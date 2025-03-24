@@ -24,7 +24,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import LowStockNotifier from '@/components/notifications/LowStockNotifier';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
-import { SidebarProvider as ShadcnSidebarProvider } from '@/components/ui/sidebar';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 const queryClient = new QueryClient();
@@ -34,36 +33,34 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="delight-ui-theme">
         <SidebarProvider>
-          <ShadcnSidebarProvider>
-            <TooltipProvider>
-              <Router>
-                <div className="min-h-screen flex w-full group/sidebar-wrapper">
-                  <Navbar />
-                  <ModernSidebar />
-                  <div className="flex-1 pt-16 md:pr-64">
-                    <div className="container px-4 py-8 mx-auto">
-                      <Breadcrumbs />
-                      <Routes>
-                        <Route path="/" element={<Index />} />
-                        <Route path="/analytics" element={<Analytics />} />
-                        <Route path="/inventory/raw-materials" element={<InventoryRawMaterials />} />
-                        <Route path="/inventory/semi-finished" element={<InventorySemiFinished />} />
-                        <Route path="/inventory/packaging" element={<InventoryPackaging />} />
-                        <Route path="/inventory/finished-products" element={<InventoryFinishedProducts />} />
-                        <Route path="/inventory/low-stock" element={<InventoryLowStock />} />
-                        <Route path="/inventory/tracking" element={<InventoryTracking />} />
-                        <Route path="/production/orders" element={<ProductionOrders />} />
-                        <Route path="/production/packaging" element={<ProductionPackaging />} />
-                        <Route path="/production/planning" element={<ProductionPlanning />} />
-                      </Routes>
-                    </div>
+          <TooltipProvider>
+            <Router>
+              <div className="min-h-screen flex w-full group/sidebar-wrapper">
+                <Navbar />
+                <ModernSidebar />
+                <div className="flex-1 pt-16 md:pr-64">
+                  <div className="container px-4 py-8 mx-auto">
+                    <Breadcrumbs />
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/analytics" element={<Analytics />} />
+                      <Route path="/inventory/raw-materials" element={<InventoryRawMaterials />} />
+                      <Route path="/inventory/semi-finished" element={<InventorySemiFinished />} />
+                      <Route path="/inventory/packaging" element={<InventoryPackaging />} />
+                      <Route path="/inventory/finished-products" element={<InventoryFinishedProducts />} />
+                      <Route path="/inventory/low-stock" element={<InventoryLowStock />} />
+                      <Route path="/inventory/tracking" element={<InventoryTracking />} />
+                      <Route path="/production/orders" element={<ProductionOrders />} />
+                      <Route path="/production/packaging" element={<ProductionPackaging />} />
+                      <Route path="/production/planning" element={<ProductionPlanning />} />
+                    </Routes>
                   </div>
-                  <Toaster />
-                  <LowStockNotifier />
                 </div>
-              </Router>
-            </TooltipProvider>
-          </ShadcnSidebarProvider>
+                <Toaster />
+                <LowStockNotifier />
+              </div>
+            </Router>
+          </TooltipProvider>
         </SidebarProvider>
       </ThemeProvider>
     </QueryClientProvider>

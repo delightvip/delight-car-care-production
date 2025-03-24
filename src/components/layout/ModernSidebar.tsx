@@ -83,103 +83,101 @@ const ModernSidebar: React.FC = () => {
   
   return (
     <>
-      <Sidebar variant="sidebar" collapsible="offcanvas">
-        <SidebarContent>
-          <ScrollArea className="h-full py-4 px-3">
-            <div className="space-y-4">
-              <NavGroup title="الرئيسية" icon={<LayoutDashboard size={16} />}>
-                <NavItem 
-                  to="/" 
-                  icon={<LayoutDashboard size={20} />} 
-                  label="لوحة التحكم" 
-                  active={pathname === '/'}
-                />
-                <NavItem 
-                  to="/analytics" 
-                  icon={<BarChart4 size={20} />} 
-                  label="التحليلات والإحصائيات" 
-                  active={pathname === '/analytics'}
-                />
-              </NavGroup>
-              
-              <NavGroup title="المخزون" icon={<Package size={16} />}>
-                <NavItem 
-                  to="/inventory/raw-materials" 
-                  icon={<Package size={20} />} 
-                  label="المواد الأولية" 
-                  active={pathname === '/inventory/raw-materials'}
-                />
-                <NavItem 
-                  to="/inventory/semi-finished" 
-                  icon={<Beaker size={20} />} 
-                  label="المنتجات النصف مصنعة" 
-                  active={pathname === '/inventory/semi-finished'}
-                />
-                <NavItem 
-                  to="/inventory/packaging" 
-                  icon={<Box size={20} />} 
-                  label="مستلزمات التعبئة" 
-                  active={pathname === '/inventory/packaging'}
-                />
-                <NavItem 
-                  to="/inventory/finished-products" 
-                  icon={<ShoppingBag size={20} />} 
-                  label="المنتجات النهائية" 
-                  active={pathname === '/inventory/finished-products'}
-                />
-                <NavItem 
-                  to="/inventory/low-stock" 
-                  icon={<AlertTriangle size={20} />} 
-                  label="المخزون المنخفض" 
-                  active={pathname === '/inventory/low-stock'}
-                />
-                <NavItem 
-                  to="/inventory/tracking" 
-                  icon={<ListChecks size={20} />} 
-                  label="تتبع المخزون" 
-                  active={pathname === '/inventory/tracking'}
-                />
-              </NavGroup>
-              
-              <NavGroup title="الإنتاج" icon={<Factory size={16} />}>
-                <NavItem 
-                  to="/production/orders" 
-                  icon={<Factory size={20} />} 
-                  label="أوامر الإنتاج" 
-                  active={pathname === '/production/orders'}
-                />
-                <NavItem 
-                  to="/production/packaging" 
-                  icon={<Layers size={20} />} 
-                  label="أوامر التعبئة" 
-                  active={pathname === '/production/packaging'}
-                />
-                <NavItem 
-                  to="/production/planning" 
-                  icon={<TrendingUp size={20} />} 
-                  label="تخطيط الإنتاج" 
-                  active={pathname === '/production/planning'}
-                />
-              </NavGroup>
-              
-              <NavGroup title="الإدارة" icon={<Settings size={16} />} defaultOpen={false}>
-                <NavItem 
-                  to="/settings/users" 
-                  icon={<Users size={20} />} 
-                  label="إدارة المستخدمين" 
-                  active={pathname === '/settings/users'}
-                />
-                <NavItem 
-                  to="/settings/system" 
-                  icon={<Settings size={20} />} 
-                  label="إعدادات النظام" 
-                  active={pathname === '/settings/system'}
-                />
-              </NavGroup>
-            </div>
-          </ScrollArea>
-        </SidebarContent>
-      </Sidebar>
+      <div className={`fixed inset-y-0 bg-sidebar left-0 w-64 transform transition-transform duration-200 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 z-30`}>
+        <ScrollArea className="h-full py-4 px-3">
+          <div className="space-y-4">
+            <NavGroup title="الرئيسية" icon={<LayoutDashboard size={16} />}>
+              <NavItem 
+                to="/" 
+                icon={<LayoutDashboard size={20} />} 
+                label="لوحة التحكم" 
+                active={pathname === '/'}
+              />
+              <NavItem 
+                to="/analytics" 
+                icon={<BarChart4 size={20} />} 
+                label="التحليلات والإحصائيات" 
+                active={pathname === '/analytics'}
+              />
+            </NavGroup>
+            
+            <NavGroup title="المخزون" icon={<Package size={16} />}>
+              <NavItem 
+                to="/inventory/raw-materials" 
+                icon={<Package size={20} />} 
+                label="المواد الأولية" 
+                active={pathname === '/inventory/raw-materials'}
+              />
+              <NavItem 
+                to="/inventory/semi-finished" 
+                icon={<Beaker size={20} />} 
+                label="المنتجات النصف مصنعة" 
+                active={pathname === '/inventory/semi-finished'}
+              />
+              <NavItem 
+                to="/inventory/packaging" 
+                icon={<Box size={20} />} 
+                label="مستلزمات التعبئة" 
+                active={pathname === '/inventory/packaging'}
+              />
+              <NavItem 
+                to="/inventory/finished-products" 
+                icon={<ShoppingBag size={20} />} 
+                label="المنتجات النهائية" 
+                active={pathname === '/inventory/finished-products'}
+              />
+              <NavItem 
+                to="/inventory/low-stock" 
+                icon={<AlertTriangle size={20} />} 
+                label="المخزون المنخفض" 
+                active={pathname === '/inventory/low-stock'}
+              />
+              <NavItem 
+                to="/inventory/tracking" 
+                icon={<ListChecks size={20} />} 
+                label="تتبع المخزون" 
+                active={pathname === '/inventory/tracking'}
+              />
+            </NavGroup>
+            
+            <NavGroup title="الإنتاج" icon={<Factory size={16} />}>
+              <NavItem 
+                to="/production/orders" 
+                icon={<Factory size={20} />} 
+                label="أوامر الإنتاج" 
+                active={pathname === '/production/orders'}
+              />
+              <NavItem 
+                to="/production/packaging" 
+                icon={<Layers size={20} />} 
+                label="أوامر التعبئة" 
+                active={pathname === '/production/packaging'}
+              />
+              <NavItem 
+                to="/production/planning" 
+                icon={<TrendingUp size={20} />} 
+                label="تخطيط الإنتاج" 
+                active={pathname === '/production/planning'}
+              />
+            </NavGroup>
+            
+            <NavGroup title="الإدارة" icon={<Settings size={16} />} defaultOpen={false}>
+              <NavItem 
+                to="/settings/users" 
+                icon={<Users size={20} />} 
+                label="إدارة المستخدمين" 
+                active={pathname === '/settings/users'}
+              />
+              <NavItem 
+                to="/settings/system" 
+                icon={<Settings size={20} />} 
+                label="إعدادات النظام" 
+                active={pathname === '/settings/system'}
+              />
+            </NavGroup>
+          </div>
+        </ScrollArea>
+      </div>
       
       {/* Mobile menu button for sidebar */}
       <div className="fixed bottom-4 right-4 md:hidden z-50">
