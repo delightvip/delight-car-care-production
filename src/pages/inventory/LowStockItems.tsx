@@ -2,192 +2,219 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle, Package, Beaker, Box, ShoppingBag } from 'lucide-react';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import LowStockStats from '@/components/inventory/LowStockStats';
 import LowStockCard from '@/components/inventory/LowStockCard';
 import PageTransition from '@/components/ui/PageTransition';
-import { AlertTriangle, Package, Beaker, Box, ShoppingBag } from 'lucide-react';
 
-// تعريف أنواع العناصر منخفضة المخزون
-export type LowStockItem = {
-  id: number;
-  name: string;
-  code: string;
-  quantity: number;
-  min_stock: number;
-  category: 'raw' | 'semi' | 'packaging' | 'finished';
-  categoryLabel: string;
-};
-
-const InventoryLowStock: React.FC = () => {
-  // استخدام React Query لجلب العناصر منخفضة المخزون
-  const { data: lowStockItems, isLoading, error } = useQuery({
-    queryKey: ['lowStockItems'],
+const LowStockItems = () => {
+  // Fetch raw materials with low stock
+  const { data: rawMaterials, isLoading: rawMaterialsLoading, error: rawMaterialsError } = useQuery({
+    queryKey: ['lowStockRawMaterials'],
     queryFn: async () => {
-      try {
-        // جلب المواد الأولية منخفضة المخزون
-        const rawMaterialsResponse = await supabase
-          .from('raw_materials')
-          .select('id, name, code, quantity, min_stock')
-          .lt('quantity', 'min_stock');
-          
-        // تنسيق بيانات المواد الأولية
-        const rawMaterials = (rawMaterialsResponse.data || []).map(item => ({
-          ...item,
-          category: 'raw' as const,
-          categoryLabel: 'مواد أولية'
-        }));
-          
-        // جلب المنتجات النصف مصنعة منخفضة المخزون
-        const semiFinishedResponse = await supabase
-          .from('semi_finished_products')
-          .select('id, name, code, quantity, min_stock')
-          .lt('quantity', 'min_stock');
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .select('*')
+        .lt('quantity', 10);
         
-        // تنسيق بيانات المنتجات النصف مصنعة
-        const semiFinishedProducts = (semiFinishedResponse.data || []).map(item => ({
-          ...item,
-          category: 'semi' as const,
-          categoryLabel: 'نصف مصنعة'
-        }));
-        
-        // جلب مواد التعبئة منخفضة المخزون
-        const packagingResponse = await supabase
-          .from('packaging_materials')
-          .select('id, name, code, quantity, min_stock')
-          .lt('quantity', 'min_stock');
-        
-        // تنسيق بيانات مواد التعبئة
-        const packagingMaterials = (packagingResponse.data || []).map(item => ({
-          ...item,
-          category: 'packaging' as const,
-          categoryLabel: 'مواد تعبئة'
-        }));
-        
-        // جلب المنتجات النهائية منخفضة المخزون
-        const finishedResponse = await supabase
-          .from('finished_products')
-          .select('id, name, code, quantity, min_stock')
-          .lt('quantity', 'min_stock');
-        
-        // تنسيق بيانات المنتجات النهائية
-        const finishedProducts = (finishedResponse.data || []).map(item => ({
-          ...item,
-          category: 'finished' as const,
-          categoryLabel: 'منتجات نهائية'
-        }));
-        
-        // دمج جميع النتائج
-        return {
-          allItems: [...rawMaterials, ...semiFinishedProducts, ...packagingMaterials, ...finishedProducts],
-          rawMaterials,
-          semiFinishedProducts,
-          packagingMaterials,
-          finishedProducts
-        };
-      } catch (error) {
-        console.error("Error fetching low stock items:", error);
-        throw error;
-      }
-    }
+      if (error) throw error;
+      return data || [];
+    },
   });
+  
+  // Fetch semi-finished products with low stock
+  const { data: semiFinished, isLoading: semiFinishedLoading, error: semiFinishedError } = useQuery({
+    queryKey: ['lowStockSemiFinished'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .select('*')
+        .lt('quantity', 10);
+        
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  
+  // Fetch packaging materials with low stock
+  const { data: packaging, isLoading: packagingLoading, error: packagingError } = useQuery({
+    queryKey: ['lowStockPackaging'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('packaging_materials')
+        .select('*')
+        .lt('quantity', 10);
+        
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  
+  // Fetch finished products with low stock
+  const { data: finishedProducts, isLoading: finishedProductsLoading, error: finishedProductsError } = useQuery({
+    queryKey: ['lowStockFinishedProducts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finished_products')
+        .select('*')
+        .lt('quantity', 10);
+        
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  
+  const isLoading = rawMaterialsLoading || semiFinishedLoading || packagingLoading || finishedProductsLoading;
+  const hasError = rawMaterialsError || semiFinishedError || packagingError || finishedProductsError;
+  
+  const renderError = () => {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>خطأ</AlertTitle>
+        <AlertDescription>
+          حدث خطأ أثناء تحميل البيانات. يرجى إعادة المحاولة لاحقا.
+        </AlertDescription>
+      </Alert>
+    );
+  };
 
-  // تعريف أعمدة الجدول
-  const columns = [
-    {
-      accessorKey: 'code',
-      header: 'الكود',
-    },
-    {
-      accessorKey: 'name',
-      header: 'الاسم',
-    },
-    {
-      accessorKey: 'categoryLabel',
-      header: 'النوع',
-    },
-    {
-      accessorKey: 'quantity',
-      header: 'الكمية الحالية',
-    },
-    {
-      accessorKey: 'min_stock',
-      header: 'الحد الأدنى',
-    },
+  const rawMaterialsColumns = [
+    { key: "code", title: "الرمز" },
+    { key: "name", title: "الاسم" },
+    { key: "quantity", title: "الكمية الحالية" },
+    { key: "unit", title: "الوحدة" },
+    { key: "min_stock", title: "الحد الأدنى" },
   ];
 
+  const semiFinishedColumns = [
+    { key: "code", title: "الرمز" },
+    { key: "name", title: "الاسم" },
+    { key: "quantity", title: "الكمية الحالية" },
+    { key: "unit", title: "الوحدة" },
+    { key: "min_stock", title: "الحد الأدنى" },
+  ];
+
+  const packagingColumns = [
+    { key: "code", title: "الرمز" },
+    { key: "name", title: "الاسم" },
+    { key: "quantity", title: "الكمية الحالية" },
+    { key: "unit", title: "الوحدة" },
+    { key: "min_stock", title: "الحد الأدنى" },
+  ];
+
+  const finishedProductsColumns = [
+    { key: "code", title: "الرمز" },
+    { key: "name", title: "الاسم" },
+    { key: "quantity", title: "الكمية الحالية" },
+    { key: "unit", title: "الوحدة" },
+    { key: "min_stock", title: "الحد الأدنى" },
+  ];
+  
   return (
     <PageTransition>
-      <div className="space-y-4">
-        <h1 className="text-3xl font-bold">المخزون المنخفض</h1>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">المخزون المنخفض</h1>
+          <p className="text-muted-foreground mt-1">العناصر التي تحتاج إلى تجديد المخزون بسبب انخفاض كمياتها</p>
+        </div>
         
-        {/* عرض إحصائيات المخزون المنخفض */}
-        {lowStockItems && (
-          <LowStockStats
-            rawMaterialsCount={lowStockItems.rawMaterials.length}
-            semiFinishedCount={lowStockItems.semiFinishedProducts.length}
-            packagingCount={lowStockItems.packagingMaterials.length}
-            finishedProductsCount={lowStockItems.finishedProducts.length}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <LowStockCard 
+            title="المواد الأولية" 
+            count={rawMaterials?.length || 0} 
+            icon={<Package size={20} />} 
+            loading={rawMaterialsLoading}
+            colorClass="bg-blue-100 text-blue-700" 
           />
-        )}
-        
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {/* بطاقات المخزون المنخفض حسب الفئة */}
-          <LowStockCard
-            title="المواد الأولية"
-            count={lowStockItems?.rawMaterials.length || 0}
-            icon={<Package className="h-8 w-8" />}
-            loading={isLoading}
-            colorClass="text-blue-500 bg-blue-100"
+          <LowStockCard 
+            title="المنتجات النصف مصنعة" 
+            count={semiFinished?.length || 0} 
+            icon={<Beaker size={20} />} 
+            loading={semiFinishedLoading}
+            colorClass="bg-green-100 text-green-700" 
           />
-          
-          <LowStockCard
-            title="المنتجات النصف مصنعة"
-            count={lowStockItems?.semiFinishedProducts.length || 0}
-            icon={<Beaker className="h-8 w-8" />}
-            loading={isLoading}
-            colorClass="text-purple-500 bg-purple-100"
+          <LowStockCard 
+            title="مستلزمات التعبئة" 
+            count={packaging?.length || 0} 
+            icon={<Box size={20} />} 
+            loading={packagingLoading}
+            colorClass="bg-purple-100 text-purple-700" 
           />
-          
-          <LowStockCard
-            title="مواد التعبئة"
-            count={lowStockItems?.packagingMaterials.length || 0}
-            icon={<Box className="h-8 w-8" />}
-            loading={isLoading}
-            colorClass="text-yellow-500 bg-yellow-100"
-          />
-          
-          <LowStockCard
-            title="المنتجات النهائية"
-            count={lowStockItems?.finishedProducts.length || 0}
-            icon={<ShoppingBag className="h-8 w-8" />}
-            loading={isLoading}
-            colorClass="text-green-500 bg-green-100"
+          <LowStockCard 
+            title="المنتجات النهائية" 
+            count={finishedProducts?.length || 0} 
+            icon={<ShoppingBag size={20} />} 
+            loading={finishedProductsLoading}
+            colorClass="bg-amber-100 text-amber-700" 
           />
         </div>
         
-        {/* جدول العناصر منخفضة المخزون */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              جميع العناصر منخفضة المخزون
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DataTableWithLoading
-              columns={columns}
-              data={lowStockItems?.allItems || []}
-              isLoading={isLoading}
-              error={error ? "حدث خطأ أثناء تحميل البيانات" : undefined}
-              filterPlaceholder="ابحث عن عنصر..."
-            />
-          </CardContent>
-        </Card>
+        <LowStockStats
+          rawMaterialsCount={rawMaterials?.length || 0}
+          semiFinishedCount={semiFinished?.length || 0}
+          packagingCount={packaging?.length || 0}
+          finishedProductsCount={finishedProducts?.length || 0}
+        />
+        
+        {hasError ? (
+          renderError()
+        ) : (
+          <Tabs defaultValue="raw-materials" dir="rtl" className="w-full">
+            <TabsList className="w-full max-w-md mx-auto flex justify-between mb-6">
+              <TabsTrigger value="raw-materials">المواد الأولية</TabsTrigger>
+              <TabsTrigger value="semi-finished">النصف مصنعة</TabsTrigger>
+              <TabsTrigger value="packaging">مستلزمات التعبئة</TabsTrigger>
+              <TabsTrigger value="finished">المنتجات النهائية</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="raw-materials">
+              <DataTableWithLoading
+                data={rawMaterials || []}
+                columns={rawMaterialsColumns}
+                isLoading={rawMaterialsLoading}
+                searchPlaceholder="بحث في المواد الأولية..."
+                noDataMessage="لا توجد مواد أولية منخفضة المخزون."
+              />
+            </TabsContent>
+            
+            <TabsContent value="semi-finished">
+              <DataTableWithLoading
+                data={semiFinished || []}
+                columns={semiFinishedColumns}
+                isLoading={semiFinishedLoading}
+                searchPlaceholder="بحث في المنتجات النصف مصنعة..."
+                noDataMessage="لا توجد منتجات نصف مصنعة منخفضة المخزون."
+              />
+            </TabsContent>
+            
+            <TabsContent value="packaging">
+              <DataTableWithLoading
+                data={packaging || []}
+                columns={packagingColumns}
+                isLoading={packagingLoading}
+                searchPlaceholder="بحث في مستلزمات التعبئة..."
+                noDataMessage="لا توجد مستلزمات تعبئة منخفضة المخزون."
+              />
+            </TabsContent>
+            
+            <TabsContent value="finished">
+              <DataTableWithLoading
+                data={finishedProducts || []}
+                columns={finishedProductsColumns}
+                isLoading={finishedProductsLoading}
+                searchPlaceholder="بحث في المنتجات النهائية..."
+                noDataMessage="لا توجد منتجات نهائية منخفضة المخزون."
+              />
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </PageTransition>
   );
 };
 
-export default InventoryLowStock;
+export default LowStockItems;
