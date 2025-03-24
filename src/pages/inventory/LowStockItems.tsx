@@ -32,7 +32,7 @@ const LowStockItems = () => {
         const { data: rawMaterials, error: rawMaterialsError } = await supabase
           .from('raw_materials')
           .select('id, code, name, quantity, min_stock, unit')
-          .filter('quantity', 'lt', supabase.raw('min_stock'));
+          .lt('quantity', 'min_stock');
         
         if (rawMaterialsError) throw new Error(rawMaterialsError.message);
         
@@ -40,7 +40,7 @@ const LowStockItems = () => {
         const { data: semiFinished, error: semiFinishedError } = await supabase
           .from('semi_finished_products')
           .select('id, code, name, quantity, min_stock, unit')
-          .filter('quantity', 'lt', supabase.raw('min_stock'));
+          .lt('quantity', 'min_stock');
         
         if (semiFinishedError) throw new Error(semiFinishedError.message);
         
@@ -48,7 +48,7 @@ const LowStockItems = () => {
         const { data: packaging, error: packagingError } = await supabase
           .from('packaging_materials')
           .select('id, code, name, quantity, min_stock, unit')
-          .filter('quantity', 'lt', supabase.raw('min_stock'));
+          .lt('quantity', 'min_stock');
         
         if (packagingError) throw new Error(packagingError.message);
         
@@ -56,7 +56,7 @@ const LowStockItems = () => {
         const { data: finished, error: finishedError } = await supabase
           .from('finished_products')
           .select('id, code, name, quantity, min_stock, unit')
-          .filter('quantity', 'lt', supabase.raw('min_stock'));
+          .lt('quantity', 'min_stock');
         
         if (finishedError) throw new Error(finishedError.message);
         
