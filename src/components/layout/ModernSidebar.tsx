@@ -3,7 +3,16 @@ import React from 'react';
 import { useAppSidebar } from '@/components/layout/SidebarContext';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
-import { Sidebar, SidebarContent } from '@/components/ui/sidebar';
+import { 
+  Sidebar, 
+  SidebarContent, 
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent
+} from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Link, useLocation } from 'react-router-dom';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
