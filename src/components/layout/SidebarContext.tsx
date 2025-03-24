@@ -2,14 +2,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-interface SidebarContextType {
+interface AppSidebarContextType {
   isOpen: boolean;
   toggle: () => void;
   open: () => void;
   close: () => void;
 }
 
-const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
+const AppSidebarContext = createContext<AppSidebarContextType | undefined>(undefined);
 
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isMobile = useIsMobile();
@@ -29,16 +29,16 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const close = () => setIsOpen(false);
 
   return (
-    <SidebarContext.Provider value={{ isOpen, toggle, open, close }}>
+    <AppSidebarContext.Provider value={{ isOpen, toggle, open, close }}>
       {children}
-    </SidebarContext.Provider>
+    </AppSidebarContext.Provider>
   );
 };
 
-export const useSidebar = (): SidebarContextType => {
-  const context = useContext(SidebarContext);
+export const useAppSidebar = (): AppSidebarContextType => {
+  const context = useContext(AppSidebarContext);
   if (context === undefined) {
-    throw new Error('useSidebar must be used within a SidebarProvider');
+    throw new Error('useAppSidebar must be used within a SidebarProvider');
   }
   return context;
 };

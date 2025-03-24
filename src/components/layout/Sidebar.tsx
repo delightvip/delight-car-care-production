@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,6 +19,7 @@ import {
   Users,
   TrendingUp
 } from 'lucide-react';
+import { useAppSidebar } from './SidebarContext';
 
 interface NavItemProps {
   to: string;
@@ -75,9 +75,12 @@ const NavGroup: React.FC<NavGroupProps> = ({ title, icon, children, defaultOpen 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const pathname = location.pathname;
+  const { isOpen } = useAppSidebar();
   
   return (
-    <aside className="w-64 h-screen border-r border-gray-200 bg-white hidden md:block fixed top-0 pt-16 z-10">
+    <aside className={`w-64 h-screen border-r border-gray-200 bg-white fixed top-0 pt-16 z-10 transition-all duration-300 ${
+      isOpen ? 'md:block' : 'hidden'
+    }`}>
       <ScrollArea className="h-full py-4 px-3">
         <div className="space-y-4">
           <NavGroup title="الرئيسية" icon={<LayoutDashboard size={16} />}>
