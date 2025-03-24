@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -108,9 +109,13 @@ class InventoryService {
       // جلب المكونات لكل منتج نصف مصنع
       const productsWithIngredients = await Promise.all(data.map(async (product) => {
         const { data: ingredients, error: ingredientsError } = await supabase
-          .from('semi_finished_product_ingredients')
-          .select('*')
-          .eq('semi_finished_product_id', product.id);
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            raw_materials(id, code, name)
+          `)
+          .eq('semi_finished_id', product.id);
         
         if (ingredientsError) throw ingredientsError;
         
@@ -122,8 +127,8 @@ class InventoryService {
           quantity: product.quantity,
           unitCost: product.unit_cost,
           ingredients: ingredients.map(ingredient => ({
-            code: ingredient.raw_material_code,
-            name: ingredient.raw_material_name,
+            code: ingredient.raw_materials.code,
+            name: ingredient.raw_materials.name,
             percentage: ingredient.percentage
           }))
         };
@@ -177,15 +182,19 @@ class InventoryService {
         const { data: semiFinished, error: semiFinishedError } = await supabase
           .from('semi_finished_products')
           .select('code, name')
-          .eq('id', product.semi_finished_product_id)
+          .eq('id', product.semi_finished_id)
           .single();
         
         if (semiFinishedError) throw semiFinishedError;
         
         // جلب مواد التعبئة
-        const { data: packaging, error: packagingError } = await supabase
+        const { data: packagingData, error: packagingError } = await supabase
           .from('finished_product_packaging')
-          .select('*')
+          .select(`
+            id, 
+            quantity,
+            packaging_materials(id, code, name)
+          `)
           .eq('finished_product_id', product.id);
         
         if (packagingError) throw packagingError;
@@ -202,9 +211,9 @@ class InventoryService {
             name: semiFinished.name,
             quantity: product.semi_finished_quantity
           },
-          packaging: packaging.map(pkg => ({
-            code: pkg.packaging_material_code,
-            name: pkg.packaging_material_name,
+          packaging: packagingData.map(pkg => ({
+            code: pkg.packaging_materials.code,
+            name: pkg.packaging_materials.name,
             quantity: pkg.quantity
           }))
         };
@@ -339,12 +348,12 @@ class InventoryService {
         return false;
       }
       
-      if (semiFinished.quantity < semiFinishedQuantity * quantity) {
+      if (semiFinished.quantity < semiFinishedQuantity) {
         toast.error(`الكمية المطلوبة من ${semiFinishedCode} غير متوفرة`);
         return false;
       }
       
-      const newSemiQuantity = semiFinished.quantity - (semiFinishedQuantity * quantity);
+      const newSemiQuantity = semiFinished.quantity - semiFinishedQuantity;
       
       const { error: updateSemiError } = await supabase
         .from('semi_finished_products')
@@ -369,12 +378,12 @@ class InventoryService {
           return false;
         }
         
-        if (packagingMaterial.quantity < req.requiredQuantity * quantity) {
+        if (packagingMaterial.quantity < req.requiredQuantity) {
           toast.error(`الكمية المطلوبة من ${req.code} غير متوفرة`);
           return false;
         }
         
-        const newPkgQuantity = packagingMaterial.quantity - (req.requiredQuantity * quantity);
+        const newPkgQuantity = packagingMaterial.quantity - req.requiredQuantity;
         
         const { error: updatePkgError } = await supabase
           .from('packaging_materials')
@@ -396,6 +405,18 @@ class InventoryService {
       
       let newFinishedQuantity = quantity;
       if (!finishedProduct) {
+        // Get the semi-finished product id
+        const { data: semiFinishedData, error: semiFinishedIdError } = await supabase
+          .from('semi_finished_products')
+          .select('id')
+          .eq('code', semiFinishedCode)
+          .single();
+          
+        if (semiFinishedIdError) {
+          toast.error(`حدث خطأ أثناء الحصول على معرف المنتج النصف مصنع`);
+          return false;
+        }
+        
         // إذا كان المنتج غير موجود، يتم إضافته
         const { error: insertError } = await supabase
           .from('finished_products')
@@ -404,7 +425,7 @@ class InventoryService {
             name: finishedProductCode, // يمكنك تعديل الاسم لاحقًا
             unit: 'وحدة', // يمكنك تعديل الوحدة لاحقًا
             quantity: quantity,
-            semi_finished_product_id: 1, // يمكنك تعديل هذه القيم لاحقًا
+            semi_finished_id: semiFinishedData.id, // استخدام معرف المنتج النصف مصنع
             semi_finished_quantity: semiFinishedQuantity,
             unit_cost: 0 // يمكنك تعديل هذه القيم لاحقًا
           });

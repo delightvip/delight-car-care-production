@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
 import ProductionDatabaseService from "./database/ProductionDatabaseService";
@@ -492,7 +493,71 @@ class ProductionService {
   public async getProductionChartData() {
     return await this.databaseService.getMonthlyProductionStats();
   }
+
+  // تحديث أمر إنتاج
+  public async updateProductionOrder(
+    orderId: number,
+    orderData: {
+      productCode: string;
+      productName: string;
+      quantity: number;
+      unit: string;
+      ingredients: {
+        code: string;
+        name: string;
+        requiredQuantity: number;
+      }[];
+    }
+  ): Promise<boolean> {
+    try {
+      const result = await this.databaseService.updateProductionOrder(orderId, orderData);
+      
+      if (result) {
+        toast.success(`تم تحديث أمر الإنتاج بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error updating production order:', error);
+      toast.error('حدث خطأ أثناء تحديث أمر الإنتاج');
+      return false;
+    }
+  }
+
+  // تحديث أمر تعبئة
+  public async updatePackagingOrder(
+    orderId: number,
+    orderData: {
+      productCode: string;
+      productName: string;
+      quantity: number;
+      unit: string;
+      semiFinished: {
+        code: string;
+        name: string;
+        quantity: number;
+      };
+      packagingMaterials: {
+        code: string;
+        name: string;
+        quantity: number;
+      }[];
+    }
+  ): Promise<boolean> {
+    try {
+      const result = await this.databaseService.updatePackagingOrder(orderId, orderData);
+      
+      if (result) {
+        toast.success(`تم تحديث أمر التعبئة بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error updating packaging order:', error);
+      toast.error('حدث خطأ أثناء تحديث أمر التعبئة');
+      return false;
+    }
+  }
 }
 
 export default ProductionService;
-

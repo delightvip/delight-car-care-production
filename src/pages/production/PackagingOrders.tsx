@@ -197,7 +197,7 @@ const PackagingOrders = () => {
       const semiFinished = {
         code: product.semiFinished.code,
         name: product.semiFinished.name,
-        quantity: product.semi_finished_quantity * editOrder.quantity
+        quantity: product.semiFinished.quantity * editOrder.quantity
       };
       
       const components = checkComponentsAvailability(editOrder.productCode, editOrder.quantity);
