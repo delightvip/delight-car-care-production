@@ -14,7 +14,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 // Define custom RPC function types to workaround type issues
 export const rpcFunctions = {
   async getProductionStats() {
-    return await supabase.rpc('get_production_stats') as unknown as { 
+    return await supabase.functions.invoke('get_production_stats') as unknown as { 
       data: { 
         total_production_orders: number;
         completed_orders: number;
@@ -25,7 +25,7 @@ export const rpcFunctions = {
     };
   },
   async getMonthlyProductionStats() {
-    return await supabase.rpc('get_monthly_production_stats') as unknown as {
+    return await supabase.functions.invoke('get_monthly_production_stats') as unknown as {
       data: { 
         month: string;
         production_count: number;

@@ -1,3 +1,4 @@
+
 import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
@@ -292,6 +293,26 @@ class ProductionDatabaseService {
     } catch (error) {
       console.error('Error updating packaging order status:', error);
       toast.error('حدث خطأ أثناء تحديث حالة أمر التعبئة');
+      return false;
+    }
+  }
+
+  // تحديث حالة أمر الإنتاج
+  public async updateProductionOrderStatus(
+    orderId: number, 
+    status: 'pending' | 'inProgress' | 'completed' | 'cancelled'
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('production_orders')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', orderId);
+        
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error updating production order status:', error);
+      toast.error('حدث خطأ أثناء تحديث حالة أمر الإنتاج');
       return false;
     }
   }
