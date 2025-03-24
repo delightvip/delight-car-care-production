@@ -9,7 +9,432 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      finished_product_packaging: {
+        Row: {
+          created_at: string | null
+          finished_product_id: number
+          id: number
+          packaging_material_id: number
+          quantity: number
+        }
+        Insert: {
+          created_at?: string | null
+          finished_product_id: number
+          id?: number
+          packaging_material_id: number
+          quantity?: number
+        }
+        Update: {
+          created_at?: string | null
+          finished_product_id?: number
+          id?: number
+          packaging_material_id?: number
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finished_product_packaging_finished_product_id_fkey"
+            columns: ["finished_product_id"]
+            isOneToOne: false
+            referencedRelation: "finished_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finished_product_packaging_packaging_material_id_fkey"
+            columns: ["packaging_material_id"]
+            isOneToOne: false
+            referencedRelation: "packaging_materials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finished_products: {
+        Row: {
+          code: string
+          created_at: string | null
+          id: number
+          min_stock: number
+          name: string
+          quantity: number
+          semi_finished_id: number
+          semi_finished_quantity: number
+          unit: string
+          unit_cost: number
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          id?: number
+          min_stock?: number
+          name: string
+          quantity?: number
+          semi_finished_id: number
+          semi_finished_quantity?: number
+          unit: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          id?: number
+          min_stock?: number
+          name?: string
+          quantity?: number
+          semi_finished_id?: number
+          semi_finished_quantity?: number
+          unit?: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finished_products_semi_finished_id_fkey"
+            columns: ["semi_finished_id"]
+            isOneToOne: false
+            referencedRelation: "semi_finished_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      packaging_materials: {
+        Row: {
+          code: string
+          created_at: string | null
+          id: number
+          importance: number | null
+          min_stock: number
+          name: string
+          quantity: number
+          unit: string
+          unit_cost: number
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          id?: number
+          importance?: number | null
+          min_stock?: number
+          name: string
+          quantity?: number
+          unit: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          id?: number
+          importance?: number | null
+          min_stock?: number
+          name?: string
+          quantity?: number
+          unit?: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      packaging_order_materials: {
+        Row: {
+          created_at: string | null
+          id: number
+          packaging_material_code: string
+          packaging_material_name: string
+          packaging_order_id: number
+          required_quantity: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          packaging_material_code: string
+          packaging_material_name: string
+          packaging_order_id: number
+          required_quantity: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          packaging_material_code?: string
+          packaging_material_name?: string
+          packaging_order_id?: number
+          required_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packaging_order_materials_packaging_order_id_fkey"
+            columns: ["packaging_order_id"]
+            isOneToOne: false
+            referencedRelation: "packaging_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      packaging_orders: {
+        Row: {
+          code: string
+          created_at: string | null
+          date: string
+          id: number
+          product_code: string
+          product_name: string
+          quantity: number
+          semi_finished_code: string
+          semi_finished_name: string
+          semi_finished_quantity: number
+          status: string
+          total_cost: number
+          unit: string
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          date: string
+          id?: number
+          product_code: string
+          product_name: string
+          quantity: number
+          semi_finished_code: string
+          semi_finished_name: string
+          semi_finished_quantity: number
+          status: string
+          total_cost?: number
+          unit: string
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          date?: string
+          id?: number
+          product_code?: string
+          product_name?: string
+          quantity?: number
+          semi_finished_code?: string
+          semi_finished_name?: string
+          semi_finished_quantity?: number
+          status?: string
+          total_cost?: number
+          unit?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      production_order_ingredients: {
+        Row: {
+          created_at: string | null
+          id: number
+          production_order_id: number
+          raw_material_code: string
+          raw_material_name: string
+          required_quantity: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          production_order_id: number
+          raw_material_code: string
+          raw_material_name: string
+          required_quantity: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          production_order_id?: number
+          raw_material_code?: string
+          raw_material_name?: string
+          required_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_ingredients_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_orders: {
+        Row: {
+          code: string
+          created_at: string | null
+          date: string
+          id: number
+          product_code: string
+          product_name: string
+          quantity: number
+          status: string
+          total_cost: number
+          unit: string
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          date: string
+          id?: number
+          product_code: string
+          product_name: string
+          quantity: number
+          status: string
+          total_cost?: number
+          unit: string
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          date?: string
+          id?: number
+          product_code?: string
+          product_name?: string
+          quantity?: number
+          status?: string
+          total_cost?: number
+          unit?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      raw_materials: {
+        Row: {
+          code: string
+          created_at: string | null
+          id: number
+          importance: number | null
+          min_stock: number
+          name: string
+          quantity: number
+          unit: string
+          unit_cost: number
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          id?: number
+          importance?: number | null
+          min_stock?: number
+          name: string
+          quantity?: number
+          unit: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          id?: number
+          importance?: number | null
+          min_stock?: number
+          name?: string
+          quantity?: number
+          unit?: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      semi_finished_ingredients: {
+        Row: {
+          created_at: string | null
+          id: number
+          percentage: number
+          raw_material_id: number
+          semi_finished_id: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          percentage: number
+          raw_material_id: number
+          semi_finished_id: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          percentage?: number
+          raw_material_id?: number
+          semi_finished_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "semi_finished_ingredients_raw_material_id_fkey"
+            columns: ["raw_material_id"]
+            isOneToOne: false
+            referencedRelation: "raw_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "semi_finished_ingredients_semi_finished_id_fkey"
+            columns: ["semi_finished_id"]
+            isOneToOne: false
+            referencedRelation: "semi_finished_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      semi_finished_products: {
+        Row: {
+          code: string
+          created_at: string | null
+          id: number
+          min_stock: number
+          name: string
+          quantity: number
+          unit: string
+          unit_cost: number
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          id?: number
+          min_stock?: number
+          name: string
+          quantity?: number
+          unit: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          id?: number
+          min_stock?: number
+          name?: string
+          quantity?: number
+          unit?: string
+          unit_cost?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: number
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: number
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

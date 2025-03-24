@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTable from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/button';
@@ -22,79 +23,80 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
-import { Edit, Plus, Trash, X } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Edit, Plus, Trash, X, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { generateCode } from '@/utils/generateCode';
+import { supabase } from '@/integrations/supabase/client';
 
-// Mock data for finished products
-const initialFinishedProducts = [
-  {
-    id: 1,
-    code: 'FIN-00001',
-    name: 'ملمع تابلوه 250مل',
-    unit: 'قطعة',
-    components: [
-      { id: 1, type: 'semi', code: 'SEMI-00001', name: 'ملمع تابلوه سائل', quantity: 0.25, unit: 'لتر' },
-      { id: 2, type: 'packaging', code: 'PKG-00001', name: 'عبوة بلاستيكية 250مل', quantity: 1, unit: 'قطعة' },
-      { id: 3, type: 'packaging', code: 'PKG-00003', name: 'ملصق منتج ملمع تابلوه', quantity: 1, unit: 'قطعة' }
-    ],
-    unitCost: 20,
-    quantity: 200,
-    minStock: 50,
-    totalValue: 4000
-  },
-  {
-    id: 2,
-    code: 'FIN-00002',
-    name: 'منظف زجاج 500مل',
-    unit: 'قطعة',
-    components: [
-      { id: 1, type: 'semi', code: 'SEMI-00002', name: 'منظف زجاج سائل', quantity: 0.5, unit: 'لتر' },
-      { id: 2, type: 'packaging', code: 'PKG-00002', name: 'عبوة بلاستيكية 500مل', quantity: 1, unit: 'قطعة' },
-      { id: 3, type: 'packaging', code: 'PKG-00004', name: 'ملصق منتج منظف زجاج', quantity: 1, unit: 'قطعة' }
-    ],
-    unitCost: 25,
-    quantity: 150,
-    minStock: 40,
-    totalValue: 3750
-  }
-];
+// نوع بيانات المنتج النهائي من قاعدة البيانات
+interface FinishedProductDB {
+  id: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  semi_finished_id: number;
+  semi_finished_quantity: number;
+  unit_cost: number;
+  min_stock: number;
+  created_at: string;
+  updated_at: string;
+}
 
-// Mock data for semi-finished products
-const semiFinishedProducts = [
-  {
-    id: 1,
-    code: 'SEMI-00001',
-    name: 'ملمع تابلوه سائل',
-    unit: 'لتر',
-    unitCost: 40
-  },
-  {
-    id: 2,
-    code: 'SEMI-00002',
-    name: 'منظف زجاج سائل',
-    unit: 'لتر',
-    unitCost: 30
-  }
-];
+// نوع بيانات المنتج النصف مصنع من قاعدة البيانات
+interface SemiFinishedProductDB {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  unit_cost: number;
+}
 
-// Mock data for packaging materials
-const packagingMaterials = [
-  { id: 1, code: 'PKG-00001', name: 'عبوة بلاستيكية 250مل', unit: 'قطعة', price: 5 },
-  { id: 2, code: 'PKG-00002', name: 'عبوة بلاستيكية 500مل', unit: 'قطعة', price: 8 },
-  { id: 3, code: 'PKG-00003', name: 'ملصق منتج ملمع تابلوه', unit: 'قطعة', price: 1.5 },
-  { id: 4, code: 'PKG-00004', name: 'ملصق منتج منظف زجاج', unit: 'قطعة', price: 1.5 },
-  { id: 5, code: 'PKG-00005', name: 'كرتونة تعبئة (24 قطعة)', unit: 'قطعة', price: 10 }
-];
+// نوع بيانات مستلزمات التعبئة من قاعدة البيانات
+interface PackagingMaterialDB {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  unit_cost: number; // سنستخدم unit_cost بدلاً من price
+}
+
+// نوع بيانات علاقة المنتج النهائي بمستلزمات التعبئة
+interface FinishedProductPackagingDB {
+  id: number;
+  finished_product_id: number;
+  packaging_material_id: number;
+  quantity: number;
+}
+
+// نوع بيانات المنتج النهائي المعروض في الواجهة
+interface FinishedProduct {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  components: {
+    id: number;
+    type: 'semi' | 'packaging';
+    code: string;
+    name: string;
+    quantity: number;
+    unit: string;
+  }[];
+  unitCost: number;
+  quantity: number;
+  minStock: number;
+  totalValue: number;
+}
 
 const units = ['قطعة', 'علبة', 'كرتونة', 'طقم'];
 
 const FinishedProducts = () => {
-  const [products, setProducts] = useState(initialFinishedProducts);
+  const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentProduct, setCurrentProduct] = useState<any>(null);
+  const [currentProduct, setCurrentProduct] = useState<FinishedProduct | null>(null);
   const [newProduct, setNewProduct] = useState({
     name: '',
     unit: '',
@@ -107,9 +109,473 @@ const FinishedProducts = () => {
   const [selectedPackaging, setSelectedPackaging] = useState('');
   const [packagingQuantity, setPackagingQuantity] = useState(0);
   
-  const { toast } = useToast();
+  // استعلام للحصول على المنتجات النهائية
+  const { 
+    data: products = [], 
+    isLoading: isLoadingProducts,
+    isError: isErrorProducts,
+    error: errorProducts
+  } = useQuery({
+    queryKey: ['finishedProducts'],
+    queryFn: async () => {
+      const { data: finishedProducts, error: fpError } = await supabase
+        .from('finished_products')
+        .select('*');
+        
+      if (fpError) throw fpError;
+      
+      // الحصول على معلومات المنتجات النصف مصنعة والتعبئة لكل منتج نهائي
+      const productsWithComponents = await Promise.all(finishedProducts.map(async (product) => {
+        // الحصول على بيانات المنتج النصف مصنع
+        const { data: semiFinished, error: sfError } = await supabase
+          .from('semi_finished_products')
+          .select('*')
+          .eq('id', product.semi_finished_id)
+          .single();
+          
+        if (sfError) {
+          console.error("Error fetching semi-finished product:", sfError);
+          return null;
+        }
+        
+        // الحصول على مستلزمات التعبئة
+        const { data: packagingItems, error: pkgError } = await supabase
+          .from('finished_product_packaging')
+          .select(`
+            id,
+            quantity,
+            packaging_materials:packaging_material_id(
+              id, code, name, unit, unit_cost
+            )
+          `)
+          .eq('finished_product_id', product.id);
+          
+        if (pkgError) {
+          console.error("Error fetching packaging materials:", pkgError);
+          return null;
+        }
+        
+        // بناء مصفوفة المكونات
+        const components = [
+          // إضافة المنتج النصف مصنع كمكون
+          {
+            id: semiFinished.id,
+            type: 'semi' as const,
+            code: semiFinished.code,
+            name: semiFinished.name,
+            quantity: product.semi_finished_quantity,
+            unit: semiFinished.unit
+          },
+          // إضافة مستلزمات التعبئة كمكونات
+          ...packagingItems.map((item: any) => ({
+            id: item.packaging_materials.id,
+            type: 'packaging' as const,
+            code: item.packaging_materials.code,
+            name: item.packaging_materials.name,
+            quantity: item.quantity,
+            unit: item.packaging_materials.unit
+          }))
+        ];
+        
+        // حساب إجمالي القيمة
+        const totalValue = product.quantity * product.unit_cost;
+        
+        return {
+          id: product.id,
+          code: product.code,
+          name: product.name,
+          unit: product.unit,
+          components,
+          unitCost: product.unit_cost,
+          quantity: product.quantity,
+          minStock: product.min_stock,
+          totalValue
+        } as FinishedProduct;
+      }));
+      
+      // إزالة أي قيم null (في حالة حدوث خطأ في الوعود)
+      return productsWithComponents.filter(product => product !== null) as FinishedProduct[];
+    }
+  });
   
-  // Columns for the data table
+  // استعلام للحصول على المنتجات النصف مصنعة
+  const { 
+    data: semiFinishedProducts = [], 
+    isLoading: isLoadingSemi 
+  } = useQuery({
+    queryKey: ['semiFinishedProducts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .select('id, code, name, unit, unit_cost');
+        
+      if (error) throw error;
+      return data as SemiFinishedProductDB[];
+    }
+  });
+  
+  // استعلام للحصول على مستلزمات التعبئة
+  const { 
+    data: packagingMaterials = [], 
+    isLoading: isLoadingPackaging 
+  } = useQuery({
+    queryKey: ['packagingMaterials'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('packaging_materials')
+        .select('id, code, name, unit, unit_cost');
+        
+      if (error) throw error;
+      return data as PackagingMaterialDB[];
+    }
+  });
+  
+  // إنشاء منتج نهائي جديد
+  const createProductMutation = useMutation({
+    mutationFn: async (newFinishedProduct: {
+      code: string;
+      name: string;
+      unit: string;
+      semi_finished_id: number;
+      semi_finished_quantity: number;
+      unit_cost: number;
+      quantity: number;
+      min_stock: number;
+      packagingMaterials: { id: number; quantity: number }[];
+    }) => {
+      // 1. إنشاء المنتج النهائي
+      const { data: product, error } = await supabase
+        .from('finished_products')
+        .insert({
+          code: newFinishedProduct.code,
+          name: newFinishedProduct.name,
+          unit: newFinishedProduct.unit,
+          semi_finished_id: newFinishedProduct.semi_finished_id,
+          semi_finished_quantity: newFinishedProduct.semi_finished_quantity,
+          unit_cost: newFinishedProduct.unit_cost,
+          quantity: newFinishedProduct.quantity,
+          min_stock: newFinishedProduct.min_stock
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // 2. إضافة مستلزمات التعبئة
+      if (newFinishedProduct.packagingMaterials.length > 0) {
+        const packagingInserts = newFinishedProduct.packagingMaterials.map(pkg => ({
+          finished_product_id: product.id,
+          packaging_material_id: pkg.id,
+          quantity: pkg.quantity
+        }));
+        
+        const { error: pkgError } = await supabase
+          .from('finished_product_packaging')
+          .insert(packagingInserts);
+          
+        if (pkgError) throw pkgError;
+      }
+      
+      return product;
+    },
+    onSuccess: () => {
+      // تحديث قائمة المنتجات
+      queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+      setIsAddDialogOpen(false);
+      toast.success('تمت إضافة المنتج بنجاح');
+      
+      // إعادة تعيين نموذج المنتج الجديد
+      setNewProduct({
+        name: '',
+        unit: '',
+        components: [],
+        quantity: 0,
+        minStock: 0
+      });
+    },
+    onError: (error) => {
+      console.error('Error creating product:', error);
+      toast.error('حدث خطأ أثناء إضافة المنتج');
+    }
+  });
+  
+  // تحديث منتج نهائي
+  const updateProductMutation = useMutation({
+    mutationFn: async (updatedProduct: {
+      id: number;
+      name: string;
+      unit: string;
+      quantity: number;
+      min_stock: number;
+      unit_cost: number;
+      semi_finished_id: number;
+      semi_finished_quantity: number;
+      packagingMaterials: { id: number; quantity: number }[];
+    }) => {
+      // 1. تحديث بيانات المنتج النهائي
+      const { error } = await supabase
+        .from('finished_products')
+        .update({
+          name: updatedProduct.name,
+          unit: updatedProduct.unit,
+          quantity: updatedProduct.quantity,
+          min_stock: updatedProduct.min_stock,
+          unit_cost: updatedProduct.unit_cost,
+          semi_finished_quantity: updatedProduct.semi_finished_quantity
+        })
+        .eq('id', updatedProduct.id);
+        
+      if (error) throw error;
+      
+      // 2. حذف جميع مستلزمات التعبئة الحالية وإعادة إنشائها
+      const { error: deleteError } = await supabase
+        .from('finished_product_packaging')
+        .delete()
+        .eq('finished_product_id', updatedProduct.id);
+        
+      if (deleteError) throw deleteError;
+      
+      // 3. إضافة مستلزمات التعبئة الجديدة
+      if (updatedProduct.packagingMaterials.length > 0) {
+        const packagingInserts = updatedProduct.packagingMaterials.map(pkg => ({
+          finished_product_id: updatedProduct.id,
+          packaging_material_id: pkg.id,
+          quantity: pkg.quantity
+        }));
+        
+        const { error: pkgError } = await supabase
+          .from('finished_product_packaging')
+          .insert(packagingInserts);
+          
+        if (pkgError) throw pkgError;
+      }
+      
+      return updatedProduct;
+    },
+    onSuccess: () => {
+      // تحديث قائمة المنتجات
+      queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+      setIsEditDialogOpen(false);
+      toast.success('تم تحديث المنتج بنجاح');
+    },
+    onError: (error) => {
+      console.error('Error updating product:', error);
+      toast.error('حدث خطأ أثناء تحديث المنتج');
+    }
+  });
+  
+  // حذف منتج نهائي
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: number) => {
+      // لا داعي لحذف مستلزمات التعبئة لأن لديها قيد CASCADE
+      const { error } = await supabase
+        .from('finished_products')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      // تحديث قائمة المنتجات
+      queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+      setIsDeleteDialogOpen(false);
+      toast.success('تم حذف المنتج بنجاح');
+    },
+    onError: (error) => {
+      console.error('Error deleting product:', error);
+      toast.error('حدث خطأ أثناء حذف المنتج');
+    }
+  });
+  
+  // حساب تكلفة الوحدة بناءً على المكونات
+  const calculateUnitCost = (components: any[]) => {
+    return components.reduce((sum, component) => {
+      if (component.type === 'semi') {
+        const semiProduct = semiFinishedProducts.find(item => item.code === component.code);
+        return sum + (semiProduct ? semiProduct.unit_cost * component.quantity : 0);
+      } else {
+        const packagingMaterial = packagingMaterials.find(item => item.code === component.code);
+        return sum + (packagingMaterial ? packagingMaterial.unit_cost * component.quantity : 0);
+      }
+    }, 0);
+  };
+  
+  // إضافة منتج نصف مصنع
+  const handleAddSemiFinished = () => {
+    if (!selectedSemiFinished || semiFinishedQuantity <= 0) {
+      toast.error("يرجى اختيار منتج نصف مصنع وتحديد الكمية");
+      return;
+    }
+    
+    // التحقق من وجود منتج نصف مصنع بالفعل
+    const hasSemiFinished = newProduct.components.some(c => c.type === 'semi');
+    if (hasSemiFinished) {
+      toast.error("لا يمكن إضافة أكثر من منتج نصف مصنع واحد");
+      return;
+    }
+    
+    const semiProduct = semiFinishedProducts.find(item => item.code === selectedSemiFinished);
+    if (!semiProduct) return;
+    
+    const newComponent = {
+      id: semiProduct.id,
+      type: 'semi' as const,
+      code: semiProduct.code,
+      name: semiProduct.name,
+      quantity: semiFinishedQuantity,
+      unit: semiProduct.unit
+    };
+    
+    setNewProduct({
+      ...newProduct,
+      components: [...newProduct.components, newComponent]
+    });
+    
+    setSelectedSemiFinished('');
+    setSemiFinishedQuantity(0);
+  };
+  
+  // إضافة مستلزم تعبئة
+  const handleAddPackaging = () => {
+    if (!selectedPackaging || packagingQuantity <= 0) {
+      toast.error("يرجى اختيار مستلزم تعبئة وتحديد الكمية");
+      return;
+    }
+    
+    // التحقق من وجود مستلزم التعبئة بالفعل
+    const existingIndex = newProduct.components.findIndex(
+      c => c.type === 'packaging' && c.code === selectedPackaging
+    );
+    
+    if (existingIndex >= 0) {
+      // تحديث كمية المستلزم الموجود
+      const updatedComponents = [...newProduct.components];
+      updatedComponents[existingIndex].quantity += packagingQuantity;
+      
+      setNewProduct({
+        ...newProduct,
+        components: updatedComponents
+      });
+    } else {
+      // إضافة مستلزم جديد
+      const packagingMaterial = packagingMaterials.find(item => item.code === selectedPackaging);
+      if (!packagingMaterial) return;
+      
+      const newComponent = {
+        id: packagingMaterial.id,
+        type: 'packaging' as const,
+        code: packagingMaterial.code,
+        name: packagingMaterial.name,
+        quantity: packagingQuantity,
+        unit: packagingMaterial.unit
+      };
+      
+      setNewProduct({
+        ...newProduct,
+        components: [...newProduct.components, newComponent]
+      });
+    }
+    
+    setSelectedPackaging('');
+    setPackagingQuantity(0);
+  };
+  
+  // إزالة مكون
+  const handleRemoveComponent = (componentIndex: number) => {
+    const updatedComponents = newProduct.components.filter((_, index) => index !== componentIndex);
+    setNewProduct({
+      ...newProduct,
+      components: updatedComponents
+    });
+  };
+  
+  // إضافة منتج جديد
+  const handleAddProduct = () => {
+    if (!newProduct.name || !newProduct.unit || newProduct.components.length === 0) {
+      toast.error("يجب ملء جميع الحقول المطلوبة وإضافة مكون واحد على الأقل");
+      return;
+    }
+    
+    // التحقق من وجود منتج نصف مصنع واحد على الأقل
+    const semiFinishedComponent = newProduct.components.find(c => c.type === 'semi');
+    if (!semiFinishedComponent) {
+      toast.error("يجب إضافة منتج نصف مصنع واحد على الأقل");
+      return;
+    }
+    
+    const unitCost = calculateUnitCost(newProduct.components);
+    
+    // إعداد مصفوفة مستلزمات التعبئة
+    const packagingComponents = newProduct.components
+      .filter(c => c.type === 'packaging')
+      .map(c => ({
+        id: c.id,
+        quantity: c.quantity
+      }));
+    
+    // إنشاء منتج جديد
+    createProductMutation.mutate({
+      code: generateCode('finished', products.length),
+      name: newProduct.name,
+      unit: newProduct.unit,
+      semi_finished_id: semiFinishedComponent.id,
+      semi_finished_quantity: semiFinishedComponent.quantity,
+      unit_cost: Math.round(unitCost * 100) / 100,
+      quantity: newProduct.quantity,
+      min_stock: newProduct.minStock,
+      packagingMaterials: packagingComponents
+    });
+  };
+  
+  // تحديث منتج
+  const handleEditProduct = () => {
+    if (!currentProduct) return;
+    
+    // التحقق من صحة البيانات
+    if (!currentProduct.name || !currentProduct.unit || currentProduct.components.length === 0) {
+      toast.error("يجب ملء جميع الحقول المطلوبة وإضافة مكون واحد على الأقل");
+      return;
+    }
+    
+    // التحقق من وجود منتج نصف مصنع واحد على الأقل
+    const semiFinishedComponent = currentProduct.components.find(c => c.type === 'semi');
+    if (!semiFinishedComponent) {
+      toast.error("يجب إضافة منتج نصف مصنع واحد على الأقل");
+      return;
+    }
+    
+    const unitCost = calculateUnitCost(currentProduct.components);
+    
+    // إعداد مصفوفة مستلزمات التعبئة
+    const packagingComponents = currentProduct.components
+      .filter(c => c.type === 'packaging')
+      .map(c => ({
+        id: c.id,
+        quantity: c.quantity
+      }));
+    
+    // تحديث المنتج
+    updateProductMutation.mutate({
+      id: currentProduct.id,
+      name: currentProduct.name,
+      unit: currentProduct.unit,
+      quantity: currentProduct.quantity,
+      min_stock: currentProduct.minStock,
+      unit_cost: Math.round(unitCost * 100) / 100,
+      semi_finished_id: semiFinishedComponent.id,
+      semi_finished_quantity: semiFinishedComponent.quantity,
+      packagingMaterials: packagingComponents
+    });
+  };
+  
+  // حذف منتج
+  const handleDeleteProduct = () => {
+    if (!currentProduct) return;
+    deleteProductMutation.mutate(currentProduct.id);
+  };
+  
+  // أعمدة جدول البيانات
   const columns = [
     { key: 'code', title: 'الكود' },
     { key: 'name', title: 'اسم المنتج' },
@@ -141,239 +607,8 @@ const FinishedProducts = () => {
     }
   ];
   
-  // Calculate the unit cost based on components
-  const calculateUnitCost = (components: any[]) => {
-    return components.reduce((sum, component) => {
-      if (component.type === 'semi') {
-        const semiProduct = semiFinishedProducts.find(item => item.code === component.code);
-        return sum + (semiProduct ? semiProduct.unitCost * component.quantity : 0);
-      } else {
-        const packagingMaterial = packagingMaterials.find(item => item.code === component.code);
-        return sum + (packagingMaterial ? packagingMaterial.price * component.quantity : 0);
-      }
-    }, 0);
-  };
-  
-  // Handle adding a semi-finished component
-  const handleAddSemiFinished = () => {
-    if (!selectedSemiFinished || semiFinishedQuantity <= 0) {
-      toast({
-        title: "خطأ",
-        description: "يرجى اختيار منتج نصف مصنع وتحديد الكمية",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Check if a semi-finished product already exists
-    const hasSemiFinished = newProduct.components.some(c => c.type === 'semi');
-    if (hasSemiFinished) {
-      toast({
-        title: "خطأ",
-        description: "لا يمكن إضافة أكثر من منتج نصف مصنع واحد",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const semiProduct = semiFinishedProducts.find(item => item.code === selectedSemiFinished);
-    if (!semiProduct) return;
-    
-    const newComponent = {
-      id: semiProduct.id,
-      type: 'semi',
-      code: semiProduct.code,
-      name: semiProduct.name,
-      quantity: semiFinishedQuantity,
-      unit: semiProduct.unit
-    };
-    
-    setNewProduct({
-      ...newProduct,
-      components: [...newProduct.components, newComponent]
-    });
-    
-    setSelectedSemiFinished('');
-    setSemiFinishedQuantity(0);
-  };
-  
-  // Handle adding a packaging component
-  const handleAddPackaging = () => {
-    if (!selectedPackaging || packagingQuantity <= 0) {
-      toast({
-        title: "خطأ",
-        description: "يرجى اختيار مستلزم تعبئة وتحديد الكمية",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Check if this packaging material already exists
-    const existingIndex = newProduct.components.findIndex(
-      c => c.type === 'packaging' && c.code === selectedPackaging
-    );
-    
-    if (existingIndex >= 0) {
-      // Update existing component quantity
-      const updatedComponents = [...newProduct.components];
-      updatedComponents[existingIndex].quantity += packagingQuantity;
-      
-      setNewProduct({
-        ...newProduct,
-        components: updatedComponents
-      });
-    } else {
-      // Add new component
-      const packagingMaterial = packagingMaterials.find(item => item.code === selectedPackaging);
-      if (!packagingMaterial) return;
-      
-      const newComponent = {
-        id: packagingMaterial.id,
-        type: 'packaging',
-        code: packagingMaterial.code,
-        name: packagingMaterial.name,
-        quantity: packagingQuantity,
-        unit: packagingMaterial.unit
-      };
-      
-      setNewProduct({
-        ...newProduct,
-        components: [...newProduct.components, newComponent]
-      });
-    }
-    
-    setSelectedPackaging('');
-    setPackagingQuantity(0);
-  };
-  
-  // Handle removing a component
-  const handleRemoveComponent = (componentIndex: number) => {
-    const updatedComponents = newProduct.components.filter((_, index) => index !== componentIndex);
-    setNewProduct({
-      ...newProduct,
-      components: updatedComponents
-    });
-  };
-  
-  // Handle adding a new product
-  const handleAddProduct = () => {
-    if (!newProduct.name || !newProduct.unit || newProduct.components.length === 0) {
-      toast({
-        title: "خطأ",
-        description: "يجب ملء جميع الحقول المطلوبة وإضافة مكون واحد على الأقل",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Check if at least one semi-finished product is included
-    const hasSemiFinished = newProduct.components.some(c => c.type === 'semi');
-    if (!hasSemiFinished) {
-      toast({
-        title: "خطأ",
-        description: "يجب إضافة منتج نصف مصنع واحد على الأقل",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const unitCost = calculateUnitCost(newProduct.components);
-    const totalValue = newProduct.quantity * unitCost;
-    
-    const newItem = {
-      id: products.length + 1,
-      code: generateCode('finished', products.length),
-      name: newProduct.name,
-      unit: newProduct.unit,
-      components: newProduct.components,
-      unitCost: Math.round(unitCost * 100) / 100,
-      quantity: newProduct.quantity,
-      minStock: newProduct.minStock,
-      totalValue: Math.round(totalValue * 100) / 100
-    };
-    
-    setProducts([...products, newItem]);
-    setNewProduct({
-      name: '',
-      unit: '',
-      components: [],
-      quantity: 0,
-      minStock: 0
-    });
-    setIsAddDialogOpen(false);
-    
-    toast({
-      title: "تمت الإضافة",
-      description: `تمت إضافة ${newItem.name} بنجاح`
-    });
-  };
-  
-  // Handle editing a product
-  const handleEditProduct = () => {
-    if (!currentProduct) return;
-    
-    // Validation
-    if (!currentProduct.name || !currentProduct.unit || currentProduct.components.length === 0) {
-      toast({
-        title: "خطأ",
-        description: "يجب ملء جميع الحقول المطلوبة وإضافة مكون واحد على الأقل",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Check if at least one semi-finished product is included
-    const hasSemiFinished = currentProduct.components.some(c => c.type === 'semi');
-    if (!hasSemiFinished) {
-      toast({
-        title: "خطأ",
-        description: "يجب إضافة منتج نصف مصنع واحد على الأقل",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const unitCost = calculateUnitCost(currentProduct.components);
-    const totalValue = currentProduct.quantity * unitCost;
-    
-    const updatedProduct = {
-      ...currentProduct,
-      unitCost: Math.round(unitCost * 100) / 100,
-      totalValue: Math.round(totalValue * 100) / 100
-    };
-    
-    const updatedProducts = products.map(product => 
-      product.id === currentProduct.id ? updatedProduct : product
-    );
-    
-    setProducts(updatedProducts);
-    setIsEditDialogOpen(false);
-    
-    toast({
-      title: "تم التعديل",
-      description: `تم تعديل ${currentProduct.name} بنجاح`
-    });
-  };
-  
-  // Handle deleting a product
-  const handleDeleteProduct = () => {
-    if (!currentProduct) return;
-    
-    const updatedProducts = products.filter(
-      product => product.id !== currentProduct.id
-    );
-    
-    setProducts(updatedProducts);
-    setIsDeleteDialogOpen(false);
-    
-    toast({
-      title: "تم الحذف",
-      description: `تم حذف ${currentProduct.name} بنجاح`
-    });
-  };
-  
-  // Render actions column
-  const renderActions = (record: any) => (
+  // عرض أزرار العمليات
+  const renderActions = (record: FinishedProduct) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
         variant="ghost"
@@ -397,6 +632,18 @@ const FinishedProducts = () => {
       </Button>
     </div>
   );
+  
+  // عرض رسالة خطأ إذا فشل تحميل البيانات
+  if (isErrorProducts) {
+    return (
+      <PageTransition>
+        <div className="flex flex-col items-center justify-center h-96">
+          <div className="text-red-500 text-xl font-bold mb-4">حدث خطأ أثناء تحميل البيانات</div>
+          <div className="text-gray-600">{(errorProducts as Error)?.message || 'خطأ غير معروف'}</div>
+        </div>
+      </PageTransition>
+    );
+  }
   
   return (
     <PageTransition>
@@ -472,6 +719,7 @@ const FinishedProducts = () => {
                     <Select 
                       value={selectedSemiFinished} 
                       onValueChange={setSelectedSemiFinished}
+                      disabled={isLoadingSemi}
                     >
                       <SelectTrigger className="flex-1">
                         <SelectValue placeholder="اختر منتج" />
@@ -493,7 +741,11 @@ const FinishedProducts = () => {
                         step={0.01}
                       />
                     </div>
-                    <Button type="button" onClick={handleAddSemiFinished}>
+                    <Button 
+                      type="button" 
+                      onClick={handleAddSemiFinished}
+                      disabled={isLoadingSemi}
+                    >
                       إضافة
                     </Button>
                   </div>
@@ -505,6 +757,7 @@ const FinishedProducts = () => {
                     <Select 
                       value={selectedPackaging} 
                       onValueChange={setSelectedPackaging}
+                      disabled={isLoadingPackaging}
                     >
                       <SelectTrigger className="flex-1">
                         <SelectValue placeholder="اختر مستلزم" />
@@ -525,7 +778,11 @@ const FinishedProducts = () => {
                         min={1}
                       />
                     </div>
-                    <Button type="button" onClick={handleAddPackaging}>
+                    <Button 
+                      type="button" 
+                      onClick={handleAddPackaging}
+                      disabled={isLoadingPackaging}
+                    >
                       إضافة
                     </Button>
                   </div>
@@ -578,23 +835,40 @@ const FinishedProducts = () => {
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   إلغاء
                 </Button>
-                <Button onClick={handleAddProduct}>
-                  إضافة
+                <Button 
+                  onClick={handleAddProduct}
+                  disabled={createProductMutation.isPending}
+                >
+                  {createProductMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      جاري الإضافة...
+                    </>
+                  ) : (
+                    'إضافة'
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
         
-        <DataTable
-          columns={columns}
-          data={products}
-          searchable
-          searchKeys={['code', 'name']}
-          actions={renderActions}
-        />
+        {isLoadingProducts ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="mr-2">جاري تحميل البيانات...</span>
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={products}
+            searchable
+            searchKeys={['code', 'name']}
+            actions={renderActions}
+          />
+        )}
         
-        {/* Edit Dialog */}
+        {/* مربع حوار التعديل */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -714,14 +988,24 @@ const FinishedProducts = () => {
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button onClick={handleEditProduct}>
-                حفظ التعديلات
+              <Button 
+                onClick={handleEditProduct}
+                disabled={updateProductMutation.isPending}
+              >
+                {updateProductMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    جاري الحفظ...
+                  </>
+                ) : (
+                  'حفظ التعديلات'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
         
-        {/* Delete Dialog */}
+        {/* مربع حوار الحذف */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -740,8 +1024,19 @@ const FinishedProducts = () => {
               <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button variant="destructive" onClick={handleDeleteProduct}>
-                حذف
+              <Button 
+                variant="destructive" 
+                onClick={handleDeleteProduct}
+                disabled={deleteProductMutation.isPending}
+              >
+                {deleteProductMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    جاري الحذف...
+                  </>
+                ) : (
+                  'حذف'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
