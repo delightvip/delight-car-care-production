@@ -226,63 +226,58 @@ class InventoryService {
   // الحصول على المواد ذات المخزون المنخفض
   public async getLowStockItems() {
     try {
-      const [rawMaterials, semiFinished, packaging, finished] = await Promise.all([
-        // المواد الأولية ذات المخزون المنخفض
-        supabase
-          .from('raw_materials')
-          .select('*')
-          .lte('quantity', supabase.rpc('least', { a: 'quantity', b: 'min_stock' })),
-          
-        // المنتجات النصف مصنعة ذات المخزون المنخفض
-        supabase
-          .from('semi_finished_products')
-          .select('*')
-          .lte('quantity', supabase.rpc('least', { a: 'quantity', b: 'min_stock' })),
-          
-        // مواد التعبئة ذات المخزون المنخفض
-        supabase
-          .from('packaging_materials')
-          .select('*')
-          .lte('quantity', supabase.rpc('least', { a: 'quantity', b: 'min_stock' })),
-          
-        // المنتجات النهائية ذات المخزون المنخفض
-        supabase
-          .from('finished_products')
-          .select('*')
-          .lte('quantity', supabase.rpc('least', { a: 'quantity', b: 'min_stock' }))
+      // Changed approach to avoid using rpc with 'least' function
+      const [rawMaterialsData, semiFinishedData, packagingData, finishedData] = await Promise.all([
+        // المواد الأولية
+        supabase.from('raw_materials').select('*'),
+        // المنتجات النصف مصنعة
+        supabase.from('semi_finished_products').select('*'),
+        // مواد التعبئة
+        supabase.from('packaging_materials').select('*'),
+        // المنتجات النهائية
+        supabase.from('finished_products').select('*')
       ]);
       
-      if (rawMaterials.error || semiFinished.error || packaging.error || finished.error) {
+      if (rawMaterialsData.error || semiFinishedData.error || packagingData.error || finishedData.error) {
         throw new Error('فشل في جلب بيانات المخزون المنخفض');
       }
       
-      const lowStockRaw = rawMaterials.data.map(item => ({ 
-        ...item, 
-        minStock: item.min_stock,
-        unitCost: item.unit_cost,
-        type: 'rawMaterial' as const 
-      }));
+      // Filter for low stock items in memory instead of using DB function
+      const lowStockRaw = rawMaterialsData.data
+        .filter(item => item.quantity <= item.min_stock)
+        .map(item => ({ 
+          ...item, 
+          minStock: item.min_stock,
+          unitCost: item.unit_cost,
+          type: 'rawMaterial' as const 
+        }));
       
-      const lowStockSemi = semiFinished.data.map(item => ({ 
-        ...item, 
-        minStock: item.min_stock,
-        unitCost: item.unit_cost,
-        type: 'semiFinished' as const 
-      }));
+      const lowStockSemi = semiFinishedData.data
+        .filter(item => item.quantity <= item.min_stock)
+        .map(item => ({ 
+          ...item, 
+          minStock: item.min_stock,
+          unitCost: item.unit_cost,
+          type: 'semiFinished' as const 
+        }));
       
-      const lowStockPackaging = packaging.data.map(item => ({ 
-        ...item, 
-        minStock: item.min_stock,
-        unitCost: item.unit_cost,
-        type: 'packaging' as const 
-      }));
+      const lowStockPackaging = packagingData.data
+        .filter(item => item.quantity <= item.min_stock)
+        .map(item => ({ 
+          ...item, 
+          minStock: item.min_stock,
+          unitCost: item.unit_cost,
+          type: 'packaging' as const 
+        }));
       
-      const lowStockFinished = finished.data.map(item => ({ 
-        ...item, 
-        minStock: item.min_stock,
-        unitCost: item.unit_cost,
-        type: 'finished' as const 
-      }));
+      const lowStockFinished = finishedData.data
+        .filter(item => item.quantity <= item.min_stock)
+        .map(item => ({ 
+          ...item, 
+          minStock: item.min_stock,
+          unitCost: item.unit_cost,
+          type: 'finished' as const 
+        }));
       
       return [...lowStockRaw, ...lowStockSemi, ...lowStockPackaging, ...lowStockFinished];
     } catch (error) {
@@ -563,7 +558,7 @@ class InventoryService {
   // الحصول على إحصائيات عامة للمخزون
   public async getInventoryStats() {
     try {
-      const [rawCount, semiCount, packagingCount, finishedCount, lowStockItems] = await Promise.all([
+      const [rawCountData, semiCountData, packagingCountData, finishedCountData, lowStockItems] = await Promise.all([
         // عدد المواد الأولية
         supabase.from('raw_materials').select('id', { count: 'exact', head: true }),
         
@@ -585,14 +580,14 @@ class InventoryService {
       const totalValue = distributionData.reduce((sum, item) => sum + item.value, 0);
       
       return {
-        totalItems: (rawCount.count || 0) + (semiCount.count || 0) + (packagingCount.count || 0) + (finishedCount.count || 0),
+        totalItems: (rawCountData.count || 0) + (semiCountData.count || 0) + (packagingCountData.count || 0) + (finishedCountData.count || 0),
         lowStockItems: lowStockItems.length,
         totalValue,
         categories: {
-          rawMaterials: rawCount.count || 0,
-          semiFinished: semiCount.count || 0,
-          packaging: packagingCount.count || 0,
-          finished: finishedCount.count || 0
+          rawMaterials: rawCountData.count || 0,
+          semiFinished: semiCountData.count || 0,
+          packaging: packagingCountData.count || 0,
+          finished: finishedCountData.count || 0
         }
       };
     } catch (error) {
