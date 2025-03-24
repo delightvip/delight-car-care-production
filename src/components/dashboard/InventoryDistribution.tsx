@@ -34,7 +34,7 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data }) =
             ))}
           </Pie>
           <Tooltip
-            formatter={(value) => [`${value} (${((value / total) * 100).toFixed(1)}%)`, 'القيمة']}
+            formatter={(value: number) => [`${value} (${((value / total) * 100).toFixed(1)}%)`, 'القيمة']}
             contentStyle={{
               backgroundColor: 'white',
               borderRadius: '8px',
