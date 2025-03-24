@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SidebarProvider as AppSidebarProvider } from '@/components/layout/SidebarContext';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import Index from '@/pages/Index';
 import Analytics from '@/pages/Analytics';
 import InventoryRawMaterials from '@/pages/inventory/InventoryRawMaterials';
@@ -20,7 +20,7 @@ import ProductionOrders from '@/pages/production/ProductionOrders';
 import ProductionPackaging from '@/pages/production/ProductionPackaging';
 import ProductionPlanning from '@/pages/production/ProductionPlanning';
 import Navbar from '@/components/layout/Navbar';
-import Sidebar from '@/components/layout/Sidebar';
+import Sidebar from '@/components/layout/ModernSidebar';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import LowStockNotifier from '@/components/notifications/LowStockNotifier';
@@ -33,7 +33,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="delight-ui-theme">
-        <AppSidebarProvider>
+        <SidebarProvider>
           <TooltipProvider>
             <Router>
               <div className="min-h-screen flex w-full group/sidebar-wrapper">
@@ -63,7 +63,7 @@ function App() {
               </div>
             </Router>
           </TooltipProvider>
-        </AppSidebarProvider>
+        </SidebarProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
