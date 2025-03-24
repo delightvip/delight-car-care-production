@@ -27,7 +27,7 @@ import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useSidebar } from '@/components/layout/SidebarContext';
+import { useSidebar as useAppSidebar } from '@/components/layout/SidebarContext';
 
 // مكون عنصر القائمة الجانبية
 const SidebarNavItem = ({ 
@@ -93,7 +93,7 @@ const ModernSidebar = () => {
   const pathname = location.pathname;
   const [animateIcons, setAnimateIcons] = useState(false);
   const isMobile = useIsMobile();
-  const { isOpen } = useSidebar();
+  const { isOpen } = useAppSidebar();
   
   const { data: lowStockItems } = useQuery({
     queryKey: ['lowStockCount'],
