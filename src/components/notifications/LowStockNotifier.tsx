@@ -16,26 +16,26 @@ const LowStockNotifier: React.FC = () => {
         // جلب المواد الأولية منخفضة المخزون
         const rawMaterialsResponse = await supabase
           .from('raw_materials')
-          .select('id, name, code, quantity')
-          .lt('quantity', 10);
+          .select('id, name, code')
+          .filter('quantity', 'lt', supabase.raw('min_stock'));
           
         // جلب المنتجات النصف مصنعة منخفضة المخزون
         const semiFinishedResponse = await supabase
           .from('semi_finished_products')
-          .select('id, name, code, quantity')
-          .lt('quantity', 10);
+          .select('id, name, code')
+          .filter('quantity', 'lt', supabase.raw('min_stock'));
         
         // جلب مواد التعبئة منخفضة المخزون
         const packagingResponse = await supabase
           .from('packaging_materials')
-          .select('id, name, code, quantity')
-          .lt('quantity', 10);
+          .select('id, name, code')
+          .filter('quantity', 'lt', supabase.raw('min_stock'));
         
         // جلب المنتجات النهائية منخفضة المخزون
         const finishedResponse = await supabase
           .from('finished_products')
-          .select('id, name, code, quantity')
-          .lt('quantity', 10);
+          .select('id, name, code')
+          .filter('quantity', 'lt', supabase.raw('min_stock'));
         
         // تجميع النتائج
         return {
