@@ -1,69 +1,111 @@
-# Welcome to your Lovable project
 
-## Project info
+# نظام إدارة الإنتاج لمصنع DELIGHT لمنتجات العناية بالسيارات
 
-**URL**: https://lovable.dev/projects/71736980-8d74-480a-bae2-b1f5b33ef7b1
+نظام متكامل لإدارة عمليات الإنتاج والمخزون في مصنع منتجات العناية بالسيارات، يساعد على متابعة المواد الخام والمنتجات النصف مصنعة ومستلزمات التعبئة والمنتجات النهائية، وإدارة أوامر الإنتاج والتعبئة.
 
-## How can I edit this code?
+## المزايا الرئيسية للنظام
 
-There are several ways of editing your application.
+### إدارة المخزون
+- عرض وإدارة المنتجات بأنواعها المختلفة (مواد أولية، مستلزمات تعبئة، منتجات نصف مصنعة، منتجات نهائية)
+- توليد أكواد فريدة لكل منتج بشكل تلقائي
+- حساب القيمة الإجمالية للمخزون وتتبع التكاليف
+- إضافة وتعديل وحذف المنتجات
 
-**Use Lovable**
+### إدارة الإنتاج
+- إنشاء أوامر إنتاج للمنتجات النصف مصنعة
+- متابعة وتغيير حالة الإنتاج (قيد الانتظار، جارٍ التنفيذ، مكتمل، ملغي)
+- خصم المواد المستخدمة من المخزون عند اكتمال الإنتاج
+- إضافة المنتجات النصف مصنعة للمخزون
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/71736980-8d74-480a-bae2-b1f5b33ef7b1) and start prompting.
+### إدارة التعبئة
+- إنشاء أوامر تعبئة للمنتجات النصف مصنعة لإنتاج منتج نهائي
+- إمكانية تعديل كميات مكونات التعبئة المختلفة
+- حساب تكلفة التعبئة والتكلفة الإجمالية للمنتج النهائي
+- خصم المنتجات النصف مصنعة ومكونات التعبئة من المخزون
+- إضافة المنتجات النهائية للمخزون
 
-Changes made via Lovable will be committed automatically to this repo.
+## مكونات النظام
 
-**Use your preferred IDE**
+### موديول المخزون
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+#### قسم المواد الأولية
+المواد الأولية اللازمة لعمليات التصنيع:
+- كود المادة (يتم توليده تلقائياً بشكل RAW-00001)
+- اسم المادة
+- وحدة القياس (كجم، لتر، مللي، جم، علبة، قطعة، كرتونة)
+- الكمية
+- السعر
+- الحد الأدنى للمخزون
+- الأهمية (عدد الوصفات التي تحتوي على المنتج)
+- إجمالي قيمة المخزون
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+#### قسم المنتجات النصف مصنعة (السائلة)
+ناتج عملية خلط المواد الأولية للخروج بمنتج سائل نصف مصنع جاهز للتعبئة:
+- كود المنتج (يتم توليده تلقائياً)
+- اسم المنتج
+- وحدة القياس
+- مكونات المنتج (نسب المواد الأولية مع إمكانية إضافة الماء)
+- الكمية
+- عدد المكونات
+- تكلفة الوحدة
+- الحد الأدنى للمخزون
+- قيمة المخزون
 
-Follow these steps:
+#### قسم مستلزمات التعبئة
+المستلزمات الخاصة بالتعبئة والتغليف:
+- كود المنتج (يتم توليده تلقائياً)
+- اسم المنتج
+- وحدة القياس
+- سعر الوحدة
+- الكمية
+- الحد الأدنى للمخزون
+- الأهمية (عدد المنتجات التي تستخدم هذا المكون)
+- إجمالي قيمة المخزون
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+#### قسم المنتجات النهائية
+المنتج النهائي الناتج عن عملية إنتاج المنتج نصف المصنع وتعبئته:
+- كود المنتج (يتم توليده تلقائياً)
+- اسم المنتج
+- وحدة القياس
+- المكونات (منتج سائل نصف مصنع + مستلزمات التعبئة)
+- تكلفة الوحدة
+- الكمية
+- الحد الأدنى للمخزون
+- القيمة الإجمالية
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+#### قسم المواد والمنتجات منخفضة المخزون
+عرض جميع المواد والمنتجات التي وصلت إلى الحد الأدنى للمخزون أو أقل منه.
 
-# Step 3: Install the necessary dependencies.
-npm i
+### موديول الإنتاج
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+#### قسم أوامر الإنتاج
+إنشاء ومتابعة أوامر إنتاج المنتجات النصف مصنعة:
+- إنشاء أمر إنتاج جديد
+- تحديد المنتج والكمية المطلوبة
+- حساب المواد الأولية المطلوبة
+- التحقق من توافر المواد الأولية
+- تتبع حالة أمر الإنتاج
 
-**Edit a file directly in GitHub**
+#### قسم أوامر التعبئة
+إنشاء ومتابعة أوامر تعبئة المنتجات النهائية:
+- إنشاء أمر تعبئة جديد
+- تحديد المنتج والكمية المطلوبة
+- حساب المكونات المطلوبة (سائل + مستلزمات تعبئة)
+- التحقق من توافر المكونات
+- تتبع حالة أمر التعبئة
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## التقنيات المستخدمة
+- React.js و TypeScript
+- Tailwind CSS للتصميم
+- Shadcn UI للمكونات
+- React Router للتنقل بين الصفحات
+- مخططات Recharts لعرض البيانات
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with .
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/71736980-8d74-480a-bae2-b1f5b33ef7b1) and click on Share -> Publish.
-
-## I want to use a custom domain - is that possible?
-
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+## التوسعات المستقبلية
+- الحركات التجارية
+- نظام الإدارة المالية
+- إدارة العملاء والموردين
+- إدارة الموظفين
+- نظام التقارير والإحصائيات
+- الإعدادات
+- إدارة المستخدمين
