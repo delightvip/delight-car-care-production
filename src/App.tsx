@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SidebarProvider } from '@/components/layout/SidebarContext';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import Index from '@/pages/Index';
 import Analytics from '@/pages/Analytics';
 import InventoryRawMaterials from '@/pages/inventory/InventoryRawMaterials';
@@ -31,12 +31,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="delight-ui-theme">
-        <TooltipProvider>
-          {/* 
-            Important: SidebarProvider must wrap the entire app content,
-            including any components that use useSidebar, like Navbar or ModernSidebar
-          */}
-          <SidebarProvider>
+        {/* 
+          First wrap with SidebarProvider from the sidebar component,
+          not from SidebarContext. This ensures the useSidebar hook
+          from sidebar.tsx has the proper context.
+        */}
+        <SidebarProvider defaultOpen={true}>
+          <TooltipProvider>
             <Router>
               <div className="min-h-screen flex w-full">
                 <Navbar />
@@ -60,8 +61,8 @@ function App() {
                 <LowStockNotifier />
               </div>
             </Router>
-          </SidebarProvider>
-        </TooltipProvider>
+          </TooltipProvider>
+        </SidebarProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
