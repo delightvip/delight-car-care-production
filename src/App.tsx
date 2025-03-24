@@ -36,11 +36,11 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <div className="min-h-screen flex flex-col w-full">
+          <div className="min-h-screen flex flex-col w-full bg-background/50 backdrop-blur-sm">
             <Navbar />
             <div className="flex flex-1 pt-16">
               <ModernSidebar />
-              <main className="flex-1 p-4 md:p-6 md:pr-6 md:ml-64 overflow-x-hidden">
+              <main className="flex-1 p-4 md:p-6 md:pr-6 md:ml-64 overflow-x-hidden transition-all duration-300">
                 <AnimatePresence mode="wait">
                   <Routes>
                     <Route path="/" element={<Index />} />
