@@ -23,7 +23,7 @@ import ModernSidebar from '@/components/layout/ModernSidebar';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import LowStockNotifier from '@/components/notifications/LowStockNotifier';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarContext } from '@/components/layout/SidebarContext';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 const queryClient = new QueryClient();
@@ -32,7 +32,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="delight-ui-theme">
-        <SidebarProvider>
+        <SidebarContext>
           <TooltipProvider>
             <Router>
               <div className="min-h-screen flex w-full">
@@ -61,7 +61,7 @@ function App() {
               </div>
             </Router>
           </TooltipProvider>
-        </SidebarProvider>
+        </SidebarContext>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -51,48 +51,68 @@ type LowStockItem =
 const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
   const items: LowStockItem[] = [];
   
-  // Fetch raw materials with low stock
-  const { data: rawMaterials, error: rawError } = await supabase
-    .from('raw_materials')
-    .select('id, name, quantity, min_stock')
-    .lt('quantity', 'min_stock');
-  
-  if (rawError) console.error('Error fetching raw materials:', rawError);
-  if (rawMaterials) {
-    items.push(...rawMaterials.map(item => ({ ...item, type: 'raw_material' as const })));
+  try {
+    // Fetch raw materials with low stock
+    const { data: rawMaterials, error: rawError } = await supabase
+      .from('raw_materials')
+      .select('id, name, quantity, min_stock')
+      .lt('quantity', 'min_stock');
+    
+    if (rawError) {
+      console.error('Error fetching raw materials:', rawError);
+    } else if (rawMaterials) {
+      items.push(...rawMaterials.map(item => ({ ...item, type: 'raw_material' as const })));
+    }
+  } catch (error) {
+    console.error('Error in raw materials fetch:', error);
   }
   
-  // Fetch semi-finished products with low stock
-  const { data: semiFinished, error: semiError } = await supabase
-    .from('semi_finished_products')
-    .select('id, name, quantity, min_stock')
-    .lt('quantity', 'min_stock');
-  
-  if (semiError) console.error('Error fetching semi-finished products:', semiError);
-  if (semiFinished) {
-    items.push(...semiFinished.map(item => ({ ...item, type: 'semi_finished' as const })));
+  try {
+    // Fetch semi-finished products with low stock
+    const { data: semiFinished, error: semiError } = await supabase
+      .from('semi_finished_products')
+      .select('id, name, quantity, min_stock')
+      .lt('quantity', 'min_stock');
+    
+    if (semiError) {
+      console.error('Error fetching semi-finished products:', semiError);
+    } else if (semiFinished) {
+      items.push(...semiFinished.map(item => ({ ...item, type: 'semi_finished' as const })));
+    }
+  } catch (error) {
+    console.error('Error in semi-finished fetch:', error);
   }
   
-  // Fetch packaging materials with low stock
-  const { data: packaging, error: packagingError } = await supabase
-    .from('packaging_materials')
-    .select('id, name, quantity, min_stock')
-    .lt('quantity', 'min_stock');
-  
-  if (packagingError) console.error('Error fetching packaging materials:', packagingError);
-  if (packaging) {
-    items.push(...packaging.map(item => ({ ...item, type: 'packaging' as const })));
+  try {
+    // Fetch packaging materials with low stock
+    const { data: packaging, error: packagingError } = await supabase
+      .from('packaging_materials')
+      .select('id, name, quantity, min_stock')
+      .lt('quantity', 'min_stock');
+    
+    if (packagingError) {
+      console.error('Error fetching packaging materials:', packagingError);
+    } else if (packaging) {
+      items.push(...packaging.map(item => ({ ...item, type: 'packaging' as const })));
+    }
+  } catch (error) {
+    console.error('Error in packaging fetch:', error);
   }
   
-  // Fetch finished products with low stock
-  const { data: finished, error: finishedError } = await supabase
-    .from('finished_products')
-    .select('id, name, quantity, min_stock')
-    .lt('quantity', 'min_stock');
-  
-  if (finishedError) console.error('Error fetching finished products:', finishedError);
-  if (finished) {
-    items.push(...finished.map(item => ({ ...item, type: 'finished_product' as const })));
+  try {
+    // Fetch finished products with low stock
+    const { data: finished, error: finishedError } = await supabase
+      .from('finished_products')
+      .select('id, name, quantity, min_stock')
+      .lt('quantity', 'min_stock');
+    
+    if (finishedError) {
+      console.error('Error fetching finished products:', finishedError);
+    } else if (finished) {
+      items.push(...finished.map(item => ({ ...item, type: 'finished_product' as const })));
+    }
+  } catch (error) {
+    console.error('Error in finished products fetch:', error);
   }
   
   return items;

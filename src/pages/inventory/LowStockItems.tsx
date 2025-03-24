@@ -25,11 +25,18 @@ interface LowStockItem {
   route: string;
 }
 
+interface LowStockData {
+  raw: LowStockItem[];
+  semi: LowStockItem[];
+  packaging: LowStockItem[];
+  finished: LowStockItem[];
+}
+
 const LowStockItems = () => {
   const [activeTab, setActiveTab] = useState('all');
   
   // Fetch low stock items using React Query
-  const { data: lowStockItems, isLoading } = useQuery({
+  const { data: lowStockItems, isLoading, error } = useQuery({
     queryKey: ['lowStockItems'],
     queryFn: async () => {
       // Fetch raw materials data
@@ -65,7 +72,7 @@ const LowStockItems = () => {
       if (finishedError) throw new Error(finishedError.message);
       
       // Format the data for consistent display
-      const formattedData = {
+      const formattedData: LowStockData = {
         raw: (rawMaterials || []).map(item => ({
           id: item.id,
           code: item.code,
@@ -117,6 +124,30 @@ const LowStockItems = () => {
     refetchInterval: 60000, // Refresh every minute
   });
   
+  // Handle error state
+  if (error) {
+    console.error('Error fetching low stock items:', error);
+    return (
+      <PageTransition>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">المخزون المنخفض</h1>
+            <p className="text-muted-foreground mt-1">العناصر التي وصلت إلى الحد الأدنى المسموح به أو أقل</p>
+          </div>
+          
+          <Card className="p-6 text-center">
+            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-xl font-medium mb-2">حدث خطأ أثناء تحميل البيانات</h3>
+            <p className="text-muted-foreground">{error instanceof Error ? error.message : 'خطأ غير معروف'}</p>
+            <Button className="mt-4" onClick={() => window.location.reload()}>
+              إعادة المحاولة
+            </Button>
+          </Card>
+        </div>
+      </PageTransition>
+    );
+  }
+  
   // Render loading skeleton
   if (isLoading) {
     return (
@@ -145,21 +176,22 @@ const LowStockItems = () => {
     );
   }
   
+  // Initialize empty data structure if lowStockItems is undefined
+  const safeData: LowStockData = lowStockItems || { raw: [], semi: [], packaging: [], finished: [] };
+  
   // Combine all items and sort by stock percentage
-  const allItems = React.useMemo(() => {
-    if (!lowStockItems) return [];
-    
+  const allItems = React.useMemo(() => {    
     return [
-      ...lowStockItems.raw,
-      ...lowStockItems.semi,
-      ...lowStockItems.packaging,
-      ...lowStockItems.finished
+      ...safeData.raw,
+      ...safeData.semi,
+      ...safeData.packaging,
+      ...safeData.finished
     ].sort((a, b) => {
       const percentA = (a.currentStock / a.minStock) * 100;
       const percentB = (b.currentStock / b.minStock) * 100;
       return percentA - percentB;
     });
-  }, [lowStockItems]);
+  }, [safeData]);
   
   // Calculate totals
   const totalLowStock = allItems.length;
@@ -248,10 +280,10 @@ const LowStockItems = () => {
   // Get filtered items based on active tab
   const getFilteredItems = () => {
     if (activeTab === 'all') return allItems;
-    if (activeTab === 'raw') return lowStockItems?.raw || [];
-    if (activeTab === 'semi') return lowStockItems?.semi || [];
-    if (activeTab === 'packaging') return lowStockItems?.packaging || [];
-    if (activeTab === 'finished') return lowStockItems?.finished || [];
+    if (activeTab === 'raw') return safeData.raw || [];
+    if (activeTab === 'semi') return safeData.semi || [];
+    if (activeTab === 'packaging') return safeData.packaging || [];
+    if (activeTab === 'finished') return safeData.finished || [];
     return [];
   };
   
@@ -307,10 +339,10 @@ const LowStockItems = () => {
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
             <TabsTrigger value="all">الكل ({allItems.length})</TabsTrigger>
-            <TabsTrigger value="raw">المواد الأولية ({lowStockItems?.raw.length || 0})</TabsTrigger>
-            <TabsTrigger value="semi">النصف مصنعة ({lowStockItems?.semi.length || 0})</TabsTrigger>
-            <TabsTrigger value="packaging">مستلزمات التعبئة ({lowStockItems?.packaging.length || 0})</TabsTrigger>
-            <TabsTrigger value="finished">المنتجات النهائية ({lowStockItems?.finished.length || 0})</TabsTrigger>
+            <TabsTrigger value="raw">المواد الأولية ({safeData.raw.length || 0})</TabsTrigger>
+            <TabsTrigger value="semi">النصف مصنعة ({safeData.semi.length || 0})</TabsTrigger>
+            <TabsTrigger value="packaging">مستلزمات التعبئة ({safeData.packaging.length || 0})</TabsTrigger>
+            <TabsTrigger value="finished">المنتجات النهائية ({safeData.finished.length || 0})</TabsTrigger>
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
