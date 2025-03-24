@@ -38,7 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -91,7 +91,7 @@ const ModernSidebar = () => {
   const location = useLocation();
   const pathname = location.pathname;
   const [animateIcons, setAnimateIcons] = useState(false);
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   
   // Fetch low stock items count
   const { data: lowStockItems } = useQuery({
@@ -100,22 +100,22 @@ const ModernSidebar = () => {
       const rawMaterialsResponse = await supabase
         .from('raw_materials')
         .select('id, quantity, min_stock')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       const semiFinishedResponse = await supabase
         .from('semi_finished_products')
         .select('id, quantity, min_stock')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       const packagingResponse = await supabase
         .from('packaging_materials')
         .select('id, quantity, min_stock')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       const finishedResponse = await supabase
         .from('finished_products')
         .select('id, quantity, min_stock')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       const totalCount = 
         (rawMaterialsResponse.data?.length || 0) + 

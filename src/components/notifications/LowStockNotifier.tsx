@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,22 +16,22 @@ const LowStockNotifier: React.FC = () => {
       const rawMaterialsResponse = await supabase
         .from('raw_materials')
         .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       const semiFinishedResponse = await supabase
         .from('semi_finished_products')
         .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       const packagingResponse = await supabase
         .from('packaging_materials')
         .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       const finishedResponse = await supabase
         .from('finished_products')
         .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', supabase.raw('min_stock'));
+        .lt('quantity', 'min_stock');
       
       // Map the data to include category
       const rawData = (rawMaterialsResponse.data || []).map(item => ({

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import PageTransition from '@/components/ui/PageTransition';
@@ -12,6 +11,36 @@ import { AlertTriangle, Box, Factory, Beaker, Layers, Package, ShoppingBag, Tren
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import LoadingIndicator from '@/components/ui/LoadingIndicator';
+
+const fetchInventoryData = async () => {
+  const rawMaterialsResponse = await supabase
+    .from('raw_materials')
+    .select('quantity, unit_cost')
+    .lt('quantity', 'min_stock');
+  
+  const semiFinishedResponse = await supabase
+    .from('semi_finished_products')
+    .select('quantity, unit_cost')
+    .lt('quantity', 'min_stock');
+  
+  const packagingResponse = await supabase
+    .from('packaging_materials')
+    .select('quantity, unit_cost')
+    .lt('quantity', 'min_stock');
+  
+  const finishedResponse = await supabase
+    .from('finished_products')
+    .select('quantity, unit_cost')
+    .lt('quantity', 'min_stock');
+  
+  const totalCount = 
+    (rawMaterialsResponse.data?.length || 0) + 
+    (semiFinishedResponse.data?.length || 0) + 
+    (packagingResponse.data?.length || 0) + 
+    (finishedResponse.data?.length || 0);
+  
+  return totalCount;
+}
 
 const Index = () => {
   // Fetch counts from database
@@ -36,35 +65,7 @@ const Index = () => {
   // Fetch low stock items
   const { data: lowStockItems } = useQuery({
     queryKey: ['lowStockItems'],
-    queryFn: async () => {
-      const rawMaterialsResponse = await supabase
-        .from('raw_materials')
-        .select('id')
-        .lt('quantity', supabase.raw('min_stock'));
-      
-      const semiFinishedResponse = await supabase
-        .from('semi_finished_products')
-        .select('id')
-        .lt('quantity', supabase.raw('min_stock'));
-      
-      const packagingResponse = await supabase
-        .from('packaging_materials')
-        .select('id')
-        .lt('quantity', supabase.raw('min_stock'));
-      
-      const finishedResponse = await supabase
-        .from('finished_products')
-        .select('id')
-        .lt('quantity', supabase.raw('min_stock'));
-      
-      const totalCount = 
-        (rawMaterialsResponse.data?.length || 0) + 
-        (semiFinishedResponse.data?.length || 0) + 
-        (packagingResponse.data?.length || 0) + 
-        (finishedResponse.data?.length || 0);
-      
-      return totalCount;
-    },
+    queryFn: fetchInventoryData,
     refetchInterval: 60000, // Refresh every minute
   });
   
