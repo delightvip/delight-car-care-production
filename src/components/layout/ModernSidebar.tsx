@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
@@ -42,7 +41,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-// Move sidebar menu item definition to a separate component
 const SidebarNavItem = ({ 
   to, 
   icon: Icon, 
@@ -93,7 +91,6 @@ const ModernSidebar = () => {
   const [animateIcons, setAnimateIcons] = useState(false);
   const isMobile = useIsMobile();
   
-  // Fetch low stock items count
   const { data: lowStockItems } = useQuery({
     queryKey: ['lowStockCount'],
     queryFn: async () => {
@@ -125,10 +122,9 @@ const ModernSidebar = () => {
       
       return totalCount;
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000,
   });
   
-  // Trigger animation when route changes
   useEffect(() => {
     setAnimateIcons(true);
     const timer = setTimeout(() => setAnimateIcons(false), 500);
