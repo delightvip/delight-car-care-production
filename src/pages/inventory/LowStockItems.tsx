@@ -11,7 +11,7 @@ import LowStockCard from '@/components/inventory/LowStockCard';
 import PageTransition from '@/components/ui/PageTransition';
 
 const LowStockItems = () => {
-  // Fetch raw materials with low stock
+  // استعلام المواد الأولية ذات المخزون المنخفض
   const { data: rawMaterials, isLoading: rawMaterialsLoading, error: rawMaterialsError } = useQuery({
     queryKey: ['lowStockRawMaterials'],
     queryFn: async () => {
@@ -25,7 +25,7 @@ const LowStockItems = () => {
     },
   });
   
-  // Fetch semi-finished products with low stock
+  // استعلام المنتجات نصف المصنعة ذات المخزون المنخفض
   const { data: semiFinished, isLoading: semiFinishedLoading, error: semiFinishedError } = useQuery({
     queryKey: ['lowStockSemiFinished'],
     queryFn: async () => {
@@ -39,7 +39,7 @@ const LowStockItems = () => {
     },
   });
   
-  // Fetch packaging materials with low stock
+  // استعلام مستلزمات التعبئة ذات المخزون المنخفض
   const { data: packaging, isLoading: packagingLoading, error: packagingError } = useQuery({
     queryKey: ['lowStockPackaging'],
     queryFn: async () => {
@@ -53,7 +53,7 @@ const LowStockItems = () => {
     },
   });
   
-  // Fetch finished products with low stock
+  // استعلام المنتجات النهائية ذات المخزون المنخفض
   const { data: finishedProducts, isLoading: finishedProductsLoading, error: finishedProductsError } = useQuery({
     queryKey: ['lowStockFinishedProducts'],
     queryFn: async () => {
@@ -176,6 +176,7 @@ const LowStockItems = () => {
                 data={rawMaterials || []}
                 columns={rawMaterialsColumns}
                 isLoading={rawMaterialsLoading}
+                searchable={true}
                 searchPlaceholder="بحث في المواد الأولية..."
                 noDataMessage="لا توجد مواد أولية منخفضة المخزون."
               />
@@ -186,6 +187,7 @@ const LowStockItems = () => {
                 data={semiFinished || []}
                 columns={semiFinishedColumns}
                 isLoading={semiFinishedLoading}
+                searchable={true}
                 searchPlaceholder="بحث في المنتجات النصف مصنعة..."
                 noDataMessage="لا توجد منتجات نصف مصنعة منخفضة المخزون."
               />
@@ -196,6 +198,7 @@ const LowStockItems = () => {
                 data={packaging || []}
                 columns={packagingColumns}
                 isLoading={packagingLoading}
+                searchable={true}
                 searchPlaceholder="بحث في مستلزمات التعبئة..."
                 noDataMessage="لا توجد مستلزمات تعبئة منخفضة المخزون."
               />
@@ -206,6 +209,7 @@ const LowStockItems = () => {
                 data={finishedProducts || []}
                 columns={finishedProductsColumns}
                 isLoading={finishedProductsLoading}
+                searchable={true}
                 searchPlaceholder="بحث في المنتجات النهائية..."
                 noDataMessage="لا توجد منتجات نهائية منخفضة المخزون."
               />

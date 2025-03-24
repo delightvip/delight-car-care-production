@@ -14,15 +14,19 @@ export interface DataTableWithLoadingProps {
   searchKeys?: string[];
   actions?: (record: any) => React.ReactNode;
   isLoading?: boolean;
+  searchPlaceholder?: string;
+  noDataMessage?: string;
 }
 
 const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({ 
   columns, 
   data, 
-  searchable, 
+  searchable = true, 
   searchKeys, 
   actions,
-  isLoading = false 
+  isLoading = false,
+  searchPlaceholder = "بحث...",
+  noDataMessage = "لا توجد بيانات لعرضها."
 }) => {
   if (isLoading) {
     return (
@@ -52,6 +56,8 @@ const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
       searchable={searchable} 
       searchKeys={searchKeys} 
       actions={actions} 
+      searchPlaceholder={searchPlaceholder}
+      noDataMessage={noDataMessage}
     />
   );
 };
