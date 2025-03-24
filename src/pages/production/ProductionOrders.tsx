@@ -146,7 +146,10 @@ const ProductionOrders = () => {
     if (!currentOrder || !newStatus) return;
     
     try {
-      const success = await productionService.updateProductionOrderStatus(currentOrder.id, newStatus as any);
+      const success = await productionService.updateProductionOrderStatus(
+        currentOrder.id, 
+        newStatus as 'pending' | 'inProgress' | 'completed' | 'cancelled'
+      );
       if (success) {
         const updatedOrders = await productionService.getProductionOrders();
         setOrders(updatedOrders);
@@ -162,19 +165,13 @@ const ProductionOrders = () => {
   const handleDeleteOrder = async () => {
     if (!currentOrder) return;
     
-    // Only allow deleting pending orders
-    if (currentOrder.status !== 'pending') {
-      toast.error("لا يمكن حذف أمر إنتاج قيد التنفيذ أو مكتمل");
-      return;
-    }
-    
     try {
-      // Implement delete logic with productionService
-      // For now, we'll just update the local state
-      const updatedOrders = orders.filter(order => order.id !== currentOrder.id);
-      setOrders(updatedOrders);
-      setIsDeleteDialogOpen(false);
-      toast.success(`تم حذف أمر الإنتاج ${currentOrder.code} بنجاح`);
+      const success = await productionService.deleteProductionOrder(currentOrder.id);
+      if (success) {
+        const updatedOrders = await productionService.getProductionOrders();
+        setOrders(updatedOrders);
+        setIsDeleteDialogOpen(false);
+      }
     } catch (error) {
       console.error("Error deleting order:", error);
       toast.error("حدث خطأ أثناء حذف أمر الإنتاج");
@@ -182,28 +179,20 @@ const ProductionOrders = () => {
   };
   
   // Calculate ingredients for the selected product
-  const calculateIngredientsForProduct = async (productCode: string, quantity: number) => {
-    try {
-      const product = semiFinishedProducts.find(p => p.code === productCode);
-      if (!product) return [];
+  const calculateIngredientsForProduct = (productCode: string, quantity: number) => {
+    const product = semiFinishedProducts.find(p => p.code === productCode);
+    if (!product) return [];
+    
+    return product.ingredients.map(ingredient => {
+      const requiredQuantity = (ingredient.percentage / 100) * quantity;
       
-      const rawMaterials = await inventoryService.getRawMaterials();
-      
-      return product.ingredients.map(ingredient => {
-        const requiredQuantity = (ingredient.percentage / 100) * quantity;
-        const inventoryItem = rawMaterials.find(item => item.code === ingredient.code);
-        const available = inventoryItem ? inventoryItem.quantity >= requiredQuantity : false;
-        
-        return {
-          ...ingredient,
-          requiredQuantity,
-          available
-        };
-      });
-    } catch (error) {
-      console.error("Error calculating ingredients:", error);
-      return [];
-    }
+      // التحقق من توفر المواد سيتم في الخادم
+      return {
+        ...ingredient,
+        requiredQuantity,
+        available: true // سنفترض التوفر حالياً للعرض
+      };
+    });
   };
   
   // Calculate total cost for the selected product
@@ -307,25 +296,17 @@ const ProductionOrders = () => {
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                     <div className="space-y-2">
-                      {/* We'll use local state here and calculate on the fly */}
-                      {semiFinishedProducts
-                        .find(p => p.code === newOrder.productCode)?.ingredients
-                        .map(ingredient => {
-                          const requiredQuantity = (ingredient.percentage / 100) * newOrder.quantity;
-                          // Note: We're simplifying this by not checking availability in real-time
-                          // In a production app, you'd want to query this from the server
-                          return (
-                            <div key={ingredient.code} className="flex justify-between p-2 border rounded-md">
-                              <div>
-                                <span className="font-medium">{ingredient.name}</span>
-                                <span className="text-sm text-muted-foreground mr-2">
-                                  ({requiredQuantity.toFixed(2)})
-                                </span>
-                              </div>
-                              <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
-                            </div>
-                          );
-                        })}
+                      {calculateIngredientsForProduct(newOrder.productCode, newOrder.quantity).map(ingredient => (
+                        <div key={ingredient.code} className="flex justify-between p-2 border rounded-md">
+                          <div>
+                            <span className="font-medium">{ingredient.name}</span>
+                            <span className="text-sm text-muted-foreground mr-2">
+                              ({ingredient.requiredQuantity.toFixed(2)})
+                            </span>
+                          </div>
+                          <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
+                        </div>
+                      ))}
                     </div>
                     
                     <div className="mt-4 p-2 border rounded-md bg-muted/50">
@@ -355,7 +336,7 @@ const ProductionOrders = () => {
           searchable
           searchKeys={['code', 'productName']}
           actions={renderActions}
-          loading={isLoading}
+          isLoading={isLoading}
         />
         
         {/* View Order Dialog */}

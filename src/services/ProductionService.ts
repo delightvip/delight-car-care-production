@@ -1,7 +1,7 @@
 
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
-import { generateOrderCode } from "@/utils/generateCode";
+import ProductionDatabaseService from "./database/ProductionDatabaseService";
 
 // أنواع البيانات لأوامر الإنتاج
 export interface ProductionOrder {
@@ -51,86 +51,11 @@ export interface PackagingOrder {
 class ProductionService {
   private static instance: ProductionService;
   private inventoryService: InventoryService;
-  
-  // بيانات موقتة لأوامر الإنتاج (في الإنتاج الحقيقي ستأتي من قاعدة البيانات)
-  private productionOrders: ProductionOrder[] = [
-    {
-      id: 1,
-      code: 'PROD-230801-00001',
-      productCode: 'SEMI-00001',
-      productName: 'ملمع تابلوه سائل',
-      quantity: 200,
-      unit: 'لتر',
-      status: 'completed',
-      date: '2023-08-15',
-      ingredients: [
-        { id: 1, code: 'RAW-00005', name: 'زيت سيليكون', requiredQuantity: 60, available: true },
-        { id: 2, code: 'RAW-00002', name: 'عطر ليمون', requiredQuantity: 10, available: true },
-        { id: 3, code: 'RAW-00001', name: 'كحول إيثيلي', requiredQuantity: 30, available: true }
-      ],
-      totalCost: 8000
-    },
-    {
-      id: 2,
-      code: 'PROD-230801-00002',
-      productCode: 'SEMI-00002',
-      productName: 'منظف زجاج سائل',
-      quantity: 300,
-      unit: 'لتر',
-      status: 'inProgress',
-      date: '2023-08-16',
-      ingredients: [
-        { id: 1, code: 'RAW-00001', name: 'كحول إيثيلي', requiredQuantity: 60, available: true },
-        { id: 2, code: 'RAW-00004', name: 'صبغة زرقاء', requiredQuantity: 3, available: true }
-      ],
-      totalCost: 9000
-    },
-    {
-      id: 3,
-      code: 'PROD-230801-00003',
-      productCode: 'SEMI-00001',
-      productName: 'ملمع تابلوه سائل',
-      quantity: 100,
-      unit: 'لتر',
-      status: 'pending',
-      date: '2023-08-17',
-      ingredients: [
-        { id: 1, code: 'RAW-00005', name: 'زيت سيليكون', requiredQuantity: 30, available: true },
-        { id: 2, code: 'RAW-00002', name: 'عطر ليمون', requiredQuantity: 5, available: false },
-        { id: 3, code: 'RAW-00001', name: 'كحول إيثيلي', requiredQuantity: 15, available: true }
-      ],
-      totalCost: 4000
-    }
-  ];
-  
-  // بيانات موقتة لأوامر التعبئة
-  private packagingOrders: PackagingOrder[] = [
-    {
-      id: 1,
-      code: 'PCK-230801-00001',
-      productCode: 'FIN-00001',
-      productName: 'ملمع تابلوه 1 لتر',
-      quantity: 50,
-      unit: 'قطعة',
-      status: 'completed',
-      date: '2023-08-20',
-      semiFinished: {
-        code: 'SEMI-00001',
-        name: 'ملمع تابلوه سائل',
-        quantity: 50,
-        available: true
-      },
-      packagingMaterials: [
-        { code: 'PKG-00001', name: 'عبوة بلاستيك 1 لتر', quantity: 50, available: true },
-        { code: 'PKG-00003', name: 'غطاء بلاستيك', quantity: 50, available: true },
-        { code: 'PKG-00004', name: 'ملصق منتج', quantity: 50, available: true }
-      ],
-      totalCost: 2500
-    }
-  ];
+  private databaseService: ProductionDatabaseService;
   
   private constructor() {
     this.inventoryService = InventoryService.getInstance();
+    this.databaseService = ProductionDatabaseService.getInstance();
   }
   
   // الحصول على كائن وحيد من الخدمة (نمط Singleton)
@@ -142,13 +67,13 @@ class ProductionService {
   }
   
   // الحصول على جميع أوامر الإنتاج
-  public getProductionOrders(): ProductionOrder[] {
-    return [...this.productionOrders];
+  public async getProductionOrders(): Promise<ProductionOrder[]> {
+    return await this.databaseService.getProductionOrders();
   }
   
   // الحصول على جميع أوامر التعبئة
-  public getPackagingOrders(): PackagingOrder[] {
-    return [...this.packagingOrders];
+  public async getPackagingOrders(): Promise<PackagingOrder[]> {
+    return await this.databaseService.getPackagingOrders();
   }
   
   // إنشاء أمر إنتاج جديد
@@ -170,7 +95,6 @@ class ProductionService {
         const available = inventoryItem ? inventoryItem.quantity >= requiredQuantity : false;
         
         return {
-          id: ingredient.id,
           code: ingredient.code,
           name: ingredient.name,
           requiredQuantity,
@@ -181,21 +105,17 @@ class ProductionService {
       // حساب التكلفة الإجمالية
       const totalCost = product.unitCost * quantity;
       
-      // إنشاء أمر الإنتاج
-      const newOrder: ProductionOrder = {
-        id: this.productionOrders.length > 0 ? Math.max(...this.productionOrders.map(order => order.id)) + 1 : 1,
-        code: generateOrderCode('production', this.productionOrders.length),
+      // إنشاء أمر الإنتاج في قاعدة البيانات
+      const newOrder = await this.databaseService.createProductionOrder(
         productCode,
-        productName: product.name,
+        product.name,
         quantity,
-        unit: product.unit,
-        status: 'pending',
-        date: new Date().toISOString().split('T')[0],
+        product.unit,
         ingredients,
         totalCost
-      };
+      );
       
-      this.productionOrders.push(newOrder);
+      if (!newOrder) return null;
       
       // التحقق من توفر جميع المكونات
       const allAvailable = ingredients.every(i => i.available);
@@ -216,13 +136,13 @@ class ProductionService {
   // تحديث حالة أمر إنتاج
   public async updateProductionOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
     try {
-      const orderIndex = this.productionOrders.findIndex(order => order.id === orderId);
-      if (orderIndex === -1) {
+      const orders = await this.getProductionOrders();
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
         toast.error('أمر الإنتاج غير موجود');
         return false;
       }
-      
-      const order = this.productionOrders[orderIndex];
       
       // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
       if (newStatus === 'completed') {
@@ -245,14 +165,14 @@ class ProductionService {
         }
       }
       
-      // تحديث حالة الأمر
-      this.productionOrders[orderIndex] = {
-        ...order,
-        status: newStatus
-      };
+      // تحديث حالة الأمر في قاعدة البيانات
+      const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
       
-      toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
-      return true;
+      if (result) {
+        toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error updating production order status:', error);
       toast.error('حدث خطأ أثناء تحديث حالة أمر الإنتاج');
@@ -280,45 +200,41 @@ class ProductionService {
       const semiAvailable = await this.inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
       
       // التحقق من توفر مواد التعبئة
-      const packagingMaterials = product.packaging.map(pkg => {
+      const packagingMaterials = await Promise.all(product.packaging.map(async pkg => {
         const pkgQuantity = pkg.quantity * quantity;
-        // Note: We need to create a proper version with await
-        // For simplicity, we're assuming available: true here
+        const available = await this.inventoryService.checkPackagingAvailability([{
+          code: pkg.code,
+          requiredQuantity: pkgQuantity
+        }]);
+        
         return {
           code: pkg.code,
           name: pkg.name,
           quantity: pkgQuantity,
-          available: true
+          available
         };
-      });
+      }));
       
       // حساب التكلفة الإجمالية
       const totalCost = product.unitCost * quantity;
       
-      // إنشاء أمر التعبئة
-      const newOrder: PackagingOrder = {
-        id: this.packagingOrders.length > 0 ? Math.max(...this.packagingOrders.map(order => order.id)) + 1 : 1,
-        code: generateOrderCode('packaging', this.packagingOrders.length),
-        productCode: finishedProductCode,
-        productName: product.name,
+      // إنشاء أمر التعبئة في قاعدة البيانات
+      const newOrder = await this.databaseService.createPackagingOrder(
+        finishedProductCode,
+        product.name,
         quantity,
-        unit: product.unit,
-        status: 'pending',
-        date: new Date().toISOString().split('T')[0],
-        semiFinished: {
+        product.unit,
+        {
           code: semiFinishedCode,
           name: product.semiFinished.name,
-          quantity: semiFinishedQuantity,
-          available: semiAvailable
+          quantity: semiFinishedQuantity
         },
         packagingMaterials,
         totalCost
-      };
+      );
       
-      this.packagingOrders.push(newOrder);
+      if (!newOrder) return null;
       
-      // For actual implementation, we would check all availability
-      // For now, we'll assume success for demo
       toast.success(`تم إنشاء أمر تعبئة ${newOrder.productName} بنجاح`);
       
       return newOrder;
@@ -332,13 +248,13 @@ class ProductionService {
   // تحديث حالة أمر تعبئة
   public async updatePackagingOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
     try {
-      const orderIndex = this.packagingOrders.findIndex(order => order.id === orderId);
-      if (orderIndex === -1) {
+      const orders = await this.getPackagingOrders();
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
         toast.error('أمر التعبئة غير موجود');
         return false;
       }
-      
-      const order = this.packagingOrders[orderIndex];
       
       // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
       if (newStatus === 'completed') {
@@ -379,17 +295,81 @@ class ProductionService {
         }
       }
       
-      // تحديث حالة الأمر
-      this.packagingOrders[orderIndex] = {
-        ...order,
-        status: newStatus
-      };
+      // تحديث حالة الأمر في قاعدة البيانات
+      const result = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
       
-      toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
-      return true;
+      if (result) {
+        toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error updating packaging order status:', error);
       toast.error('حدث خطأ أثناء تحديث حالة أمر التعبئة');
+      return false;
+    }
+  }
+  
+  // حذف أمر إنتاج
+  public async deleteProductionOrder(orderId: number): Promise<boolean> {
+    try {
+      const orders = await this.getProductionOrders();
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
+        toast.error('أمر الإنتاج غير موجود');
+        return false;
+      }
+      
+      // فقط أوامر الإنتاج في حالة "قيد الانتظار" يمكن حذفها
+      if (order.status !== 'pending') {
+        toast.error('لا يمكن حذف أمر إنتاج قيد التنفيذ أو مكتمل');
+        return false;
+      }
+      
+      // حذف الأمر من قاعدة البيانات
+      const result = await this.databaseService.deleteProductionOrder(orderId);
+      
+      if (result) {
+        toast.success(`تم حذف أمر الإنتاج ${order.code} بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error deleting production order:', error);
+      toast.error('حدث خطأ أثناء حذف أمر الإنتاج');
+      return false;
+    }
+  }
+  
+  // حذف أمر تعبئة
+  public async deletePackagingOrder(orderId: number): Promise<boolean> {
+    try {
+      const orders = await this.getPackagingOrders();
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
+        toast.error('أمر التعبئة غير موجود');
+        return false;
+      }
+      
+      // فقط أوامر التعبئة في حالة "قيد الانتظار" يمكن حذفها
+      if (order.status !== 'pending') {
+        toast.error('لا يمكن حذف أمر تعبئة قيد التنفيذ أو مكتمل');
+        return false;
+      }
+      
+      // حذف الأمر من قاعدة البيانات
+      const result = await this.databaseService.deletePackagingOrder(orderId);
+      
+      if (result) {
+        toast.success(`تم حذف أمر التعبئة ${order.code} بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error deleting packaging order:', error);
+      toast.error('حدث خطأ أثناء حذف أمر التعبئة');
       return false;
     }
   }
@@ -407,44 +387,13 @@ class ProductionService {
   }
   
   // الحصول على بيانات إحصائية للإنتاج
-  public getProductionStats() {
-    const totalOrders = this.productionOrders.length;
-    const pendingOrders = this.productionOrders.filter(order => order.status === 'pending').length;
-    const inProgressOrders = this.productionOrders.filter(order => order.status === 'inProgress').length;
-    const completedOrders = this.productionOrders.filter(order => order.status === 'completed').length;
-    
-    const totalPackagingOrders = this.packagingOrders.length;
-    const pendingPackagingOrders = this.packagingOrders.filter(order => order.status === 'pending').length;
-    const inProgressPackagingOrders = this.packagingOrders.filter(order => order.status === 'inProgress').length;
-    const completedPackagingOrders = this.packagingOrders.filter(order => order.status === 'completed').length;
-    
-    return {
-      production: {
-        total: totalOrders,
-        pending: pendingOrders,
-        inProgress: inProgressOrders,
-        completed: completedOrders
-      },
-      packaging: {
-        total: totalPackagingOrders,
-        pending: pendingPackagingOrders,
-        inProgress: inProgressPackagingOrders,
-        completed: completedPackagingOrders
-      }
-    };
+  public async getProductionStats() {
+    return await this.databaseService.getProductionStats();
   }
   
   // الحصول على بيانات الإنتاج للرسوم البيانية
-  public getProductionChartData() {
-    // بيانات إنتاج آخر 6 أشهر (بيانات موقتة)
-    return [
-      { name: 'يناير', الإنتاج: 400, التعبئة: 340 },
-      { name: 'فبراير', الإنتاج: 300, التعبئة: 290 },
-      { name: 'مارس', الإنتاج: 500, التعبئة: 480 },
-      { name: 'أبريل', الإنتاج: 280, التعبئة: 230 },
-      { name: 'مايو', الإنتاج: 450, التعبئة: 410 },
-      { name: 'يونيو', الإنتاج: 600, التعبئة: 580 }
-    ];
+  public async getProductionChartData() {
+    return await this.databaseService.getMonthlyProductionStats();
   }
 }
 

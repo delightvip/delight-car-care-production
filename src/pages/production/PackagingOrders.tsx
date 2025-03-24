@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
-import DataTable from '@/components/ui/DataTable';
+import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,103 +23,11 @@ import {
 } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle2, Clock, Edit, Eye, Plus, Trash } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { generateOrderCode } from '@/utils/generateCode';
-
-// Mock data for packaging orders
-const initialPackagingOrders = [
-  {
-    id: 1,
-    code: 'PACK-230801-00001',
-    productCode: 'FIN-00001',
-    productName: 'ملمع تابلوه 250مل',
-    quantity: 200,
-    unit: 'قطعة',
-    status: 'completed',
-    date: '2023-08-15',
-    components: [
-      { type: 'semi', code: 'SEMI-00001', name: 'ملمع تابلوه سائل', requiredQuantity: 50, available: true, unit: 'لتر' },
-      { type: 'packaging', code: 'PKG-00001', name: 'عبوة بلاستيكية 250مل', requiredQuantity: 200, available: true, unit: 'قطعة' },
-      { type: 'packaging', code: 'PKG-00003', name: 'ملصق منتج ملمع تابلوه', requiredQuantity: 200, available: true, unit: 'قطعة' }
-    ],
-    totalCost: 4000
-  },
-  {
-    id: 2,
-    code: 'PACK-230801-00002',
-    productCode: 'FIN-00002',
-    productName: 'منظف زجاج 500مل',
-    quantity: 150,
-    unit: 'قطعة',
-    status: 'inProgress',
-    date: '2023-08-16',
-    components: [
-      { type: 'semi', code: 'SEMI-00002', name: 'منظف زجاج سائل', requiredQuantity: 75, available: true, unit: 'لتر' },
-      { type: 'packaging', code: 'PKG-00002', name: 'عبوة بلاستيكية 500مل', requiredQuantity: 150, available: true, unit: 'قطعة' },
-      { type: 'packaging', code: 'PKG-00004', name: 'ملصق منتج منظف زجاج', requiredQuantity: 150, available: true, unit: 'قطعة' }
-    ],
-    totalCost: 3750
-  },
-  {
-    id: 3,
-    code: 'PACK-230801-00003',
-    productCode: 'FIN-00001',
-    productName: 'ملمع تابلوه 250مل',
-    quantity: 100,
-    unit: 'قطعة',
-    status: 'pending',
-    date: '2023-08-17',
-    components: [
-      { type: 'semi', code: 'SEMI-00001', name: 'ملمع تابلوه سائل', requiredQuantity: 25, available: true, unit: 'لتر' },
-      { type: 'packaging', code: 'PKG-00001', name: 'عبوة بلاستيكية 250مل', requiredQuantity: 100, available: false, unit: 'قطعة' },
-      { type: 'packaging', code: 'PKG-00003', name: 'ملصق منتج ملمع تابلوه', requiredQuantity: 100, available: true, unit: 'قطعة' }
-    ],
-    totalCost: 2000
-  }
-];
-
-// Mock data for finished products
-const finishedProducts = [
-  {
-    id: 1,
-    code: 'FIN-00001',
-    name: 'ملمع تابلوه 250مل',
-    unit: 'قطعة',
-    components: [
-      { type: 'semi', code: 'SEMI-00001', name: 'ملمع تابلوه سائل', quantity: 0.25, unit: 'لتر' },
-      { type: 'packaging', code: 'PKG-00001', name: 'عبوة بلاستيكية 250مل', quantity: 1, unit: 'قطعة' },
-      { type: 'packaging', code: 'PKG-00003', name: 'ملصق منتج ملمع تابلوه', quantity: 1, unit: 'قطعة' }
-    ],
-    unitCost: 20
-  },
-  {
-    id: 2,
-    code: 'FIN-00002',
-    name: 'منظف زجاج 500مل',
-    unit: 'قطعة',
-    components: [
-      { type: 'semi', code: 'SEMI-00002', name: 'منظف زجاج سائل', quantity: 0.5, unit: 'لتر' },
-      { type: 'packaging', code: 'PKG-00002', name: 'عبوة بلاستيكية 500مل', quantity: 1, unit: 'قطعة' },
-      { type: 'packaging', code: 'PKG-00004', name: 'ملصق منتج منظف زجاج', quantity: 1, unit: 'قطعة' }
-    ],
-    unitCost: 25
-  }
-];
-
-// Mock data for inventory
-const inventory = {
-  semi: [
-    { code: 'SEMI-00001', name: 'ملمع تابلوه سائل', quantity: 35, minStock: 50, unit: 'لتر' },
-    { code: 'SEMI-00002', name: 'منظف زجاج سائل', quantity: 100, minStock: 50, unit: 'لتر' }
-  ],
-  packaging: [
-    { code: 'PKG-00001', name: 'عبوة بلاستيكية 250مل', quantity: 120, minStock: 200, unit: 'قطعة' },
-    { code: 'PKG-00002', name: 'عبوة بلاستيكية 500مل', quantity: 400, minStock: 150, unit: 'قطعة' },
-    { code: 'PKG-00003', name: 'ملصق منتج ملمع تابلوه', quantity: 1000, minStock: 300, unit: 'قطعة' },
-    { code: 'PKG-00004', name: 'ملصق منتج منظف زجاج', quantity: 1000, minStock: 300, unit: 'قطعة' },
-    { code: 'PKG-00005', name: 'كرتونة تعبئة (24 قطعة)', quantity: 40, minStock: 50, unit: 'قطعة' }
-  ]
-};
+import { toast } from 'sonner';
+import ProductionService from '@/services/ProductionService';
+import InventoryService from '@/services/InventoryService';
+import { PackagingOrder } from '@/services/ProductionService';
+import { FinishedProduct } from '@/services/InventoryService';
 
 const statusTranslations = {
   pending: 'قيد الانتظار',
@@ -142,19 +50,43 @@ const statusIcons = {
 };
 
 const PackagingOrders = () => {
-  const [orders, setOrders] = useState(initialPackagingOrders);
+  const [orders, setOrders] = useState<PackagingOrder[]>([]);
+  const [finishedProducts, setFinishedProducts] = useState<FinishedProduct[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<any>(null);
+  const [currentOrder, setCurrentOrder] = useState<PackagingOrder | null>(null);
   const [newOrder, setNewOrder] = useState({
     productCode: '',
     quantity: 0
   });
   const [newStatus, setNewStatus] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   
-  const { toast } = useToast();
+  const productionService = ProductionService.getInstance();
+  const inventoryService = InventoryService.getInstance();
+  
+  // تحميل البيانات
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const ordersData = await productionService.getPackagingOrders();
+        const finishedData = await inventoryService.getFinishedProducts();
+        
+        setOrders(ordersData);
+        setFinishedProducts(finishedData);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast.error("حدث خطأ أثناء تحميل البيانات");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
   
   // Columns for the data table
   const columns = [
@@ -183,29 +115,96 @@ const PackagingOrders = () => {
     }
   ];
   
-  // Check if all components are available
+  // Handle adding a new order
+  const handleAddOrder = async () => {
+    if (!newOrder.productCode || newOrder.quantity <= 0) {
+      toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
+      return;
+    }
+    
+    try {
+      const createdOrder = await productionService.createPackagingOrder(
+        newOrder.productCode, 
+        newOrder.quantity
+      );
+      if (createdOrder) {
+        const updatedOrders = await productionService.getPackagingOrders();
+        setOrders(updatedOrders);
+        setNewOrder({
+          productCode: '',
+          quantity: 0
+        });
+        setIsAddDialogOpen(false);
+      }
+    } catch (error) {
+      console.error("Error creating order:", error);
+      toast.error("حدث خطأ أثناء إنشاء أمر التعبئة");
+    }
+  };
+  
+  // Handle updating order status
+  const handleUpdateStatus = async () => {
+    if (!currentOrder || !newStatus) return;
+    
+    try {
+      const success = await productionService.updatePackagingOrderStatus(
+        currentOrder.id, 
+        newStatus as 'pending' | 'inProgress' | 'completed' | 'cancelled'
+      );
+      if (success) {
+        const updatedOrders = await productionService.getPackagingOrders();
+        setOrders(updatedOrders);
+        setIsStatusDialogOpen(false);
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast.error("حدث خطأ أثناء تحديث حالة أمر التعبئة");
+    }
+  };
+  
+  // Handle deleting an order
+  const handleDeleteOrder = async () => {
+    if (!currentOrder) return;
+    
+    try {
+      const success = await productionService.deletePackagingOrder(currentOrder.id);
+      if (success) {
+        const updatedOrders = await productionService.getPackagingOrders();
+        setOrders(updatedOrders);
+        setIsDeleteDialogOpen(false);
+      }
+    } catch (error) {
+      console.error("Error deleting order:", error);
+      toast.error("حدث خطأ أثناء حذف أمر التعبئة");
+    }
+  };
+  
+  // Check components availability for the selected product
   const checkComponentsAvailability = (productCode: string, quantity: number) => {
     const product = finishedProducts.find(p => p.code === productCode);
     if (!product) return [];
     
-    return product.components.map(component => {
-      const requiredQuantity = component.quantity * quantity;
-      let inventoryItem;
-      
-      if (component.type === 'semi') {
-        inventoryItem = inventory.semi.find(item => item.code === component.code);
-      } else {
-        inventoryItem = inventory.packaging.find(item => item.code === component.code);
-      }
-      
-      const available = inventoryItem && inventoryItem.quantity >= requiredQuantity;
-      
-      return {
-        ...component,
-        requiredQuantity,
-        available
-      };
-    });
+    // سنحتاج إلى المنتج النصف مصنع والكمية المطلوبة
+    const semiFinishedComponent = {
+      type: 'semi',
+      code: product.semiFinished.code,
+      name: product.semiFinished.name,
+      requiredQuantity: product.semiFinished.quantity * quantity,
+      available: true, // سيتم التحقق من التوفر في الخادم
+      unit: 'وحدة' // سيتم تعبئتها لاحقاً
+    };
+    
+    // وكذلك مواد التعبئة
+    const packagingComponents = product.packaging.map(item => ({
+      type: 'packaging',
+      code: item.code,
+      name: item.name,
+      requiredQuantity: item.quantity * quantity,
+      available: true, // سيتم التحقق من التوفر في الخادم
+      unit: 'وحدة' // سيتم تعبئتها لاحقاً
+    }));
+    
+    return [semiFinishedComponent, ...packagingComponents];
   };
   
   // Calculate total cost of packaging
@@ -216,126 +215,8 @@ const PackagingOrders = () => {
     return product.unitCost * quantity;
   };
   
-  // Handle adding a new order
-  const handleAddOrder = () => {
-    if (!newOrder.productCode || newOrder.quantity <= 0) {
-      toast({
-        title: "خطأ",
-        description: "يجب اختيار منتج وتحديد كمية صحيحة",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const product = finishedProducts.find(p => p.code === newOrder.productCode);
-    if (!product) {
-      toast({
-        title: "خطأ",
-        description: "المنتج غير موجود",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const components = checkComponentsAvailability(newOrder.productCode, newOrder.quantity);
-    const allAvailable = components.every(i => i.available);
-    const totalCost = calculateTotalCost(newOrder.productCode, newOrder.quantity);
-    
-    const newItem = {
-      id: orders.length + 1,
-      code: generateOrderCode('packaging', orders.length),
-      productCode: newOrder.productCode,
-      productName: product.name,
-      quantity: newOrder.quantity,
-      unit: product.unit,
-      status: allAvailable ? 'pending' : 'pending',
-      date: new Date().toISOString().split('T')[0],
-      components,
-      totalCost
-    };
-    
-    setOrders([...orders, newItem]);
-    setNewOrder({
-      productCode: '',
-      quantity: 0
-    });
-    setIsAddDialogOpen(false);
-    
-    toast({
-      title: "تمت الإضافة",
-      description: `تم إضافة أمر تعبئة ${newItem.productName} بنجاح`
-    });
-    
-    if (!allAvailable) {
-      toast({
-        title: "تنبيه",
-        description: "بعض المكونات غير متوفرة بالكمية المطلوبة. تم حفظ الأمر كمسودة.",
-        variant: "destructive"
-      });
-    }
-  };
-  
-  // Handle updating order status
-  const handleUpdateStatus = () => {
-    if (!currentOrder || !newStatus) return;
-    
-    // If changing to completed, verify components availability
-    if (newStatus === 'completed') {
-      const components = checkComponentsAvailability(currentOrder.productCode, currentOrder.quantity);
-      const allAvailable = components.every(i => i.available);
-      
-      if (!allAvailable) {
-        toast({
-          title: "خطأ",
-          description: "لا يمكن إكمال الأمر لعدم توفر جميع المكونات",
-          variant: "destructive"
-        });
-        return;
-      }
-    }
-    
-    const updatedOrders = orders.map(order => 
-      order.id === currentOrder.id ? 
-        { ...order, status: newStatus } : 
-        order
-    );
-    
-    setOrders(updatedOrders);
-    setIsStatusDialogOpen(false);
-    
-    toast({
-      title: "تم التحديث",
-      description: `تم تحديث حالة أمر التعبئة إلى ${statusTranslations[newStatus as keyof typeof statusTranslations]}`
-    });
-  };
-  
-  // Handle deleting an order
-  const handleDeleteOrder = () => {
-    if (!currentOrder) return;
-    
-    // Only allow deleting pending orders
-    if (currentOrder.status !== 'pending') {
-      toast({
-        title: "خطأ",
-        description: "لا يمكن حذف أمر تعبئة قيد التنفيذ أو مكتمل",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const updatedOrders = orders.filter(order => order.id !== currentOrder.id);
-    
-    setOrders(updatedOrders);
-    setIsDeleteDialogOpen(false);
-    
-    toast({
-      title: "تم الحذف",
-      description: `تم حذف أمر التعبئة ${currentOrder.code} بنجاح`
-    });
-  };
-  
   // Render actions column
-  const renderActions = (record: any) => (
+  const renderActions = (record: PackagingOrder) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
         variant="ghost"
@@ -427,29 +308,23 @@ const PackagingOrders = () => {
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                     <div className="space-y-2">
-                      {checkComponentsAvailability(newOrder.productCode, newOrder.quantity).map(component => {
-                        return (
-                          <div key={component.code} className="flex justify-between p-2 border rounded-md">
-                            <div>
-                              <span className="font-medium">{component.name}</span>
-                              <span className="text-sm text-muted-foreground mr-2">
-                                ({component.requiredQuantity.toFixed(2)} {component.unit})
-                              </span>
-                              <Badge 
-                                variant="outline" 
-                                className="mr-2"
-                              >
-                                {component.type === 'semi' ? 'سائل' : 'تعبئة'}
-                              </Badge>
-                            </div>
-                            {component.available ? (
-                              <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                            ) : (
-                              <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                            )}
+                      {checkComponentsAvailability(newOrder.productCode, newOrder.quantity).map(component => (
+                        <div key={component.code} className="flex justify-between p-2 border rounded-md">
+                          <div>
+                            <span className="font-medium">{component.name}</span>
+                            <span className="text-sm text-muted-foreground mr-2">
+                              ({component.requiredQuantity.toFixed(2)} {component.unit})
+                            </span>
+                            <Badge 
+                              variant="outline" 
+                              className="mr-2"
+                            >
+                              {component.type === 'semi' ? 'سائل' : 'تعبئة'}
+                            </Badge>
                           </div>
-                        );
-                      })}
+                          <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
+                        </div>
+                      ))}
                     </div>
                     
                     <div className="mt-4 p-2 border rounded-md bg-muted/50">
@@ -473,12 +348,13 @@ const PackagingOrders = () => {
           </Dialog>
         </div>
         
-        <DataTable
+        <DataTableWithLoading
           columns={columns}
           data={orders}
           searchable
           searchKeys={['code', 'productName']}
           actions={renderActions}
+          isLoading={isLoading}
         />
         
         {/* View Order Dialog */}
@@ -522,21 +398,31 @@ const PackagingOrders = () => {
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                   <div className="space-y-2">
-                    {currentOrder.components.map((component: any) => (
-                      <div key={component.code} className="flex justify-between p-2 border rounded-md">
+                    <div className="flex justify-between p-2 border rounded-md">
+                      <div>
+                        <span className="font-medium">{currentOrder.semiFinished.name}</span>
+                        <span className="text-sm text-muted-foreground mr-2">
+                          ({currentOrder.semiFinished.quantity})
+                        </span>
+                        <Badge variant="outline" className="mr-2">سائل</Badge>
+                      </div>
+                      {currentOrder.semiFinished.available ? (
+                        <Badge className="bg-green-100 text-green-800">متوفر</Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
+                      )}
+                    </div>
+                    
+                    {currentOrder.packagingMaterials.map((material) => (
+                      <div key={material.code} className="flex justify-between p-2 border rounded-md">
                         <div>
-                          <span className="font-medium">{component.name}</span>
+                          <span className="font-medium">{material.name}</span>
                           <span className="text-sm text-muted-foreground mr-2">
-                            ({component.requiredQuantity.toFixed(2)} {component.unit})
+                            ({material.quantity})
                           </span>
-                          <Badge 
-                            variant="outline" 
-                            className="mr-2"
-                          >
-                            {component.type === 'semi' ? 'سائل' : 'تعبئة'}
-                          </Badge>
+                          <Badge variant="outline" className="mr-2">تعبئة</Badge>
                         </div>
-                        {component.available ? (
+                        {material.available ? (
                           <Badge className="bg-green-100 text-green-800">متوفر</Badge>
                         ) : (
                           <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
