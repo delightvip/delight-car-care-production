@@ -14,39 +14,109 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
+  // جلب عدد المواد الأولية
+  const { data: rawMaterialsCount } = useQuery({
+    queryKey: ['rawMaterialsCount'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('raw_materials')
+        .select('*', { count: 'exact', head: true });
+      
+      return count || 0;
+    },
+    refetchInterval: 60000, 
+  });
+  
+  // جلب أوامر الإنتاج النشطة
+  const { data: activeProductionOrders } = useQuery({
+    queryKey: ['activeProductionOrders'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('production_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      
+      return count || 0;
+    },
+    refetchInterval: 60000, 
+  });
+  
+  // جلب عدد التحديثات اليومية
+  const { data: todayUpdates } = useQuery({
+    queryKey: ['todayUpdates'],
+    queryFn: async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // جمع عدد تحديثات اليوم لكل نوع من المخزون
+      const { count: rawMaterialsUpdates } = await supabase
+        .from('raw_materials')
+        .select('*', { count: 'exact', head: true })
+        .gte('updated_at', today.toISOString());
+        
+      const { count: semiFinishedUpdates } = await supabase
+        .from('semi_finished_products')
+        .select('*', { count: 'exact', head: true })
+        .gte('updated_at', today.toISOString());
+        
+      const { count: packagingUpdates } = await supabase
+        .from('packaging_materials')
+        .select('*', { count: 'exact', head: true })
+        .gte('updated_at', today.toISOString());
+        
+      const { count: finishedUpdates } = await supabase
+        .from('finished_products')
+        .select('*', { count: 'exact', head: true })
+        .gte('updated_at', today.toISOString());
+      
+      // جمع الإجمالي
+      return (rawMaterialsUpdates || 0) + 
+             (semiFinishedUpdates || 0) + 
+             (packagingUpdates || 0) + 
+             (finishedUpdates || 0);
+    },
+    refetchInterval: 60000, 
+  });
+  
   // Fetch low stock count
   const { data: lowStockCount } = useQuery({
     queryKey: ['lowStockCount'],
     queryFn: async () => {
-      const rawMaterialsResponse = await supabase
-        .from('raw_materials')
-        .select('id')
-        .lt('quantity', 'min_stock');
-      
-      const semiFinishedResponse = await supabase
-        .from('semi_finished_products')
-        .select('id')
-        .lt('quantity', 'min_stock');
-      
-      const packagingResponse = await supabase
-        .from('packaging_materials')
-        .select('id')
-        .lt('quantity', 'min_stock');
-      
-      const finishedResponse = await supabase
-        .from('finished_products')
-        .select('id')
-        .lt('quantity', 'min_stock');
-      
-      const totalCount = 
-        (rawMaterialsResponse.data?.length || 0) + 
-        (semiFinishedResponse.data?.length || 0) + 
-        (packagingResponse.data?.length || 0) + 
-        (finishedResponse.data?.length || 0);
-      
-      return totalCount;
+      try {
+        // التحقق من مواد المخزون منخفضة الكمية
+        const rawMaterialsResponse = await supabase
+          .from('raw_materials')
+          .select('id')
+          .lt('quantity', 10); // استخدام قيمة افتراضية في حالة عدم وجود عمود min_stock
+        
+        const semiFinishedResponse = await supabase
+          .from('semi_finished_products')
+          .select('id')
+          .lt('quantity', 10);
+        
+        const packagingResponse = await supabase
+          .from('packaging_materials')
+          .select('id')
+          .lt('quantity', 10);
+        
+        const finishedResponse = await supabase
+          .from('finished_products')
+          .select('id')
+          .lt('quantity', 10);
+        
+        const totalCount = 
+          (rawMaterialsResponse.data?.length || 0) + 
+          (semiFinishedResponse.data?.length || 0) + 
+          (packagingResponse.data?.length || 0) + 
+          (finishedResponse.data?.length || 0);
+        
+        return totalCount;
+      } catch (error) {
+        console.error("Error fetching low stock items:", error);
+        return 0;
+      }
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000, // تحديث كل دقيقة
   });
   
   return (
@@ -60,7 +130,7 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <DashboardCard
             title="إجمالي المواد"
-            value="142"
+            value={rawMaterialsCount?.toString() || "0"}
             description="المواد الأولية المتوفرة"
             icon={<DashboardCardIcon icon={Package} className="bg-blue-100 text-blue-600" />}
             link="/inventory/raw-materials"
@@ -68,7 +138,7 @@ const Index = () => {
           
           <DashboardCard
             title="أوامر الإنتاج"
-            value="16"
+            value={activeProductionOrders?.toString() || "0"}
             description="أوامر إنتاج نشطة"
             icon={<DashboardCardIcon icon={Layers} className="bg-green-100 text-green-600" />}
             link="/production/orders"
@@ -85,7 +155,7 @@ const Index = () => {
           
           <DashboardCard
             title="التحديثات"
-            value="12"
+            value={todayUpdates?.toString() || "0"}
             description="إجمالي التحديثات اليوم"
             icon={<DashboardCardIcon icon={Clock} className="bg-purple-100 text-purple-600" />}
             link="/inventory/tracking"

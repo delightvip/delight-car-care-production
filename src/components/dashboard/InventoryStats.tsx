@@ -18,47 +18,59 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ data: propData }) => {
   const { data: databaseData, isLoading, error } = useQuery({
     queryKey: ['inventoryStats'],
     queryFn: async () => {
-      // جلب بيانات المواد الأولية
-      const { data: rawMaterialsData, error: rawMaterialsError } = await supabase
-        .from('raw_materials')
-        .select('quantity, unit_cost');
-      
-      if (rawMaterialsError) throw new Error(rawMaterialsError.message);
-      
-      // جلب بيانات المنتجات النصف مصنعة
-      const { data: semiFinishedData, error: semiFinishedError } = await supabase
-        .from('semi_finished_products')
-        .select('quantity, unit_cost');
-      
-      if (semiFinishedError) throw new Error(semiFinishedError.message);
-      
-      // جلب بيانات مستلزمات التعبئة
-      const { data: packagingData, error: packagingError } = await supabase
-        .from('packaging_materials')
-        .select('quantity, unit_cost');
-      
-      if (packagingError) throw new Error(packagingError.message);
-      
-      // جلب بيانات المنتجات النهائية
-      const { data: finishedData, error: finishedError } = await supabase
-        .from('finished_products')
-        .select('quantity, unit_cost');
-      
-      if (finishedError) throw new Error(finishedError.message);
-      
-      // حساب القيم الإجمالية لكل نوع
-      const rawMaterialsValue = rawMaterialsData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      const semiFinishedValue = semiFinishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      const packagingValue = packagingData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      const finishedValue = finishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      
-      // تنسيق البيانات للرسم البياني
-      return [
-        { name: 'المواد الأولية', value: rawMaterialsValue, color: '#3B82F6' },
-        { name: 'المنتجات النصف مصنعة', value: semiFinishedValue, color: '#10B981' },
-        { name: 'مواد التعبئة', value: packagingValue, color: '#F59E0B' },
-        { name: 'المنتجات النهائية', value: finishedValue, color: '#6366F1' }
-      ];
+      try {
+        // جلب بيانات المواد الأولية
+        const { data: rawMaterialsData, error: rawMaterialsError } = await supabase
+          .from('raw_materials')
+          .select('quantity, unit_cost');
+        
+        if (rawMaterialsError) throw new Error(rawMaterialsError.message);
+        
+        // جلب بيانات المنتجات النصف مصنعة
+        const { data: semiFinishedData, error: semiFinishedError } = await supabase
+          .from('semi_finished_products')
+          .select('quantity, unit_cost');
+        
+        if (semiFinishedError) throw new Error(semiFinishedError.message);
+        
+        // جلب بيانات مستلزمات التعبئة
+        const { data: packagingData, error: packagingError } = await supabase
+          .from('packaging_materials')
+          .select('quantity, unit_cost');
+        
+        if (packagingError) throw new Error(packagingError.message);
+        
+        // جلب بيانات المنتجات النهائية
+        const { data: finishedData, error: finishedError } = await supabase
+          .from('finished_products')
+          .select('quantity, unit_cost');
+        
+        if (finishedError) throw new Error(finishedError.message);
+        
+        // حساب القيم الإجمالية لكل نوع
+        const rawMaterialsValue = rawMaterialsData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+        const semiFinishedValue = semiFinishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+        const packagingValue = packagingData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+        const finishedValue = finishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+        
+        console.log("Inventory Stats Data:", {
+          rawMaterialsValue,
+          semiFinishedValue,
+          packagingValue,
+          finishedValue
+        });
+        
+        // تنسيق البيانات للرسم البياني
+        return [
+          { name: 'المواد الأولية', value: rawMaterialsValue, color: '#3B82F6' },
+          { name: 'المنتجات النصف مصنعة', value: semiFinishedValue, color: '#10B981' },
+          { name: 'مواد التعبئة', value: packagingValue, color: '#F59E0B' },
+          { name: 'المنتجات النهائية', value: finishedValue, color: '#6366F1' }
+        ];
+      } catch (error) {
+        console.error("Error fetching inventory stats:", error);
+        return [];
+      }
     },
     // تحديث كل دقيقة
     refetchInterval: 60000,

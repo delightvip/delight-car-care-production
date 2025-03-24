@@ -28,7 +28,6 @@ const ProductionChart: React.FC = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['monthlyProductionStats'],
     queryFn: async () => {
-      // Try to get data from custom function first, fallback to manual query
       try {
         // Get data using date aggregation
         const today = new Date();
@@ -39,47 +38,73 @@ const ProductionChart: React.FC = () => {
         const startDate = sixMonthsAgo.toISOString().split('T')[0];
         const endDate = today.toISOString().split('T')[0];
         
-        // Get production orders by month
-        const { data: productionData } = await supabase
+        // استخراج البيانات حسب الشهر لتجميعها بعد ذلك
+        const { data: productionOrders } = await supabase
           .from('production_orders')
           .select('date')
           .gte('date', startDate)
           .lte('date', endDate);
         
-        // Get packaging orders by month
-        const { data: packagingData } = await supabase
+        const { data: packagingOrders } = await supabase
           .from('packaging_orders')
           .select('date')
           .gte('date', startDate)
           .lte('date', endDate);
         
-        // Process the data manually by month since .group() is not available
-        const countsByMonth: Record<string, { production: number, packaging: number }> = {};
+        // استخدام Map لتجميع البيانات حسب الشهر
+        const countsByMonth = new Map<string, { production: number, packaging: number }>();
+        
+        // إنشاء مفاتيح لجميع الأشهر الستة الماضية
+        for (let i = 0; i <= 5; i++) {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          
+          // استخدم اسم الشهر بالعربية
+          const monthName = date.toLocaleDateString('ar-EG', { month: 'short' });
+          const monthKey = date.toLocaleDateString('ar-EG', { month: 'short' });
+          
+          countsByMonth.set(monthKey, { production: 0, packaging: 0 });
+        }
         
         // Process production data
-        (productionData || []).forEach((item: any) => {
-          const month = new Date(item.date).toLocaleDateString('ar-EG', { month: 'short' });
-          if (!countsByMonth[month]) {
-            countsByMonth[month] = { production: 0, packaging: 0 };
-          }
-          countsByMonth[month].production += 1;
+        productionOrders?.forEach((item: any) => {
+          const date = new Date(item.date);
+          const monthKey = date.toLocaleDateString('ar-EG', { month: 'short' });
+          
+          const currentValue = countsByMonth.get(monthKey) || { production: 0, packaging: 0 };
+          countsByMonth.set(monthKey, { 
+            ...currentValue, 
+            production: currentValue.production + 1 
+          });
         });
         
         // Process packaging data
-        (packagingData || []).forEach((item: any) => {
-          const month = new Date(item.date).toLocaleDateString('ar-EG', { month: 'short' });
-          if (!countsByMonth[month]) {
-            countsByMonth[month] = { production: 0, packaging: 0 };
-          }
-          countsByMonth[month].packaging += 1;
+        packagingOrders?.forEach((item: any) => {
+          const date = new Date(item.date);
+          const monthKey = date.toLocaleDateString('ar-EG', { month: 'short' });
+          
+          const currentValue = countsByMonth.get(monthKey) || { production: 0, packaging: 0 };
+          countsByMonth.set(monthKey, { 
+            ...currentValue, 
+            packaging: currentValue.packaging + 1 
+          });
         });
         
-        // Convert to array format for chart
-        return Object.entries(countsByMonth).map(([month, counts]) => ({
+        // Convert Map to array for chart
+        const result = Array.from(countsByMonth.entries()).map(([month, counts]) => ({
           month,
           production: counts.production,
           packaging: counts.packaging
         }));
+        
+        // Sort by month chronologically
+        result.sort((a, b) => {
+          // للترتيب من الأقدم للأحدث
+          const months = Array.from(countsByMonth.keys());
+          return months.indexOf(a.month) - months.indexOf(b.month);
+        });
+        
+        return result;
       } catch (err) {
         console.error('Error fetching production data:', err);
         // Return empty data if error
