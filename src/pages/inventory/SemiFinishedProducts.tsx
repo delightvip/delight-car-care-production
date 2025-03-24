@@ -4,70 +4,82 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTable from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Edit, Plus, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
-
-const units = ['كجم', 'لتر', 'مللى', 'جم', 'علبة', 'قطعة', 'كرتونة'];
+import SemiFinishedForm from '@/components/semi-finished/SemiFinishedForm';
+import DeleteConfirmDialog from '@/components/semi-finished/DeleteConfirmDialog';
 
 const SemiFinishedProducts = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<any>(null);
-  const [newProduct, setNewProduct] = useState({
-    name: '',
-    unit: '',
-    quantity: 0,
-    unitCost: 0,
-    minStock: 0
-  });
-  
+
   const queryClient = useQueryClient();
   
-  // جلب المنتجات النصف مصنعة من قاعدة البيانات
+  // استعلام للحصول على المواد الأولية
+  const { data: rawMaterials = [], isLoading: isLoadingRawMaterials } = useQuery({
+    queryKey: ['rawMaterials'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .select('id, code, name, unit')
+        .order('name');
+        
+      if (error) throw error;
+      return data;
+    }
+  });
+  
+  // استعلام للحصول على المنتجات النصف مصنعة مع مكوناتها
   const { data: semiFinishedProducts, isLoading, error } = useQuery({
     queryKey: ['semiFinishedProducts'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. جلب المنتجات النصف مصنعة
+      const { data: products, error: productsError } = await supabase
         .from('semi_finished_products')
         .select('*')
         .order('created_at', { ascending: false });
         
-      if (error) {
-        throw new Error(error.message);
-      }
-      
-      // تحويل البيانات إلى الصيغة المتوافقة مع الواجهة
-      return data.map(item => ({
-        id: item.id,
-        code: item.code,
-        name: item.name,
-        unit: item.unit,
-        quantity: item.quantity,
-        unitCost: item.unit_cost,
-        minStock: item.min_stock,
-        totalValue: item.quantity * item.unit_cost
+      if (productsError) throw new Error(productsError.message);
+
+      // 2. جلب مكونات كل منتج
+      const productsWithIngredients = await Promise.all(products.map(async (product) => {
+        const { data: ingredients, error: ingredientsError } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            raw_materials:raw_material_id(id, code, name)
+          `)
+          .eq('semi_finished_id', product.id);
+          
+        if (ingredientsError) throw new Error(ingredientsError.message);
+        
+        // تنسيق المكونات بطريقة أسهل للاستخدام
+        const formattedIngredients = ingredients.map((ingredient) => ({
+          id: ingredient.raw_materials.id,
+          code: ingredient.raw_materials.code,
+          name: ingredient.raw_materials.name,
+          percentage: ingredient.percentage
+        }));
+        
+        return {
+          id: product.id,
+          code: product.code,
+          name: product.name,
+          unit: product.unit,
+          quantity: product.quantity,
+          unitCost: product.unit_cost,
+          minStock: product.min_stock,
+          totalValue: product.quantity * product.unit_cost,
+          ingredients: formattedIngredients
+        };
       }));
+      
+      return productsWithIngredients;
     }
   });
   
@@ -87,6 +99,7 @@ const SemiFinishedProducts = () => {
         newCode = `SEMI-${String(lastNum + 1).padStart(5, '0')}`;
       }
       
+      // 1. إضافة المنتج النصف مصنع
       const { data, error } = await supabase
         .from('semi_finished_products')
         .insert([{
@@ -100,19 +113,28 @@ const SemiFinishedProducts = () => {
         .select();
         
       if (error) throw new Error(error.message);
+      
+      // 2. إضافة مكونات المنتج
+      if (newItem.ingredients && newItem.ingredients.length > 0) {
+        const ingredientsToInsert = newItem.ingredients.map((ingredient: any) => ({
+          semi_finished_id: data[0].id,
+          raw_material_id: ingredient.id,
+          percentage: ingredient.percentage
+        }));
+        
+        const { error: ingredientsError } = await supabase
+          .from('semi_finished_ingredients')
+          .insert(ingredientsToInsert);
+          
+        if (ingredientsError) throw new Error(ingredientsError.message);
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
       toast.success('تمت إضافة المنتج النصف مصنع بنجاح');
       setIsAddDialogOpen(false);
-      setNewProduct({
-        name: '',
-        unit: '',
-        quantity: 0,
-        unitCost: 0,
-        minStock: 0
-      });
     },
     onError: (error: any) => {
       toast.error(`حدث خطأ: ${error.message}`);
@@ -122,6 +144,7 @@ const SemiFinishedProducts = () => {
   // تعديل منتج
   const updateMutation = useMutation({
     mutationFn: async (product: any) => {
+      // 1. تحديث بيانات المنتج
       const { data, error } = await supabase
         .from('semi_finished_products')
         .update({
@@ -135,6 +158,30 @@ const SemiFinishedProducts = () => {
         .select();
         
       if (error) throw new Error(error.message);
+      
+      // 2. حذف المكونات القديمة
+      const { error: deleteError } = await supabase
+        .from('semi_finished_ingredients')
+        .delete()
+        .eq('semi_finished_id', product.id);
+        
+      if (deleteError) throw new Error(deleteError.message);
+      
+      // 3. إضافة المكونات الجديدة
+      if (product.ingredients && product.ingredients.length > 0) {
+        const ingredientsToInsert = product.ingredients.map((ingredient: any) => ({
+          semi_finished_id: product.id,
+          raw_material_id: ingredient.id,
+          percentage: ingredient.percentage
+        }));
+        
+        const { error: ingredientsError } = await supabase
+          .from('semi_finished_ingredients')
+          .insert(ingredientsToInsert);
+          
+        if (ingredientsError) throw new Error(ingredientsError.message);
+      }
+      
       return data;
     },
     onSuccess: () => {
@@ -150,6 +197,7 @@ const SemiFinishedProducts = () => {
   // حذف منتج
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      // لا حاجة لحذف المكونات لأننا استخدمنا ON DELETE CASCADE في قاعدة البيانات
       const { error } = await supabase
         .from('semi_finished_products')
         .delete()
@@ -168,41 +216,16 @@ const SemiFinishedProducts = () => {
     }
   });
   
-  // معالجة إضافة منتج جديد
-  const handleAddProduct = () => {
-    if (!newProduct.name || !newProduct.unit) {
-      toast.error('يجب ملء جميع الحقول المطلوبة');
-      return;
-    }
-    
-    addMutation.mutate(newProduct);
-  };
-  
-  // معالجة تعديل منتج
-  const handleEditProduct = () => {
-    if (!currentProduct) return;
-    
-    updateMutation.mutate({
-      id: currentProduct.id,
-      name: currentProduct.name,
-      unit: currentProduct.unit,
-      quantity: currentProduct.quantity,
-      unitCost: currentProduct.unitCost,
-      minStock: currentProduct.minStock
-    });
-  };
-  
-  // معالجة حذف منتج
-  const handleDeleteProduct = () => {
-    if (!currentProduct) return;
-    deleteMutation.mutate(currentProduct.id);
-  };
-  
   // تعريف أعمدة الجدول
   const columns = [
     { key: 'code', title: 'الكود' },
     { key: 'name', title: 'اسم المنتج' },
     { key: 'unit', title: 'وحدة القياس' },
+    {
+      key: 'ingredients',
+      title: 'عدد المكونات',
+      render: (value: any[]) => value.length
+    },
     { 
       key: 'quantity', 
       title: 'الكمية',
@@ -251,6 +274,22 @@ const SemiFinishedProducts = () => {
     </div>
   );
   
+  // معالجة إضافة منتج جديد
+  const handleAddProduct = (productData: any) => {
+    addMutation.mutate(productData);
+  };
+  
+  // معالجة تعديل منتج
+  const handleEditProduct = (productData: any) => {
+    updateMutation.mutate(productData);
+  };
+  
+  // معالجة حذف منتج
+  const handleDeleteProduct = () => {
+    if (!currentProduct) return;
+    deleteMutation.mutate(currentProduct.id);
+  };
+  
   if (error) {
     return (
       <PageTransition>
@@ -272,85 +311,10 @@ const SemiFinishedProducts = () => {
             <h1 className="text-3xl font-bold tracking-tight">المنتجات النصف مصنعة</h1>
             <p className="text-muted-foreground mt-1">إدارة المنتجات النصف مصنعة المستخدمة في عمليات الإنتاج</p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus size={18} className="mr-2" />
-                إضافة منتج
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>إضافة منتج نصف مصنع جديد</DialogTitle>
-                <DialogDescription>
-                  أدخل بيانات المنتج النصف مصنع الجديد. سيتم إنشاء كود فريد للمنتج تلقائيًا.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">اسم المنتج</Label>
-                  <Input
-                    id="name"
-                    value={newProduct.name}
-                    onChange={e => setNewProduct({...newProduct, name: e.target.value})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="unit">وحدة القياس</Label>
-                  <Select 
-                    value={newProduct.unit} 
-                    onValueChange={value => setNewProduct({...newProduct, unit: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر وحدة القياس" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units.map(unit => (
-                        <SelectItem key={unit} value={unit}>
-                          {unit}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="quantity">الكمية</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={newProduct.quantity}
-                    onChange={e => setNewProduct({...newProduct, quantity: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="unitCost">التكلفة</Label>
-                  <Input
-                    id="unitCost"
-                    type="number"
-                    value={newProduct.unitCost}
-                    onChange={e => setNewProduct({...newProduct, unitCost: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="minStock">الحد الأدنى للمخزون</Label>
-                  <Input
-                    id="minStock"
-                    type="number"
-                    value={newProduct.minStock}
-                    onChange={e => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  إلغاء
-                </Button>
-                <Button onClick={handleAddProduct} disabled={addMutation.isPending}>
-                  {addMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus size={18} className="mr-2" />
+            إضافة منتج
+          </Button>
         </div>
         
         {isLoading ? (
@@ -371,116 +335,39 @@ const SemiFinishedProducts = () => {
           />
         )}
         
-        {/* نافذة تعديل المنتج */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>تعديل منتج نصف مصنع</DialogTitle>
-              <DialogDescription>
-                تعديل بيانات المنتج النصف مصنع.
-              </DialogDescription>
-            </DialogHeader>
-            {currentProduct && (
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-code">الكود</Label>
-                  <Input
-                    id="edit-code"
-                    value={currentProduct.code}
-                    disabled
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-name">اسم المنتج</Label>
-                  <Input
-                    id="edit-name"
-                    value={currentProduct.name}
-                    onChange={e => setCurrentProduct({...currentProduct, name: e.target.value})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-unit">وحدة القياس</Label>
-                  <Select 
-                    value={currentProduct.unit} 
-                    onValueChange={value => setCurrentProduct({...currentProduct, unit: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر وحدة القياس" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units.map(unit => (
-                        <SelectItem key={unit} value={unit}>
-                          {unit}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-quantity">الكمية</Label>
-                  <Input
-                    id="edit-quantity"
-                    type="number"
-                    value={currentProduct.quantity}
-                    onChange={e => setCurrentProduct({...currentProduct, quantity: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-unitCost">التكلفة</Label>
-                  <Input
-                    id="edit-unitCost"
-                    type="number"
-                    value={currentProduct.unitCost}
-                    onChange={e => setCurrentProduct({...currentProduct, unitCost: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-minStock">الحد الأدنى للمخزون</Label>
-                  <Input
-                    id="edit-minStock"
-                    type="number"
-                    value={currentProduct.minStock}
-                    onChange={e => setCurrentProduct({...currentProduct, minStock: Number(e.target.value)})}
-                  />
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                إلغاء
-              </Button>
-              <Button onClick={handleEditProduct} disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التعديلات'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* نموذج إضافة منتج جديد */}
+        <SemiFinishedForm
+          isOpen={isAddDialogOpen}
+          onClose={() => setIsAddDialogOpen(false)}
+          onSubmit={handleAddProduct}
+          rawMaterials={rawMaterials}
+          isLoading={addMutation.isPending}
+          title="إضافة منتج نصف مصنع جديد"
+          submitText="إضافة"
+        />
         
-        {/* نافذة حذف المنتج */}
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>حذف منتج نصف مصنع</DialogTitle>
-              <DialogDescription>
-                هل أنت متأكد من حذف هذا المنتج النصف مصنع؟ لا يمكن التراجع عن هذا الإجراء.
-              </DialogDescription>
-            </DialogHeader>
-            {currentProduct && (
-              <div className="py-4">
-                <p className="font-medium">{currentProduct.name}</p>
-                <p className="text-sm text-muted-foreground">{currentProduct.code}</p>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                إلغاء
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteProduct} disabled={deleteMutation.isPending}>
-                {deleteMutation.isPending ? 'جاري الحذف...' : 'حذف'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* نموذج تعديل منتج */}
+        {currentProduct && (
+          <SemiFinishedForm
+            isOpen={isEditDialogOpen}
+            onClose={() => setIsEditDialogOpen(false)}
+            onSubmit={handleEditProduct}
+            initialData={currentProduct}
+            rawMaterials={rawMaterials}
+            isLoading={updateMutation.isPending}
+            title="تعديل منتج نصف مصنع"
+            submitText="حفظ التعديلات"
+          />
+        )}
+        
+        {/* مربع حوار تأكيد الحذف */}
+        <DeleteConfirmDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={handleDeleteProduct}
+          isLoading={deleteMutation.isPending}
+          product={currentProduct}
+        />
       </div>
     </PageTransition>
   );
