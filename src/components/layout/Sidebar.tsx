@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   LayoutDashboard, 
   Package,
-  Flask,
+  Beaker,
   Box,
   ShoppingBag,
   AlertTriangle,
@@ -80,7 +80,7 @@ const Sidebar: React.FC = () => {
             />
             <NavItem 
               to="/inventory/semi-finished" 
-              icon={<Flask size={20} />} 
+              icon={<Beaker size={20} />} 
               label="المنتجات النصف مصنعة" 
               active={pathname === '/inventory/semi-finished'}
             />

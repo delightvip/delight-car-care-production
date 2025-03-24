@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import PageTransition from '@/components/ui/PageTransition';
@@ -6,7 +5,7 @@ import DashboardCard from '@/components/dashboard/DashboardCard';
 import InventoryStats from '@/components/dashboard/InventoryStats';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, Box, Factory, Flask, Layers, Package, ShoppingBag } from 'lucide-react';
+import { AlertTriangle, Box, Factory, Beaker, Layers, Package, ShoppingBag } from 'lucide-react';
 
 const inventoryStatsData = [
   { name: 'المواد الأولية', value: 86, color: '#3B82F6' },
@@ -63,7 +62,7 @@ const Index = () => {
           <DashboardCard
             title="المنتجات النصف مصنعة"
             value="42"
-            icon={<Flask size={24} />}
+            icon={<Beaker size={24} />}
             color="success"
             link="/inventory/semi-finished"
           />
