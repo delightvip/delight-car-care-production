@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTable from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/button';
@@ -24,94 +24,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle2, Clock, Edit, Eye, Plus, Trash } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateOrderCode } from '@/utils/generateCode';
-
-// Mock data for production orders
-const initialProductionOrders = [
-  {
-    id: 1,
-    code: 'PROD-230801-00001',
-    productCode: 'SEMI-00001',
-    productName: 'ملمع تابلوه سائل',
-    quantity: 200,
-    unit: 'لتر',
-    status: 'completed',
-    date: '2023-08-15',
-    ingredients: [
-      { id: 1, code: 'RAW-00005', name: 'زيت سيليكون', requiredQuantity: 60, available: true },
-      { id: 2, code: 'RAW-00002', name: 'عطر ليمون', requiredQuantity: 10, available: true },
-      { id: 3, code: 'RAW-00001', name: 'كحول إيثيلي', requiredQuantity: 30, available: true }
-    ],
-    totalCost: 8000
-  },
-  {
-    id: 2,
-    code: 'PROD-230801-00002',
-    productCode: 'SEMI-00002',
-    productName: 'منظف زجاج سائل',
-    quantity: 300,
-    unit: 'لتر',
-    status: 'inProgress',
-    date: '2023-08-16',
-    ingredients: [
-      { id: 1, code: 'RAW-00001', name: 'كحول إيثيلي', requiredQuantity: 60, available: true },
-      { id: 2, code: 'RAW-00004', name: 'صبغة زرقاء', requiredQuantity: 3, available: true }
-    ],
-    totalCost: 9000
-  },
-  {
-    id: 3,
-    code: 'PROD-230801-00003',
-    productCode: 'SEMI-00001',
-    productName: 'ملمع تابلوه سائل',
-    quantity: 100,
-    unit: 'لتر',
-    status: 'pending',
-    date: '2023-08-17',
-    ingredients: [
-      { id: 1, code: 'RAW-00005', name: 'زيت سيليكون', requiredQuantity: 30, available: true },
-      { id: 2, code: 'RAW-00002', name: 'عطر ليمون', requiredQuantity: 5, available: false },
-      { id: 3, code: 'RAW-00001', name: 'كحول إيثيلي', requiredQuantity: 15, available: true }
-    ],
-    totalCost: 4000
-  }
-];
-
-// Mock data for semi-finished products
-const semiFinishedProducts = [
-  {
-    id: 1,
-    code: 'SEMI-00001',
-    name: 'ملمع تابلوه سائل',
-    unit: 'لتر',
-    ingredients: [
-      { id: 1, code: 'RAW-00005', name: 'زيت سيليكون', percentage: 30 },
-      { id: 2, code: 'RAW-00002', name: 'عطر ليمون', percentage: 5 },
-      { id: 3, code: 'RAW-00001', name: 'كحول إيثيلي', percentage: 15 }
-    ],
-    unitCost: 40
-  },
-  {
-    id: 2,
-    code: 'SEMI-00002',
-    name: 'منظف زجاج سائل',
-    unit: 'لتر',
-    ingredients: [
-      { id: 3, code: 'RAW-00001', name: 'كحول إيثيلي', percentage: 20 },
-      { id: 4, code: 'RAW-00004', name: 'صبغة زرقاء', percentage: 1 }
-    ],
-    unitCost: 30
-  }
-];
-
-// Mock data for raw materials inventory
-const rawMaterialsInventory = [
-  { code: 'RAW-00001', name: 'كحول إيثيلي', quantity: 40, minStock: 50 },
-  { code: 'RAW-00002', name: 'عطر ليمون', quantity: 5, minStock: 15 },
-  { code: 'RAW-00003', name: 'جليسرين', quantity: 18, minStock: 20 },
-  { code: 'RAW-00004', name: 'صبغة زرقاء', quantity: 15, minStock: 5 },
-  { code: 'RAW-00005', name: 'زيت سيليكون', quantity: 45, minStock: 20 }
-];
+import { toast } from 'sonner';
+import ProductionService from '@/services/ProductionService';
+import InventoryService from '@/services/InventoryService';
+import { ProductionOrder } from '@/services/ProductionService';
+import { SemiFinishedProduct } from '@/services/InventoryService';
 
 const statusTranslations = {
   pending: 'قيد الانتظار',
@@ -134,19 +51,28 @@ const statusIcons = {
 };
 
 const ProductionOrders = () => {
-  const [orders, setOrders] = useState(initialProductionOrders);
+  const [orders, setOrders] = useState<ProductionOrder[]>([]);
+  const [semiFinishedProducts, setSemiFinishedProducts] = useState<SemiFinishedProduct[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<any>(null);
+  const [currentOrder, setCurrentOrder] = useState<ProductionOrder | null>(null);
   const [newOrder, setNewOrder] = useState({
     productCode: '',
     quantity: 0
   });
   const [newStatus, setNewStatus] = useState('');
   
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
+  const productionService = ProductionService.getInstance();
+  const inventoryService = InventoryService.getInstance();
+  
+  // تحميل البيانات
+  useEffect(() => {
+    setOrders(productionService.getProductionOrders());
+    setSemiFinishedProducts(inventoryService.getSemiFinishedProducts());
+  }, []);
   
   // Columns for the data table
   const columns = [
@@ -175,15 +101,63 @@ const ProductionOrders = () => {
     }
   ];
   
-  // Check if all ingredients are available
-  const checkIngredientsAvailability = (productCode: string, quantity: number) => {
+  // Handle adding a new order
+  const handleAddOrder = () => {
+    if (!newOrder.productCode || newOrder.quantity <= 0) {
+      toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
+      return;
+    }
+    
+    const createdOrder = productionService.createProductionOrder(newOrder.productCode, newOrder.quantity);
+    if (createdOrder) {
+      setOrders(productionService.getProductionOrders());
+      setNewOrder({
+        productCode: '',
+        quantity: 0
+      });
+      setIsAddDialogOpen(false);
+    }
+  };
+  
+  // Handle updating order status
+  const handleUpdateStatus = () => {
+    if (!currentOrder || !newStatus) return;
+    
+    const success = productionService.updateProductionOrderStatus(currentOrder.id, newStatus as any);
+    if (success) {
+      setOrders(productionService.getProductionOrders());
+      setIsStatusDialogOpen(false);
+    }
+  };
+  
+  // Handle deleting an order
+  const handleDeleteOrder = () => {
+    if (!currentOrder) return;
+    
+    // Only allow deleting pending orders
+    if (currentOrder.status !== 'pending') {
+      toast.error("لا يمكن حذف أمر إنتاج قيد التنفيذ أو مكتمل");
+      return;
+    }
+    
+    // للتبسيط، سنقوم بحذف الأمر من المصفوفة المحلية فقط
+    const updatedOrders = orders.filter(order => order.id !== currentOrder.id);
+    setOrders(updatedOrders);
+    setIsDeleteDialogOpen(false);
+    
+    toast.success(`تم حذف أمر الإنتاج ${currentOrder.code} بنجاح`);
+  };
+  
+  // Calculate ingredients for the selected product
+  const calculateIngredientsForProduct = (productCode: string, quantity: number) => {
     const product = semiFinishedProducts.find(p => p.code === productCode);
     if (!product) return [];
     
     return product.ingredients.map(ingredient => {
       const requiredQuantity = (ingredient.percentage / 100) * quantity;
-      const inventoryItem = rawMaterialsInventory.find(item => item.code === ingredient.code);
-      const available = inventoryItem && inventoryItem.quantity >= requiredQuantity;
+      const rawMaterials = inventoryService.getRawMaterials();
+      const inventoryItem = rawMaterials.find(item => item.code === ingredient.code);
+      const available = inventoryItem ? inventoryItem.quantity >= requiredQuantity : false;
       
       return {
         ...ingredient,
@@ -193,7 +167,7 @@ const ProductionOrders = () => {
     });
   };
   
-  // Calculate total cost of production
+  // Calculate total cost for the selected product
   const calculateTotalCost = (productCode: string, quantity: number) => {
     const product = semiFinishedProducts.find(p => p.code === productCode);
     if (!product) return 0;
@@ -201,126 +175,8 @@ const ProductionOrders = () => {
     return product.unitCost * quantity;
   };
   
-  // Handle adding a new order
-  const handleAddOrder = () => {
-    if (!newOrder.productCode || newOrder.quantity <= 0) {
-      toast({
-        title: "خطأ",
-        description: "يجب اختيار منتج وتحديد كمية صحيحة",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const product = semiFinishedProducts.find(p => p.code === newOrder.productCode);
-    if (!product) {
-      toast({
-        title: "خطأ",
-        description: "المنتج غير موجود",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const ingredients = checkIngredientsAvailability(newOrder.productCode, newOrder.quantity);
-    const allAvailable = ingredients.every(i => i.available);
-    const totalCost = calculateTotalCost(newOrder.productCode, newOrder.quantity);
-    
-    const newItem = {
-      id: orders.length + 1,
-      code: generateOrderCode('production', orders.length),
-      productCode: newOrder.productCode,
-      productName: product.name,
-      quantity: newOrder.quantity,
-      unit: product.unit,
-      status: allAvailable ? 'pending' : 'pending',
-      date: new Date().toISOString().split('T')[0],
-      ingredients,
-      totalCost
-    };
-    
-    setOrders([...orders, newItem]);
-    setNewOrder({
-      productCode: '',
-      quantity: 0
-    });
-    setIsAddDialogOpen(false);
-    
-    toast({
-      title: "تمت الإضافة",
-      description: `تم إضافة أمر إنتاج ${newItem.productName} بنجاح`
-    });
-    
-    if (!allAvailable) {
-      toast({
-        title: "تنبيه",
-        description: "بعض المكونات غير متوفرة بالكمية المطلوبة. تم حفظ الأمر كمسودة.",
-        variant: "destructive"
-      });
-    }
-  };
-  
-  // Handle updating order status
-  const handleUpdateStatus = () => {
-    if (!currentOrder || !newStatus) return;
-    
-    // If changing to completed, verify ingredients availability
-    if (newStatus === 'completed') {
-      const ingredients = checkIngredientsAvailability(currentOrder.productCode, currentOrder.quantity);
-      const allAvailable = ingredients.every(i => i.available);
-      
-      if (!allAvailable) {
-        toast({
-          title: "خطأ",
-          description: "لا يمكن إكمال الأمر لعدم توفر جميع المكونات",
-          variant: "destructive"
-        });
-        return;
-      }
-    }
-    
-    const updatedOrders = orders.map(order => 
-      order.id === currentOrder.id ? 
-        { ...order, status: newStatus } : 
-        order
-    );
-    
-    setOrders(updatedOrders);
-    setIsStatusDialogOpen(false);
-    
-    toast({
-      title: "تم التحديث",
-      description: `تم تحديث حالة أمر الإنتاج إلى ${statusTranslations[newStatus as keyof typeof statusTranslations]}`
-    });
-  };
-  
-  // Handle deleting an order
-  const handleDeleteOrder = () => {
-    if (!currentOrder) return;
-    
-    // Only allow deleting pending orders
-    if (currentOrder.status !== 'pending') {
-      toast({
-        title: "خطأ",
-        description: "لا يمكن حذف أمر إنتاج قيد التنفيذ أو مكتمل",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const updatedOrders = orders.filter(order => order.id !== currentOrder.id);
-    
-    setOrders(updatedOrders);
-    setIsDeleteDialogOpen(false);
-    
-    toast({
-      title: "تم الحذف",
-      description: `تم حذف أمر الإنتاج ${currentOrder.code} بنجاح`
-    });
-  };
-  
   // Render actions column
-  const renderActions = (record: any) => (
+  const renderActions = (record: ProductionOrder) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
         variant="ghost"
@@ -412,7 +268,7 @@ const ProductionOrders = () => {
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                     <div className="space-y-2">
-                      {checkIngredientsAvailability(newOrder.productCode, newOrder.quantity).map(ingredient => {
+                      {calculateIngredientsForProduct(newOrder.productCode, newOrder.quantity).map(ingredient => {
                         return (
                           <div key={ingredient.code} className="flex justify-between p-2 border rounded-md">
                             <div>
@@ -501,7 +357,7 @@ const ProductionOrders = () => {
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                   <div className="space-y-2">
-                    {currentOrder.ingredients.map((ingredient: any) => (
+                    {currentOrder.ingredients.map((ingredient) => (
                       <div key={ingredient.code} className="flex justify-between p-2 border rounded-md">
                         <div>
                           <span className="font-medium">{ingredient.name}</span>

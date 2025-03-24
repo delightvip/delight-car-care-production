@@ -1,17 +1,14 @@
 
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-
-interface InventoryDistributionProps {
-  data: {
-    name: string;
-    value: number;
-  }[];
-}
+import InventoryService from '@/services/InventoryService';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1'];
 
-const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data }) => {
+const InventoryDistribution: React.FC = () => {
+  const inventoryService = InventoryService.getInstance();
+  const data = inventoryService.getInventoryDistributionData();
+  
   const total = data.reduce((sum, item) => sum + item.value, 0);
   
   return (
@@ -34,7 +31,7 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data }) =
             ))}
           </Pie>
           <Tooltip
-            formatter={(value: number) => [`${value} (${((value / total) * 100).toFixed(1)}%)`, 'القيمة']}
+            formatter={(value: number) => [`${value.toLocaleString()} ج.م (${((value / total) * 100).toFixed(1)}%)`, 'القيمة']}
             contentStyle={{
               backgroundColor: 'white',
               borderRadius: '8px',
@@ -44,6 +41,7 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data }) =
           />
           <Legend 
             wrapperStyle={{ paddingTop: '10px' }}
+            formatter={(value) => <span className="text-sm font-medium">{value}</span>}
           />
         </PieChart>
       </ResponsiveContainer>
