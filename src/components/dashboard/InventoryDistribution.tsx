@@ -153,7 +153,7 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
             </Pie>
           </motion.g>
           <Tooltip
-            formatter={(value: number) => [`${value.toLocaleString()} ج.م (${((value / total) * 100).toFixed(1)}%)`, 'القيمة']}
+            formatter={(value: number) => [`${value.toLocaleString('ar-EG')} ج.م (${((value / total) * 100).toFixed(1)}%)`, 'القيمة']}
             contentStyle={{
               backgroundColor: 'white',
               borderRadius: '8px',
@@ -177,7 +177,7 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
                     <div className="space-y-1">
                       <p className="text-sm font-medium">{value}</p>
                       <p className="text-sm text-muted-foreground">
-                        {itemData?.value.toLocaleString()} ج.م ({percentage}%)
+                        {itemData?.value.toLocaleString('ar-EG')} ج.م ({percentage}%)
                       </p>
                     </div>
                   </HoverCardContent>

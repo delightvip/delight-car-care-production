@@ -6,74 +6,216 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from "@/components/ui/progress";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Box, Beaker, Package, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Mock data for all inventory items with stock levels
-const lowStockItems = {
-  raw: [
-    { id: 1, code: 'RAW-00001', name: 'كحول إيثيلي', currentStock: 40, minStock: 50, unit: 'لتر', category: 'المواد الأولية', route: '/inventory/raw-materials' },
-    { id: 3, code: 'RAW-00003', name: 'جليسرين', currentStock: 18, minStock: 20, unit: 'كجم', category: 'المواد الأولية', route: '/inventory/raw-materials' }
-  ],
-  semi: [
-    { id: 1, code: 'SEMI-00001', name: 'ملمع تابلوه سائل', currentStock: 35, minStock: 50, unit: 'لتر', category: 'المنتجات النصف مصنعة', route: '/inventory/semi-finished' }
-  ],
-  packaging: [
-    { id: 1, code: 'PKG-00001', name: 'عبوة بلاستيكية 250مل', currentStock: 120, minStock: 200, unit: 'قطعة', category: 'مستلزمات التعبئة', route: '/inventory/packaging' },
-    { id: 5, code: 'PKG-00005', name: 'كرتونة تعبئة (24 قطعة)', currentStock: 40, minStock: 50, unit: 'قطعة', category: 'مستلزمات التعبئة', route: '/inventory/packaging' }
-  ],
-  finished: [
-    { id: 1, code: 'FIN-00001', name: 'ملمع تابلوه 250مل', currentStock: 30, minStock: 50, unit: 'قطعة', category: 'المنتجات النهائية', route: '/inventory/finished-products' }
-  ]
-};
+// Type for low stock items
+interface LowStockItem {
+  id: number;
+  code: string;
+  name: string;
+  currentStock: number;
+  minStock: number;
+  unit: string;
+  category: string;
+  categoryName: string;
+  route: string;
+}
 
 const LowStockItems = () => {
   const [activeTab, setActiveTab] = useState('all');
   
-  // Combine all items and sort by stock percentage
-  const allItems = [
-    ...lowStockItems.raw,
-    ...lowStockItems.semi,
-    ...lowStockItems.packaging,
-    ...lowStockItems.finished
-  ].sort((a, b) => {
-    const percentA = (a.currentStock / a.minStock) * 100;
-    const percentB = (b.currentStock / b.minStock) * 100;
-    return percentA - percentB;
+  // Fetch low stock items using React Query
+  const { data: lowStockItems, isLoading } = useQuery({
+    queryKey: ['lowStockItems'],
+    queryFn: async () => {
+      // Fetch raw materials data
+      const { data: rawMaterials, error: rawMaterialsError } = await supabase
+        .from('raw_materials')
+        .select('id, code, name, quantity, min_stock, unit')
+        .lt('quantity', 'min_stock');
+      
+      if (rawMaterialsError) throw new Error(rawMaterialsError.message);
+      
+      // Fetch semi-finished products data
+      const { data: semiFinished, error: semiFinishedError } = await supabase
+        .from('semi_finished_products')
+        .select('id, code, name, quantity, min_stock, unit')
+        .lt('quantity', 'min_stock');
+      
+      if (semiFinishedError) throw new Error(semiFinishedError.message);
+      
+      // Fetch packaging materials data
+      const { data: packaging, error: packagingError } = await supabase
+        .from('packaging_materials')
+        .select('id, code, name, quantity, min_stock, unit')
+        .lt('quantity', 'min_stock');
+      
+      if (packagingError) throw new Error(packagingError.message);
+      
+      // Fetch finished products data
+      const { data: finished, error: finishedError } = await supabase
+        .from('finished_products')
+        .select('id, code, name, quantity, min_stock, unit')
+        .lt('quantity', 'min_stock');
+      
+      if (finishedError) throw new Error(finishedError.message);
+      
+      // Format the data for consistent display
+      const formattedData = {
+        raw: (rawMaterials || []).map(item => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          currentStock: item.quantity,
+          minStock: item.min_stock,
+          unit: item.unit,
+          category: 'raw_materials',
+          categoryName: 'المواد الأولية',
+          route: '/inventory/raw-materials'
+        })),
+        semi: (semiFinished || []).map(item => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          currentStock: item.quantity,
+          minStock: item.min_stock,
+          unit: item.unit,
+          category: 'semi_finished',
+          categoryName: 'المنتجات النصف مصنعة',
+          route: '/inventory/semi-finished'
+        })),
+        packaging: (packaging || []).map(item => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          currentStock: item.quantity,
+          minStock: item.min_stock,
+          unit: item.unit,
+          category: 'packaging',
+          categoryName: 'مستلزمات التعبئة',
+          route: '/inventory/packaging'
+        })),
+        finished: (finished || []).map(item => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          currentStock: item.quantity,
+          minStock: item.min_stock,
+          unit: item.unit,
+          category: 'finished_products',
+          categoryName: 'المنتجات النهائية',
+          route: '/inventory/finished-products'
+        }))
+      };
+      
+      return formattedData;
+    },
+    refetchInterval: 60000, // Refresh every minute
   });
+  
+  // Render loading skeleton
+  if (isLoading) {
+    return (
+      <PageTransition>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">المخزون المنخفض</h1>
+            <p className="text-muted-foreground mt-1">العناصر التي وصلت إلى الحد الأدنى المسموح به أو أقل</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+          </div>
+          
+          <Skeleton className="h-10 w-full max-w-md mb-6" />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array(6).fill(0).map((_, i) => (
+              <Skeleton key={i} className="h-48" />
+            ))}
+          </div>
+        </div>
+      </PageTransition>
+    );
+  }
+  
+  // Combine all items and sort by stock percentage
+  const allItems = React.useMemo(() => {
+    if (!lowStockItems) return [];
+    
+    return [
+      ...lowStockItems.raw,
+      ...lowStockItems.semi,
+      ...lowStockItems.packaging,
+      ...lowStockItems.finished
+    ].sort((a, b) => {
+      const percentA = (a.currentStock / a.minStock) * 100;
+      const percentB = (b.currentStock / b.minStock) * 100;
+      return percentA - percentB;
+    });
+  }, [lowStockItems]);
   
   // Calculate totals
   const totalLowStock = allItems.length;
   const criticalItems = allItems.filter(item => (item.currentStock / item.minStock) * 100 <= 50).length;
   
   // Render a stock item card
-  const renderStockItem = (item: any) => {
+  const renderStockItem = (item: LowStockItem) => {
     const percentage = Math.min(100, Math.round((item.currentStock / item.minStock) * 100));
     const progressColor = 
       percentage <= 30 ? 'bg-red-500' : 
       percentage <= 70 ? 'bg-amber-500' : 
       'bg-green-500';
     
+    // Icon based on category
+    const ItemIcon = 
+      item.category === 'raw_materials' ? Package :
+      item.category === 'semi_finished' ? Beaker :
+      item.category === 'packaging' ? Box :
+      ShoppingBag;
+    
     return (
       <Card key={item.code} className="overflow-hidden">
         <CardContent className="p-6">
           <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="text-lg font-medium">{item.name}</h3>
-              <p className="text-sm text-muted-foreground">{item.code}</p>
+            <div className="flex items-start gap-3">
+              <div className={`
+                p-2 rounded-md 
+                ${item.category === 'raw_materials' ? 'bg-blue-100 text-blue-700' : ''}
+                ${item.category === 'semi_finished' ? 'bg-green-100 text-green-700' : ''}
+                ${item.category === 'packaging' ? 'bg-amber-100 text-amber-700' : ''}
+                ${item.category === 'finished_products' ? 'bg-purple-100 text-purple-700' : ''}
+              `}>
+                <ItemIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium">{item.name}</h3>
+                <p className="text-sm text-muted-foreground">{item.code}</p>
+              </div>
             </div>
             <Badge 
               variant="outline" 
-              className="ml-2"
+              className={`
+                ${item.category === 'raw_materials' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}
+                ${item.category === 'semi_finished' ? 'bg-green-50 text-green-700 border-green-200' : ''}
+                ${item.category === 'packaging' ? 'bg-amber-50 text-amber-700 border-amber-200' : ''}
+                ${item.category === 'finished_products' ? 'bg-purple-50 text-purple-700 border-purple-200' : ''}
+              `}
             >
-              {item.category}
+              {item.categoryName}
             </Badge>
           </div>
           
           <div className="space-y-4">
             <div className="flex justify-between items-center text-sm">
-              <span>المخزون الحالي: {item.currentStock} {item.unit}</span>
-              <span>الحد الأدنى: {item.minStock} {item.unit}</span>
+              <span>المخزون الحالي: <span className="font-medium">{item.currentStock} {item.unit}</span></span>
+              <span>الحد الأدنى: <span className="font-medium">{item.minStock} {item.unit}</span></span>
             </div>
             
             <div className="w-full">
@@ -103,6 +245,16 @@ const LowStockItems = () => {
     );
   };
   
+  // Get filtered items based on active tab
+  const getFilteredItems = () => {
+    if (activeTab === 'all') return allItems;
+    if (activeTab === 'raw') return lowStockItems?.raw || [];
+    if (activeTab === 'semi') return lowStockItems?.semi || [];
+    if (activeTab === 'packaging') return lowStockItems?.packaging || [];
+    if (activeTab === 'finished') return lowStockItems?.finished || [];
+    return [];
+  };
+  
   return (
     <PageTransition>
       <div className="space-y-6">
@@ -112,25 +264,25 @@ const LowStockItems = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-amber-50">
+          <Card className="bg-amber-50 dark:bg-amber-950/20">
             <CardContent className="p-6 flex items-center justify-between">
               <div>
-                <p className="text-sm text-amber-800 font-medium">إجمالي العناصر منخفضة المخزون</p>
-                <h3 className="text-3xl font-bold text-amber-900 mt-1">{totalLowStock}</h3>
+                <p className="text-sm text-amber-800 dark:text-amber-400 font-medium">إجمالي العناصر منخفضة المخزون</p>
+                <h3 className="text-3xl font-bold text-amber-900 dark:text-amber-300 mt-1">{totalLowStock}</h3>
               </div>
-              <div className="h-12 w-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                 <AlertTriangle size={24} />
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-red-50">
+          <Card className="bg-red-50 dark:bg-red-950/20">
             <CardContent className="p-6 flex items-center justify-between">
               <div>
-                <p className="text-sm text-red-800 font-medium">العناصر الحرجة (أقل من 50%)</p>
-                <h3 className="text-3xl font-bold text-red-900 mt-1">{criticalItems}</h3>
+                <p className="text-sm text-red-800 dark:text-red-400 font-medium">العناصر الحرجة (أقل من 50%)</p>
+                <h3 className="text-3xl font-bold text-red-900 dark:text-red-300 mt-1">{criticalItems}</h3>
               </div>
-              <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 flex items-center justify-center">
                 <AlertTriangle size={24} />
               </div>
             </CardContent>
@@ -142,6 +294,11 @@ const LowStockItems = () => {
                 <p className="text-sm text-muted-foreground">
                   يُوصى بتجديد المخزون للعناصر التي تقل عن الحد الأدنى لضمان استمرارية عمليات الإنتاج.
                 </p>
+                <Button className="mt-4" size="sm" asChild>
+                  <Link to="/inventory/tracking">
+                    عرض حركة المخزون
+                  </Link>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -150,39 +307,24 @@ const LowStockItems = () => {
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
             <TabsTrigger value="all">الكل ({allItems.length})</TabsTrigger>
-            <TabsTrigger value="raw">المواد الأولية ({lowStockItems.raw.length})</TabsTrigger>
-            <TabsTrigger value="semi">النصف مصنعة ({lowStockItems.semi.length})</TabsTrigger>
-            <TabsTrigger value="packaging">مستلزمات التعبئة ({lowStockItems.packaging.length})</TabsTrigger>
-            <TabsTrigger value="finished">المنتجات النهائية ({lowStockItems.finished.length})</TabsTrigger>
+            <TabsTrigger value="raw">المواد الأولية ({lowStockItems?.raw.length || 0})</TabsTrigger>
+            <TabsTrigger value="semi">النصف مصنعة ({lowStockItems?.semi.length || 0})</TabsTrigger>
+            <TabsTrigger value="packaging">مستلزمات التعبئة ({lowStockItems?.packaging.length || 0})</TabsTrigger>
+            <TabsTrigger value="finished">المنتجات النهائية ({lowStockItems?.finished.length || 0})</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="all" className="mt-0">
+          <TabsContent value={activeTab} className="mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allItems.map(renderStockItem)}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="raw" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {lowStockItems.raw.map(renderStockItem)}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="semi" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {lowStockItems.semi.map(renderStockItem)}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="packaging" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {lowStockItems.packaging.map(renderStockItem)}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="finished" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {lowStockItems.finished.map(renderStockItem)}
+              {getFilteredItems().length > 0 ? (
+                getFilteredItems().map(renderStockItem)
+              ) : (
+                <Card className="col-span-full">
+                  <CardContent className="p-6 text-center">
+                    <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p>لا توجد عناصر منخفضة المخزون في هذه الفئة</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </TabsContent>
         </Tabs>
