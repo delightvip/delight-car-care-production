@@ -5,8 +5,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 interface ProductionChartProps {
   data: {
     month: string;
-    production_count: number;
-    packaging_count: number;
+    production_count?: number;
+    packaging_count?: number;
+    production?: number;
+    packaging?: number;
   }[];
 }
 
@@ -14,8 +16,8 @@ const ProductionChart: React.FC<ProductionChartProps> = ({ data }) => {
   // Transform the data to match the format expected by the chart
   const chartData = data.map(item => ({
     month: item.month,
-    production: item.production_count,
-    packaging: item.packaging_count
+    production: item.production_count ?? item.production ?? 0,
+    packaging: item.packaging_count ?? item.packaging ?? 0
   }));
 
   return (
