@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   LayoutDashboard, 
   Package,
@@ -10,7 +11,14 @@ import {
   ShoppingBag,
   AlertTriangle,
   Factory,
-  Layers
+  Layers,
+  ChevronDown,
+  ChevronRight,
+  BarChart4,
+  ListChecks,
+  Settings,
+  Users,
+  TrendingUp
 } from 'lucide-react';
 
 interface NavItemProps {
@@ -40,17 +48,27 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, active }) => {
 
 interface NavGroupProps {
   title: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }
 
-const NavGroup: React.FC<NavGroupProps> = ({ title, children }) => {
+const NavGroup: React.FC<NavGroupProps> = ({ title, icon, children, defaultOpen = true }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  
   return (
-    <div className="py-2">
-      <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-        {title}
-      </h3>
-      <div className="space-y-1">{children}</div>
-    </div>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="py-2">
+      <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700 cursor-pointer transition-colors">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="uppercase tracking-wider">{title}</span>
+        </div>
+        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-1 pt-1">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
@@ -59,19 +77,25 @@ const Sidebar: React.FC = () => {
   const pathname = location.pathname;
   
   return (
-    <aside className="w-64 h-screen border-r border-gray-200 bg-white hidden md:block fixed top-0 right-0 pt-16">
+    <aside className="w-64 h-screen border-r border-gray-200 bg-white hidden md:block fixed top-0 pt-16 z-10">
       <ScrollArea className="h-full py-4 px-3">
         <div className="space-y-4">
-          <NavGroup title="الرئيسية">
+          <NavGroup title="الرئيسية" icon={<LayoutDashboard size={16} />}>
             <NavItem 
               to="/" 
               icon={<LayoutDashboard size={20} />} 
               label="لوحة التحكم" 
               active={pathname === '/'}
             />
+            <NavItem 
+              to="/analytics" 
+              icon={<BarChart4 size={20} />} 
+              label="التحليلات والإحصائيات" 
+              active={pathname === '/analytics'}
+            />
           </NavGroup>
           
-          <NavGroup title="المخزون">
+          <NavGroup title="المخزون" icon={<Package size={16} />}>
             <NavItem 
               to="/inventory/raw-materials" 
               icon={<Package size={20} />} 
@@ -102,9 +126,15 @@ const Sidebar: React.FC = () => {
               label="المخزون المنخفض" 
               active={pathname === '/inventory/low-stock'}
             />
+            <NavItem 
+              to="/inventory/tracking" 
+              icon={<ListChecks size={20} />} 
+              label="تتبع المخزون" 
+              active={pathname === '/inventory/tracking'}
+            />
           </NavGroup>
           
-          <NavGroup title="الإنتاج">
+          <NavGroup title="الإنتاج" icon={<Factory size={16} />}>
             <NavItem 
               to="/production/orders" 
               icon={<Factory size={20} />} 
@@ -116,6 +146,27 @@ const Sidebar: React.FC = () => {
               icon={<Layers size={20} />} 
               label="أوامر التعبئة" 
               active={pathname === '/production/packaging'}
+            />
+            <NavItem 
+              to="/production/planning" 
+              icon={<TrendingUp size={20} />} 
+              label="تخطيط الإنتاج" 
+              active={pathname === '/production/planning'}
+            />
+          </NavGroup>
+          
+          <NavGroup title="الإدارة" icon={<Settings size={16} />} defaultOpen={false}>
+            <NavItem 
+              to="/settings/users" 
+              icon={<Users size={20} />} 
+              label="إدارة المستخدمين" 
+              active={pathname === '/settings/users'}
+            />
+            <NavItem 
+              to="/settings/system" 
+              icon={<Settings size={20} />} 
+              label="إعدادات النظام" 
+              active={pathname === '/settings/system'}
             />
           </NavGroup>
         </div>
