@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import InventoryService from '@/services/InventoryService';
 import { motion } from 'framer-motion';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1'];
 
@@ -12,9 +14,60 @@ interface InventoryDistributionProps {
 }
 
 const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: propData }) => {
-  const inventoryService = InventoryService.getInstance();
-  const data = propData || inventoryService.getInventoryDistributionData();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  
+  // استخدام React Query لجلب البيانات مباشرة من قاعدة البيانات
+  const { data: databaseData, isLoading, error } = useQuery({
+    queryKey: ['inventoryDistribution'],
+    queryFn: async () => {
+      // جلب بيانات المواد الأولية
+      const { data: rawMaterialsData, error: rawMaterialsError } = await supabase
+        .from('raw_materials')
+        .select('quantity, unit_cost');
+      
+      if (rawMaterialsError) throw new Error(rawMaterialsError.message);
+      
+      // جلب بيانات المنتجات النصف مصنعة
+      const { data: semiFinishedData, error: semiFinishedError } = await supabase
+        .from('semi_finished_products')
+        .select('quantity, unit_cost');
+      
+      if (semiFinishedError) throw new Error(semiFinishedError.message);
+      
+      // جلب بيانات مستلزمات التعبئة
+      const { data: packagingData, error: packagingError } = await supabase
+        .from('packaging_materials')
+        .select('quantity, unit_cost');
+      
+      if (packagingError) throw new Error(packagingError.message);
+      
+      // جلب بيانات المنتجات النهائية
+      const { data: finishedData, error: finishedError } = await supabase
+        .from('finished_products')
+        .select('quantity, unit_cost');
+      
+      if (finishedError) throw new Error(finishedError.message);
+      
+      // حساب القيم الإجمالية لكل نوع
+      const rawMaterialsValue = rawMaterialsData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+      const semiFinishedValue = semiFinishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+      const packagingValue = packagingData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+      const finishedValue = finishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+      
+      // تنسيق البيانات للرسم البياني
+      return [
+        { name: 'المواد الأولية', value: rawMaterialsValue },
+        { name: 'المنتجات النصف مصنعة', value: semiFinishedValue },
+        { name: 'مواد التعبئة', value: packagingValue },
+        { name: 'المنتجات النهائية', value: finishedValue }
+      ];
+    },
+    // تحديث كل دقيقة
+    refetchInterval: 60000,
+  });
+  
+  // استخدام البيانات الخارجية إذا تم توفيرها، وإلا استخدام البيانات من قاعدة البيانات
+  const data = propData || databaseData || [];
   
   const total = data.reduce((sum, item) => sum + item.value, 0);
   
@@ -47,6 +100,22 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
       </text>
     );
   };
+  
+  if (isLoading && !propData) {
+    return (
+      <div className="h-72 w-full flex items-center justify-center">
+        <Skeleton className="h-56 w-56 rounded-full" />
+      </div>
+    );
+  }
+  
+  if (error && !propData) {
+    return (
+      <div className="h-72 w-full flex items-center justify-center">
+        <p className="text-red-500">حدث خطأ أثناء تحميل البيانات</p>
+      </div>
+    );
+  }
   
   return (
     <div className="h-72 w-full">

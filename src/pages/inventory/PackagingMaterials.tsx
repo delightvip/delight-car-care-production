@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTable from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/button';
@@ -22,72 +23,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Edit, Plus, Trash } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { generateCode } from '@/utils/generateCode';
-
-// Mock data for packaging materials
-const initialPackagingMaterials = [
-  { 
-    id: 1,
-    code: 'PKG-00001',
-    name: 'عبوة بلاستيكية 250مل',
-    unit: 'قطعة',
-    price: 5,
-    quantity: 500,
-    minStock: 200,
-    importance: 3,
-    totalValue: 2500
-  },
-  { 
-    id: 2,
-    code: 'PKG-00002',
-    name: 'عبوة بلاستيكية 500مل',
-    unit: 'قطعة',
-    price: 8,
-    quantity: 400,
-    minStock: 150,
-    importance: 4,
-    totalValue: 3200
-  },
-  { 
-    id: 3,
-    code: 'PKG-00003',
-    name: 'ملصق منتج ملمع تابلوه',
-    unit: 'قطعة',
-    price: 1.5,
-    quantity: 1000,
-    minStock: 300,
-    importance: 2,
-    totalValue: 1500
-  },
-  { 
-    id: 4,
-    code: 'PKG-00004',
-    name: 'ملصق منتج منظف زجاج',
-    unit: 'قطعة',
-    price: 1.5,
-    quantity: 1000,
-    minStock: 300,
-    importance: 2,
-    totalValue: 1500
-  },
-  { 
-    id: 5,
-    code: 'PKG-00005',
-    name: 'كرتونة تعبئة (24 قطعة)',
-    unit: 'قطعة',
-    price: 10,
-    quantity: 200,
-    minStock: 50,
-    importance: 5,
-    totalValue: 2000
-  }
-];
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const units = ['قطعة', 'علبة', 'كرتونة', 'رول', 'متر'];
 
 const PackagingMaterials = () => {
-  const [packagingMaterials, setPackagingMaterials] = useState(initialPackagingMaterials);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -100,9 +42,165 @@ const PackagingMaterials = () => {
     minStock: 0
   });
   
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
   
-  // Columns for the data table
+  // جلب مواد التعبئة من قاعدة البيانات
+  const { data: packagingMaterials, isLoading, error } = useQuery({
+    queryKey: ['packagingMaterials'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('packaging_materials')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      // تحويل البيانات إلى الصيغة المتوافقة مع الواجهة
+      return data.map(item => ({
+        id: item.id,
+        code: item.code,
+        name: item.name,
+        unit: item.unit,
+        price: item.unit_cost,
+        quantity: item.quantity,
+        minStock: item.min_stock,
+        importance: item.importance || 0,
+        totalValue: item.quantity * item.unit_cost
+      }));
+    }
+  });
+  
+  // إضافة مادة تعبئة جديدة
+  const addMutation = useMutation({
+    mutationFn: async (newItem: any) => {
+      // توليد كود جديد (في بيئة الإنتاج يمكن أن يتم ذلك من الخادم)
+      const { data: maxCode } = await supabase
+        .from('packaging_materials')
+        .select('code')
+        .order('code', { ascending: false })
+        .limit(1);
+        
+      let newCode = 'PKG-00001';
+      if (maxCode && maxCode.length > 0) {
+        const lastNum = parseInt(maxCode[0].code.split('-')[1]);
+        newCode = `PKG-${String(lastNum + 1).padStart(5, '0')}`;
+      }
+      
+      const { data, error } = await supabase
+        .from('packaging_materials')
+        .insert([{
+          code: newCode,
+          name: newItem.name,
+          unit: newItem.unit,
+          unit_cost: newItem.price,
+          quantity: newItem.quantity,
+          min_stock: newItem.minStock,
+          importance: 0
+        }])
+        .select();
+        
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
+      toast.success('تمت إضافة مستلزم التعبئة بنجاح');
+      setIsAddDialogOpen(false);
+      setNewMaterial({
+        name: '',
+        unit: '',
+        price: 0,
+        quantity: 0,
+        minStock: 0
+      });
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ: ${error.message}`);
+    }
+  });
+  
+  // تعديل مادة تعبئة
+  const updateMutation = useMutation({
+    mutationFn: async (material: any) => {
+      const { data, error } = await supabase
+        .from('packaging_materials')
+        .update({
+          name: material.name,
+          unit: material.unit,
+          unit_cost: material.price,
+          quantity: material.quantity,
+          min_stock: material.minStock
+        })
+        .eq('id', material.id)
+        .select();
+        
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
+      toast.success('تم تعديل مستلزم التعبئة بنجاح');
+      setIsEditDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ: ${error.message}`);
+    }
+  });
+  
+  // حذف مادة تعبئة
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await supabase
+        .from('packaging_materials')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw new Error(error.message);
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
+      toast.success('تم حذف مستلزم التعبئة بنجاح');
+      setIsDeleteDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ: ${error.message}`);
+    }
+  });
+  
+  // معالجة إضافة مادة جديدة
+  const handleAddMaterial = () => {
+    if (!newMaterial.name || !newMaterial.unit) {
+      toast.error('يجب ملء جميع الحقول المطلوبة');
+      return;
+    }
+    
+    addMutation.mutate(newMaterial);
+  };
+  
+  // معالجة تعديل مادة
+  const handleEditMaterial = () => {
+    if (!currentMaterial) return;
+    
+    updateMutation.mutate({
+      id: currentMaterial.id,
+      name: currentMaterial.name,
+      unit: currentMaterial.unit,
+      price: currentMaterial.price,
+      quantity: currentMaterial.quantity,
+      minStock: currentMaterial.minStock
+    });
+  };
+  
+  // معالجة حذف مادة
+  const handleDeleteMaterial = () => {
+    if (!currentMaterial) return;
+    deleteMutation.mutate(currentMaterial.id);
+  };
+  
+  // تعريف أعمدة الجدول
   const columns = [
     { key: 'code', title: 'الكود' },
     { key: 'name', title: 'اسم المنتج' },
@@ -130,86 +228,7 @@ const PackagingMaterials = () => {
     }
   ];
   
-  // Handle adding a new material
-  const handleAddMaterial = () => {
-    if (!newMaterial.name || !newMaterial.unit) {
-      toast({
-        title: "خطأ",
-        description: "يجب ملء جميع الحقول المطلوبة",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const totalValue = newMaterial.quantity * newMaterial.price;
-    
-    const newItem = {
-      id: packagingMaterials.length + 1,
-      code: generateCode('packaging', packagingMaterials.length),
-      name: newMaterial.name,
-      unit: newMaterial.unit,
-      price: newMaterial.price,
-      quantity: newMaterial.quantity,
-      minStock: newMaterial.minStock,
-      importance: 0, // Initially set to 0, to be calculated later
-      totalValue
-    };
-    
-    setPackagingMaterials([...packagingMaterials, newItem]);
-    setNewMaterial({
-      name: '',
-      unit: '',
-      price: 0,
-      quantity: 0,
-      minStock: 0
-    });
-    setIsAddDialogOpen(false);
-    
-    toast({
-      title: "تمت الإضافة",
-      description: `تمت إضافة ${newItem.name} بنجاح`
-    });
-  };
-  
-  // Handle editing a material
-  const handleEditMaterial = () => {
-    if (!currentMaterial) return;
-    
-    const totalValue = currentMaterial.quantity * currentMaterial.price;
-    
-    const updatedMaterials = packagingMaterials.map(material => 
-      material.id === currentMaterial.id ? 
-        { ...currentMaterial, totalValue } : 
-        material
-    );
-    
-    setPackagingMaterials(updatedMaterials);
-    setIsEditDialogOpen(false);
-    
-    toast({
-      title: "تم التعديل",
-      description: `تم تعديل ${currentMaterial.name} بنجاح`
-    });
-  };
-  
-  // Handle deleting a material
-  const handleDeleteMaterial = () => {
-    if (!currentMaterial) return;
-    
-    const updatedMaterials = packagingMaterials.filter(
-      material => material.id !== currentMaterial.id
-    );
-    
-    setPackagingMaterials(updatedMaterials);
-    setIsDeleteDialogOpen(false);
-    
-    toast({
-      title: "تم الحذف",
-      description: `تم حذف ${currentMaterial.name} بنجاح`
-    });
-  };
-  
-  // Render actions column
+  // إضافة أيقونات التعديل والحذف
   const renderActions = (record: any) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
@@ -234,6 +253,19 @@ const PackagingMaterials = () => {
       </Button>
     </div>
   );
+  
+  if (error) {
+    return (
+      <PageTransition>
+        <div className="p-6 text-center">
+          <p className="text-red-500">حدث خطأ أثناء تحميل البيانات: {(error as Error).message}</p>
+          <Button className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] })}>
+            إعادة المحاولة
+          </Button>
+        </div>
+      </PageTransition>
+    );
+  }
   
   return (
     <PageTransition>
@@ -316,23 +348,33 @@ const PackagingMaterials = () => {
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   إلغاء
                 </Button>
-                <Button onClick={handleAddMaterial}>
-                  إضافة
+                <Button onClick={handleAddMaterial} disabled={addMutation.isPending}>
+                  {addMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
         
-        <DataTable
-          columns={columns}
-          data={packagingMaterials}
-          searchable
-          searchKeys={['code', 'name']}
-          actions={renderActions}
-        />
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={packagingMaterials || []}
+            searchable
+            searchKeys={['code', 'name']}
+            actions={renderActions}
+          />
+        )}
         
-        {/* Edit Dialog */}
+        {/* نافذة تعديل المادة */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -410,14 +452,14 @@ const PackagingMaterials = () => {
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button onClick={handleEditMaterial}>
-                حفظ التعديلات
+              <Button onClick={handleEditMaterial} disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التعديلات'}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
         
-        {/* Delete Dialog */}
+        {/* نافذة حذف المادة */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -436,8 +478,8 @@ const PackagingMaterials = () => {
               <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button variant="destructive" onClick={handleDeleteMaterial}>
-                حذف
+              <Button variant="destructive" onClick={handleDeleteMaterial} disabled={deleteMutation.isPending}>
+                {deleteMutation.isPending ? 'جاري الحذف...' : 'حذف'}
               </Button>
             </DialogFooter>
           </DialogContent>
