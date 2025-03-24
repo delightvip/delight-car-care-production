@@ -5,17 +5,24 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 interface ProductionChartProps {
   data: {
     month: string;
-    production: number;
-    packaging: number;
+    production_count: number;
+    packaging_count: number;
   }[];
 }
 
 const ProductionChart: React.FC<ProductionChartProps> = ({ data }) => {
+  // Transform the data to match the format expected by the chart
+  const chartData = data.map(item => ({
+    month: item.month,
+    production: item.production_count,
+    packaging: item.packaging_count
+  }));
+
   return (
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          data={data}
+          data={chartData}
           margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />

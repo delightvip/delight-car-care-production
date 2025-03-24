@@ -1,5 +1,4 @@
-
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   ProductionOrder, 
@@ -277,26 +276,6 @@ class ProductionDatabaseService {
     return `${prefix}-${timestamp}`;
   }
 
-  // تحديث حالة أمر الإنتاج
-  public async updateProductionOrderStatus(
-    orderId: number, 
-    status: 'pending' | 'inProgress' | 'completed' | 'cancelled'
-  ): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('production_orders')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', orderId);
-        
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error('Error updating production order status:', error);
-      toast.error('حدث خطأ أثناء تحديث حالة أمر الإنتاج');
-      return false;
-    }
-  }
-
   // تحديث حالة أمر التعبئة
   public async updatePackagingOrderStatus(
     orderId: number, 
@@ -391,8 +370,7 @@ class ProductionDatabaseService {
   // جلب بيانات إحصائية للإنتاج
   public async getProductionStats() {
     try {
-      const { data, error } = await supabase
-        .rpc('get_production_stats');
+      const { data, error } = await rpcFunctions.getProductionStats();
         
       if (error) throw error;
       return data || { total_production_orders: 0, completed_orders: 0, pending_orders: 0, total_cost: 0 };
@@ -405,8 +383,7 @@ class ProductionDatabaseService {
   // جلب بيانات شهرية للإنتاج
   public async getMonthlyProductionStats() {
     try {
-      const { data, error } = await supabase
-        .rpc('get_monthly_production_stats');
+      const { data, error } = await rpcFunctions.getMonthlyProductionStats();
         
       if (error) throw error;
       return data || [];
