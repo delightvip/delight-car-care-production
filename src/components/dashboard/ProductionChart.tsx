@@ -30,24 +30,7 @@ const ProductionChart: React.FC = () => {
     queryFn: async () => {
       // Try to get data from custom function first, fallback to manual query
       try {
-        // Try direct function call
-        const { data: functionData, error: functionError } = await supabase
-          .from('production_orders')
-          .select('date, count(*)')
-          .group('date');
-          
-        if (functionError) throw functionError;
-        
-        // Transform function data
-        return functionData.map((item: any) => ({
-          month: new Date(item.date).toLocaleDateString('ar-EG', { month: 'short' }),
-          production_count: parseInt(item.count || "0"),
-          packaging_count: 0
-        }));
-      } catch (err) {
-        console.error('Error fetching from function, using fallback:', err);
-        
-        // Fallback to direct query
+        // Get data using date aggregation
         const today = new Date();
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(today.getMonth() - 6);
@@ -56,45 +39,51 @@ const ProductionChart: React.FC = () => {
         const startDate = sixMonthsAgo.toISOString().split('T')[0];
         const endDate = today.toISOString().split('T')[0];
         
-        // Get production orders
+        // Get production orders by month
         const { data: productionData } = await supabase
           .from('production_orders')
-          .select('date, count(*)')
+          .select('date')
           .gte('date', startDate)
-          .lte('date', endDate)
-          .group('date');
+          .lte('date', endDate);
         
-        // Get packaging orders
+        // Get packaging orders by month
         const { data: packagingData } = await supabase
           .from('packaging_orders')
-          .select('date, count(*)')
+          .select('date')
           .gte('date', startDate)
-          .lte('date', endDate)
-          .group('date');
+          .lte('date', endDate);
         
-        // Combine and format data
-        const monthMap: Record<string, ChartDataType> = {};
+        // Process the data manually by month since .group() is not available
+        const countsByMonth: Record<string, { production: number, packaging: number }> = {};
         
         // Process production data
         (productionData || []).forEach((item: any) => {
           const month = new Date(item.date).toLocaleDateString('ar-EG', { month: 'short' });
-          if (!monthMap[month]) {
-            monthMap[month] = { month, production: 0, packaging: 0 };
+          if (!countsByMonth[month]) {
+            countsByMonth[month] = { production: 0, packaging: 0 };
           }
-          monthMap[month].production = parseInt(item.count || "0");
+          countsByMonth[month].production += 1;
         });
         
         // Process packaging data
         (packagingData || []).forEach((item: any) => {
           const month = new Date(item.date).toLocaleDateString('ar-EG', { month: 'short' });
-          if (!monthMap[month]) {
-            monthMap[month] = { month, production: 0, packaging: 0 };
+          if (!countsByMonth[month]) {
+            countsByMonth[month] = { production: 0, packaging: 0 };
           }
-          monthMap[month].packaging = parseInt(item.count || "0");
+          countsByMonth[month].packaging += 1;
         });
         
-        // Sort by month
-        return Object.values(monthMap);
+        // Convert to array format for chart
+        return Object.entries(countsByMonth).map(([month, counts]) => ({
+          month,
+          production: counts.production,
+          packaging: counts.packaging
+        }));
+      } catch (err) {
+        console.error('Error fetching production data:', err);
+        // Return empty data if error
+        return [];
       }
     },
     refetchInterval: 300000, // Refresh every 5 minutes
