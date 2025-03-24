@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
-import DataTable from '@/components/ui/DataTable';
+import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -69,7 +68,6 @@ const ProductionOrders = () => {
   const productionService = ProductionService.getInstance();
   const inventoryService = InventoryService.getInstance();
   
-  // تحميل البيانات
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -90,7 +88,6 @@ const ProductionOrders = () => {
     fetchData();
   }, []);
   
-  // Columns for the data table
   const columns = [
     { key: 'code', title: 'كود الأمر' },
     { key: 'productName', title: 'المنتج' },
@@ -117,7 +114,6 @@ const ProductionOrders = () => {
     }
   ];
   
-  // Handle adding a new order
   const handleAddOrder = async () => {
     if (!newOrder.productCode || newOrder.quantity <= 0) {
       toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
@@ -141,7 +137,6 @@ const ProductionOrders = () => {
     }
   };
   
-  // Handle updating order status
   const handleUpdateStatus = async () => {
     if (!currentOrder || !newStatus) return;
     
@@ -161,7 +156,6 @@ const ProductionOrders = () => {
     }
   };
   
-  // Handle deleting an order
   const handleDeleteOrder = async () => {
     if (!currentOrder) return;
     
@@ -178,7 +172,6 @@ const ProductionOrders = () => {
     }
   };
   
-  // Calculate ingredients for the selected product
   const calculateIngredientsForProduct = (productCode: string, quantity: number) => {
     const product = semiFinishedProducts.find(p => p.code === productCode);
     if (!product) return [];
@@ -186,16 +179,14 @@ const ProductionOrders = () => {
     return product.ingredients.map(ingredient => {
       const requiredQuantity = (ingredient.percentage / 100) * quantity;
       
-      // التحقق من توفر المواد سيتم في الخادم
       return {
         ...ingredient,
         requiredQuantity,
-        available: true // سنفترض التوفر حالياً للعرض
+        available: true
       };
     });
   };
   
-  // Calculate total cost for the selected product
   const calculateTotalCost = (productCode: string, quantity: number) => {
     const product = semiFinishedProducts.find(p => p.code === productCode);
     if (!product) return 0;
@@ -203,7 +194,6 @@ const ProductionOrders = () => {
     return product.unitCost * quantity;
   };
   
-  // Render actions column
   const renderActions = (record: ProductionOrder) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
@@ -330,7 +320,7 @@ const ProductionOrders = () => {
           </Dialog>
         </div>
         
-        <DataTable
+        <DataTableWithLoading
           columns={columns}
           data={orders}
           searchable
@@ -339,7 +329,6 @@ const ProductionOrders = () => {
           isLoading={isLoading}
         />
         
-        {/* View Order Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -407,7 +396,6 @@ const ProductionOrders = () => {
           </DialogContent>
         </Dialog>
         
-        {/* Update Status Dialog */}
         <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -457,7 +445,6 @@ const ProductionOrders = () => {
           </DialogContent>
         </Dialog>
         
-        {/* Delete Dialog */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent>
             <DialogHeader>

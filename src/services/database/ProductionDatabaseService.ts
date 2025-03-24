@@ -45,7 +45,7 @@ class ProductionDatabaseService {
           productName: order.product_name,
           quantity: order.quantity,
           unit: order.unit,
-          status: order.status,
+          status: order.status as "pending" | "inProgress" | "completed" | "cancelled",
           date: order.date,
           ingredients: ingredients.map(ingredient => ({
             id: ingredient.id,
@@ -93,7 +93,7 @@ class ProductionDatabaseService {
           productName: order.product_name,
           quantity: order.quantity,
           unit: order.unit,
-          status: order.status,
+          status: order.status as "pending" | "inProgress" | "completed" | "cancelled",
           date: order.date,
           semiFinished: {
             code: order.semi_finished_code,
@@ -141,7 +141,7 @@ class ProductionDatabaseService {
           product_name: productName,
           quantity,
           unit,
-          status: 'pending',
+          status: 'pending' as "pending",
           date,
           total_cost: totalCost
         })
@@ -172,7 +172,7 @@ class ProductionDatabaseService {
         productName: orderData.product_name,
         quantity: orderData.quantity,
         unit: orderData.unit,
-        status: orderData.status,
+        status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
         date: orderData.date,
         ingredients: ingredients.map(ingredient => ({
           id: 0, // سيتم تحديثها لاحقاً
@@ -213,7 +213,7 @@ class ProductionDatabaseService {
           product_name: productName,
           quantity,
           unit,
-          status: 'pending',
+          status: 'pending' as "pending",
           date,
           semi_finished_code: semiFinished.code,
           semi_finished_name: semiFinished.name,
@@ -247,7 +247,7 @@ class ProductionDatabaseService {
         productName: orderData.product_name,
         quantity: orderData.quantity,
         unit: orderData.unit,
-        status: orderData.status,
+        status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
         date: orderData.date,
         semiFinished: {
           code: semiFinished.code,
