@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -56,18 +55,25 @@ const PackagingOrders = () => {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PackagingOrder | null>(null);
   const [newOrder, setNewOrder] = useState({
     productCode: '',
     quantity: 0
   });
   const [newStatus, setNewStatus] = useState('');
+  const [editOrder, setEditOrder] = useState({
+    id: 0,
+    productCode: '',
+    productName: '',
+    quantity: 0,
+    unit: ''
+  });
   const [isLoading, setIsLoading] = useState(true);
   
   const productionService = ProductionService.getInstance();
   const inventoryService = InventoryService.getInstance();
   
-  // تحميل البيانات
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -88,7 +94,6 @@ const PackagingOrders = () => {
     fetchData();
   }, []);
   
-  // Columns for the data table
   const columns = [
     { key: 'code', title: 'كود الأمر' },
     { key: 'productName', title: 'المنتج' },
@@ -115,7 +120,6 @@ const PackagingOrders = () => {
     }
   ];
   
-  // Handle adding a new order
   const handleAddOrder = async () => {
     if (!newOrder.productCode || newOrder.quantity <= 0) {
       toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
@@ -142,7 +146,6 @@ const PackagingOrders = () => {
     }
   };
   
-  // Handle updating order status
   const handleUpdateStatus = async () => {
     if (!currentOrder || !newStatus) return;
     
@@ -162,7 +165,6 @@ const PackagingOrders = () => {
     }
   };
   
-  // Handle deleting an order
   const handleDeleteOrder = async () => {
     if (!currentOrder) return;
     
@@ -179,35 +181,83 @@ const PackagingOrders = () => {
     }
   };
   
-  // Check components availability for the selected product
+  const handleEditOrder = async () => {
+    if (!editOrder.id || !editOrder.productCode || editOrder.quantity <= 0) {
+      toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
+      return;
+    }
+    
+    try {
+      const product = finishedProducts.find(p => p.code === editOrder.productCode);
+      if (!product) {
+        toast.error("المنتج غير موجود");
+        return;
+      }
+      
+      const semiFinished = {
+        code: product.semiFinished.code,
+        name: product.semiFinished.name,
+        quantity: product.semi_finished_quantity * editOrder.quantity
+      };
+      
+      const components = checkComponentsAvailability(editOrder.productCode, editOrder.quantity);
+      const packagingMaterials = components
+        .filter(comp => comp.type === 'packaging')
+        .map(material => ({
+          code: material.code,
+          name: material.name,
+          quantity: material.requiredQuantity
+        }));
+      
+      const success = await productionService.updatePackagingOrder(
+        editOrder.id,
+        {
+          productCode: editOrder.productCode,
+          productName: product.name,
+          quantity: editOrder.quantity,
+          unit: editOrder.unit,
+          semiFinished,
+          packagingMaterials
+        }
+      );
+      
+      if (success) {
+        const updatedOrders = await productionService.getPackagingOrders();
+        setOrders(updatedOrders);
+        setIsEditDialogOpen(false);
+        toast.success("تم تحديث أمر التعبئة بنجاح");
+      }
+    } catch (error) {
+      console.error("Error updating packaging order:", error);
+      toast.error("حدث خطأ أثناء تحديث أمر التعبئة");
+    }
+  };
+  
   const checkComponentsAvailability = (productCode: string, quantity: number) => {
     const product = finishedProducts.find(p => p.code === productCode);
     if (!product) return [];
     
-    // سنحتاج إلى المنتج النصف مصنع والكمية المطلوبة
     const semiFinishedComponent = {
       type: 'semi',
       code: product.semiFinished.code,
       name: product.semiFinished.name,
       requiredQuantity: product.semiFinished.quantity * quantity,
-      available: true, // سيتم التحقق من التوفر في الخادم
-      unit: 'وحدة' // سيتم تعبئتها لاحقاً
+      available: true,
+      unit: 'وحدة'
     };
     
-    // وكذلك مواد التعبئة
     const packagingComponents = product.packaging.map(item => ({
       type: 'packaging',
       code: item.code,
       name: item.name,
       requiredQuantity: item.quantity * quantity,
-      available: true, // سيتم التحقق من التوفر في الخادم
-      unit: 'وحدة' // سيتم تعبئتها لاحقاً
+      available: true,
+      unit: 'وحدة'
     }));
     
     return [semiFinishedComponent, ...packagingComponents];
   };
   
-  // Calculate total cost of packaging
   const calculateTotalCost = (productCode: string, quantity: number) => {
     const product = finishedProducts.find(p => p.code === productCode);
     if (!product) return 0;
@@ -215,7 +265,6 @@ const PackagingOrders = () => {
     return product.unitCost * quantity;
   };
   
-  // Render actions column
   const renderActions = (record: PackagingOrder) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
@@ -236,6 +285,23 @@ const PackagingOrders = () => {
           setNewStatus(record.status);
           setIsStatusDialogOpen(true);
         }}
+      >
+        <Edit size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setEditOrder({
+            id: record.id,
+            productCode: record.productCode,
+            productName: record.productName,
+            quantity: record.quantity,
+            unit: record.unit
+          });
+          setIsEditDialogOpen(true);
+        }}
+        disabled={record.status !== 'pending'}
       >
         <Edit size={16} />
       </Button>
@@ -357,7 +423,6 @@ const PackagingOrders = () => {
           isLoading={isLoading}
         />
         
-        {/* View Order Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -441,7 +506,6 @@ const PackagingOrders = () => {
           </DialogContent>
         </Dialog>
         
-        {/* Update Status Dialog */}
         <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -491,7 +555,6 @@ const PackagingOrders = () => {
           </DialogContent>
         </Dialog>
         
-        {/* Delete Dialog */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -512,6 +575,94 @@ const PackagingOrders = () => {
               </Button>
               <Button variant="destructive" onClick={handleDeleteOrder}>
                 حذف
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>تعديل أمر تعبئة</DialogTitle>
+              <DialogDescription>
+                تعديل بيانات أمر التعبئة
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-product">المنتج</Label>
+                <Select 
+                  value={editOrder.productCode} 
+                  onValueChange={value => setEditOrder({...editOrder, productCode: value})}
+                >
+                  <SelectTrigger id="edit-product">
+                    <SelectValue placeholder="اختر المنتج" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {finishedProducts.map(product => (
+                      <SelectItem key={product.code} value={product.code}>
+                        {product.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-quantity">الكمية</Label>
+                <Input
+                  id="edit-quantity"
+                  type="number"
+                  value={editOrder.quantity}
+                  onChange={e => setEditOrder({...editOrder, quantity: Number(e.target.value)})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-unit">الوحدة</Label>
+                <Input
+                  id="edit-unit"
+                  value={editOrder.unit}
+                  onChange={e => setEditOrder({...editOrder, unit: e.target.value})}
+                />
+              </div>
+              
+              {editOrder.productCode && editOrder.quantity > 0 && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
+                  <div className="space-y-2">
+                    {checkComponentsAvailability(editOrder.productCode, editOrder.quantity).map(component => (
+                      <div key={component.code} className="flex justify-between p-2 border rounded-md">
+                        <div>
+                          <span className="font-medium">{component.name}</span>
+                          <span className="text-sm text-muted-foreground mr-2">
+                            ({component.requiredQuantity.toFixed(2)} {component.unit})
+                          </span>
+                          <Badge 
+                            variant="outline" 
+                            className="mr-2"
+                          >
+                            {component.type === 'semi' ? 'سائل' : 'تعبئة'}
+                          </Badge>
+                        </div>
+                        <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-4 p-2 border rounded-md bg-muted/50">
+                    <div className="flex justify-between">
+                      <span className="font-medium">التكلفة الإجمالية:</span>
+                      <span>{calculateTotalCost(editOrder.productCode, editOrder.quantity)} ج.م</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button onClick={handleEditOrder}>
+                تحديث
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -56,12 +56,20 @@ const ProductionOrders = () => {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<ProductionOrder | null>(null);
   const [newOrder, setNewOrder] = useState({
     productCode: '',
     quantity: 0
   });
   const [newStatus, setNewStatus] = useState('');
+  const [editOrder, setEditOrder] = useState({
+    id: 0,
+    productCode: '',
+    productName: '',
+    quantity: 0,
+    unit: ''
+  });
   const [isLoading, setIsLoading] = useState(true);
   
   const { toast: uiToast } = useToast();
@@ -172,6 +180,42 @@ const ProductionOrders = () => {
     }
   };
   
+  const handleEditOrder = async () => {
+    if (!editOrder.id || !editOrder.productCode || editOrder.quantity <= 0) {
+      toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
+      return;
+    }
+    
+    try {
+      const ingredients = calculateIngredientsForProduct(editOrder.productCode, editOrder.quantity);
+      
+      const success = await productionService.updateProductionOrder(
+        editOrder.id,
+        {
+          productCode: editOrder.productCode,
+          productName: semiFinishedProducts.find(p => p.code === editOrder.productCode)?.name || '',
+          quantity: editOrder.quantity,
+          unit: editOrder.unit,
+          ingredients: ingredients.map(ing => ({
+            code: ing.code,
+            name: ing.name,
+            requiredQuantity: ing.requiredQuantity
+          }))
+        }
+      );
+      
+      if (success) {
+        const updatedOrders = await productionService.getProductionOrders();
+        setOrders(updatedOrders);
+        setIsEditDialogOpen(false);
+        toast.success("تم تحديث أمر الإنتاج بنجاح");
+      }
+    } catch (error) {
+      console.error("Error updating order:", error);
+      toast.error("حدث خطأ أثناء تحديث أمر الإنتاج");
+    }
+  };
+  
   const calculateIngredientsForProduct = (productCode: string, quantity: number) => {
     const product = semiFinishedProducts.find(p => p.code === productCode);
     if (!product) return [];
@@ -214,6 +258,23 @@ const ProductionOrders = () => {
           setNewStatus(record.status);
           setIsStatusDialogOpen(true);
         }}
+      >
+        <Edit size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setEditOrder({
+            id: record.id,
+            productCode: record.productCode,
+            productName: record.productName,
+            quantity: record.quantity,
+            unit: record.unit
+          });
+          setIsEditDialogOpen(true);
+        }}
+        disabled={record.status !== 'pending'}
       >
         <Edit size={16} />
       </Button>
@@ -465,6 +526,88 @@ const ProductionOrders = () => {
               </Button>
               <Button variant="destructive" onClick={handleDeleteOrder}>
                 حذف
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>تعديل أمر إنتاج</DialogTitle>
+              <DialogDescription>
+                تعديل بيانات أمر الإنتاج
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-product">المنتج</Label>
+                <Select 
+                  value={editOrder.productCode} 
+                  onValueChange={value => setEditOrder({...editOrder, productCode: value})}
+                >
+                  <SelectTrigger id="edit-product">
+                    <SelectValue placeholder="اختر المنتج" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {semiFinishedProducts.map(product => (
+                      <SelectItem key={product.code} value={product.code}>
+                        {product.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-quantity">الكمية</Label>
+                <Input
+                  id="edit-quantity"
+                  type="number"
+                  value={editOrder.quantity}
+                  onChange={e => setEditOrder({...editOrder, quantity: Number(e.target.value)})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-unit">الوحدة</Label>
+                <Input
+                  id="edit-unit"
+                  value={editOrder.unit}
+                  onChange={e => setEditOrder({...editOrder, unit: e.target.value})}
+                />
+              </div>
+              
+              {editOrder.productCode && editOrder.quantity > 0 && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
+                  <div className="space-y-2">
+                    {calculateIngredientsForProduct(editOrder.productCode, editOrder.quantity).map(ingredient => (
+                      <div key={ingredient.code} className="flex justify-between p-2 border rounded-md">
+                        <div>
+                          <span className="font-medium">{ingredient.name}</span>
+                          <span className="text-sm text-muted-foreground mr-2">
+                            ({ingredient.requiredQuantity.toFixed(2)})
+                          </span>
+                        </div>
+                        <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-4 p-2 border rounded-md bg-muted/50">
+                    <div className="flex justify-between">
+                      <span className="font-medium">التكلفة الإجمالية:</span>
+                      <span>{calculateTotalCost(editOrder.productCode, editOrder.quantity)} ج.م</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button onClick={handleEditOrder}>
+                تحديث
               </Button>
             </DialogFooter>
           </DialogContent>

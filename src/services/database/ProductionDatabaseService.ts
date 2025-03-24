@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
@@ -288,20 +287,161 @@ class ProductionDatabaseService {
     }
   }
 
-  // تحديث حالة أمر التعبئة
-  public async updatePackagingOrderStatus(orderId: number, newStatus: string): Promise<boolean> {
+  // تحديث تكلفة أمر الإنتاج
+  public async updateProductionOrderCost(orderId: number, totalCost: number): Promise<boolean> {
     try {
       const { error } = await supabase
-        .from('packaging_orders')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .from('production_orders')
+        .update({ total_cost: totalCost, updated_at: new Date().toISOString() })
         .eq('id', orderId);
         
       if (error) throw error;
       
       return true;
     } catch (error) {
-      console.error('Error updating packaging order status:', error);
-      toast.error('حدث خطأ أثناء تحديث حالة أمر التعبئة');
+      console.error('Error updating production order cost:', error);
+      toast.error('حدث خطأ أثناء تحديث تكلفة أمر الإنتا��');
+      return false;
+    }
+  }
+  
+  // تحديث بيانات أمر الإنتاج
+  public async updateProductionOrder(
+    orderId: number,
+    data: {
+      productCode?: string;
+      productName?: string;
+      quantity?: number;
+      unit?: string;
+      ingredients?: {
+        code: string;
+        name: string;
+        requiredQuantity: number;
+      }[];
+    }
+  ): Promise<boolean> {
+    try {
+      // تحديث بيانات أمر الإنتاج
+      if (data.productCode || data.productName || data.quantity || data.unit) {
+        const updateData: any = {};
+        if (data.productCode) updateData.product_code = data.productCode;
+        if (data.productName) updateData.product_name = data.productName;
+        if (data.quantity) updateData.quantity = data.quantity;
+        if (data.unit) updateData.unit = data.unit;
+        
+        const { error: orderError } = await supabase
+          .from('production_orders')
+          .update({ ...updateData, updated_at: new Date().toISOString() })
+          .eq('id', orderId);
+          
+        if (orderError) throw orderError;
+      }
+      
+      // تحديث مكونات أمر الإنتاج
+      if (data.ingredients && data.ingredients.length > 0) {
+        // حذف المكونات القديمة
+        const { error: deleteError } = await supabase
+          .from('production_order_ingredients')
+          .delete()
+          .eq('production_order_id', orderId);
+          
+        if (deleteError) throw deleteError;
+        
+        // إضافة المكونات الجديدة
+        const ingredientsToInsert = data.ingredients.map(ingredient => ({
+          production_order_id: orderId,
+          raw_material_code: ingredient.code,
+          raw_material_name: ingredient.name,
+          required_quantity: ingredient.requiredQuantity
+        }));
+        
+        const { error: ingredientsError } = await supabase
+          .from('production_order_ingredients')
+          .insert(ingredientsToInsert);
+          
+        if (ingredientsError) throw ingredientsError;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating production order:', error);
+      toast.error('حدث خطأ أثناء تحديث أمر الإنتاج');
+      return false;
+    }
+  }
+  
+  // تحديث بيانات أمر التعبئة
+  public async updatePackagingOrder(
+    orderId: number,
+    data: {
+      productCode?: string;
+      productName?: string;
+      quantity?: number;
+      unit?: string;
+      semiFinished?: {
+        code: string;
+        name: string;
+        quantity: number;
+      };
+      packagingMaterials?: {
+        code: string;
+        name: string;
+        quantity: number;
+      }[];
+    }
+  ): Promise<boolean> {
+    try {
+      // تحديث بيانات أمر التعبئة
+      const updateData: any = {};
+      if (data.productCode) updateData.product_code = data.productCode;
+      if (data.productName) updateData.product_name = data.productName;
+      if (data.quantity) updateData.quantity = data.quantity;
+      if (data.unit) updateData.unit = data.unit;
+      
+      if (data.semiFinished) {
+        updateData.semi_finished_code = data.semiFinished.code;
+        updateData.semi_finished_name = data.semiFinished.name;
+        updateData.semi_finished_quantity = data.semiFinished.quantity;
+      }
+      
+      if (Object.keys(updateData).length > 0) {
+        const { error: orderError } = await supabase
+          .from('packaging_orders')
+          .update({ ...updateData, updated_at: new Date().toISOString() })
+          .eq('id', orderId);
+          
+        if (orderError) throw orderError;
+      }
+      
+      // تحديث مواد التعبئة
+      if (data.packagingMaterials && data.packagingMaterials.length > 0) {
+        // حذف المواد القديمة
+        const { error: deleteError } = await supabase
+          .from('packaging_order_materials')
+          .delete()
+          .eq('packaging_order_id', orderId);
+          
+        if (deleteError) throw deleteError;
+        
+        // إضافة المواد الجديدة
+        const materialsToInsert = data.packagingMaterials.map(material => ({
+          packaging_order_id: orderId,
+          packaging_material_code: material.code,
+          packaging_material_name: material.name,
+          required_quantity: material.quantity
+        }));
+        
+        const { error: materialsError } = await supabase
+          .from('packaging_order_materials')
+          .insert(materialsToInsert);
+          
+        if (materialsError) throw materialsError;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating packaging order:', error);
+      toast.error('حدث خطأ أثناء تحديث أمر التعبئة');
       return false;
     }
   }

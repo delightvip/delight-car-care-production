@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
 import ProductionDatabaseService from "./database/ProductionDatabaseService";
@@ -144,8 +143,36 @@ class ProductionService {
         return false;
       }
       
+      // التحقق من الحالة السابقة للأمر
+      const prevStatus = order.status;
+      
+      // تحديث حالة الأمر في قاعدة البيانات
+      const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
+      
+      if (!result) {
+        return false;
+      }
+
+      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
+      if (prevStatus === 'completed' && newStatus !== 'completed') {
+        // استرجاع المواد الأولية المستهلكة
+        const returnMaterials = order.ingredients.map(ingredient => ({
+          code: ingredient.code,
+          requiredQuantity: ingredient.requiredQuantity
+        }));
+        
+        // إعادة المواد الأولية للمخزون
+        await this.inventoryService.returnRawMaterials(returnMaterials);
+        
+        // إزالة المنتج النصف مصنع من المخزون
+        await this.inventoryService.removeSemiFinishedFromInventory(order.productCode, order.quantity);
+        
+        toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
+        return true;
+      }
+
       // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
-      if (newStatus === 'completed') {
+      if (newStatus === 'completed' && prevStatus !== 'completed') {
         // تجهيز متطلبات المواد الأولية
         const requirements = order.ingredients.map(ingredient => ({
           code: ingredient.code,
@@ -155,18 +182,36 @@ class ProductionService {
         // استهلاك المواد الأولية من المخزون
         const consumeSuccess = await this.inventoryService.consumeRawMaterials(requirements);
         if (!consumeSuccess) {
+          // إعادة الحالة السابقة إذا فشلت العملية
+          await this.databaseService.updateProductionOrderStatus(orderId, prevStatus);
           return false;
         }
         
-        // إضافة المنتج النصف مصنع للمخزون
-        const addSuccess = await this.inventoryService.addSemiFinishedToInventory(order.productCode, order.quantity);
+        // تحديث الأهمية للمواد الأولية المستخدمة
+        await this.inventoryService.updateRawMaterialsImportance(
+          requirements.map(req => req.code)
+        );
+        
+        // حساب التكلفة الإجمالية بناءً على تكلفة المواد الأولية
+        const totalCost = await this.calculateProductionCost(requirements);
+        
+        // إضافة المنتج النصف مصنع للمخزون مع تحديث التكلفة
+        const addSuccess = await this.inventoryService.addSemiFinishedToInventory(
+          order.productCode, 
+          order.quantity, 
+          totalCost / order.quantity // تكلفة الوحدة
+        );
+        
         if (!addSuccess) {
+          // استعادة المواد الأولية إذا فشلت العملية
+          await this.inventoryService.returnRawMaterials(requirements);
+          await this.databaseService.updateProductionOrderStatus(orderId, prevStatus);
           return false;
         }
+        
+        // تحديث تكلفة الأمر في قاعدة البيانات
+        await this.databaseService.updateProductionOrderCost(orderId, totalCost);
       }
-      
-      // تحديث حالة الأمر في قاعدة البيانات
-      const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
       
       if (result) {
         toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
@@ -177,6 +222,25 @@ class ProductionService {
       console.error('Error updating production order status:', error);
       toast.error('حدث خطأ أثناء تحديث حالة أمر الإنتاج');
       return false;
+    }
+  }
+  
+  // حساب تكلفة الإنتاج بناءً على المواد المستخدمة
+  private async calculateProductionCost(requirements: { code: string, requiredQuantity: number }[]): Promise<number> {
+    try {
+      let totalCost = 0;
+      
+      for (const req of requirements) {
+        const { data: rawMaterial } = await this.inventoryService.getRawMaterialByCode(req.code);
+        if (rawMaterial) {
+          totalCost += rawMaterial.unit_cost * req.requiredQuantity;
+        }
+      }
+      
+      return totalCost;
+    } catch (error) {
+      console.error('Error calculating production cost:', error);
+      return 0;
     }
   }
   
@@ -256,8 +320,41 @@ class ProductionService {
         return false;
       }
       
+      // التحقق من الحالة السابقة للأمر
+      const prevStatus = order.status;
+      
+      // تحديث حالة الأمر في قاعدة البيانات
+      const result = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
+      
+      if (!result) {
+        return false;
+      }
+      
+      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
+      if (prevStatus === 'completed' && newStatus !== 'completed') {
+        // إعادة المنتج النصف مصنع للمخزون
+        await this.inventoryService.addSemiFinishedToInventory(
+          order.semiFinished.code,
+          order.semiFinished.quantity
+        );
+        
+        // إعادة مواد التعبئة للمخزون
+        const packagingReqs = order.packagingMaterials.map(material => ({
+          code: material.code,
+          requiredQuantity: material.quantity
+        }));
+        
+        await this.inventoryService.returnPackagingMaterials(packagingReqs);
+        
+        // إزالة المنتج النهائي من المخزون
+        await this.inventoryService.removeFinishedFromInventory(order.productCode, order.quantity);
+        
+        toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
+        return true;
+      }
+
       // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
-      if (newStatus === 'completed') {
+      if (newStatus === 'completed' && prevStatus !== 'completed') {
         // التحقق من توفر المنتج النصف مصنع
         const semiFinishedAvailable = await this.inventoryService.checkSemiFinishedAvailability(
           order.semiFinished.code, 
@@ -266,6 +363,7 @@ class ProductionService {
         
         if (!semiFinishedAvailable) {
           toast.error('المنتج النصف مصنع غير متوفر بالكمية المطلوبة');
+          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
           return false;
         }
         
@@ -278,6 +376,7 @@ class ProductionService {
         const packagingAvailable = await this.inventoryService.checkPackagingAvailability(packagingReqs);
         if (!packagingAvailable) {
           toast.error('مواد التعبئة غير متوفرة بالكميات المطلوبة');
+          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
           return false;
         }
         
@@ -286,17 +385,15 @@ class ProductionService {
           order.productCode,
           order.quantity,
           order.semiFinished.code,
-          order.semiFinished.quantity / order.quantity,
+          order.semiFinished.quantity,
           packagingReqs
         );
         
         if (!produceSuccess) {
+          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
           return false;
         }
       }
-      
-      // تحديث حالة الأمر في قاعدة البيانات
-      const result = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
       
       if (result) {
         toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
@@ -398,3 +495,4 @@ class ProductionService {
 }
 
 export default ProductionService;
+

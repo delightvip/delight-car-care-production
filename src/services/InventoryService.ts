@@ -1,40 +1,49 @@
-
-import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-// أنواع البيانات للمواد المختلفة
+// أنواع البيانات للمواد الخام
 export interface RawMaterial {
   id: number;
   code: string;
   name: string;
-  quantity: number;
-  minStock: number;
   unit: string;
+  quantity: number;
   unitCost: number;
+  importance: number | null;
 }
 
+// أنواع بيانات المنتجات النصف مصنعة
 export interface SemiFinishedProduct {
   id: number;
   code: string;
   name: string;
-  quantity: number;
   unit: string;
+  quantity: number;
+  unitCost: number;
   ingredients: {
-    id: number;
     code: string;
     name: string;
     percentage: number;
   }[];
-  unitCost: number;
-  minStock: number;
 }
 
+// أنواع بيانات مواد التعبئة
+export interface PackagingMaterial {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+}
+
+// أنواع بيانات المنتجات النهائية
 export interface FinishedProduct {
   id: number;
   code: string;
   name: string;
-  quantity: number;
   unit: string;
+  quantity: number;
+  unitCost: number;
   semiFinished: {
     code: string;
     name: string;
@@ -45,21 +54,8 @@ export interface FinishedProduct {
     name: string;
     quantity: number;
   }[];
-  unitCost: number;
-  minStock: number;
 }
 
-export interface PackagingMaterial {
-  id: number;
-  code: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  unitCost: number;
-  minStock: number;
-}
-
-// الفئة الخدمية للمخزون
 class InventoryService {
   private static instance: InventoryService;
   
@@ -73,241 +69,200 @@ class InventoryService {
     return InventoryService.instance;
   }
   
-  // الحصول على جميع المواد الأولية من قاعدة البيانات
+  // جلب جميع المواد الخام
   public async getRawMaterials(): Promise<RawMaterial[]> {
     try {
       const { data, error } = await supabase
         .from('raw_materials')
         .select('*')
-        .order('name');
-        
+        .order('name', { ascending: true });
+      
       if (error) throw error;
       
       return data.map(item => ({
         id: item.id,
         code: item.code,
         name: item.name,
-        quantity: item.quantity,
-        minStock: item.min_stock,
         unit: item.unit,
-        unitCost: item.unit_cost
+        quantity: item.quantity,
+        unitCost: item.unit_cost,
+        importance: item.importance
       }));
     } catch (error) {
       console.error('Error fetching raw materials:', error);
+      toast.error('حدث خطأ أثناء جلب المواد الخام');
       return [];
     }
   }
   
-  // الحصول على جميع المنتجات النصف مصنعة من قاعدة البيانات
+  // جلب جميع المنتجات النصف مصنعة
   public async getSemiFinishedProducts(): Promise<SemiFinishedProduct[]> {
     try {
-      // جلب المنتجات النصف مصنعة
-      const { data: products, error } = await supabase
+      const { data, error } = await supabase
         .from('semi_finished_products')
         .select('*')
-        .order('name');
-        
+        .order('name', { ascending: true });
+      
       if (error) throw error;
       
-      // جلب مكونات كل منتج
-      const semiFinishedProducts = await Promise.all(products.map(async (product) => {
+      // جلب المكونات لكل منتج نصف مصنع
+      const productsWithIngredients = await Promise.all(data.map(async (product) => {
         const { data: ingredients, error: ingredientsError } = await supabase
-          .from('semi_finished_ingredients')
-          .select(`
-            id,
-            percentage,
-            raw_materials:raw_material_id(id, code, name)
-          `)
-          .eq('semi_finished_id', product.id);
-          
+          .from('semi_finished_product_ingredients')
+          .select('*')
+          .eq('semi_finished_product_id', product.id);
+        
         if (ingredientsError) throw ingredientsError;
         
         return {
           id: product.id,
           code: product.code,
           name: product.name,
-          quantity: product.quantity,
           unit: product.unit,
+          quantity: product.quantity,
           unitCost: product.unit_cost,
-          minStock: product.min_stock,
-          ingredients: ingredients.map(ing => ({
-            id: ing.raw_materials.id,
-            code: ing.raw_materials.code,
-            name: ing.raw_materials.name,
-            percentage: ing.percentage
+          ingredients: ingredients.map(ingredient => ({
+            code: ingredient.raw_material_code,
+            name: ingredient.raw_material_name,
+            percentage: ingredient.percentage
           }))
         };
       }));
       
-      return semiFinishedProducts;
+      return productsWithIngredients;
     } catch (error) {
       console.error('Error fetching semi-finished products:', error);
+      toast.error('حدث خطأ أثناء جلب المنتجات النصف مصنعة');
       return [];
     }
   }
   
-  // الحصول على جميع مواد التعبئة من قاعدة البيانات
+  // جلب جميع مواد التعبئة
   public async getPackagingMaterials(): Promise<PackagingMaterial[]> {
     try {
       const { data, error } = await supabase
         .from('packaging_materials')
         .select('*')
-        .order('name');
-        
+        .order('name', { ascending: true });
+      
       if (error) throw error;
       
       return data.map(item => ({
         id: item.id,
         code: item.code,
         name: item.name,
-        quantity: item.quantity,
         unit: item.unit,
-        unitCost: item.unit_cost,
-        minStock: item.min_stock
+        quantity: item.quantity
       }));
     } catch (error) {
       console.error('Error fetching packaging materials:', error);
+      toast.error('حدث خطأ أثناء جلب مواد التعبئة');
       return [];
     }
   }
   
-  // الحصول على جميع المنتجات النهائية من قاعدة البيانات
+  // جلب جميع المنتجات النهائية
   public async getFinishedProducts(): Promise<FinishedProduct[]> {
     try {
-      const { data: finishedProducts, error } = await supabase
+      const { data, error } = await supabase
         .from('finished_products')
-        .select(`
-          *,
-          semi_finished:semi_finished_id(id, code, name)
-        `)
-        .order('name');
-        
+        .select('*')
+        .order('name', { ascending: true });
+      
       if (error) throw error;
       
-      const productsWithPackaging = await Promise.all(finishedProducts.map(async (product) => {
-        const { data: packagingItems, error: pkgError } = await supabase
+      // جلب المكونات لكل منتج نهائي
+      const productsWithComponents = await Promise.all(data.map(async (product) => {
+        // جلب معلومات المنتج النصف مصنع
+        const { data: semiFinished, error: semiFinishedError } = await supabase
+          .from('semi_finished_products')
+          .select('code, name')
+          .eq('id', product.semi_finished_product_id)
+          .single();
+        
+        if (semiFinishedError) throw semiFinishedError;
+        
+        // جلب مواد التعبئة
+        const { data: packaging, error: packagingError } = await supabase
           .from('finished_product_packaging')
-          .select(`
-            quantity,
-            packaging_materials:packaging_material_id(id, code, name)
-          `)
+          .select('*')
           .eq('finished_product_id', product.id);
-          
-        if (pkgError) throw pkgError;
+        
+        if (packagingError) throw packagingError;
         
         return {
           id: product.id,
           code: product.code,
           name: product.name,
-          quantity: product.quantity,
           unit: product.unit,
+          quantity: product.quantity,
+          unitCost: product.unit_cost,
           semiFinished: {
-            code: product.semi_finished.code,
-            name: product.semi_finished.name,
+            code: semiFinished.code,
+            name: semiFinished.name,
             quantity: product.semi_finished_quantity
           },
-          packaging: packagingItems.map(item => ({
-            code: item.packaging_materials.code,
-            name: item.packaging_materials.name,
-            quantity: item.quantity
-          })),
-          unitCost: product.unit_cost,
-          minStock: product.min_stock
+          packaging: packaging.map(pkg => ({
+            code: pkg.packaging_material_code,
+            name: pkg.packaging_material_name,
+            quantity: pkg.quantity
+          }))
         };
       }));
       
-      return productsWithPackaging;
+      return productsWithComponents;
     } catch (error) {
       console.error('Error fetching finished products:', error);
+      toast.error('حدث خطأ أثناء جلب المنتجات النهائية');
       return [];
     }
   }
   
-  // الحصول على المواد ذات المخزون المنخفض
-  public async getLowStockItems() {
-    try {
-      // Changed approach to avoid using rpc with 'least' function
-      const [rawMaterialsData, semiFinishedData, packagingData, finishedData] = await Promise.all([
-        // المواد الأولية
-        supabase.from('raw_materials').select('*'),
-        // المنتجات النصف مصنعة
-        supabase.from('semi_finished_products').select('*'),
-        // مواد التعبئة
-        supabase.from('packaging_materials').select('*'),
-        // المنتجات النهائية
-        supabase.from('finished_products').select('*')
-      ]);
-      
-      if (rawMaterialsData.error || semiFinishedData.error || packagingData.error || finishedData.error) {
-        throw new Error('فشل في جلب بيانات المخزون المنخفض');
-      }
-      
-      // Filter for low stock items in memory instead of using DB function
-      const lowStockRaw = rawMaterialsData.data
-        .filter(item => item.quantity <= item.min_stock)
-        .map(item => ({ 
-          ...item, 
-          minStock: item.min_stock,
-          unitCost: item.unit_cost,
-          type: 'rawMaterial' as const 
-        }));
-      
-      const lowStockSemi = semiFinishedData.data
-        .filter(item => item.quantity <= item.min_stock)
-        .map(item => ({ 
-          ...item, 
-          minStock: item.min_stock,
-          unitCost: item.unit_cost,
-          type: 'semiFinished' as const 
-        }));
-      
-      const lowStockPackaging = packagingData.data
-        .filter(item => item.quantity <= item.min_stock)
-        .map(item => ({ 
-          ...item, 
-          minStock: item.min_stock,
-          unitCost: item.unit_cost,
-          type: 'packaging' as const 
-        }));
-      
-      const lowStockFinished = finishedData.data
-        .filter(item => item.quantity <= item.min_stock)
-        .map(item => ({ 
-          ...item, 
-          minStock: item.min_stock,
-          unitCost: item.unit_cost,
-          type: 'finished' as const 
-        }));
-      
-      return [...lowStockRaw, ...lowStockSemi, ...lowStockPackaging, ...lowStockFinished];
-    } catch (error) {
-      console.error('Error fetching low stock items:', error);
-      return [];
-    }
-  }
-  
-  // التحقق من توفر المواد الأولية
-  public async checkRawMaterialsAvailability(requirements: { code: string, requiredQuantity: number }[]): Promise<boolean> {
+  // استهلاك المواد الخام من المخزون
+  public async consumeRawMaterials(requirements: { code: string; requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const req of requirements) {
-        const { data, error } = await supabase
+        // جلب بيانات المادة الخام الحالية
+        const { data: rawMaterial, error: fetchError } = await supabase
           .from('raw_materials')
           .select('quantity')
           .eq('code', req.code)
           .single();
-          
-        if (error || !data || data.quantity < req.requiredQuantity) {
+        
+        if (fetchError) {
+          toast.error(`المادة الخام ${req.code} غير موجودة`);
+          return false;
+        }
+        
+        if (rawMaterial.quantity < req.requiredQuantity) {
+          toast.error(`الكمية المطلوبة من ${req.code} غير متوفرة`);
+          return false;
+        }
+        
+        // حساب الكمية الجديدة
+        const newQuantity = rawMaterial.quantity - req.requiredQuantity;
+        
+        // تحديث المخزون
+        const { error: updateError } = await supabase
+          .from('raw_materials')
+          .update({ quantity: newQuantity })
+          .eq('code', req.code);
+        
+        if (updateError) {
+          toast.error(`حدث خطأ أثناء تحديث كمية ${req.code}`);
           return false;
         }
       }
+      
       return true;
     } catch (error) {
-      console.error('Error checking raw materials availability:', error);
+      console.error('Error consuming raw materials:', error);
+      toast.error('حدث خطأ أثناء استهلاك المواد الخام');
       return false;
     }
   }
   
-  // التحقق من توفر المنتجات النصف مصنعة
+  // التحقق من توفر المنتج النصف مصنع
   public async checkSemiFinishedAvailability(code: string, requiredQuantity: number): Promise<boolean> {
     try {
       const { data, error } = await supabase
@@ -315,17 +270,27 @@ class InventoryService {
         .select('quantity')
         .eq('code', code)
         .single();
-        
-      if (error || !data) return false;
-      return data.quantity >= requiredQuantity;
+      
+      if (error) {
+        toast.error(`المنتج النصف مصنع ${code} غير موجود`);
+        return false;
+      }
+      
+      if (data.quantity < requiredQuantity) {
+        toast.error(`الكمية المطلوبة من ${code} غير متوفرة`);
+        return false;
+      }
+      
+      return true;
     } catch (error) {
       console.error('Error checking semi-finished availability:', error);
+      toast.error('حدث خطأ أثناء التحقق من توفر المنتج النصف مصنع');
       return false;
     }
   }
   
   // التحقق من توفر مواد التعبئة
-  public async checkPackagingAvailability(requirements: { code: string, requiredQuantity: number }[]): Promise<boolean> {
+  public async checkPackagingAvailability(requirements: { code: string; requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const req of requirements) {
         const { data, error } = await supabase
@@ -333,122 +298,51 @@ class InventoryService {
           .select('quantity')
           .eq('code', req.code)
           .single();
-          
-        if (error || !data || data.quantity < req.requiredQuantity) {
+        
+        if (error) {
+          toast.error(`مادة التعبئة ${req.code} غير موجودة`);
+          return false;
+        }
+        
+        if (data.quantity < req.requiredQuantity) {
+          toast.error(`الكمية المطلوبة من ${req.code} غير متوفرة`);
           return false;
         }
       }
+      
       return true;
     } catch (error) {
       console.error('Error checking packaging availability:', error);
+      toast.error('حدث خطأ أثناء التحقق من توفر مواد التعبئة');
       return false;
     }
   }
   
-  // استهلاك المواد الأولية لإنتاج منتج نصف مصنع
-  public async consumeRawMaterials(requirements: { code: string, requiredQuantity: number }[]): Promise<boolean> {
-    // التحقق من التوفر أولاً
-    const isAvailable = await this.checkRawMaterialsAvailability(requirements);
-    if (!isAvailable) {
-      toast.error('المواد الأولية غير متوفرة بالكميات المطلوبة');
-      return false;
-    }
-    
-    try {
-      // استهلاك المواد
-      for (const req of requirements) {
-        const { data, error } = await supabase
-          .from('raw_materials')
-          .select('quantity')
-          .eq('code', req.code)
-          .single();
-          
-        if (error) throw error;
-        
-        const newQuantity = data.quantity - req.requiredQuantity;
-        
-        const { error: updateError } = await supabase
-          .from('raw_materials')
-          .update({ quantity: newQuantity })
-          .eq('code', req.code);
-          
-        if (updateError) throw updateError;
-      }
-      
-      toast.success('تم استهلاك المواد الأولية بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error consuming raw materials:', error);
-      toast.error('حدث خطأ أثناء استهلاك المواد الأولية');
-      return false;
-    }
-  }
-  
-  // إضافة منتج نصف مصنع للمخزون
-  public async addSemiFinishedToInventory(code: string, quantity: number): Promise<boolean> {
-    try {
-      const { data, error } = await supabase
-        .from('semi_finished_products')
-        .select('*')
-        .eq('code', code)
-        .single();
-        
-      if (error) throw error;
-      
-      const newQuantity = data.quantity + quantity;
-      
-      const { error: updateError } = await supabase
-        .from('semi_finished_products')
-        .update({ quantity: newQuantity })
-        .eq('code', code);
-        
-      if (updateError) throw updateError;
-      
-      toast.success(`تمت إضافة ${quantity} ${data.unit} من ${data.name} للمخزون`);
-      return true;
-    } catch (error) {
-      console.error('Error adding semi-finished to inventory:', error);
-      toast.error('حدث خطأ أثناء إضافة المنتج النصف مصنع للمخزون');
-      return false;
-    }
-  }
-  
-  // استهلاك منتج نصف مصنع ومواد تعبئة لإنتاج منتج نهائي
+  // تنفيذ عملية إنتاج المنتج النهائي
   public async produceFinishedProduct(
     finishedProductCode: string,
     quantity: number,
     semiFinishedCode: string,
     semiFinishedQuantity: number,
-    packagingRequirements: { code: string, requiredQuantity: number }[]
+    packagingReqs: { code: string; requiredQuantity: number }[]
   ): Promise<boolean> {
-    // التحقق من توفر المنتج النصف مصنع
-    const isSemiFinishedAvailable = await this.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity * quantity);
-    if (!isSemiFinishedAvailable) {
-      toast.error('المنتج النصف مصنع غير متوفر بالكمية المطلوبة');
-      return false;
-    }
-    
-    // التحقق من توفر مواد التعبئة
-    const totalPackagingReqs = packagingRequirements.map(req => ({
-      code: req.code,
-      requiredQuantity: req.requiredQuantity * quantity
-    }));
-    
-    const isPackagingAvailable = await this.checkPackagingAvailability(totalPackagingReqs);
-    if (!isPackagingAvailable) {
-      toast.error('مواد التعبئة غير متوفرة بالكميات المطلوبة');
-      return false;
-    }
-    
     try {
-      // استهلاك المنتج النصف مصنع
+      // سحب المنتج النصف مصنع من المخزون
       const { data: semiFinished, error: semiError } = await supabase
         .from('semi_finished_products')
         .select('quantity')
         .eq('code', semiFinishedCode)
         .single();
-        
-      if (semiError) throw semiError;
+      
+      if (semiError) {
+        toast.error(`المنتج النصف مصنع ${semiFinishedCode} غير موجود`);
+        return false;
+      }
+      
+      if (semiFinished.quantity < semiFinishedQuantity * quantity) {
+        toast.error(`الكمية المطلوبة من ${semiFinishedCode} غير متوفرة`);
+        return false;
+      }
       
       const newSemiQuantity = semiFinished.quantity - (semiFinishedQuantity * quantity);
       
@@ -456,48 +350,85 @@ class InventoryService {
         .from('semi_finished_products')
         .update({ quantity: newSemiQuantity })
         .eq('code', semiFinishedCode);
-        
-      if (updateSemiError) throw updateSemiError;
       
-      // استهلاك مواد التعبئة
-      for (const req of totalPackagingReqs) {
-        const { data: material, error: matError } = await supabase
+      if (updateSemiError) {
+        toast.error(`حدث خطأ أثناء تحديث كمية ${semiFinishedCode}`);
+        return false;
+      }
+      
+      // سحب مواد التعبئة من المخزون
+      for (const req of packagingReqs) {
+        const { data: packagingMaterial, error: pkgError } = await supabase
           .from('packaging_materials')
           .select('quantity')
           .eq('code', req.code)
           .single();
-          
-        if (matError) throw matError;
         
-        const newQuantity = material.quantity - req.requiredQuantity;
+        if (pkgError) {
+          toast.error(`مادة التعبئة ${req.code} غير موجودة`);
+          return false;
+        }
         
-        const { error: updateMatError } = await supabase
+        if (packagingMaterial.quantity < req.requiredQuantity * quantity) {
+          toast.error(`الكمية المطلوبة من ${req.code} غير متوفرة`);
+          return false;
+        }
+        
+        const newPkgQuantity = packagingMaterial.quantity - (req.requiredQuantity * quantity);
+        
+        const { error: updatePkgError } = await supabase
           .from('packaging_materials')
-          .update({ quantity: newQuantity })
+          .update({ quantity: newPkgQuantity })
           .eq('code', req.code);
-          
-        if (updateMatError) throw updateMatError;
+        
+        if (updatePkgError) {
+          toast.error(`حدث خطأ أثناء تحديث كمية ${req.code}`);
+          return false;
+        }
       }
       
       // إضافة المنتج النهائي للمخزون
-      const { data: finishedProduct, error: fpError } = await supabase
+      const { data: finishedProduct, error: finishedError } = await supabase
         .from('finished_products')
         .select('quantity')
         .eq('code', finishedProductCode)
         .single();
+      
+      let newFinishedQuantity = quantity;
+      if (!finishedProduct) {
+        // إذا كان المنتج غير موجود، يتم إضافته
+        const { error: insertError } = await supabase
+          .from('finished_products')
+          .insert({
+            code: finishedProductCode,
+            name: finishedProductCode, // يمكنك تعديل الاسم لاحقًا
+            unit: 'وحدة', // يمكنك تعديل الوحدة لاحقًا
+            quantity: quantity,
+            semi_finished_product_id: 1, // يمكنك تعديل هذه القيم لاحقًا
+            semi_finished_quantity: semiFinishedQuantity,
+            unit_cost: 0 // يمكنك تعديل هذه القيم لاحقًا
+          });
         
-      if (fpError) throw fpError;
-      
-      const newQuantity = finishedProduct.quantity + quantity;
-      
-      const { error: updateFpError } = await supabase
-        .from('finished_products')
-        .update({ quantity: newQuantity })
-        .eq('code', finishedProductCode);
+        if (insertError) {
+          toast.error(`حدث خطأ أثناء إضافة المنتج النهائي ${finishedProductCode}`);
+          return false;
+        }
+      } else {
+        // إذا كان المنتج موجودًا، يتم تحديث الكمية
+        newFinishedQuantity = finishedProduct.quantity + quantity;
         
-      if (updateFpError) throw updateFpError;
+        const { error: updateFinishedError } = await supabase
+          .from('finished_products')
+          .update({ quantity: newFinishedQuantity })
+          .eq('code', finishedProductCode);
+        
+        if (updateFinishedError) {
+          toast.error(`حدث خطأ أثناء تحديث كمية ${finishedProductCode}`);
+          return false;
+        }
+      }
       
-      toast.success(`تم إنتاج ${quantity} وحدة من المنتج النهائي بنجاح`);
+      toast.success(`تم إنتاج ${quantity} وحدة من ${finishedProductCode} بنجاح`);
       return true;
     } catch (error) {
       console.error('Error producing finished product:', error);
@@ -505,104 +436,234 @@ class InventoryService {
       return false;
     }
   }
-  
-  // الحصول على بيانات للرسم البياني لتوزيع المخزون
-  public async getInventoryDistributionData() {
+
+  // دالة للحصول على مادة خام عن طريق الكود
+  public async getRawMaterialByCode(code: string) {
     try {
-      // جلب بيانات المواد الأولية
-      const { data: rawMaterialsData, error: rawMaterialsError } = await supabase
+      return await supabase
         .from('raw_materials')
-        .select('quantity, unit_cost');
-      
-      if (rawMaterialsError) throw rawMaterialsError;
-      
-      // جلب بيانات المنتجات النصف مصنعة
-      const { data: semiFinishedData, error: semiFinishedError } = await supabase
-        .from('semi_finished_products')
-        .select('quantity, unit_cost');
-      
-      if (semiFinishedError) throw semiFinishedError;
-      
-      // جلب بيانات مستلزمات التعبئة
-      const { data: packagingData, error: packagingError } = await supabase
-        .from('packaging_materials')
-        .select('quantity, unit_cost');
-      
-      if (packagingError) throw packagingError;
-      
-      // جلب بيانات المنتجات النهائية
-      const { data: finishedData, error: finishedError } = await supabase
-        .from('finished_products')
-        .select('quantity, unit_cost');
-      
-      if (finishedError) throw finishedError;
-      
-      // حساب القيم الإجمالية لكل نوع
-      const rawMaterialsValue = rawMaterialsData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      const semiFinishedValue = semiFinishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      const packagingValue = packagingData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      const finishedProductsValue = finishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-      
-      return [
-        { name: 'المواد الأولية', value: rawMaterialsValue },
-        { name: 'المنتجات النصف مصنعة', value: semiFinishedValue },
-        { name: 'مواد التعبئة', value: packagingValue },
-        { name: 'المنتجات النهائية', value: finishedProductsValue }
-      ];
+        .select('*')
+        .eq('code', code)
+        .single();
     } catch (error) {
-      console.error('Error fetching inventory distribution data:', error);
-      return [];
+      console.error('Error fetching raw material by code:', error);
+      return { data: null, error };
     }
   }
-  
-  // الحصول على إحصائيات عامة للمخزون
-  public async getInventoryStats() {
+
+  // تحديث أهمية المواد الخام المستخدمة
+  public async updateRawMaterialsImportance(materialCodes: string[]): Promise<boolean> {
     try {
-      const [rawCountData, semiCountData, packagingCountData, finishedCountData, lowStockItems] = await Promise.all([
-        // عدد المواد الأولية
-        supabase.from('raw_materials').select('id', { count: 'exact', head: true }),
+      // نحدد المواد التي ستتأثر
+      for (const code of materialCodes) {
+        const { data: material, error } = await supabase
+          .from('raw_materials')
+          .select('importance')
+          .eq('code', code)
+          .single();
         
-        // عدد المنتجات النصف مصنعة
-        supabase.from('semi_finished_products').select('id', { count: 'exact', head: true }),
+        if (error) continue;
         
-        // عدد مواد التعبئة
-        supabase.from('packaging_materials').select('id', { count: 'exact', head: true }),
+        // زيادة أهمية المادة الخام
+        const newImportance = (material.importance || 0) + 1;
         
-        // عدد المنتجات النهائية
-        supabase.from('finished_products').select('id', { count: 'exact', head: true }),
-        
-        // العناصر ذات المخزون المنخفض
-        this.getLowStockItems()
-      ]);
+        await supabase
+          .from('raw_materials')
+          .update({ importance: newImportance })
+          .eq('code', code);
+      }
       
-      // حساب القيمة الإجمالية للمخزون
-      const distributionData = await this.getInventoryDistributionData();
-      const totalValue = distributionData.reduce((sum, item) => sum + item.value, 0);
-      
-      return {
-        totalItems: (rawCountData.count || 0) + (semiCountData.count || 0) + (packagingCountData.count || 0) + (finishedCountData.count || 0),
-        lowStockItems: lowStockItems.length,
-        totalValue,
-        categories: {
-          rawMaterials: rawCountData.count || 0,
-          semiFinished: semiCountData.count || 0,
-          packaging: packagingCountData.count || 0,
-          finished: finishedCountData.count || 0
-        }
-      };
+      return true;
     } catch (error) {
-      console.error('Error fetching inventory stats:', error);
-      return {
-        totalItems: 0,
-        lowStockItems: 0,
-        totalValue: 0,
-        categories: {
-          rawMaterials: 0,
-          semiFinished: 0,
-          packaging: 0,
-          finished: 0
-        }
-      };
+      console.error('Error updating raw material importance:', error);
+      return false;
+    }
+  }
+
+  // إضافة منتج نصف مصنع للمخزون مع تحديث التكلفة
+  public async addSemiFinishedToInventory(
+    code: string, 
+    quantity: number,
+    unitCost?: number
+  ): Promise<boolean> {
+    try {
+      // جلب بيانات المنتج الحالية
+      const { data: product, error: fetchError } = await supabase
+        .from('semi_finished_products')
+        .select('quantity, unit_cost')
+        .eq('code', code)
+        .single();
+      
+      if (fetchError) {
+        toast.error('لم يتم العثور على المنتج النصف مصنع');
+        return false;
+      }
+      
+      // حساب الكمية الجديدة
+      const newQuantity = product.quantity + quantity;
+      
+      // حساب التكلفة الجديدة (إذا تم توفيرها)
+      let updateData: any = { quantity: newQuantity };
+      
+      if (unitCost !== undefined) {
+        // حساب متوسط التكلفة بناءً على المخزون الحالي والكمية الجديدة
+        const currentTotalCost = product.quantity * (product.unit_cost || 0);
+        const newItemsTotalCost = quantity * unitCost;
+        const newAverageCost = (currentTotalCost + newItemsTotalCost) / newQuantity;
+        
+        updateData.unit_cost = newAverageCost;
+      }
+      
+      // تحديث المخزون
+      const { error: updateError } = await supabase
+        .from('semi_finished_products')
+        .update(updateData)
+        .eq('code', code);
+      
+      if (updateError) {
+        toast.error('حدث خطأ أثناء تحديث المخزون');
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error adding semi-finished to inventory:', error);
+      toast.error('حدث خطأ أثناء إضافة المنتج للمخزون');
+      return false;
+    }
+  }
+
+  // سحب منتج نصف مصنع من المخزون
+  public async removeSemiFinishedFromInventory(code: string, quantity: number): Promise<boolean> {
+    try {
+      // جلب بيانات المنتج الحالية
+      const { data: product, error: fetchError } = await supabase
+        .from('semi_finished_products')
+        .select('quantity')
+        .eq('code', code)
+        .single();
+      
+      if (fetchError) {
+        toast.error('لم يتم العثور على المنتج النصف مصنع');
+        return false;
+      }
+      
+      // حساب الكمية الجديدة
+      const newQuantity = Math.max(0, product.quantity - quantity);
+      
+      // تحديث المخزون
+      const { error: updateError } = await supabase
+        .from('semi_finished_products')
+        .update({ quantity: newQuantity })
+        .eq('code', code);
+      
+      if (updateError) {
+        toast.error('حدث خطأ أثناء تحديث المخزون');
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error removing semi-finished from inventory:', error);
+      toast.error('حدث خطأ أثناء سحب المنتج من المخزون');
+      return false;
+    }
+  }
+
+  // إعادة المواد الأولية للمخزون
+  public async returnRawMaterials(materials: { code: string; requiredQuantity: number }[]): Promise<boolean> {
+    try {
+      for (const material of materials) {
+        // جلب بيانات المادة الخام الحالية
+        const { data: rawMaterial, error: fetchError } = await supabase
+          .from('raw_materials')
+          .select('quantity')
+          .eq('code', material.code)
+          .single();
+        
+        if (fetchError) continue;
+        
+        // حساب الكمية الجديدة
+        const newQuantity = rawMaterial.quantity + material.requiredQuantity;
+        
+        // تحديث المخزون
+        await supabase
+          .from('raw_materials')
+          .update({ quantity: newQuantity })
+          .eq('code', material.code);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error returning raw materials to inventory:', error);
+      return false;
+    }
+  }
+
+  // إعادة مواد التعبئة للمخزون
+  public async returnPackagingMaterials(materials: { code: string; requiredQuantity: number }[]): Promise<boolean> {
+    try {
+      for (const material of materials) {
+        // جلب بيانات مادة التعبئة الحالية
+        const { data: packagingMaterial, error: fetchError } = await supabase
+          .from('packaging_materials')
+          .select('quantity')
+          .eq('code', material.code)
+          .single();
+        
+        if (fetchError) continue;
+        
+        // حساب الكمية الجديدة
+        const newQuantity = packagingMaterial.quantity + material.requiredQuantity;
+        
+        // تحديث المخزون
+        await supabase
+          .from('packaging_materials')
+          .update({ quantity: newQuantity })
+          .eq('code', material.code);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error returning packaging materials to inventory:', error);
+      return false;
+    }
+  }
+
+  // سحب منتج نهائي من المخزون
+  public async removeFinishedFromInventory(code: string, quantity: number): Promise<boolean> {
+    try {
+      // جلب بيانات المنتج الحالية
+      const { data: product, error: fetchError } = await supabase
+        .from('finished_products')
+        .select('quantity')
+        .eq('code', code)
+        .single();
+      
+      if (fetchError) {
+        toast.error('لم يتم العثور على المنتج النهائي');
+        return false;
+      }
+      
+      // حساب الكمية الجديدة
+      const newQuantity = Math.max(0, product.quantity - quantity);
+      
+      // تحديث المخزون
+      const { error: updateError } = await supabase
+        .from('finished_products')
+        .update({ quantity: newQuantity })
+        .eq('code', code);
+      
+      if (updateError) {
+        toast.error('حدث خطأ أثناء تحديث المخزون');
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error removing finished product from inventory:', error);
+      toast.error('حدث خطأ أثناء سحب المنتج من المخزون');
+      return false;
     }
   }
 }
