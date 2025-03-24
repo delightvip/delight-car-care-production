@@ -48,7 +48,7 @@ const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
   return (
     <DataTable 
       columns={columns} 
-      data={data} 
+      data={data || []} 
       searchable={searchable} 
       searchKeys={searchKeys} 
       actions={actions} 

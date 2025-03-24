@@ -1,13 +1,11 @@
-
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
-import DataTable from '@/components/ui/DataTable';
+import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Button } from '@/components/ui/button';
 import { Edit, Plus, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Skeleton } from '@/components/ui/skeleton';
 import SemiFinishedForm from '@/components/semi-finished/SemiFinishedForm';
 import DeleteConfirmDialog from '@/components/semi-finished/DeleteConfirmDialog';
 
@@ -59,12 +57,12 @@ const SemiFinishedProducts = () => {
         if (ingredientsError) throw new Error(ingredientsError.message);
         
         // تنسيق المكونات بطريقة أسهل للاستخدام
-        const formattedIngredients = ingredients.map((ingredient) => ({
-          id: ingredient.raw_materials.id,
-          code: ingredient.raw_materials.code,
-          name: ingredient.raw_materials.name,
+        const formattedIngredients = ingredients?.map((ingredient) => ({
+          id: ingredient.raw_materials?.id,
+          code: ingredient.raw_materials?.code,
+          name: ingredient.raw_materials?.name,
           percentage: ingredient.percentage
-        }));
+        })) || [];
         
         return {
           id: product.id,
@@ -224,7 +222,7 @@ const SemiFinishedProducts = () => {
     {
       key: 'ingredients',
       title: 'عدد المكونات',
-      render: (value: any[]) => value.length
+      render: (value: any[] | undefined) => (value && Array.isArray(value)) ? value.length : 0
     },
     { 
       key: 'quantity', 
@@ -317,23 +315,14 @@ const SemiFinishedProducts = () => {
           </Button>
         </div>
         
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : (
-          <DataTable
-            columns={columns}
-            data={semiFinishedProducts || []}
-            searchable
-            searchKeys={['code', 'name']}
-            actions={renderActions}
-          />
-        )}
+        <DataTableWithLoading
+          columns={columns}
+          data={semiFinishedProducts || []}
+          searchable
+          searchKeys={['code', 'name']}
+          actions={renderActions}
+          isLoading={isLoading}
+        />
         
         {/* نموذج إضافة منتج جديد */}
         <SemiFinishedForm
@@ -374,3 +363,7 @@ const SemiFinishedProducts = () => {
 };
 
 export default SemiFinishedProducts;
+
+
+
+

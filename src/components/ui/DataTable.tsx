@@ -32,15 +32,18 @@ const DataTable: React.FC<DataTableProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   
+  // Ensure data is an array
+  const safeData = Array.isArray(data) ? data : [];
+  
   // Handle search
   const filteredData = searchable && searchTerm 
-    ? data.filter(item => {
+    ? safeData.filter(item => {
         return (searchKeys.length > 0 ? searchKeys : Object.keys(item)).some(key => {
           const value = item[key];
           return value && value.toString().toLowerCase().includes(searchTerm.toLowerCase());
         });
       })
-    : data;
+    : safeData;
     
   // Handle pagination
   const pageCount = Math.ceil(filteredData.length / itemsPerPage);
