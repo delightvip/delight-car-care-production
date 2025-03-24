@@ -18,7 +18,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('raw_materials')
         .select('*')
-        .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+        .lt('quantity', 10);
         
       if (error) throw error;
       return data || [];
@@ -32,7 +32,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('semi_finished_products')
         .select('*')
-        .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+        .lt('quantity', 10);
         
       if (error) throw error;
       return data || [];
@@ -46,7 +46,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('packaging_materials')
         .select('*')
-        .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+        .lt('quantity', 10);
         
       if (error) throw error;
       return data || [];
@@ -60,7 +60,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('finished_products')
         .select('*')
-        .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+        .lt('quantity', 10);
         
       if (error) throw error;
       return data || [];

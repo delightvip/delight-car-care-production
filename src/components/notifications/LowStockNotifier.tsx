@@ -17,25 +17,25 @@ const LowStockNotifier = () => {
         const rawMaterialsResponse = await supabase
           .from('raw_materials')
           .select('id, name, quantity, min_stock, code')
-          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+          .lt('quantity', 10);
         
         // فحص المنتجات نصف المصنعة ذات المخزون المنخفض
         const semiFinishedResponse = await supabase
           .from('semi_finished_products')
           .select('id, name, quantity, min_stock, code')
-          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+          .lt('quantity', 10);
         
         // فحص مستلزمات التعبئة ذات المخزون المنخفض
         const packagingResponse = await supabase
           .from('packaging_materials')
           .select('id, name, quantity, min_stock, code')
-          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+          .lt('quantity', 10);
         
         // فحص المنتجات النهائية ذات المخزون المنخفض
         const finishedResponse = await supabase
           .from('finished_products')
           .select('id, name, quantity, min_stock, code')
-          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
+          .lt('quantity', 10);
         
         // تحقق من الأخطاء
         if (rawMaterialsResponse.error) throw rawMaterialsResponse.error;
