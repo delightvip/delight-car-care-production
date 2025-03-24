@@ -9,48 +9,136 @@ import InventoryDistribution from '@/components/dashboard/InventoryDistribution'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { AlertTriangle, Box, Factory, Beaker, Layers, Package, ShoppingBag, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
-
-const inventoryStatsData = [
-  { name: 'المواد الأولية', value: 86, color: '#3B82F6' },
-  { name: 'النصف مصنعة', value: 42, color: '#10B981' },
-  { name: 'مستلزمات التعبئة', value: 56, color: '#F59E0B' },
-  { name: 'المنتجات النهائية', value: 35, color: '#6366F1' },
-];
-
-const productionData = [
-  { month: 'يناير', production: 65, packaging: 45 },
-  { month: 'فبراير', production: 72, packaging: 58 },
-  { month: 'مارس', production: 83, packaging: 70 },
-  { month: 'أبريل', production: 75, packaging: 68 },
-  { month: 'مايو', production: 92, packaging: 80 },
-  { month: 'يونيو', production: 85, packaging: 76 },
-];
-
-const distributionData = [
-  { name: 'المواد الأولية', value: 30 },
-  { name: 'النصف مصنعة', value: 15 },
-  { name: 'مستلزمات التعبئة', value: 20 },
-  { name: 'المنتجات النهائية', value: 35 },
-];
-
-const lowStockItems = [
-  { id: 1, code: 'RAW-00123', name: 'كحول إيثيلي', currentStock: 25, minStock: 50, unit: 'لتر' },
-  { id: 2, code: 'PKG-00087', name: 'عبوة بلاستيكية 250مل', currentStock: 120, minStock: 200, unit: 'قطعة' },
-  { id: 3, code: 'RAW-00045', name: 'عطر ليمون', currentStock: 8, minStock: 15, unit: 'لتر' },
-];
-
-const recentOrders = [
-  { id: 1, code: 'PROD-230801-00001', product: 'ملمع تابلوه', quantity: 200, status: 'مكتمل', date: '2023-08-15' },
-  { id: 2, code: 'PACK-230801-00002', product: 'منظف زجاج 500مل', quantity: 150, status: 'قيد التنفيذ', date: '2023-08-16' },
-  { id: 3, code: 'PROD-230801-00003', product: 'معطر سيارات', quantity: 100, status: 'قيد الانتظار', date: '2023-08-17' },
-];
-
-const upcomingOrders = [
-  { id: 1, code: 'PROD-230820-00015', product: 'ملمع إطارات', quantity: 150, dueDate: '2023-08-25' },
-  { id: 2, code: 'PACK-230821-00008', product: 'معطر سيارات فاخر', quantity: 250, dueDate: '2023-08-27' },
-];
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import LoadingIndicator from '@/components/ui/LoadingIndicator';
 
 const Index = () => {
+  // Fetch counts from database
+  const { data: inventoryCounts, isLoading: isLoadingInventory } = useQuery({
+    queryKey: ['inventoryCounts'],
+    queryFn: async () => {
+      const rawMaterials = await supabase.from('raw_materials').select('id', { count: 'exact' });
+      const semiFinished = await supabase.from('semi_finished_products').select('id', { count: 'exact' });
+      const packaging = await supabase.from('packaging_materials').select('id', { count: 'exact' });
+      const finished = await supabase.from('finished_products').select('id', { count: 'exact' });
+      
+      return {
+        rawMaterialsCount: rawMaterials.count || 0,
+        semiFinishedCount: semiFinished.count || 0,
+        packagingCount: packaging.count || 0,
+        finishedCount: finished.count || 0
+      };
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+  
+  // Fetch low stock items
+  const { data: lowStockItems } = useQuery({
+    queryKey: ['lowStockItems'],
+    queryFn: async () => {
+      const rawMaterialsResponse = await supabase
+        .from('raw_materials')
+        .select('id')
+        .lt('quantity', supabase.raw('min_stock'));
+      
+      const semiFinishedResponse = await supabase
+        .from('semi_finished_products')
+        .select('id')
+        .lt('quantity', supabase.raw('min_stock'));
+      
+      const packagingResponse = await supabase
+        .from('packaging_materials')
+        .select('id')
+        .lt('quantity', supabase.raw('min_stock'));
+      
+      const finishedResponse = await supabase
+        .from('finished_products')
+        .select('id')
+        .lt('quantity', supabase.raw('min_stock'));
+      
+      const totalCount = 
+        (rawMaterialsResponse.data?.length || 0) + 
+        (semiFinishedResponse.data?.length || 0) + 
+        (packagingResponse.data?.length || 0) + 
+        (finishedResponse.data?.length || 0);
+      
+      return totalCount;
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+  
+  // Fetch active production orders
+  const { data: activeProductionOrders } = useQuery({
+    queryKey: ['activeProductionOrders'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('production_orders')
+        .select('id')
+        .eq('status', 'قيد التنفيذ');
+      
+      return data?.length || 0;
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+  
+  // Fetch pending packaging orders
+  const { data: pendingPackagingOrders } = useQuery({
+    queryKey: ['pendingPackagingOrders'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('packaging_orders')
+        .select('id')
+        .eq('status', 'قيد الانتظار');
+      
+      return data?.length || 0;
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+  
+  // Fetch recent orders
+  const { data: recentOrders, isLoading: isLoadingRecentOrders } = useQuery({
+    queryKey: ['recentOrders'],
+    queryFn: async () => {
+      const { data: productionData } = await supabase
+        .from('production_orders')
+        .select('id, code, product_name, quantity, status, date')
+        .order('date', { ascending: false })
+        .limit(3);
+      
+      return productionData || [];
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+  
+  // Fetch upcoming orders
+  const { data: upcomingOrders, isLoading: isLoadingUpcomingOrders } = useQuery({
+    queryKey: ['upcomingOrders'],
+    queryFn: async () => {
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      const { data: productionData } = await supabase
+        .from('production_orders')
+        .select('id, code, product_name, quantity, date')
+        .gte('date', currentDate)
+        .order('date', { ascending: true })
+        .limit(2);
+      
+      return productionData || [];
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+  
+  if (isLoadingInventory || isLoadingRecentOrders || isLoadingUpcomingOrders) {
+    return (
+      <PageTransition>
+        <div className="flex items-center justify-center h-[80vh]">
+          <LoadingIndicator size={40} text="جاري تحميل لوحة التحكم..." />
+        </div>
+      </PageTransition>
+    );
+  }
+
   return (
     <PageTransition>
       <div className="space-y-6">
@@ -78,7 +166,7 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <DashboardCard
             title="المواد الأولية"
-            value="86"
+            value={inventoryCounts?.rawMaterialsCount.toString() || "0"}
             icon={<Package size={24} />}
             color="primary"
             link="/inventory/raw-materials"
@@ -86,7 +174,7 @@ const Index = () => {
           />
           <DashboardCard
             title="المنتجات النصف مصنعة"
-            value="42"
+            value={inventoryCounts?.semiFinishedCount.toString() || "0"}
             icon={<Beaker size={24} />}
             color="success"
             link="/inventory/semi-finished"
@@ -94,7 +182,7 @@ const Index = () => {
           />
           <DashboardCard
             title="مستلزمات التعبئة"
-            value="56"
+            value={inventoryCounts?.packagingCount.toString() || "0"}
             icon={<Box size={24} />}
             color="warning"
             link="/inventory/packaging"
@@ -102,7 +190,7 @@ const Index = () => {
           />
           <DashboardCard
             title="المنتجات النهائية"
-            value="35"
+            value={inventoryCounts?.finishedCount.toString() || "0"}
             icon={<ShoppingBag size={24} />}
             color="secondary"
             link="/inventory/finished-products"
@@ -113,21 +201,21 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <DashboardCard
             title="العناصر منخفضة المخزون"
-            value="8"
+            value={lowStockItems?.toString() || "0"}
             icon={<AlertTriangle size={24} />}
             color="danger"
             link="/inventory/low-stock"
           />
           <DashboardCard
             title="أوامر الإنتاج النشطة"
-            value="5"
+            value={activeProductionOrders?.toString() || "0"}
             icon={<Factory size={24} />}
             color="info"
             link="/production/orders"
           />
           <DashboardCard
             title="أوامر التعبئة المعلقة"
-            value="4"
+            value={pendingPackagingOrders?.toString() || "0"}
             icon={<Layers size={24} />}
             color="warning"
             link="/production/packaging"
@@ -146,7 +234,7 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ProductionChart data={productionData} />
+              <ProductionChart />
             </CardContent>
           </Card>
           
@@ -161,7 +249,7 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <InventoryDistribution data={distributionData} />
+              <InventoryDistribution />
             </CardContent>
           </Card>
         </div>
@@ -184,28 +272,24 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {lowStockItems.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                    <div>
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-muted-foreground">{item.code}</div>
+                {lowStockItems === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="h-12 w-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-2">
+                      <ShoppingBag size={24} />
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-sm font-medium">{item.currentStock} {item.unit}</div>
-                        <div className="text-xs text-muted-foreground">الحد الأدنى: {item.minStock} {item.unit}</div>
-                      </div>
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center
-                        ${item.currentStock / item.minStock <= 0.3 ? 'bg-red-100 text-red-700' : 
-                          item.currentStock / item.minStock <= 0.6 ? 'bg-amber-100 text-amber-700' : 
-                          'bg-yellow-100 text-yellow-700'}`}>
-                        <span className="font-medium text-sm">
-                          {Math.round((item.currentStock / item.minStock) * 100)}%
-                        </span>
-                      </div>
-                    </div>
+                    <p className="text-muted-foreground">جميع العناصر ضمن الحدود المقبولة للمخزون</p>
                   </div>
-                ))}
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-2">
+                      <AlertTriangle size={24} />
+                    </div>
+                    <p className="text-muted-foreground">يوجد {lowStockItems} عناصر منخفضة المخزون</p>
+                    <Button variant="outline" size="sm" className="mt-4" asChild>
+                      <Link to="/inventory/low-stock">عرض العناصر</Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -227,25 +311,34 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {upcomingOrders.map(order => (
-                  <div key={order.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                    <div>
-                      <div className="font-medium">{order.product}</div>
-                      <div className="text-sm text-muted-foreground">{order.code}</div>
+                {upcomingOrders?.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="h-12 w-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-2">
+                      <Calendar size={24} />
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-sm font-medium">الكمية: {order.quantity}</div>
-                        <div className="text-xs text-muted-foreground">تاريخ التنفيذ: {order.dueDate}</div>
-                      </div>
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link to={`/production/orders/${order.id}`}>
-                          <span>التفاصيل</span>
-                        </Link>
-                      </Button>
-                    </div>
+                    <p className="text-muted-foreground">لا توجد أوامر إنتاج مجدولة للأيام القادمة</p>
                   </div>
-                ))}
+                ) : (
+                  upcomingOrders?.map(order => (
+                    <div key={order.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                      <div>
+                        <div className="font-medium">{order.product_name}</div>
+                        <div className="text-sm text-muted-foreground">{order.code}</div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-sm font-medium">الكمية: {order.quantity}</div>
+                          <div className="text-xs text-muted-foreground">تاريخ التنفيذ: {order.date}</div>
+                        </div>
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link to={`/production/orders/${order.id}`}>
+                            <span>التفاصيل</span>
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
             <CardFooter className="border-t pt-4">
@@ -275,46 +368,55 @@ const Index = () => {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="py-3 px-2 text-right font-medium">الكود</th>
-                    <th className="py-3 px-2 text-right font-medium">المنتج</th>
-                    <th className="py-3 px-2 text-right font-medium">الكمية</th>
-                    <th className="py-3 px-2 text-right font-medium">الحالة</th>
-                    <th className="py-3 px-2 text-right font-medium">التاريخ</th>
-                    <th className="py-3 px-2 text-right font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.map(order => (
-                    <tr key={order.id} className="border-b last:border-0 hover:bg-muted/50">
-                      <td className="py-3 px-2 text-sm">{order.code}</td>
-                      <td className="py-3 px-2 text-sm">{order.product}</td>
-                      <td className="py-3 px-2 text-sm">{order.quantity}</td>
-                      <td className="py-3 px-2 text-sm">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium
-                          ${order.status === 'مكتمل' ? 'bg-green-100 text-green-800' : 
-                            order.status === 'قيد التنفيذ' ? 'bg-blue-100 text-blue-800' : 
-                            'bg-amber-100 text-amber-800'}`}
-                        >
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-sm">{order.date}</td>
-                      <td className="py-3 px-2 text-sm">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/production/orders/${order.id}`}>
-                            عرض
-                          </Link>
-                        </Button>
-                      </td>
+            {recentOrders?.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="h-12 w-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-2">
+                  <Factory size={24} />
+                </div>
+                <p className="text-muted-foreground">لا توجد أوامر إنتاج حالية</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="py-3 px-2 text-right font-medium">الكود</th>
+                      <th className="py-3 px-2 text-right font-medium">المنتج</th>
+                      <th className="py-3 px-2 text-right font-medium">الكمية</th>
+                      <th className="py-3 px-2 text-right font-medium">الحالة</th>
+                      <th className="py-3 px-2 text-right font-medium">التاريخ</th>
+                      <th className="py-3 px-2 text-right font-medium"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {recentOrders?.map(order => (
+                      <tr key={order.id} className="border-b last:border-0 hover:bg-muted/50">
+                        <td className="py-3 px-2 text-sm">{order.code}</td>
+                        <td className="py-3 px-2 text-sm">{order.product_name}</td>
+                        <td className="py-3 px-2 text-sm">{order.quantity}</td>
+                        <td className="py-3 px-2 text-sm">
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium
+                            ${order.status === 'مكتمل' ? 'bg-green-100 text-green-800' : 
+                              order.status === 'قيد التنفيذ' ? 'bg-blue-100 text-blue-800' : 
+                              'bg-amber-100 text-amber-800'}`}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 text-sm">{order.date}</td>
+                        <td className="py-3 px-2 text-sm">
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link to={`/production/orders/${order.id}`}>
+                              عرض
+                            </Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

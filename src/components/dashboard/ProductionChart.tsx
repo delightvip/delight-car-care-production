@@ -1,83 +1,110 @@
 
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Factory, Layers } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import LoadingIndicator from '../ui/LoadingIndicator';
+import EmptyState from '../ui/EmptyState';
 
 interface ProductionChartProps {
-  data: {
-    month: string;
-    production_count?: number;
-    packaging_count?: number;
+  data?: {
+    month: string; 
     production?: number;
     packaging?: number;
+    production_count?: number;
+    packaging_count?: number;
   }[];
 }
 
-const ProductionChart: React.FC<ProductionChartProps> = ({ data }) => {
-  // Transform the data to match the format expected by the chart
-  const chartData = data.map(item => ({
-    month: item.month,
-    production: item.production_count ?? item.production ?? 0,
-    packaging: item.packaging_count ?? item.packaging ?? 0
-  }));
-
-  // Custom tooltip to enhance visual appearance
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 shadow-lg rounded-lg border border-gray-100">
-          <p className="font-medium text-sm text-gray-700 mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={`item-${index}`} className="flex items-center gap-2 py-1">
-              <div className="w-3 h-3" style={{ backgroundColor: entry.color }}></div>
-              <span className="text-xs font-medium">{entry.name}: </span>
-              <span className="text-xs">{entry.value}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Custom legend to enhance visual appearance with icons
-  const CustomLegend = ({ payload }: any) => {
+const ProductionChart: React.FC<ProductionChartProps> = ({ data: propData }) => {
+  const { data: fetchedData, isLoading, error } = useQuery({
+    queryKey: ['monthlyProductionStats'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_monthly_production_stats');
+      
+      if (error) throw new Error(error.message);
+      
+      return data;
+    },
+    refetchInterval: 60000 // Refresh every minute
+  });
+  
+  const chartData = propData || fetchedData || [];
+  
+  if (isLoading && !propData) {
+    return <LoadingIndicator className="h-60" />;
+  }
+  
+  if (error && !propData) {
     return (
-      <div className="flex justify-center gap-8 mt-2">
-        {payload.map((entry: any, index: number) => (
-          <div key={`item-${index}`} className="flex items-center gap-2">
-            {entry.value === 'production' ? (
-              <Factory size={16} className="text-blue-600" />
-            ) : (
-              <Layers size={16} className="text-emerald-600" />
-            )}
-            <span className="text-sm">{entry.value === 'production' ? 'أوامر الإنتاج' : 'أوامر التعبئة'}</span>
-          </div>
-        ))}
-      </div>
+      <EmptyState 
+        title="تعذر تحميل البيانات" 
+        description="حدث خطأ أثناء تحميل بيانات الإنتاج." 
+      />
     );
-  };
-
+  }
+  
+  if (chartData.length === 0) {
+    return (
+      <EmptyState 
+        title="لا توجد بيانات" 
+        description="لا توجد بيانات إنتاج متاحة حالياً." 
+      />
+    );
+  }
+  
+  // Map the data to ensure we have consistent property names
+  const normalizedData = chartData.map(item => ({
+    month: item.month,
+    production: item.production || item.production_count || 0,
+    packaging: item.packaging || item.packaging_count || 0
+  }));
+  
   return (
-    <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={chartData}
-          margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-          <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend 
-            content={<CustomLegend />}
-            wrapperStyle={{ paddingTop: '10px' }}
-          />
-          <Bar dataKey="production" name="أوامر الإنتاج" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="packaging" name="أوامر التعبئة" fill="#10B981" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart
+        data={normalizedData}
+        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+        barSize={20}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+        <XAxis
+          dataKey="month"
+          tick={{ fontSize: 12 }}
+          tickLine={false}
+          axisLine={{ stroke: '#E5E7EB', strokeWidth: 1 }}
+        />
+        <YAxis
+          tick={{ fontSize: 12 }}
+          tickLine={false}
+          axisLine={{ stroke: '#E5E7EB', strokeWidth: 1 }}
+        />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            border: 'none',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            textAlign: 'right',
+            direction: 'rtl'
+          }}
+          formatter={(value: number) => [`${value} وحدة`, '']}
+          labelFormatter={(label) => `شهر ${label}`}
+        />
+        <Bar
+          dataKey="production"
+          name="الإنتاج"
+          fill="#3b82f6"
+          radius={[4, 4, 0, 0]}
+        />
+        <Bar
+          dataKey="packaging"
+          name="التعبئة"
+          fill="#10b981"
+          radius={[4, 4, 0, 0]}
+        />
+      </BarChart>
+    </ResponsiveContainer>
   );
 };
 
