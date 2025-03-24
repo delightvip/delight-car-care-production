@@ -1,10 +1,11 @@
+
 import React from 'react';
 import {
   BrowserRouter as Router,
   Routes,
   Route,
 } from "react-router-dom";
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
 import Index from '@/pages/Index';
@@ -21,6 +22,7 @@ import ProductionPlanning from '@/pages/production/ProductionPlanning';
 import Navbar from '@/components/layout/Navbar';
 import ModernSidebar from '@/components/layout/ModernSidebar';
 import { Toaster } from '@/components/ui/toaster';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Import the LowStockNotifier component
 import LowStockNotifier from '@/components/notifications/LowStockNotifier';
@@ -29,33 +31,35 @@ const queryClient = new QueryClient();
 
 function App() {
   return (
-    <>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider defaultTheme="light" storageKey="delight-ui-theme">
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="light" storageKey="delight-ui-theme">
+        <TooltipProvider>
           <SidebarProvider>
-            <Router>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/inventory/raw-materials" element={<InventoryRawMaterials />} />
-                <Route path="/inventory/semi-finished" element={<InventorySemiFinished />} />
-                <Route path="/inventory/packaging" element={<InventoryPackaging />} />
-                <Route path="/inventory/finished-products" element={<InventoryFinishedProducts />} />
-                <Route path="/inventory/low-stock" element={<InventoryLowStock />} />
-                <Route path="/inventory/tracking" element={<InventoryTracking />} />
-                <Route path="/production/orders" element={<ProductionOrders />} />
-                <Route path="/production/packaging" element={<ProductionPackaging />} />
-                <Route path="/production/planning" element={<ProductionPlanning />} />
-              </Routes>
-              <Navbar />
-              <ModernSidebar />
-              <Toaster />
-              <LowStockNotifier />
-            </Router>
+            <div className="min-h-screen flex w-full">
+              <Router>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/inventory/raw-materials" element={<InventoryRawMaterials />} />
+                  <Route path="/inventory/semi-finished" element={<InventorySemiFinished />} />
+                  <Route path="/inventory/packaging" element={<InventoryPackaging />} />
+                  <Route path="/inventory/finished-products" element={<InventoryFinishedProducts />} />
+                  <Route path="/inventory/low-stock" element={<InventoryLowStock />} />
+                  <Route path="/inventory/tracking" element={<InventoryTracking />} />
+                  <Route path="/production/orders" element={<ProductionOrders />} />
+                  <Route path="/production/packaging" element={<ProductionPackaging />} />
+                  <Route path="/production/planning" element={<ProductionPlanning />} />
+                </Routes>
+                <Navbar />
+                <ModernSidebar />
+                <Toaster />
+                <LowStockNotifier />
+              </Router>
+            </div>
           </SidebarProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 
