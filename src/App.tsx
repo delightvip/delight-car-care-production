@@ -8,7 +8,6 @@ import {
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SidebarProvider as AppSidebarProvider } from '@/components/layout/SidebarContext';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import Index from '@/pages/Index';
 import Analytics from '@/pages/Analytics';
 import InventoryRawMaterials from '@/pages/inventory/InventoryRawMaterials';
@@ -34,39 +33,37 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="delight-ui-theme">
-        <SidebarProvider>
-          <AppSidebarProvider>
-            <TooltipProvider>
-              <Router>
-                <div className="min-h-screen flex w-full group/sidebar-wrapper">
-                  <Navbar />
-                  <ModernSidebar />
-                  <div className="flex-1 pt-16 md:pr-64">
-                    <div className="container px-4 py-8 mx-auto">
-                      <Breadcrumbs />
-                      <Routes>
-                        <Route path="/" element={<Index />} />
-                        <Route path="/analytics" element={<Analytics />} />
-                        <Route path="/inventory/raw-materials" element={<InventoryRawMaterials />} />
-                        <Route path="/inventory/semi-finished" element={<InventorySemiFinished />} />
-                        <Route path="/inventory/packaging" element={<InventoryPackaging />} />
-                        <Route path="/inventory/finished-products" element={<InventoryFinishedProducts />} />
-                        <Route path="/inventory/low-stock" element={<InventoryLowStock />} />
-                        <Route path="/inventory/tracking" element={<InventoryTracking />} />
-                        <Route path="/production/orders" element={<ProductionOrders />} />
-                        <Route path="/production/packaging" element={<ProductionPackaging />} />
-                        <Route path="/production/planning" element={<ProductionPlanning />} />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </div>
+        <AppSidebarProvider>
+          <TooltipProvider>
+            <Router>
+              <div className="min-h-screen flex w-full group/sidebar-wrapper">
+                <Navbar />
+                <ModernSidebar />
+                <div className="flex-1 pt-16 md:pr-64">
+                  <div className="container px-4 py-8 mx-auto">
+                    <Breadcrumbs />
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/analytics" element={<Analytics />} />
+                      <Route path="/inventory/raw-materials" element={<InventoryRawMaterials />} />
+                      <Route path="/inventory/semi-finished" element={<InventorySemiFinished />} />
+                      <Route path="/inventory/packaging" element={<InventoryPackaging />} />
+                      <Route path="/inventory/finished-products" element={<InventoryFinishedProducts />} />
+                      <Route path="/inventory/low-stock" element={<InventoryLowStock />} />
+                      <Route path="/inventory/tracking" element={<InventoryTracking />} />
+                      <Route path="/production/orders" element={<ProductionOrders />} />
+                      <Route path="/production/packaging" element={<ProductionPackaging />} />
+                      <Route path="/production/planning" element={<ProductionPlanning />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
                   </div>
-                  <Toaster />
-                  <LowStockNotifier />
                 </div>
-              </Router>
-            </TooltipProvider>
-          </AppSidebarProvider>
-        </SidebarProvider>
+                <Toaster />
+                <LowStockNotifier />
+              </div>
+            </Router>
+          </TooltipProvider>
+        </AppSidebarProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

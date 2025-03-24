@@ -3,10 +3,10 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DataTableWithLoading } from '@/components/ui/DataTableWithLoading';
-import { LowStockStats } from '@/components/inventory/LowStockStats';
-import { LowStockCard } from '@/components/inventory/LowStockCard';
-import { PageTransition } from '@/components/ui/PageTransition';
+import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
+import LowStockStats from '@/components/inventory/LowStockStats';
+import LowStockCard from '@/components/inventory/LowStockCard';
+import PageTransition from '@/components/ui/PageTransition';
 import { AlertTriangle, Package, Beaker, Box, ShoppingBag } from 'lucide-react';
 
 // تعريف أنواع العناصر منخفضة المخزون
