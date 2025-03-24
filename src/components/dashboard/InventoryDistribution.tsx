@@ -7,9 +7,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1'];
 
-const InventoryDistribution: React.FC = () => {
+interface InventoryDistributionProps {
+  data?: { name: string; value: number }[];
+}
+
+const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: propData }) => {
   const inventoryService = InventoryService.getInstance();
-  const data = inventoryService.getInventoryDistributionData();
+  const data = propData || inventoryService.getInventoryDistributionData();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   
   const total = data.reduce((sum, item) => sum + item.value, 0);
