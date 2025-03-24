@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -39,90 +39,116 @@ const LowStockItems = () => {
   const { data: lowStockItems, isLoading, error } = useQuery({
     queryKey: ['lowStockItems'],
     queryFn: async () => {
-      // Fetch raw materials data
-      const { data: rawMaterials, error: rawMaterialsError } = await supabase
-        .from('raw_materials')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      if (rawMaterialsError) throw new Error(rawMaterialsError.message);
-      
-      // Fetch semi-finished products data
-      const { data: semiFinished, error: semiFinishedError } = await supabase
-        .from('semi_finished_products')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      if (semiFinishedError) throw new Error(semiFinishedError.message);
-      
-      // Fetch packaging materials data
-      const { data: packaging, error: packagingError } = await supabase
-        .from('packaging_materials')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      if (packagingError) throw new Error(packagingError.message);
-      
-      // Fetch finished products data
-      const { data: finished, error: finishedError } = await supabase
-        .from('finished_products')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      if (finishedError) throw new Error(finishedError.message);
-      
-      // Format the data for consistent display
-      const formattedData: LowStockData = {
-        raw: (rawMaterials || []).map(item => ({
-          id: item.id,
-          code: item.code,
-          name: item.name,
-          currentStock: item.quantity,
-          minStock: item.min_stock,
-          unit: item.unit,
-          category: 'raw_materials',
-          categoryName: 'المواد الأولية',
-          route: '/inventory/raw-materials'
-        })),
-        semi: (semiFinished || []).map(item => ({
-          id: item.id,
-          code: item.code,
-          name: item.name,
-          currentStock: item.quantity,
-          minStock: item.min_stock,
-          unit: item.unit,
-          category: 'semi_finished',
-          categoryName: 'المنتجات النصف مصنعة',
-          route: '/inventory/semi-finished'
-        })),
-        packaging: (packaging || []).map(item => ({
-          id: item.id,
-          code: item.code,
-          name: item.name,
-          currentStock: item.quantity,
-          minStock: item.min_stock,
-          unit: item.unit,
-          category: 'packaging',
-          categoryName: 'مستلزمات التعبئة',
-          route: '/inventory/packaging'
-        })),
-        finished: (finished || []).map(item => ({
-          id: item.id,
-          code: item.code,
-          name: item.name,
-          currentStock: item.quantity,
-          minStock: item.min_stock,
-          unit: item.unit,
-          category: 'finished_products',
-          categoryName: 'المنتجات النهائية',
-          route: '/inventory/finished-products'
-        }))
-      };
-      
-      return formattedData;
+      try {
+        // Fetch raw materials data
+        const { data: rawMaterials, error: rawMaterialsError } = await supabase
+          .from('raw_materials')
+          .select('id, code, name, quantity, min_stock, unit')
+          .lt('quantity', 'min_stock');
+        
+        if (rawMaterialsError) throw new Error(rawMaterialsError.message);
+        
+        // Fetch semi-finished products data
+        const { data: semiFinished, error: semiFinishedError } = await supabase
+          .from('semi_finished_products')
+          .select('id, code, name, quantity, min_stock, unit')
+          .lt('quantity', 'min_stock');
+        
+        if (semiFinishedError) throw new Error(semiFinishedError.message);
+        
+        // Fetch packaging materials data
+        const { data: packaging, error: packagingError } = await supabase
+          .from('packaging_materials')
+          .select('id, code, name, quantity, min_stock, unit')
+          .lt('quantity', 'min_stock');
+        
+        if (packagingError) throw new Error(packagingError.message);
+        
+        // Fetch finished products data
+        const { data: finished, error: finishedError } = await supabase
+          .from('finished_products')
+          .select('id, code, name, quantity, min_stock, unit')
+          .lt('quantity', 'min_stock');
+        
+        if (finishedError) throw new Error(finishedError.message);
+        
+        // Format the data for consistent display
+        const formattedData: LowStockData = {
+          raw: (rawMaterials || []).map(item => ({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            currentStock: item.quantity,
+            minStock: item.min_stock,
+            unit: item.unit,
+            category: 'raw_materials',
+            categoryName: 'المواد الأولية',
+            route: '/inventory/raw-materials'
+          })),
+          semi: (semiFinished || []).map(item => ({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            currentStock: item.quantity,
+            minStock: item.min_stock,
+            unit: item.unit,
+            category: 'semi_finished',
+            categoryName: 'المنتجات النصف مصنعة',
+            route: '/inventory/semi-finished'
+          })),
+          packaging: (packaging || []).map(item => ({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            currentStock: item.quantity,
+            minStock: item.min_stock,
+            unit: item.unit,
+            category: 'packaging',
+            categoryName: 'مستلزمات التعبئة',
+            route: '/inventory/packaging'
+          })),
+          finished: (finished || []).map(item => ({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            currentStock: item.quantity,
+            minStock: item.min_stock,
+            unit: item.unit,
+            category: 'finished_products',
+            categoryName: 'المنتجات النهائية',
+            route: '/inventory/finished-products'
+          }))
+        };
+        
+        return formattedData;
+      } catch (error) {
+        console.error('Error fetching low stock items:', error);
+        return { raw: [], semi: [], packaging: [], finished: [] };
+      }
     },
     refetchInterval: 60000, // Refresh every minute
   });
+  
+  // Initialize empty data structure if lowStockItems is undefined
+  const safeData: LowStockData = lowStockItems || { raw: [], semi: [], packaging: [], finished: [] };
+  
+  // Combine all items and sort by stock percentage - THIS MUST BE IN THE SAME RENDER ORDER
+  const allItems = useMemo(() => {    
+    return [
+      ...safeData.raw,
+      ...safeData.semi,
+      ...safeData.packaging,
+      ...safeData.finished
+    ].sort((a, b) => {
+      const percentA = (a.currentStock / a.minStock) * 100;
+      const percentB = (b.currentStock / b.minStock) * 100;
+      return percentA - percentB;
+    });
+  }, [safeData]);
+  
+  // Calculate totals
+  const totalLowStock = allItems.length;
+  const criticalItems = allItems.filter(item => (item.currentStock / item.minStock) * 100 <= 50).length;
   
   // Handle error state
   if (error) {
@@ -175,27 +201,6 @@ const LowStockItems = () => {
       </PageTransition>
     );
   }
-  
-  // Initialize empty data structure if lowStockItems is undefined
-  const safeData: LowStockData = lowStockItems || { raw: [], semi: [], packaging: [], finished: [] };
-  
-  // Combine all items and sort by stock percentage
-  const allItems = React.useMemo(() => {    
-    return [
-      ...safeData.raw,
-      ...safeData.semi,
-      ...safeData.packaging,
-      ...safeData.finished
-    ].sort((a, b) => {
-      const percentA = (a.currentStock / a.minStock) * 100;
-      const percentB = (b.currentStock / b.minStock) * 100;
-      return percentA - percentB;
-    });
-  }, [safeData]);
-  
-  // Calculate totals
-  const totalLowStock = allItems.length;
-  const criticalItems = allItems.filter(item => (item.currentStock / item.minStock) * 100 <= 50).length;
   
   // Render a stock item card
   const renderStockItem = (item: LowStockItem) => {

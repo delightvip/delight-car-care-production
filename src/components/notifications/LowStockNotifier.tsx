@@ -63,11 +63,7 @@ const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
     } else if (rawMaterials) {
       items.push(...rawMaterials.map(item => ({ ...item, type: 'raw_material' as const })));
     }
-  } catch (error) {
-    console.error('Error in raw materials fetch:', error);
-  }
-  
-  try {
+    
     // Fetch semi-finished products with low stock
     const { data: semiFinished, error: semiError } = await supabase
       .from('semi_finished_products')
@@ -79,11 +75,7 @@ const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
     } else if (semiFinished) {
       items.push(...semiFinished.map(item => ({ ...item, type: 'semi_finished' as const })));
     }
-  } catch (error) {
-    console.error('Error in semi-finished fetch:', error);
-  }
-  
-  try {
+    
     // Fetch packaging materials with low stock
     const { data: packaging, error: packagingError } = await supabase
       .from('packaging_materials')
@@ -95,11 +87,7 @@ const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
     } else if (packaging) {
       items.push(...packaging.map(item => ({ ...item, type: 'packaging' as const })));
     }
-  } catch (error) {
-    console.error('Error in packaging fetch:', error);
-  }
-  
-  try {
+    
     // Fetch finished products with low stock
     const { data: finished, error: finishedError } = await supabase
       .from('finished_products')
@@ -111,11 +99,12 @@ const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
     } else if (finished) {
       items.push(...finished.map(item => ({ ...item, type: 'finished_product' as const })));
     }
+    
+    return items;
   } catch (error) {
-    console.error('Error in finished products fetch:', error);
+    console.error('Error in fetchLowStockItems:', error);
+    return [];
   }
-  
-  return items;
 };
 
 const LowStockNotifier: React.FC = () => {
@@ -124,7 +113,7 @@ const LowStockNotifier: React.FC = () => {
   const [open, setOpen] = useState(false);
   
   const { data: lowStockItems = [] } = useQuery({
-    queryKey: ['lowStockItems'],
+    queryKey: ['lowStockNotifierItems'],
     queryFn: fetchLowStockItems,
     refetchInterval: 60000, // Refetch every minute
   });
