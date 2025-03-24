@@ -24,10 +24,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import LowStockNotifier from '@/components/notifications/LowStockNotifier';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
-import { 
-  Sidebar, 
-  SidebarProvider as UISidebarProvider 
-} from '@/components/ui/sidebar';
+import { UISidebarProvider } from '@/components/ui/sidebar';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 const queryClient = new QueryClient();
