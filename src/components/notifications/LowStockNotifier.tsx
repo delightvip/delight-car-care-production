@@ -1,126 +1,127 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, Package, Beaker, Box, ShoppingBag } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ToastAction } from '@/components/ui/toast';
+
+interface LowStockItem {
+  id: string;
+  name: string;
+  quantity: number;
+  min_stock: number;
+  type: 'raw_material' | 'semi_finished' | 'packaging' | 'finished';
+}
 
 const LowStockNotifier: React.FC = () => {
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [notifiedItems, setNotifiedItems] = useState<Record<string, boolean>>({});
   
-  // Fetch low stock items with React Query
+  // Query to get all low stock items across tables
   const { data: lowStockItems } = useQuery({
     queryKey: ['lowStockItems'],
     queryFn: async () => {
-      // Fetch raw materials
-      const rawMaterialsResponse = await supabase
-        .from('raw_materials')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      // Fetch semi-finished products
-      const semiFinishedResponse = await supabase
-        .from('semi_finished_products')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      // Fetch packaging materials
-      const packagingResponse = await supabase
-        .from('packaging_materials')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      // Fetch finished products
-      const finishedResponse = await supabase
-        .from('finished_products')
-        .select('id, code, name, quantity, min_stock, unit')
-        .lt('quantity', 'min_stock');
-      
-      // Map the data to include category
-      const rawData = (rawMaterialsResponse.data || []).map(item => ({
-        ...item,
-        category: 'raw_materials',
-        categoryName: 'المواد الأولية',
-        icon: Package
-      }));
-      
-      const semiData = (semiFinishedResponse.data || []).map(item => ({
-        ...item,
-        category: 'semi_finished',
-        categoryName: 'المنتجات النصف مصنعة',
-        icon: Beaker
-      }));
-      
-      const packagingData = (packagingResponse.data || []).map(item => ({
-        ...item,
-        category: 'packaging',
-        categoryName: 'مستلزمات التعبئة',
-        icon: Box
-      }));
-      
-      const finishedData = (finishedResponse.data || []).map(item => ({
-        ...item,
-        category: 'finished_products',
-        categoryName: 'المنتجات النهائية',
-        icon: ShoppingBag
-      }));
-      
-      // Combine all data
-      return [...rawData, ...semiData, ...packagingData, ...finishedData];
+      try {
+        // Get raw materials with low stock
+        const { data: rawMaterials, error: rawMaterialsError } = await supabase
+          .from('raw_materials')
+          .select('id, name, quantity, min_stock')
+          .lt('quantity', 'min_stock');
+        
+        if (rawMaterialsError) throw rawMaterialsError;
+        
+        // Get semi-finished products with low stock
+        const { data: semiFinished, error: semiFinishedError } = await supabase
+          .from('semi_finished_products')
+          .select('id, name, quantity, min_stock')
+          .lt('quantity', 'min_stock');
+        
+        if (semiFinishedError) throw semiFinishedError;
+        
+        // Get packaging materials with low stock
+        const { data: packaging, error: packagingError } = await supabase
+          .from('packaging_materials')
+          .select('id, name, quantity, min_stock')
+          .lt('quantity', 'min_stock');
+        
+        if (packagingError) throw packagingError;
+        
+        // Get finished products with low stock
+        const { data: finished, error: finishedError } = await supabase
+          .from('finished_products')
+          .select('id, name, quantity, min_stock')
+          .lt('quantity', 'min_stock');
+        
+        if (finishedError) throw finishedError;
+        
+        // Add type field to each item for identification
+        const typedRawMaterials = (rawMaterials || []).map(item => ({ ...item, type: 'raw_material' as const }));
+        const typedSemiFinished = (semiFinished || []).map(item => ({ ...item, type: 'semi_finished' as const }));
+        const typedPackaging = (packaging || []).map(item => ({ ...item, type: 'packaging' as const }));
+        const typedFinished = (finished || []).map(item => ({ ...item, type: 'finished' as const }));
+        
+        // Combine all low stock items
+        return [
+          ...typedRawMaterials,
+          ...typedSemiFinished,
+          ...typedPackaging,
+          ...typedFinished
+        ];
+      } catch (error) {
+        console.error('Error fetching low stock items:', error);
+        return [];
+      }
     },
-    refetchInterval: 300000, // Refresh every 5 minutes
+    refetchInterval: 60000 // Check every minute
   });
   
-  // Show notifications for critical items (below 30% of min stock)
+  // Show toast notifications when there are low stock items
   useEffect(() => {
-    if (lowStockItems && lowStockItems.length > 0) {
-      // Show notification for total count
-      toast({
-        title: `${lowStockItems.length} عنصر منخفض المخزون`,
-        description: "هناك عناصر وصلت إلى الحد الأدنى للمخزون",
-        variant: "destructive",
-        action: (
-          <Button 
-            variant="outline"
-            className="bg-background text-destructive border-destructive hover:bg-destructive/10"
-            onClick={() => navigate('/inventory/low-stock')}
-          >
-            عرض
-          </Button>
-        )
-      });
+    if (!lowStockItems || lowStockItems.length === 0) return;
+    
+    // Only show one notification at a time to avoid spamming
+    let timeoutDelay = 0;
+    
+    lowStockItems.forEach((item: LowStockItem) => {
+      const itemKey = `${item.type}-${item.id}`;
       
-      // Find critical items (less than 30% of min stock)
-      const criticalItems = lowStockItems.filter(
-        item => (item.quantity / item.min_stock) * 100 < 30
-      );
-      
-      // Show separate notifications for critical items (up to 3)
-      criticalItems.slice(0, 3).forEach(item => {
-        const Icon = item.icon;
-        toast({
-          title: `${item.name} منخفض بشكل حرج`,
-          description: `المخزون الحالي: ${item.quantity} ${item.unit} (${Math.round((item.quantity / item.min_stock) * 100)}%)`,
-          variant: "destructive",
-          icon: <Icon className="h-4 w-4" />,
-          action: (
-            <Button 
-              variant="outline"
-              className="bg-background text-destructive border-destructive hover:bg-destructive/10"
-              onClick={() => navigate('/inventory/low-stock')}
-            >
-              عرض
-            </Button>
-          )
-        });
-      });
-    }
-  }, [lowStockItems, navigate, toast]);
+      // Only notify if we haven't already notified about this item
+      if (!notifiedItems[itemKey]) {
+        setTimeout(() => {
+          toast({
+            title: "تنبيه: مخزون منخفض",
+            description: `${item.name} أقل من الحد الأدنى (${item.quantity}/${item.min_stock})`,
+            variant: "warning",
+            duration: 5000,
+            action: (
+              <ToastAction asChild altText="عرض التفاصيل">
+                <Link to="/inventory/low-stock">عرض</Link>
+              </ToastAction>
+            )
+          });
+          
+          // Mark item as notified
+          setNotifiedItems(prev => ({
+            ...prev,
+            [itemKey]: true
+          }));
+        }, timeoutDelay);
+        
+        timeoutDelay += 500; // Stagger notifications
+      }
+    });
+    
+    // Every hour, reset notification status to re-notify about persistent issues
+    const interval = setInterval(() => {
+      setNotifiedItems({});
+    }, 60 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [lowStockItems, toast, notifiedItems]);
   
-  return null; // This is a headless component, it doesn't render anything
+  return null; // This component doesn't render anything
 };
 
 export default LowStockNotifier;

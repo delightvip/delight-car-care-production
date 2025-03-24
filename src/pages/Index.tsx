@@ -97,16 +97,7 @@ const Index = () => {
             <InventoryValueCard />
           </div>
           <div>
-            <ProductionChart
-              data={[
-                { name: 'يناير', value: 24 },
-                { name: 'فبراير', value: 23 },
-                { name: 'مارس', value: 35 },
-                { name: 'أبريل', value: 45 },
-                { name: 'مايو', value: 40 },
-                { name: 'يونيو', value: 55 },
-              ]}
-            />
+            <ProductionChart />
           </div>
         </div>
         

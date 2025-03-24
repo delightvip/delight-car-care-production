@@ -7,6 +7,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react';
 interface DashboardCardProps {
   title: string;
   value: string | number;
+  description?: string;
   icon: React.ReactNode;
   color?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info';
   trend?: {
@@ -16,17 +17,20 @@ interface DashboardCardProps {
   link?: string;
   className?: string;
   onClick?: () => void;
+  alert?: boolean;
 }
 
 const DashboardCard: React.FC<DashboardCardProps> = ({
   title,
   value,
+  description,
   icon,
   color = 'primary',
   trend,
   link,
   className,
-  onClick
+  onClick,
+  alert
 }) => {
   const colorClasses = {
     primary: 'bg-blue-50 text-blue-600 border-blue-100',
@@ -56,6 +60,7 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
     <div 
       className={cn(
         'rounded-lg border p-5 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer h-full',
+        alert ? 'border-amber-300' : '', 
         className
       )}
       onClick={onClick}
@@ -91,7 +96,13 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
         <h3 className="text-lg font-medium text-gray-900 mb-1">{title}</h3>
         <div className="text-3xl font-bold">{value}</div>
         
-        {trend && (
+        {description && (
+          <div className="mt-2 text-sm text-gray-500">
+            {description}
+          </div>
+        )}
+        
+        {trend && !description && (
           <div className="mt-2 text-sm text-gray-500">
             {trend.label}
           </div>
@@ -110,3 +121,4 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
 };
 
 export default DashboardCard;
+export type { DashboardCardProps };
