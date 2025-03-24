@@ -21,18 +21,18 @@ interface LowStockData {
 const LowStockItems = () => {
   const [activeTab, setActiveTab] = useState('all');
   
-  // Fetch low stock items using React Query with fixed query logic
+  // Fetch low stock items using React Query with fixed query logic to handle comparison properly
   const { data: lowStockItems, isLoading, error } = useQuery({
     queryKey: ['lowStockItems'],
     queryFn: async () => {
       try {
         console.log("Fetching low stock items...");
         
-        // Fetch raw materials data - comparing quantity directly with min_stock field
+        // Fetch raw materials data - using numeric comparison
         const { data: rawMaterials, error: rawMaterialsError } = await supabase
           .from('raw_materials')
           .select('id, code, name, quantity, min_stock, unit')
-          .lt('quantity', 'min_stock');
+          .filter('quantity', 'lt', supabase.raw('min_stock::numeric'));
         
         if (rawMaterialsError) throw new Error(rawMaterialsError.message);
         
@@ -40,7 +40,7 @@ const LowStockItems = () => {
         const { data: semiFinished, error: semiFinishedError } = await supabase
           .from('semi_finished_products')
           .select('id, code, name, quantity, min_stock, unit')
-          .lt('quantity', 'min_stock');
+          .filter('quantity', 'lt', supabase.raw('min_stock::numeric'));
         
         if (semiFinishedError) throw new Error(semiFinishedError.message);
         
@@ -48,7 +48,7 @@ const LowStockItems = () => {
         const { data: packaging, error: packagingError } = await supabase
           .from('packaging_materials')
           .select('id, code, name, quantity, min_stock, unit')
-          .lt('quantity', 'min_stock');
+          .filter('quantity', 'lt', supabase.raw('min_stock::numeric'));
         
         if (packagingError) throw new Error(packagingError.message);
         
@@ -56,7 +56,7 @@ const LowStockItems = () => {
         const { data: finished, error: finishedError } = await supabase
           .from('finished_products')
           .select('id, code, name, quantity, min_stock, unit')
-          .lt('quantity', 'min_stock');
+          .filter('quantity', 'lt', supabase.raw('min_stock::numeric'));
         
         if (finishedError) throw new Error(finishedError.message);
         

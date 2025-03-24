@@ -3,16 +3,6 @@ import React from 'react';
 import { useAppSidebar } from '@/components/layout/SidebarContext';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
-import { 
-  Sidebar, 
-  SidebarContent, 
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent
-} from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Link, useLocation } from 'react-router-dom';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -92,8 +82,9 @@ const ModernSidebar: React.FC = () => {
   
   return (
     <>
-      <div className={`fixed inset-y-0 bg-sidebar left-0 w-64 transform transition-transform duration-200 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 z-30`}>
-        <ScrollArea className="h-full py-4 px-3">
+      {/* القائمة الجانبية الأساسية - تظهر في الجهة اليمنى */}
+      <div className={`fixed inset-y-0 bg-sidebar right-0 w-64 transform transition-transform duration-200 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0 z-30 bg-white border-l border-gray-200`}>
+        <ScrollArea className="h-full py-4 px-3 pt-16">
           <div className="space-y-4">
             <NavGroup title="الرئيسية" icon={<LayoutDashboard size={16} />}>
               <NavItem 
@@ -188,8 +179,8 @@ const ModernSidebar: React.FC = () => {
         </ScrollArea>
       </div>
       
-      {/* Mobile menu button for sidebar */}
-      <div className="fixed bottom-4 right-4 md:hidden z-50">
+      {/* زر القائمة المتنقلة للجوال */}
+      <div className="fixed bottom-4 left-4 md:hidden z-50">
         <Button
           onClick={toggle}
           variant="default"
