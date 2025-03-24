@@ -8,7 +8,7 @@ import { AlertTriangle } from 'lucide-react';
 const LowStockNotifier = () => {
   const { toast } = useToast();
   
-  // تعديل استعلام الحصول على عناصر المخزون المنخفض
+  // استعلام الحصول على عناصر المخزون المنخفض
   const { data: lowStockCount, error } = useQuery({
     queryKey: ['notifierLowStockCount'],
     queryFn: async () => {
@@ -16,26 +16,26 @@ const LowStockNotifier = () => {
         // فحص المواد الأولية ذات المخزون المنخفض
         const rawMaterialsResponse = await supabase
           .from('raw_materials')
-          .select('id, name, quantity, min_stock')
-          .lt('quantity', 10);
+          .select('id, name, quantity, min_stock, code')
+          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
         
         // فحص المنتجات نصف المصنعة ذات المخزون المنخفض
         const semiFinishedResponse = await supabase
           .from('semi_finished_products')
-          .select('id, name, quantity, min_stock')
-          .lt('quantity', 10);
+          .select('id, name, quantity, min_stock, code')
+          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
         
         // فحص مستلزمات التعبئة ذات المخزون المنخفض
         const packagingResponse = await supabase
           .from('packaging_materials')
-          .select('id, name, quantity, min_stock')
-          .lt('quantity', 10);
+          .select('id, name, quantity, min_stock, code')
+          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
         
         // فحص المنتجات النهائية ذات المخزون المنخفض
         const finishedResponse = await supabase
           .from('finished_products')
-          .select('id, name, quantity, min_stock')
-          .lt('quantity', 10);
+          .select('id, name, quantity, min_stock, code')
+          .lt('quantity', supabase.rpc('least', { a: 10, b: supabase.raw('min_stock') }));
         
         // تحقق من الأخطاء
         if (rawMaterialsResponse.error) throw rawMaterialsResponse.error;
@@ -54,6 +54,10 @@ const LowStockNotifier = () => {
           semiFinishedCount + 
           packagingCount + 
           finishedCount;
+        
+        console.log("إجمالي عناصر المخزون المنخفض:", totalCount);
+        console.log("المواد الأولية:", rawMaterialsCount);
+        console.log("مستلزمات التعبئة:", packagingCount);
         
         // تجميع قائمة بالعناصر المنخفضة
         const lowStockItems = [
@@ -78,7 +82,7 @@ const LowStockNotifier = () => {
         throw error;
       }
     },
-    refetchInterval: 60000, // التحقق كل دقيقة
+    refetchInterval: 30000, // التحقق كل 30 ثانية
   });
   
   useEffect(() => {
@@ -91,12 +95,30 @@ const LowStockNotifier = () => {
       // تحضير نص وصف إضافي للإشعار
       let description = `يوجد ${lowStockCount.totalCount} عنصر منخفض في المخزون يحتاج إلى تجديد.`;
       
-      // إضافة تفاصيل أكثر إذا كان هناك أنواع محددة منخفضة
+      // إضافة تفاصيل أكثر حول أنواع العناصر المنخفضة
+      const itemDetails = [];
       if (lowStockCount.counts.rawMaterials > 0) {
-        description += ` (${lowStockCount.counts.rawMaterials} مواد أولية)`;
+        itemDetails.push(`${lowStockCount.counts.rawMaterials} مواد أولية`);
+      }
+      if (lowStockCount.counts.semiFinished > 0) {
+        itemDetails.push(`${lowStockCount.counts.semiFinished} منتجات نصف مصنعة`);
       }
       if (lowStockCount.counts.packaging > 0) {
-        description += ` (${lowStockCount.counts.packaging} مستلزمات تعبئة)`;
+        itemDetails.push(`${lowStockCount.counts.packaging} مستلزمات تعبئة`);
+      }
+      if (lowStockCount.counts.finished > 0) {
+        itemDetails.push(`${lowStockCount.counts.finished} منتجات نهائية`);
+      }
+      
+      if (itemDetails.length > 0) {
+        description += ` (${itemDetails.join('، ')})`;
+      }
+      
+      // معلومات إضافية عن بعض العناصر المهمة
+      if (lowStockCount.items.length > 0) {
+        // عرض أول ثلاثة عناصر كمثال
+        const exampleItems = lowStockCount.items.slice(0, 3);
+        description += `\nمثال: ${exampleItems.map(item => `${item.name} (${item.type})`).join('، ')}`;
       }
       
       // عرض الإشعار

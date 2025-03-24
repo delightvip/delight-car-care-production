@@ -18,6 +18,8 @@ interface DataTableProps {
   pagination?: boolean;
   itemsPerPage?: number;
   actions?: (record: any) => React.ReactNode;
+  searchPlaceholder?: string;
+  noDataMessage?: string;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -27,7 +29,9 @@ const DataTable: React.FC<DataTableProps> = ({
   searchKeys = [],
   pagination = true,
   itemsPerPage = 10,
-  actions
+  actions,
+  searchPlaceholder = "بحث...",
+  noDataMessage = "لا توجد بيانات للعرض"
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,7 +61,7 @@ const DataTable: React.FC<DataTableProps> = ({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           <Input
-            placeholder="بحث..."
+            placeholder={searchPlaceholder}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 pr-4"
@@ -98,7 +102,7 @@ const DataTable: React.FC<DataTableProps> = ({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length + (actions ? 1 : 0)} className="text-center py-8">
-                  لا توجد بيانات للعرض
+                  {noDataMessage}
                 </TableCell>
               </TableRow>
             )}
