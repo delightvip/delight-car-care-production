@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
@@ -137,8 +136,8 @@ class CommercialService {
   }
   
   public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
-    return this.ledgerService.generateAccountStatement(startDate, endDate, partyType);
-  }
+  return this.ledgerService.generateAccountStatement(startDate, endDate, partyType);
+}
 }
 
 // Re-export the CommercialTypes so they can be imported from this module as well

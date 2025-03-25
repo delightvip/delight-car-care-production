@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -29,7 +28,7 @@ import { CalendarIcon, PlusCircle, Trash } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Return } from '@/services/CommercialService';
+import { Return, ReturnItem } from '@/services/CommercialTypes';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
 

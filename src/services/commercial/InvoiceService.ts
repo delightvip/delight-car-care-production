@@ -1,8 +1,11 @@
-
 import BaseCommercialService from './BaseCommercialService';
 import { Invoice, InvoiceItem } from '../CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
+import { RawMaterial } from '../inventory/RawMaterialService';
+import { PackagingMaterial } from '../inventory/PackagingMaterialService';
+import { SemiFinishedProduct } from '../inventory/SemiFinishedProductService';
+import { FinishedProduct } from '../inventory/FinishedProductService';
 
 class InvoiceService extends BaseCommercialService {
   private static instance: InvoiceService;
@@ -38,10 +41,9 @@ class InvoiceService extends BaseCommercialService {
         date: invoice.date,
         total_amount: invoice.total_amount,
         status: invoice.status,
-        payment_status: invoice.payment_status || 'draft',
+        payment_status: invoice.status || 'draft',
         notes: invoice.notes,
-        created_at: invoice.created_at,
-        items: []
+        created_at: invoice.created_at
       }));
       
       return invoicesWithParties;
@@ -73,10 +75,9 @@ class InvoiceService extends BaseCommercialService {
         date: invoice.date,
         total_amount: invoice.total_amount,
         status: invoice.status,
-        payment_status: invoice.payment_status || 'draft',
+        payment_status: invoice.status || 'draft',
         notes: invoice.notes,
-        created_at: invoice.created_at,
-        items: []
+        created_at: invoice.created_at
       }));
       
       return invoicesWithParties;
@@ -89,7 +90,7 @@ class InvoiceService extends BaseCommercialService {
   
   public async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
-      const { data: invoice, error: invoiceError } = await this.supabase
+      const { data: invoiceData, error: invoiceError } = await this.supabase
         .from('invoices')
         .select(`
           *,
@@ -108,16 +109,16 @@ class InvoiceService extends BaseCommercialService {
       if (itemsError) throw itemsError;
       
       return {
-        id: invoice.id,
-        invoice_type: invoice.invoice_type,
-        party_id: invoice.party_id,
-        party_name: invoice.parties?.name,
-        date: invoice.date,
-        total_amount: invoice.total_amount,
-        status: invoice.status,
-        payment_status: invoice.payment_status || 'draft',
-        notes: invoice.notes,
-        created_at: invoice.created_at,
+        id: invoiceData.id,
+        invoice_type: invoiceData.invoice_type,
+        party_id: invoiceData.party_id,
+        party_name: invoiceData.parties?.name,
+        date: invoiceData.date,
+        total_amount: invoiceData.total_amount,
+        status: invoiceData.status,
+        payment_status: invoiceData.status || 'draft',
+        notes: invoiceData.notes,
+        created_at: invoiceData.created_at,
         items: items
       };
     } catch (error) {
@@ -127,66 +128,65 @@ class InvoiceService extends BaseCommercialService {
     }
   }
   
-  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
+  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at' | 'status' | 'payment_status'>): Promise<Invoice | null> {
     try {
-      // Set default payment status to draft
-      const paymentStatus = 'draft';
+      // Format date if it's a Date object
+      const formattedDate = typeof invoiceData.date === 'object' ? 
+        format(invoiceData.date, 'yyyy-MM-dd') : 
+        invoiceData.date;
       
-      // First insert the invoice
-      const { data: invoice, error: invoiceError } = await this.supabase
+      const { data: invoiceRecord, error } = await this.supabase
         .from('invoices')
         .insert({
           invoice_type: invoiceData.invoice_type,
           party_id: invoiceData.party_id,
-          date: invoiceData.date,
+          date: formattedDate,
           total_amount: invoiceData.total_amount,
-          status: invoiceData.status,
-          payment_status: paymentStatus,
+          status: 'unpaid', // Set initial status to unpaid
+          payment_status: 'draft', // Set initial payment_status to draft
           notes: invoiceData.notes
         })
         .select()
         .single();
       
-      if (invoiceError) throw invoiceError;
+      if (error) throw error;
       
-      // Then insert all the invoice items
-      const invoiceItems = invoiceData.items.map(item => ({
-        invoice_id: invoice.id,
-        item_id: item.item_id,
-        item_type: item.item_type,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.quantity * item.unit_price
-      }));
+      // If there are items for this invoice, insert them
+      if (invoiceData.items && invoiceData.items.length > 0) {
+        const invoiceItems = invoiceData.items.map(item => ({
+          invoice_id: invoiceRecord.id,
+          item_id: item.item_id,
+          item_type: item.item_type,
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total: item.quantity * item.unit_price
+        }));
+        
+        const { error: itemsError } = await this.supabase
+          .from('invoice_items')
+          .insert(invoiceItems);
+        
+        if (itemsError) throw itemsError;
+      }
       
-      const { error: itemsError } = await this.supabase
-        .from('invoice_items')
-        .insert(invoiceItems);
-      
-      if (itemsError) throw itemsError;
-      
-      // Get the party name for the response
+      // Get party details for response
       const party = await this.partyService.getPartyById(invoiceData.party_id);
       
       toast.success('تم إنشاء الفاتورة بنجاح');
       
       return {
-        id: invoice.id,
-        invoice_type: invoice.invoice_type,
-        party_id: invoice.party_id,
+        id: invoiceRecord.id,
+        invoice_type: invoiceData.invoice_type,
+        party_id: invoiceData.party_id,
         party_name: party?.name,
-        date: invoice.date,
-        total_amount: invoice.total_amount,
-        status: invoice.status,
-        payment_status: paymentStatus,
-        notes: invoice.notes || '',
-        created_at: invoice.created_at,
-        items: invoiceData.items.map(item => ({
-          ...item,
-          invoice_id: invoice.id,
-          total: item.quantity * item.unit_price
-        }))
+        date: invoiceRecord.date,
+        total_amount: invoiceData.total_amount,
+        status: invoiceRecord.status,
+        payment_status: invoiceRecord.payment_status,
+        notes: invoiceData.notes,
+        created_at: invoiceRecord.created_at,
+        items: invoiceData.items
       };
     } catch (error) {
       console.error('Error creating invoice:', error);
@@ -197,76 +197,78 @@ class InvoiceService extends BaseCommercialService {
   
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
-      // Get the invoice with items
-      const invoice = await this.getInvoiceById(invoiceId);
-      if (!invoice) {
+      const invoiceData = await this.getInvoiceById(invoiceId);
+      if (!invoiceData) {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
       
-      // Check if the invoice is already confirmed
-      if (invoice.payment_status === 'confirmed') {
+      if (invoiceData.payment_status === 'confirmed') {
         toast.info('الفاتورة مؤكدة بالفعل');
         return true;
       }
       
       // Update inventory based on invoice type
-      if (invoice.invoice_type === 'sale') {
-        // Decrease inventory for sales
-        for (const item of invoice.items) {
+      if (invoiceData.invoice_type === 'sale') {
+        // Decrease inventory for sales invoices
+        for (const item of invoiceData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
           }
         }
         
-        // Update customer financial records for sales
-        await this.partyService.updatePartyBalance(
-          invoice.party_id,
-          invoice.total_amount,
-          true, // debit for sales (customer owes money)
-          'فاتورة مبيعات',
-          'sale_invoice',
-          invoice.id
-        );
-      } else if (invoice.invoice_type === 'purchase') {
-        // Increase inventory for purchases
-        for (const item of invoice.items) {
+        // Update financial records for sales invoices
+        if (invoiceData.party_id) {
+          await this.partyService.updatePartyBalance(
+            invoiceData.party_id,
+            invoiceData.total_amount,
+            true, // debit for sales (increase customer's debt)
+            'فاتورة مبيعات',
+            'sale_invoice',
+            invoiceData.id
+          );
+        }
+      } else if (invoiceData.invoice_type === 'purchase') {
+        // Increase inventory for purchase invoices
+        for (const item of invoiceData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
           }
         }
         
-        // Update supplier financial records for purchases
-        await this.partyService.updatePartyBalance(
-          invoice.party_id,
-          invoice.total_amount,
-          false, // credit for purchases (we owe money)
-          'فاتورة مشتريات',
-          'purchase_invoice',
-          invoice.id
-        );
+        // Update financial records for purchase invoices
+        if (invoiceData.party_id) {
+          await this.partyService.updatePartyBalance(
+            invoiceData.party_id,
+            invoiceData.total_amount,
+            false, // credit for purchases (increase our debt)
+            'فاتورة مشتريات',
+            'purchase_invoice',
+            invoiceData.id
+          );
+        }
       }
       
       // Update invoice status to confirmed
@@ -288,76 +290,78 @@ class InvoiceService extends BaseCommercialService {
   
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
-      // Get the invoice with items
-      const invoice = await this.getInvoiceById(invoiceId);
-      if (!invoice) {
+      const invoiceData = await this.getInvoiceById(invoiceId);
+      if (!invoiceData) {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
       
-      // Only confirmed invoices can be cancelled
-      if (invoice.payment_status !== 'confirmed') {
+      if (invoiceData.payment_status !== 'confirmed') {
         toast.error('يمكن إلغاء الفواتير المؤكدة فقط');
         return false;
       }
       
-      // Reverse inventory updates based on invoice type
-      if (invoice.invoice_type === 'sale') {
-        // Increase inventory for cancelled sales
-        for (const item of invoice.items) {
+      // Update inventory based on invoice type
+      if (invoiceData.invoice_type === 'sale') {
+        // Increase inventory for cancelled sales invoices
+        for (const item of invoiceData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
           }
         }
         
-        // Update customer financial records for cancelled sales
-        await this.partyService.updatePartyBalance(
-          invoice.party_id,
-          invoice.total_amount,
-          false, // credit for cancelled sales (reverse the debit)
-          'إلغاء فاتورة مبيعات',
-          'cancel_sale_invoice',
-          invoice.id
-        );
-      } else if (invoice.invoice_type === 'purchase') {
-        // Decrease inventory for cancelled purchases
-        for (const item of invoice.items) {
+        // Update financial records for cancelled sales invoices
+        if (invoiceData.party_id) {
+          await this.partyService.updatePartyBalance(
+            invoiceData.party_id,
+            invoiceData.total_amount,
+            false, // credit for cancelled sales (reduce customer's debt)
+            'إلغاء فاتورة مبيعات',
+            'cancel_sale_invoice',
+            invoiceData.id
+          );
+        }
+      } else if (invoiceData.invoice_type === 'purchase') {
+        // Decrease inventory for cancelled purchase invoices
+        for (const item of invoiceData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
           }
         }
         
-        // Update supplier financial records for cancelled purchases
-        await this.partyService.updatePartyBalance(
-          invoice.party_id,
-          invoice.total_amount,
-          true, // debit for cancelled purchases (reverse the credit)
-          'إلغاء فاتورة مشتريات',
-          'cancel_purchase_invoice',
-          invoice.id
-        );
+        // Update financial records for cancelled purchase invoices
+        if (invoiceData.party_id) {
+          await this.partyService.updatePartyBalance(
+            invoiceData.party_id,
+            invoiceData.total_amount,
+            true, // debit for cancelled purchases (reduce our debt)
+            'إلغاء فاتورة مشتريات',
+            'cancel_purchase_invoice',
+            invoiceData.id
+          );
+        }
       }
       
       // Update invoice status to cancelled
@@ -379,18 +383,6 @@ class InvoiceService extends BaseCommercialService {
   
   public async deleteInvoice(id: string): Promise<boolean> {
     try {
-      const invoice = await this.getInvoiceById(id);
-      if (!invoice) {
-        toast.error('لم يتم العثور على الفاتورة');
-        return false;
-      }
-      
-      // Only draft invoices can be deleted
-      if (invoice.payment_status !== 'draft') {
-        toast.error('لا يمكن حذف الفواتير المؤكدة، يمكن إلغاءها فقط');
-        return false;
-      }
-      
       // Delete invoice items first
       const { error: itemsError } = await this.supabase
         .from('invoice_items')
@@ -418,81 +410,71 @@ class InvoiceService extends BaseCommercialService {
   
   public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
-      const { data: invoice, error } = await this.supabase
-        .from('invoices')
-        .select('*')
-        .eq('id', invoiceId)
-        .single();
+      const invoice = await this.getInvoiceById(invoiceId);
       
-      if (error) throw error;
-      
-      let newStatus = invoice.status;
-      
-      // Calculate how much has been paid including this payment
-      const { data: payments, error: paymentsError } = await this.supabase
-        .from('payments')
-        .select('amount, payment_status')
-        .eq('related_invoice_id', invoiceId)
-        .eq('payment_status', 'confirmed');
-      
-      if (paymentsError) throw paymentsError;
-      
-      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-      
-      if (totalPaid >= invoice.total_amount) {
-        newStatus = 'paid';
-      } else if (totalPaid > 0) {
-        newStatus = 'partial';
-      } else {
-        newStatus = 'unpaid';
+      if (!invoice) {
+        toast.error('لم يتم العثور على الفاتورة');
+        return;
       }
       
-      await this.supabase
+      const remainingAmount = invoice.total_amount - paymentAmount;
+      let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      
+      if (remainingAmount <= 0) {
+        newStatus = 'paid';
+      } else if (paymentAmount > 0) {
+        newStatus = 'partial';
+      }
+      
+      const { error } = await this.supabase
         .from('invoices')
         .update({ status: newStatus })
         .eq('id', invoiceId);
+      
+      if (error) {
+        console.error('Error updating invoice status:', error);
+        toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
+      } else {
+        toast.success('تم تحديث حالة الفاتورة بنجاح');
+      }
     } catch (error) {
-      console.error('Error updating invoice status after payment:', error);
+      console.error('Error updating invoice status:', error);
+      toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
     }
   }
   
   public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
-      const { data: invoice, error } = await this.supabase
-        .from('invoices')
-        .select('*')
-        .eq('id', invoiceId)
-        .single();
+      const invoice = await this.getInvoiceById(invoiceId);
       
-      if (error) throw error;
-      
-      let newStatus = invoice.status;
-      
-      // Calculate how much has been paid after cancelling this payment
-      const { data: payments, error: paymentsError } = await this.supabase
-        .from('payments')
-        .select('amount, payment_status')
-        .eq('related_invoice_id', invoiceId)
-        .eq('payment_status', 'confirmed');
-      
-      if (paymentsError) throw paymentsError;
-      
-      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0) - paymentAmount;
-      
-      if (totalPaid >= invoice.total_amount) {
-        newStatus = 'paid';
-      } else if (totalPaid > 0) {
-        newStatus = 'partial';
-      } else {
-        newStatus = 'unpaid';
+      if (!invoice) {
+        toast.error('لم يتم العثور على الفاتورة');
+        return;
       }
       
-      await this.supabase
+      const remainingAmount = invoice.total_amount + paymentAmount;
+      let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      
+      if (remainingAmount <= 0) {
+        newStatus = 'paid';
+      } else if (paymentAmount > 0) {
+        newStatus = 'partial';
+      }
+      
+      const { error } = await this.supabase
         .from('invoices')
         .update({ status: newStatus })
         .eq('id', invoiceId);
+      
+      if (error) {
+        console.error('Error updating invoice status:', error);
+        toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
+      } else {
+        toast.success('تم تحديث حالة الفاتورة بنجاح');
+      }
     } catch (error) {
-      console.error('Error updating invoice status after payment cancellation:', error);
+      console.error('Error updating invoice status:', error);
+      toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
     }
   }
 }

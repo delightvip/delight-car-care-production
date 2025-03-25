@@ -1,3 +1,4 @@
+
 import BaseCommercialService from './BaseCommercialService';
 import { LedgerEntry } from '../CommercialTypes';
 import { toast } from "sonner";
@@ -59,12 +60,12 @@ class LedgerService extends BaseCommercialService {
     }
   }
   
-  public async generateAccountStatement(startDate: string, endDate: string, partyType?: "customer" | "supplier" | "other"): Promise<any> {
+  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
     try {
       // Get parties of the specified type or all if not specified
       let parties;
       if (partyType && partyType !== 'all') {
-        parties = await this.partyService.getPartiesByType(partyType);
+        parties = await this.partyService.getPartiesByType(partyType as "customer" | "supplier" | "other");
       } else {
         parties = await this.partyService.getParties();
       }

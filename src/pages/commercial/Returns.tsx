@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CommercialService, { Return, ReturnItem } from '@/services/CommercialService';
@@ -343,7 +342,8 @@ const Returns: React.FC = () => {
         <ReturnDetailsDialog
           open={isDetailsDialogOpen}
           onOpenChange={setIsDetailsDialogOpen}
-          returnData={selectedReturn}
+          returnData={selectedReturn!}
+          onDelete={handleDeleteReturn}
         />
       )}
       

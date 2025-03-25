@@ -1,4 +1,5 @@
 
+import React from 'react';
 import { Return, ReturnItem } from '@/services/CommercialTypes';
 import {
   Dialog,
@@ -17,6 +18,8 @@ interface ReturnDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
   returnData: Return;
   onDelete?: () => void;
+  onConfirm?: () => Promise<void>;
+  onCancel?: () => Promise<void>;
 }
 
 export function ReturnDetailsDialog({
@@ -24,6 +27,8 @@ export function ReturnDetailsDialog({
   onOpenChange,
   returnData,
   onDelete,
+  onConfirm,
+  onCancel,
 }: ReturnDetailsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -129,9 +134,11 @@ export function ReturnDetailsDialog({
             </div>
           )}
           
-          {returnData.payment_status && onDelete && (
+          {returnData.payment_status && (
             <TransactionStatusActions 
               status={returnData.payment_status}
+              onConfirm={onConfirm}
+              onCancel={onCancel}
               onDelete={onDelete}
             />
           )}

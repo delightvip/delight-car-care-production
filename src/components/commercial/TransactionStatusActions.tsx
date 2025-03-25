@@ -16,8 +16,9 @@ import {
 
 interface TransactionStatusActionsProps {
   status: 'draft' | 'confirmed' | 'cancelled';
-  onConfirm: () => Promise<void>;
-  onCancel: () => Promise<void>;
+  onConfirm?: () => Promise<void>;
+  onCancel?: () => Promise<void>;
+  onDelete?: () => void;
   confirmText?: string;
   cancelText?: string;
 }
@@ -26,6 +27,7 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
   status,
   onConfirm,
   onCancel,
+  onDelete,
   confirmText = 'هل أنت متأكد من تأكيد هذه المعاملة؟ لن يمكن تعديلها بعد التأكيد.',
   cancelText = 'هل أنت متأكد من إلغاء هذه المعاملة؟ سيتم إلغاء تأثيرها على الحسابات والمخزون.',
 }) => {
@@ -33,12 +35,14 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
   const [isCancelLoading, setIsCancelLoading] = React.useState(false);
 
   const handleConfirm = async () => {
+    if (!onConfirm) return;
     setIsConfirmLoading(true);
     await onConfirm();
     setIsConfirmLoading(false);
   };
 
   const handleCancel = async () => {
+    if (!onCancel) return;
     setIsCancelLoading(true);
     await onCancel();
     setIsCancelLoading(false);
@@ -46,36 +50,47 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
 
   if (status === 'draft') {
     return (
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button className="bg-green-600 hover:bg-green-700">
-            <CheckCircle className="ml-2 h-4 w-4" />
-            تأكيد المعاملة
+      <div className="flex flex-wrap gap-2">
+        {onConfirm && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button className="bg-green-600 hover:bg-green-700">
+                <CheckCircle className="ml-2 h-4 w-4" />
+                تأكيد المعاملة
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>تأكيد المعاملة</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {confirmText}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleConfirm}
+                  className="bg-green-600 hover:bg-green-700"
+                  disabled={isConfirmLoading}
+                >
+                  {isConfirmLoading ? 'جاري التنفيذ...' : 'تأكيد'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+        
+        {onDelete && (
+          <Button variant="outline" onClick={onDelete} className="border-gray-400">
+            <XCircle className="ml-2 h-4 w-4" />
+            حذف
           </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد المعاملة</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmText}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirm}
-              className="bg-green-600 hover:bg-green-700"
-              disabled={isConfirmLoading}
-            >
-              {isConfirmLoading ? 'جاري التنفيذ...' : 'تأكيد'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        )}
+      </div>
     );
   }
 
-  if (status === 'confirmed') {
+  if (status === 'confirmed' && onCancel) {
     return (
       <AlertDialog>
         <AlertDialogTrigger asChild>

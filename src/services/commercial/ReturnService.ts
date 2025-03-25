@@ -1,4 +1,3 @@
-
 import BaseCommercialService from './BaseCommercialService';
 import { Return, ReturnItem } from '../CommercialTypes';
 import { toast } from "sonner";
@@ -219,16 +218,16 @@ class ReturnService extends BaseCommercialService {
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
           }
         }
@@ -249,16 +248,16 @@ class ReturnService extends BaseCommercialService {
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
           }
         }
@@ -312,16 +311,16 @@ class ReturnService extends BaseCommercialService {
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
               break;
           }
         }
@@ -342,16 +341,16 @@ class ReturnService extends BaseCommercialService {
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
               break;
           }
         }
