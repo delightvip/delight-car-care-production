@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -177,7 +178,6 @@ const Invoices = () => {
   
   const handleCreateInvoice = async (invoiceData: Omit<Invoice, 'id' | 'created_at'>) => {
     try {
-      const { items, ...invoiceWithoutItems } = invoiceData;
       await commercialService.createInvoice(invoiceData);
       refetch();
       setIsAddDialogOpen(false);
@@ -347,7 +347,11 @@ const Invoices = () => {
                                   <FileText className="mr-2 h-4 w-4" />
                                   <span>عرض التفاصيل</span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => navigate(`/commercial/invoices/${invoice.id}`)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  <span>تعديل</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => window.print()}>
                                   <Printer className="mr-2 h-4 w-4" />
                                   <span>طباعة</span>
                                 </DropdownMenuItem>
@@ -398,7 +402,7 @@ const Invoices = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد حذف الفاتورة</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف هذه الفاتورة؟ سيتم أيضاً إلغاء تأثيرها على حساب الطرف المرتبط بها.
+              هل أنت متأكد من حذف هذه الفاتورة؟ سيتم أيضاً إلغاء تأثيرها على حساب الطرف المرتبط بها والمخزون.
               <br />
               هذا الإجراء لا يمكن التراجع عنه.
             </AlertDialogDescription>

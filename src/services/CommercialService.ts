@@ -1,4 +1,4 @@
-import { createClient, PostgrestError, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from "sonner";
 
@@ -131,7 +131,7 @@ class CommercialService {
 
       if (error) throw error;
 
-      return {
+      const invoice: Invoice = {
         id: data.id,
         party_id: data.party_id,
         party_name: data.parties?.name,
@@ -142,6 +142,11 @@ class CommercialService {
         notes: data.notes || '',
         created_at: data.created_at
       };
+
+      const items = await this.getInvoiceItems(id);
+      invoice.items = items;
+
+      return invoice;
     } catch (error) {
       console.error('Error fetching invoice:', error);
       toast.error('حدث خطأ أثناء جلب بيانات الفاتورة');
@@ -716,14 +721,26 @@ class CommercialService {
 
   public async getLedgerEntries(filters: any = {}): Promise<any[]> {
     try {
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from('ledger')
         .select(`
           *,
           parties!ledger_party_id_fkey (name, type)
-        `)
-        .eq('party_id', filters.party_id)
-        .order('date', { ascending: false });
+        `);
+
+      if (filters.party_id) {
+        query = query.eq('party_id', filters.party_id);
+      }
+
+      if (filters.startDate && filters.endDate) {
+        query = query.gte('date', filters.startDate).lte('date', filters.endDate);
+      }
+
+      if (filters.partyType) {
+        query = query.eq('parties.type', filters.partyType);
+      }
+
+      const { data, error } = await query.order('date', { ascending: false });
       
       if (error) throw error;
       

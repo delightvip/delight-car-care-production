@@ -22,6 +22,7 @@ import ProductionPlanning from '@/pages/production/ProductionPlanning';
 import Parties from '@/pages/commercial/Parties';
 import PartyDetails from '@/pages/commercial/PartyDetails';
 import Invoices from '@/pages/commercial/Invoices';
+import InvoiceDetails from '@/pages/commercial/InvoiceDetails';
 import Returns from '@/pages/commercial/Returns';
 import Payments from '@/pages/commercial/Payments';
 import AccountStatements from '@/pages/commercial/AccountStatements';
@@ -68,6 +69,7 @@ function App() {
                           <Route path="/commercial/parties" element={<Parties />} />
                           <Route path="/commercial/parties/:id" element={<PartyDetails />} />
                           <Route path="/commercial/invoices" element={<Invoices />} />
+                          <Route path="/commercial/invoices/:id" element={<InvoiceDetails />} />
                           <Route path="/commercial/returns" element={<Returns />} />
                           <Route path="/commercial/payments" element={<Payments />} />
                           <Route path="/commercial/collections" element={<Payments />} />
