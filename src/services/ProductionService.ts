@@ -102,8 +102,8 @@ class ProductionService {
         };
       });
       
-      // حساب التكلفة الإجمالية
-      const totalCost = product.unitCost * quantity;
+      // حساب التكلفة الإجمالية - Fix here: Changed unitCost to unit_cost
+      const totalCost = product.unit_cost * quantity;
       
       // إنشاء أمر الإنتاج في قاعدة البيانات
       const newOrder = await this.databaseService.createProductionOrder(
@@ -280,8 +280,8 @@ class ProductionService {
         };
       }));
       
-      // حساب التكلفة الإجمالية
-      const totalCost = product.unitCost * quantity;
+      // حساب التكلفة الإجمالية - Fix here: Changed unitCost to unit_cost
+      const totalCost = product.unit_cost * quantity;
       
       // إنشاء أمر التعبئة في قاعدة البيانات
       const newOrder = await this.databaseService.createPackagingOrder(
