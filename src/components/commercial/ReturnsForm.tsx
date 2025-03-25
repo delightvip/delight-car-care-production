@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -198,7 +199,8 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">بدون فاتورة</SelectItem>
+                    {/* Fix: Changed empty string to "no_invoice" */}
+                    <SelectItem value="no_invoice">بدون فاتورة</SelectItem>
                     {invoices?.filter(inv => 
                       form.getValues('return_type') === 'sales_return' 
                         ? inv.invoice_type === 'sale' 

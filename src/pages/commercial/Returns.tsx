@@ -66,6 +66,11 @@ const Returns = () => {
 
   const handleAddNewReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
     try {
+      // Convert "no_invoice" to null/undefined before sending to the server
+      if (returnData.invoice_id === 'no_invoice') {
+        returnData.invoice_id = undefined;
+      }
+      
       await commercialService.recordReturn(returnData);
       refetch();
       setIsFormOpen(false);
