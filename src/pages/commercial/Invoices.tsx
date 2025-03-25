@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -261,7 +260,13 @@ const Invoices = () => {
     }
   };
   
-  const isLoading = isLoadingInvoices || /* ... other loading states */;
+  const isLoading = 
+    isLoadingInvoices || 
+    isLoadingParties || 
+    isLoadingRawMaterials || 
+    isLoadingPackaging || 
+    isLoadingSemiFinished || 
+    isLoadingFinished;
   
   if (isLoading) {
     return (
