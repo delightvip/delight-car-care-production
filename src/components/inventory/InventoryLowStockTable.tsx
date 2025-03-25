@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { 
   Card, 
@@ -40,7 +39,6 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   
-  // فلترة البيانات بناءً على مصطلح البحث
   const filteredData = useMemo(() => {
     if (!searchTerm) return data;
     
@@ -50,7 +48,6 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     );
   }, [data, searchTerm]);
   
-  // ترتيب البيانات بناءً على النسبة المئوية للمخزون المتبقي
   const sortedData = useMemo(() => {
     return [...filteredData].sort((a, b) => {
       const percentA = (a.quantity / a.min_stock) * 100;
@@ -62,7 +59,6 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     });
   }, [filteredData, sortOrder]);
   
-  // تعريف أعمدة الجدول
   const columns = useMemo(() => [
     {
       key: "code",
@@ -140,8 +136,9 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
               value={percentage} 
               className={`h-2 ${progressClasses.bg}`}
               style={{
-                backgroundColor: progressClasses.bg.replace('bg-', ''),
-                "--tw-bg-opacity": 1
+                backgroundColor: progressClasses.bg.includes('red') ? 'rgba(254, 226, 226, 1)' : 
+                                progressClasses.bg.includes('amber') ? 'rgba(254, 243, 199, 1)' : 
+                                'rgba(220, 252, 231, 1)'
               }}
             />
           </div>
@@ -154,7 +151,6 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
       render: (value: any, row: InventoryItem) => {
         const importance = row.importance || 0;
         
-        // تحديد مستوى الأهمية بناءً على القيمة
         const getImportanceLevel = () => {
           if (importance >= 8) return { label: 'عالية', color: 'bg-red-100 text-red-800' };
           if (importance >= 4) return { label: 'متوسطة', color: 'bg-amber-100 text-amber-800' };
@@ -178,7 +174,6 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     }
   ], []);
   
-  // رسالة عدم وجود بيانات
   const noDataMessage = useMemo(() => {
     const typeMessages = {
       raw: 'لا توجد مواد أولية منخفضة المخزون',
