@@ -26,9 +26,9 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
     // Use provided data or fetched data, with proper null checks
     const dataToUse = propData || databaseData || [];
     
-    if (dataToUse.length > 0) {
+    if (dataToUse && dataToUse.length > 0) {
       // استبعاد العناصر التي قيمتها صفر
-      const filteredData = dataToUse.filter(item => (item?.value || 0) > 0);
+      const filteredData = dataToUse.filter(item => item && (item.value || 0) > 0);
       setChartData(filteredData);
     } else {
       setChartData([]);

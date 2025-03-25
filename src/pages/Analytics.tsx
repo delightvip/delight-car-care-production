@@ -93,7 +93,23 @@ const Analytics = () => {
         };
       } catch (error) {
         console.error("Error fetching inventory stats:", error);
-        throw error;
+        // Return default values structure instead of throwing to prevent component crash
+        return {
+          values: {
+            rawMaterials: 0,
+            semiFinished: 0,
+            packaging: 0,
+            finished: 0,
+            total: 0
+          },
+          counts: {
+            rawMaterials: 0,
+            semiFinished: 0,
+            packaging: 0,
+            finished: 0,
+            total: 0
+          }
+        };
       }
     },
     refetchInterval: 60000
@@ -147,50 +163,50 @@ const Analytics = () => {
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">المواد الأولية</span>
-                          <span className="text-blue-600 font-medium">{inventoryStats?.counts.rawMaterials || 0} عنصر</span>
+                          <span className="text-blue-600 font-medium">{inventoryStats?.counts?.rawMaterials || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {(inventoryStats?.values.rawMaterials || 0).toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values?.rawMaterials || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">المنتجات النصف مصنعة</span>
-                          <span className="text-purple-600 font-medium">{inventoryStats?.counts.semiFinished || 0} عنصر</span>
+                          <span className="text-purple-600 font-medium">{inventoryStats?.counts?.semiFinished || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {(inventoryStats?.values.semiFinished || 0).toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values?.semiFinished || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">مستلزمات التعبئة</span>
-                          <span className="text-green-600 font-medium">{inventoryStats?.counts.packaging || 0} عنصر</span>
+                          <span className="text-green-600 font-medium">{inventoryStats?.counts?.packaging || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {(inventoryStats?.values.packaging || 0).toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values?.packaging || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">المنتجات النهائية</span>
-                          <span className="text-amber-600 font-medium">{inventoryStats?.counts.finished || 0} عنصر</span>
+                          <span className="text-amber-600 font-medium">{inventoryStats?.counts?.finished || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {(inventoryStats?.values.finished || 0).toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values?.finished || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="bg-muted rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">القيمة الإجمالية</span>
-                          <span className="text-primary font-medium">{inventoryStats?.counts.total || 0} عنصر</span>
+                          <span className="text-primary font-medium">{inventoryStats?.counts?.total || 0} عنصر</span>
                         </div>
                         <div className="text-xl font-bold text-primary">
-                          {(inventoryStats?.values.total || 0).toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values?.total || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                     </div>

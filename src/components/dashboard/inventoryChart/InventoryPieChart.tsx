@@ -13,11 +13,11 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
   height = '16rem',
 }) => {
   // Calculate the total to derive percentages
-  const total = data.reduce((sum, item) => sum + (item.value || 0), 0);
+  const total = data.reduce((sum, item) => sum + (item?.value || 0), 0);
   
   // Custom tooltip formatter
   const customTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
+    if (active && payload && payload.length && payload[0]?.payload) {
       const item = payload[0].payload;
       const percentage = ((item.value / total) * 100).toFixed(1);
       
@@ -37,9 +37,13 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
   const renderLegend = (props: any) => {
     const { payload } = props;
     
+    if (!payload || !Array.isArray(payload)) return null;
+    
     return (
       <ul className="flex flex-wrap justify-center gap-4 text-sm mt-4">
         {payload.map((entry: any, index: number) => {
+          if (!entry?.payload?.value) return null;
+          
           const percentage = ((entry.payload.value / total) * 100).toFixed(1);
           
           return (
@@ -55,6 +59,14 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
       </ul>
     );
   };
+  
+  if (!data || data.length === 0 || total === 0) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <p className="text-muted-foreground">لا توجد بيانات لعرضها</p>
+      </div>
+    );
+  }
   
   return (
     <div style={{ width: '100%', height }}>
