@@ -16,7 +16,7 @@ export interface Invoice {
 }
 
 export interface InvoiceItem {
-  id: string;
+  id?: string;
   invoice_id?: string;
   item_id?: number;
   item_name: string;
@@ -31,6 +31,7 @@ export interface Payment {
   id: string;
   payment_type: 'collection' | 'disbursement';
   party_id: string;
+  party_name?: string;
   method: string;
   amount: number;
   related_invoice_id?: string;
@@ -76,7 +77,9 @@ class CommercialService {
   private static instance: CommercialService;
   private supabase: SupabaseClient;
 
-  private constructor() {}
+  private constructor() {
+    this.supabase = supabase;
+  }
 
   public static getInstance(): CommercialService {
     if (!CommercialService.instance) {
@@ -87,7 +90,7 @@ class CommercialService {
 
   public async getInvoices(): Promise<Invoice[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('invoices')
         .select(`
           *,
@@ -117,7 +120,7 @@ class CommercialService {
 
   public async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('invoices')
         .select(`
           *,
@@ -148,7 +151,7 @@ class CommercialService {
 
   public async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('invoice_items')
         .select('*')
         .eq('invoice_id', invoiceId);
@@ -175,7 +178,7 @@ class CommercialService {
 
   public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('invoices')
         .select(`
           *,
@@ -210,7 +213,7 @@ class CommercialService {
         invoice.date : 
         invoice.date.toISOString().split('T')[0];
 
-      const { data: invoiceData, error: invoiceError } = await supabase
+      const { data: invoiceData, error: invoiceError } = await this.supabase
         .from('invoices')
         .insert({
           party_id: invoice.party_id,
@@ -235,7 +238,7 @@ class CommercialService {
           total: item.quantity * item.unit_price
         }));
         
-        const { error: itemsError } = await supabase
+        const { error: itemsError } = await this.supabase
           .from('invoice_items')
           .insert(invoiceItems);
         
@@ -271,7 +274,7 @@ class CommercialService {
         invoiceData.date : 
         invoiceData.date?.toISOString().split('T')[0];
       
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('invoices')
         .update({
           party_id: invoiceData.party_id,
@@ -296,14 +299,14 @@ class CommercialService {
 
   public async deleteInvoice(id: string): Promise<boolean> {
     try {
-      const { error: itemsError } = await supabase
+      const { error: itemsError } = await this.supabase
         .from('invoice_items')
         .delete()
         .eq('invoice_id', id);
       
       if (itemsError) throw itemsError;
       
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('invoices')
         .delete()
         .eq('id', id);
@@ -321,7 +324,7 @@ class CommercialService {
 
   public async updateInvoiceStatus(invoiceId: string, status: 'paid' | 'partial' | 'unpaid'): Promise<boolean> {
     try {
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('invoices')
         .update({ status: status })
         .eq('id', invoiceId);
@@ -344,7 +347,7 @@ class CommercialService {
       
       const totalAmount = invoice.total_amount;
       
-      const { data: payments, error: paymentsError } = await supabase
+      const { data: payments, error: paymentsError } = await this.supabase
         .from('payments')
         .select('amount')
         .eq('related_invoice_id', invoiceId);
@@ -370,7 +373,7 @@ class CommercialService {
 
   public async getPayments(): Promise<Payment[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('payments')
         .select(`
           *,
@@ -401,7 +404,7 @@ class CommercialService {
 
   public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('payments')
         .select(`
           *,
@@ -431,13 +434,13 @@ class CommercialService {
     }
   }
 
-  public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
+  public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at' | 'party_name'>): Promise<Payment | null> {
     try {
       const dateStr = typeof paymentData.date === 'string' ? 
         paymentData.date : 
         paymentData.date.toISOString().split('T')[0];
       
-      const { data: payment, error: paymentError } = await supabase
+      const { data: payment, error: paymentError } = await this.supabase
         .from('payments')
         .insert({
           party_id: paymentData.party_id,
@@ -491,13 +494,13 @@ class CommercialService {
     }
   }
 
-  public async updatePayment(id: string, paymentData: Partial<Omit<Payment, 'id' | 'created_at'>>): Promise<boolean> {
+  public async updatePayment(id: string, paymentData: Partial<Omit<Payment, 'id' | 'created_at' | 'party_name'>>): Promise<boolean> {
     try {
       const dateStr = typeof paymentData.date === 'string' ? 
         paymentData.date : 
         paymentData.date?.toISOString().split('T')[0];
       
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('payments')
         .update({
           party_id: paymentData.party_id,
@@ -527,7 +530,7 @@ class CommercialService {
 
   public async deletePayment(id: string): Promise<boolean> {
     try {
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('payments')
         .delete()
         .eq('id', id);
@@ -545,7 +548,7 @@ class CommercialService {
 
   public async getReturns(): Promise<Return[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('returns')
         .select('*')
         .order('date', { ascending: false });
@@ -571,7 +574,7 @@ class CommercialService {
 
   public async getReturnsByInvoice(invoiceId: string): Promise<Return[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('returns')
         .select('*')
         .eq('invoice_id', invoiceId)
@@ -600,9 +603,9 @@ class CommercialService {
     try {
       const dateStr = typeof returnData.date === 'string' ? 
         returnData.date : 
-        returnData.date.toISOString().split('T')[0];
+        new Date(returnData.date).toISOString().split('T')[0];
 
-      const { data: returnRecord, error: returnError } = await supabase
+      const { data: returnRecord, error: returnError } = await this.supabase
         .from('returns')
         .insert({
           invoice_id: returnData.invoice_id,
@@ -617,7 +620,7 @@ class CommercialService {
       if (returnError) throw returnError;
       
       if (returnData.invoice_id) {
-        const { data: invoice, error: invoiceError } = await supabase
+        const { data: invoice, error: invoiceError } = await this.supabase
           .from('invoices')
           .select('party_id, invoice_type')
           .eq('id', returnData.invoice_id)
@@ -669,9 +672,9 @@ class CommercialService {
     try {
       const dateStr = typeof returnData.date === 'string' ? 
         returnData.date : 
-        returnData.date?.toISOString().split('T')[0];
+        returnData.date ? new Date(returnData.date).toISOString().split('T')[0] : undefined;
       
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('returns')
         .update({
           invoice_id: returnData.invoice_id,
@@ -695,7 +698,7 @@ class CommercialService {
 
   public async deleteReturn(id: string): Promise<boolean> {
     try {
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('returns')
         .delete()
         .eq('id', id);
@@ -713,7 +716,7 @@ class CommercialService {
 
   public async getLedgerEntries(filters: any = {}): Promise<any[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('ledger')
         .select(`
           *,

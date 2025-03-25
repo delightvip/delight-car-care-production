@@ -1,5 +1,7 @@
-import { createClient, PostgrestFilterBuilder, SupabaseClient } from '@supabase/supabase-js';
+
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from "sonner";
 
 export interface Party {
   id: string;

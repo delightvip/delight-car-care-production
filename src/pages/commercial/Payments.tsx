@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CommercialService, { Payment } from '@/services/CommercialService';
@@ -124,7 +123,6 @@ const Payments = () => {
   };
   
   const handleEditClick = (payment: Payment) => {
-    // Convert payment to match PaymentFormValues format
     const formData = {
       payment_type: payment.payment_type as "collection" | "disbursement",
       amount: payment.amount,

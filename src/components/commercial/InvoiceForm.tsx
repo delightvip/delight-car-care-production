@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -29,7 +28,6 @@ import { Trash2, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
 
-// تعريف مخطط النموذج
 const invoiceFormSchema = z.object({
   invoice_type: z.enum(['sale', 'purchase'], {
     required_error: 'الرجاء اختيار نوع الفاتورة',
@@ -96,13 +94,11 @@ export function InvoiceForm({
     },
   });
 
-  // حساب المجموع الكلي عند تغير عناصر الفاتورة
   useEffect(() => {
     const calculatedTotal = invoiceItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
     setTotal(calculatedTotal);
   }, [invoiceItems]);
 
-  // جلب سعر العنصر المحدد
   useEffect(() => {
     if (selectedItemId) {
       const selectedItem = items.find(item => item.id === Number(selectedItemId));
@@ -130,7 +126,6 @@ export function InvoiceForm({
       
       setInvoiceItems([...invoiceItems, newItem]);
       
-      // إعادة تعيين حقول إضافة العنصر
       setSelectedItemId('');
       setItemQuantity(1);
       setItemPrice(0);
@@ -286,7 +281,6 @@ export function InvoiceForm({
             <div className="border rounded-md p-4">
               <h3 className="text-lg font-semibold mb-4">عناصر الفاتورة</h3>
               
-              {/* إضافة عنصر جديد */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div>
                   <label className="text-sm font-medium">المنتج</label>
@@ -340,7 +334,6 @@ export function InvoiceForm({
                 </div>
               </div>
               
-              {/* جدول العناصر */}
               <div className="border rounded-md overflow-hidden">
                 <Table>
                   <TableHeader>
