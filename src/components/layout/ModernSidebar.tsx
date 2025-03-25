@@ -1,179 +1,215 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  Sidebar,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  useSidebar
-} from '@/components/ui/sidebar';
-import { 
-  LayoutDashboard, 
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import {
+  LayoutDashboard,
+  BarChart4,
   Package,
-  Beaker,
+  Layers,
   Box,
   ShoppingBag,
   AlertTriangle,
-  Factory,
-  Layers,
-  BarChart4,
   ListChecks,
-  Settings,
-  Users,
-  TrendingUp,
+  FileSpreadsheet,
+  Boxes,
+  Tags,
+  Settings
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { useSidebar } from '@/components/layout/SidebarContext';
+import { useNotifications } from '@/components/notifications/NotificationProvider';
+
+interface MenuItemProps {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  isActive: boolean;
+  badge?: number;
+  badgeVariant?: 'default' | 'destructive' | 'success';
+}
+
+const MenuItem: React.FC<MenuItemProps> = ({ to, icon, label, isActive, badge, badgeVariant = 'default' }) => (
+  <Link
+    to={to}
+    className={cn(
+      'flex items-center py-2 px-4 space-x-2 space-x-reverse text-muted-foreground rounded-md transition-colors group hover:bg-muted',
+      isActive && 'bg-primary/10 text-primary font-medium'
+    )}
+  >
+    <div className={cn('h-5 w-5', isActive && 'text-primary')}>{icon}</div>
+    <span className="flex-1">{label}</span>
+    {typeof badge === 'number' && badge > 0 && (
+      <Badge variant={badgeVariant} className="ml-auto">
+        {badge}
+      </Badge>
+    )}
+  </Link>
+);
+
+interface SectionProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+const Section: React.FC<SectionProps> = ({ title, children }) => (
+  <div className="space-y-2">
+    <div className="px-4 py-2">
+      <h2 className="text-xs font-semibold text-muted-foreground tracking-tight">{title}</h2>
+    </div>
+    {children}
+  </div>
+);
 
 const ModernSidebar = () => {
   const location = useLocation();
-  const pathname = location.pathname;
-  const { state } = useSidebar();
+  const { openMobile, setOpenMobile, isOpen } = useSidebar();
+  const { lowStockItems } = useNotifications();
   
-  return (
-    <Sidebar side="right" variant="sidebar" className="shadow-lg bg-gradient-to-b from-background to-background/90 border-r-0 border-l">
-      <SidebarContent className="pt-16">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-primary font-bold">الرئيسية</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/'} className="hover:bg-primary/5">
-                  <Link to="/">
-                    <LayoutDashboard className="h-5 w-5" />
-                    <span>لوحة التحكم</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/analytics'} className="hover:bg-primary/5">
-                  <Link to="/analytics">
-                    <BarChart4 className="h-5 w-5" />
-                    <span>التحليلات والإحصائيات</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-primary font-bold">المخزون</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/inventory/raw-materials'} className="hover:bg-primary/5">
-                  <Link to="/inventory/raw-materials">
-                    <Package className="h-5 w-5" />
-                    <span>المواد الأولية</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/inventory/semi-finished'} className="hover:bg-primary/5">
-                  <Link to="/inventory/semi-finished">
-                    <Beaker className="h-5 w-5" />
-                    <span>المنتجات النصف مصنعة</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/inventory/packaging'} className="hover:bg-primary/5">
-                  <Link to="/inventory/packaging">
-                    <Box className="h-5 w-5" />
-                    <span>مستلزمات التعبئة</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/inventory/finished-products'} className="hover:bg-primary/5">
-                  <Link to="/inventory/finished-products">
-                    <ShoppingBag className="h-5 w-5" />
-                    <span>المنتجات النهائية</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/inventory/low-stock'} className="hover:bg-primary/5">
-                  <Link to="/inventory/low-stock">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
-                    <span>المخزون المنخفض</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/inventory/tracking'} className="hover:bg-primary/5">
-                  <Link to="/inventory/tracking">
-                    <ListChecks className="h-5 w-5" />
-                    <span>تتبع المخزون</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-primary font-bold">الإنتاج</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/production/orders'} className="hover:bg-primary/5">
-                  <Link to="/production/orders">
-                    <Factory className="h-5 w-5" />
-                    <span>أوامر الإنتاج</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/production/packaging'} className="hover:bg-primary/5">
-                  <Link to="/production/packaging">
-                    <Layers className="h-5 w-5" />
-                    <span>أوامر التعبئة</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/production/planning'} className="hover:bg-primary/5">
-                  <Link to="/production/planning">
-                    <TrendingUp className="h-5 w-5" />
-                    <span>تخطيط الإنتاج</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-primary font-bold">الإدارة</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/settings/users'} className="hover:bg-primary/5">
-                  <Link to="/settings/users">
-                    <Users className="h-5 w-5" />
-                    <span>إدارة المستخدمين</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/settings/system'} className="hover:bg-primary/5">
-                  <Link to="/settings/system">
-                    <Settings className="h-5 w-5" />
-                    <span>إعدادات النظام</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
+  // عدد عناصر المخزون المنخفض
+  const totalLowStock = lowStockItems?.totalCount || 0;
+  
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
+  
+  const sidebarContent = (
+    <div className="flex flex-col h-full">
+      <div className="p-4">
+        <h2 className="text-lg font-bold text-primary">نظام إدارة المصنع</h2>
+        <p className="text-sm text-muted-foreground">مرحباً بك في نظام ديلايت</p>
+      </div>
+      <Separator />
+      <ScrollArea className="flex-1 py-4">
+        <div className="space-y-6 px-2">
+          <Section title="الرئيسية">
+            <MenuItem 
+              to="/" 
+              icon={<LayoutDashboard />} 
+              label="لوحة التحكم" 
+              isActive={isActive('/')} 
+            />
+            <MenuItem 
+              to="/analytics" 
+              icon={<BarChart4 />} 
+              label="التحليلات" 
+              isActive={isActive('/analytics')} 
+            />
+          </Section>
+          
+          <Section title="المخزون">
+            <MenuItem 
+              to="/inventory/raw-materials" 
+              icon={<Package />} 
+              label="المواد الأولية" 
+              isActive={isActive('/inventory/raw-materials')} 
+              badge={lowStockItems?.counts.rawMaterials}
+              badgeVariant="destructive"
+            />
+            <MenuItem 
+              to="/inventory/semi-finished" 
+              icon={<Layers />} 
+              label="المنتجات النصف مصنعة" 
+              isActive={isActive('/inventory/semi-finished')} 
+              badge={lowStockItems?.counts.semiFinished}
+              badgeVariant="destructive"
+            />
+            <MenuItem 
+              to="/inventory/packaging" 
+              icon={<Box />} 
+              label="مستلزمات التعبئة" 
+              isActive={isActive('/inventory/packaging')} 
+              badge={lowStockItems?.counts.packaging}
+              badgeVariant="destructive"
+            />
+            <MenuItem 
+              to="/inventory/finished-products" 
+              icon={<ShoppingBag />} 
+              label="المنتجات النهائية" 
+              isActive={isActive('/inventory/finished-products')} 
+              badge={lowStockItems?.counts.finished}
+              badgeVariant="destructive"
+            />
+            <MenuItem 
+              to="/inventory/low-stock" 
+              icon={<AlertTriangle />} 
+              label="المخزون المنخفض" 
+              isActive={isActive('/inventory/low-stock')} 
+              badge={totalLowStock}
+              badgeVariant="destructive"
+            />
+            <MenuItem 
+              to="/inventory/tracking" 
+              icon={<ListChecks />} 
+              label="تتبع المخزون" 
+              isActive={isActive('/inventory/tracking')} 
+            />
+          </Section>
+          
+          <Section title="الإنتاج">
+            <MenuItem 
+              to="/production/orders" 
+              icon={<FileSpreadsheet />} 
+              label="أوامر الإنتاج" 
+              isActive={isActive('/production/orders')} 
+            />
+            <MenuItem 
+              to="/production/packaging" 
+              icon={<Boxes />} 
+              label="أوامر التعبئة" 
+              isActive={isActive('/production/packaging')} 
+            />
+            <MenuItem 
+              to="/production/planning" 
+              icon={<Tags />} 
+              label="تخطيط الإنتاج" 
+              isActive={isActive('/production/planning')} 
+            />
+          </Section>
+          
+          <Section title="الإعدادات">
+            <MenuItem 
+              to="/settings" 
+              icon={<Settings />} 
+              label="إعدادات النظام" 
+              isActive={isActive('/settings')} 
+            />
+          </Section>
+        </div>
+      </ScrollArea>
+    </div>
   );
+
+  // للأجهزة المحمولة
+  if (useIsMobile().isMobile) {
+    return (
+      <Sheet open={openMobile} onOpenChange={setOpenMobile} direction="right">
+        <SheetContent side="right" className="p-0 w-72 bg-background">
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  // للشاشات الكبيرة
+  return (
+    <div className={cn(
+      "fixed top-0 right-0 h-full w-64 bg-background border-l transition-all z-10",
+      !isOpen && "translate-x-full"
+    )}>
+      <div className="pt-16 h-full">
+        {sidebarContent}
+      </div>
+    </div>
+  );
+};
+
+const useIsMobile = () => {
+  const { isMobile } = useSidebar();
+  return { isMobile };
 };
 
 export default ModernSidebar;

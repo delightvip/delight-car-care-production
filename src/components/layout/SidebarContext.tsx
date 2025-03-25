@@ -1,44 +1,89 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { PanelLeft } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Button } from '@/components/ui/button';
 
-interface AppSidebarContextType {
+interface SidebarContextType {
   isOpen: boolean;
-  toggle: () => void;
-  open: () => void;
-  close: () => void;
+  isMobile: boolean;
+  openMobile: boolean;
+  setOpenMobile: (open: boolean) => void;
+  toggleSidebar: () => void;
 }
 
-const AppSidebarContext = createContext<AppSidebarContextType | undefined>(undefined);
+const SidebarContext = createContext<SidebarContextType | null>(null);
 
-export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const useSidebar = () => {
+  const context = useContext(SidebarContext);
+  if (!context) {
+    throw new Error('useSidebar must be used within a SidebarProvider');
+  }
+  return context;
+};
+
+interface SidebarProviderProps {
+  children: ReactNode;
+}
+
+export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) => {
   const isMobile = useIsMobile();
-  const [isOpen, setIsOpen] = useState(!isMobile);
+  const [isOpen, setIsOpen] = useState(true);
+  const [openMobile, setOpenMobile] = useState(false);
 
-  useEffect(() => {
-    // أغلق القائمة الجانبية تلقائيًا في وضع الجوال
-    if (isMobile) {
-      setIsOpen(false);
-    } else {
-      setIsOpen(true);
-    }
+  const toggleSidebar = useCallback(() => {
+    return isMobile
+      ? setOpenMobile((open) => !open)
+      : setIsOpen((open) => !open);
   }, [isMobile]);
 
-  const toggle = () => setIsOpen(prev => !prev);
-  const open = () => setIsOpen(true);
-  const close = () => setIsOpen(false);
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'b' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        toggleSidebar();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSidebar]);
 
   return (
-    <AppSidebarContext.Provider value={{ isOpen, toggle, open, close }}>
+    <SidebarContext.Provider
+      value={{
+        isOpen,
+        isMobile,
+        openMobile,
+        setOpenMobile,
+        toggleSidebar,
+      }}
+    >
       {children}
-    </AppSidebarContext.Provider>
+    </SidebarContext.Provider>
   );
 };
 
-export const useAppSidebar = (): AppSidebarContextType => {
-  const context = useContext(AppSidebarContext);
-  if (context === undefined) {
-    throw new Error('useAppSidebar must be used within a SidebarProvider');
-  }
-  return context;
+export const SidebarTrigger: React.FC<React.ComponentPropsWithoutRef<typeof Button>> = ({ 
+  className, 
+  onClick, 
+  ...props 
+}) => {
+  const { toggleSidebar } = useSidebar();
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={className}
+      onClick={(event) => {
+        onClick?.(event);
+        toggleSidebar();
+      }}
+      {...props}
+    >
+      <PanelLeft />
+      <span className="sr-only">Toggle Sidebar</span>
+    </Button>
+  );
 };
