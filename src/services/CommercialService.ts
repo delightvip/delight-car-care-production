@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
@@ -78,7 +77,6 @@ class CommercialService {
     return CommercialService.instance;
   }
   
-  // جلب جميع الفواتير
   public async getInvoices(): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
@@ -130,7 +128,6 @@ class CommercialService {
     }
   }
   
-  // جلب الفواتير حسب النوع
   public async getInvoicesByType(type: 'sale' | 'purchase'): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
@@ -183,10 +180,8 @@ class CommercialService {
     }
   }
   
-  // إنشاء فاتورة جديدة
   public async createInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
-      // إنشاء الفاتورة
       const { data, error } = await supabase
         .from('invoices')
         .insert({
@@ -201,7 +196,6 @@ class CommercialService {
       
       if (error) throw error;
       
-      // إضافة عناصر الفاتورة
       const itemsToInsert = invoice.items.map(item => ({
         invoice_id: data.id,
         item_id: item.item_id,
@@ -217,16 +211,12 @@ class CommercialService {
       
       if (itemsError) throw itemsError;
       
-      // تحديث المخزون بناءً على نوع الفاتورة
       if (invoice.invoice_type === 'sale') {
-        // بيع منتجات = خصم من المخزون
         await this.updateInventoryForSale(invoice.items);
       } else if (invoice.invoice_type === 'purchase') {
-        // شراء منتجات = إضافة للمخزون
         await this.updateInventoryForPurchase(invoice.items);
       }
       
-      // إضافة الحركة في سجل الحسابات (ledger)
       const { error: ledgerError } = await supabase
         .from('ledger')
         .insert({
@@ -235,7 +225,7 @@ class CommercialService {
           transaction_id: data.id,
           debit: invoice.invoice_type === 'purchase' ? invoice.total_amount : 0,
           credit: invoice.invoice_type === 'sale' ? invoice.total_amount : 0,
-          balance_after: 0, // سيتم تحديثه في وقت لاحق أو من خلال trigger
+          balance_after: 0,
           date: invoice.date
         });
       
@@ -243,7 +233,6 @@ class CommercialService {
       
       toast.success(`تم إنشاء فاتورة ${invoice.invoice_type === 'sale' ? 'بيع' : 'شراء'} بنجاح`);
       
-      // جلب الفاتورة مع العناصر
       return this.getInvoiceById(data.id);
     } catch (error) {
       console.error('Error creating invoice:', error);
@@ -252,7 +241,6 @@ class CommercialService {
     }
   }
   
-  // جلب فاتورة بواسطة المعرف
   public async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
       const { data, error } = await supabase
@@ -301,13 +289,11 @@ class CommercialService {
     }
   }
   
-  // تحديث المخزون للبيع
   private async updateInventoryForSale(items: InvoiceItem[]): Promise<void> {
     try {
       for (const item of items) {
         const tableName = item.item_type;
         
-        // جلب العنصر الحالي
         const { data: currentItem, error: fetchError } = await supabase
           .from(tableName)
           .select('quantity, id, name')
@@ -319,13 +305,11 @@ class CommercialService {
           continue;
         }
         
-        // التحقق من توفر الكمية
         if (currentItem.quantity < item.quantity) {
           toast.warning(`لا تتوفر كمية كافية من ${currentItem.name} في المخزون`);
           continue;
         }
         
-        // خصم الكمية من المخزون
         const newQuantity = currentItem.quantity - item.quantity;
         const { error: updateError } = await supabase
           .from(tableName)
@@ -337,7 +321,6 @@ class CommercialService {
           continue;
         }
         
-        // تسجيل حركة المخزون - نستخدم طريقة أخرى لتسجيل الحركة
         await this.recordInventoryMovement('out', item.item_type, item.item_name, item.quantity, 'بيع بموجب فاتورة');
       }
     } catch (error) {
@@ -345,13 +328,11 @@ class CommercialService {
     }
   }
   
-  // تحديث المخزون للشراء
   private async updateInventoryForPurchase(items: InvoiceItem[]): Promise<void> {
     try {
       for (const item of items) {
         const tableName = item.item_type;
         
-        // جلب العنصر الحالي
         const { data: currentItem, error: fetchError } = await supabase
           .from(tableName)
           .select('quantity, id, unit_cost')
@@ -363,13 +344,11 @@ class CommercialService {
           continue;
         }
         
-        // حساب تكلفة الوحدة الجديدة (المتوسط المرجح)
         const currentValue = currentItem.quantity * (currentItem.unit_cost || 0);
         const newValue = item.quantity * item.unit_price;
         const newTotal = currentItem.quantity + item.quantity;
         const newUnitCost = newTotal > 0 ? (currentValue + newValue) / newTotal : item.unit_price;
         
-        // إضافة الكمية للمخزون وتحديث تكلفة الوحدة
         const { error: updateError } = await supabase
           .from(tableName)
           .update({ 
@@ -383,7 +362,6 @@ class CommercialService {
           continue;
         }
         
-        // تسجيل حركة المخزون - نستخدم طريقة أخرى لتسجيل الحركة
         await this.recordInventoryMovement('in', item.item_type, item.item_name, item.quantity, 'شراء بموجب فاتورة');
       }
     } catch (error) {
@@ -391,7 +369,6 @@ class CommercialService {
     }
   }
   
-  // تسجيل دفعة
   public async recordPayment(payment: Payment): Promise<Payment | null> {
     try {
       const { data, error } = await supabase
@@ -410,12 +387,10 @@ class CommercialService {
       
       if (error) throw error;
       
-      // تحديث حالة الفاتورة إذا كانت الدفعة مرتبطة بفاتورة
       if (payment.related_invoice_id) {
         await this.updateInvoiceStatusAfterPayment(payment.related_invoice_id);
       }
       
-      // إضافة الحركة في سجل الحسابات (ledger)
       const { error: ledgerError } = await supabase
         .from('ledger')
         .insert({
@@ -424,7 +399,7 @@ class CommercialService {
           transaction_id: data.id,
           debit: payment.payment_type === 'disbursement' ? payment.amount : 0,
           credit: payment.payment_type === 'collection' ? payment.amount : 0,
-          balance_after: 0, // سيتم تحديثه في وقت لاحق أو من خلال trigger
+          balance_after: 0,
           date: payment.date
         });
       
@@ -444,10 +419,8 @@ class CommercialService {
     }
   }
   
-  // تحديث حالة الفاتورة بعد الدفع
   private async updateInvoiceStatusAfterPayment(invoiceId: string): Promise<void> {
     try {
-      // جلب الفاتورة
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .select('total_amount, id')
@@ -456,7 +429,6 @@ class CommercialService {
       
       if (invoiceError) throw invoiceError;
       
-      // جلب إجمالي المدفوعات للفاتورة
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount')
@@ -466,7 +438,6 @@ class CommercialService {
       
       const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
       
-      // تحديد حالة الفاتورة
       let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
       
       if (totalPaid >= invoice.total_amount) {
@@ -475,7 +446,6 @@ class CommercialService {
         newStatus = 'partial';
       }
       
-      // تحديث حالة الفاتورة
       const { error: updateError } = await supabase
         .from('invoices')
         .update({ status: newStatus })
@@ -487,7 +457,6 @@ class CommercialService {
     }
   }
   
-  // تسجيل مرتجع
   public async recordReturn(returnObj: Return): Promise<Return | null> {
     try {
       const { data, error } = await supabase
@@ -504,27 +473,23 @@ class CommercialService {
       
       if (error) throw error;
       
-      // تحديث المخزون بناءً على نوع المرتجع
       if (returnObj.items && returnObj.items.length > 0) {
         if (returnObj.return_type === 'sales_return') {
-          // مرتجع مبيعات: إعادة المنتجات للمخزون
           await this.updateInventoryForSalesReturn(returnObj.items);
         } else {
-          // مرتجع مشتريات: خصم المنتجات من المخزون
           await this.updateInventoryForPurchaseReturn(returnObj.items);
         }
       }
       
-      // إضافة الحركة في سجل الحسابات (ledger)
       const { error: ledgerError } = await supabase
         .from('ledger')
         .insert({
-          party_id: null, // سيتم تحديثه لاحقًا بعد جلب معرف الطرف من الفاتورة
+          party_id: null,
           transaction_type: returnObj.return_type === 'sales_return' ? 'sales_return' : 'purchase_return',
           transaction_id: data.id,
           debit: returnObj.return_type === 'sales_return' ? returnObj.amount : 0,
           credit: returnObj.return_type === 'purchase_return' ? returnObj.amount : 0,
-          balance_after: 0, // سيتم تحديثه في وقت لاحق
+          balance_after: 0,
           date: returnObj.date
         });
       
@@ -543,13 +508,11 @@ class CommercialService {
     }
   }
   
-  // تحديث المخزون لمرتجع المبيعات
   private async updateInventoryForSalesReturn(items: ReturnItem[]): Promise<void> {
     try {
       for (const item of items) {
         const tableName = item.item_type;
         
-        // جلب العنصر الحالي
         const { data: currentItem, error: fetchError } = await supabase
           .from(tableName)
           .select('quantity, id')
@@ -561,7 +524,6 @@ class CommercialService {
           continue;
         }
         
-        // إضافة الكمية المرتجعة للمخزون
         const newQuantity = currentItem.quantity + item.quantity;
         const { error: updateError } = await supabase
           .from(tableName)
@@ -573,7 +535,6 @@ class CommercialService {
           continue;
         }
         
-        // تسجيل حركة المخزون - نستخدم طريقة أخرى لتسجيل الحركة
         await this.recordInventoryMovement('return_in', item.item_type, item.item_name, item.quantity, 'مرتجع مبيعات');
       }
     } catch (error) {
@@ -581,13 +542,11 @@ class CommercialService {
     }
   }
   
-  // تحديث المخزون لمرتجع المشتريات
   private async updateInventoryForPurchaseReturn(items: ReturnItem[]): Promise<void> {
     try {
       for (const item of items) {
         const tableName = item.item_type;
         
-        // جلب العنصر الحالي
         const { data: currentItem, error: fetchError } = await supabase
           .from(tableName)
           .select('quantity, id')
@@ -599,13 +558,11 @@ class CommercialService {
           continue;
         }
         
-        // التحقق من توفر الكمية
         if (currentItem.quantity < item.quantity) {
           toast.warning(`لا تتوفر كمية كافية من ${item.item_name} في المخزون للإرجاع`);
           continue;
         }
         
-        // خصم الكمية المرتجعة من المخزون
         const newQuantity = currentItem.quantity - item.quantity;
         const { error: updateError } = await supabase
           .from(tableName)
@@ -617,7 +574,6 @@ class CommercialService {
           continue;
         }
         
-        // تسجيل حركة المخزون - نستخدم طريقة أخرى لتسجيل الحركة
         await this.recordInventoryMovement('return_out', item.item_type, item.item_name, item.quantity, 'مرتجع مشتريات');
       }
     } catch (error) {
@@ -625,11 +581,8 @@ class CommercialService {
     }
   }
   
-  // طريقة مساعدة لتسجيل حركة المخزون
   private async recordInventoryMovement(type: string, category: string, itemName: string, quantity: number, note: string): Promise<void> {
     try {
-      // بدلا من استخدام جدول inventory_movements مباشرة، نستخدم الخدمة الحالية لتسجيل الحركات
-      // سنفترض أن InventoryService لديها طريقة لتسجيل حركات المخزون
       await this.inventoryService.recordItemMovement({
         type,
         category,
@@ -643,7 +596,50 @@ class CommercialService {
     }
   }
   
-  // جلب جميع المدفوعات
+  public async getLedgerEntries(filters: {
+    startDate?: string;
+    endDate?: string;
+    partyType?: string;
+  } = {}) {
+    try {
+      let query = this.supabase
+        .from('ledger')
+        .select(`
+          *,
+          party:party_id (name, type)
+        `)
+        .order('date', { ascending: false });
+
+      if (filters.startDate) {
+        query = query.gte('date', filters.startDate);
+      }
+
+      if (filters.endDate) {
+        query = query.lte('date', filters.endDate);
+      }
+
+      if (filters.partyType) {
+        query = query.eq('party.type', filters.partyType);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Error fetching ledger entries:", error);
+        throw error;
+      }
+
+      return data.map(entry => ({
+        ...entry,
+        party_name: entry.party?.name || 'غير معروف',
+        party_type: entry.party?.type || 'غير معروف'
+      }));
+    } catch (error) {
+      console.error("Error in getLedgerEntries:", error);
+      throw error;
+    }
+  }
+  
   public async getPayments(): Promise<Payment[]> {
     try {
       const { data, error } = await supabase
@@ -675,7 +671,6 @@ class CommercialService {
     }
   }
   
-  // جلب جميع المرتجعات
   public async getReturns(): Promise<Return[]> {
     try {
       const { data, error } = await supabase
