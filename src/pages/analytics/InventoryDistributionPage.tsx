@@ -16,6 +16,22 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 
+// Define types for better type safety
+interface InventoryItemBase {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  unit_cost: number;
+  totalValue: number;
+}
+
+interface InventoryItem extends InventoryItemBase {
+  type: string;
+  typeName: string;
+}
+
 const InventoryDistributionPage = () => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [inventoryType, setInventoryType] = React.useState('all');
@@ -130,12 +146,13 @@ const InventoryDistributionPage = () => {
   const filteredData = React.useMemo(() => {
     if (!inventoryData) return [];
     
-    let data = inventoryData[inventoryType as keyof typeof inventoryData] || [];
+    // Safely access inventory data
+    const data = inventoryData[inventoryType as keyof typeof inventoryData] || [];
     
     if (Array.isArray(data) && searchTerm) {
       return data.filter(item => 
-        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        item.code?.toLowerCase().includes(searchTerm.toLowerCase())
+        (item.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
+        (item.code?.toLowerCase() || '').includes(searchTerm.toLowerCase())
       );
     }
     
@@ -163,14 +180,14 @@ const InventoryDistributionPage = () => {
       key: "unit_cost",
       title: "تكلفة الوحدة",
       render: (value: any, item: any) => (
-        <span>{item.unit_cost?.toLocaleString('ar-EG')} ج.م</span>
+        <span>{(item.unit_cost || 0).toLocaleString('ar-EG')} ج.م</span>
       )
     },
     {
       key: "totalValue",
       title: "القيمة الإجمالية",
       render: (value: any, item: any) => (
-        <span className="font-medium">{item.totalValue?.toLocaleString('ar-EG')} ج.م</span>
+        <span className="font-medium">{(item.totalValue || 0).toLocaleString('ar-EG')} ج.م</span>
       )
     },
     {

@@ -15,52 +15,58 @@ const Analytics = () => {
     queryFn: async () => {
       try {
         // جلب إحصائيات المخزون
-        const rawMaterialsResponse = await supabase
+        const { data: rawMaterialsResponse, error: rawMaterialsError } = await supabase
           .from('raw_materials')
           .select('quantity, unit_cost');
           
-        const semiFinishedResponse = await supabase
+        const { data: semiFinishedResponse, error: semiFinishedError } = await supabase
           .from('semi_finished_products')
           .select('quantity, unit_cost');
           
-        const packagingResponse = await supabase
+        const { data: packagingResponse, error: packagingError } = await supabase
           .from('packaging_materials')
           .select('quantity, unit_cost');
           
-        const finishedResponse = await supabase
+        const { data: finishedResponse, error: finishedError } = await supabase
           .from('finished_products')
           .select('quantity, unit_cost');
         
         // Check for errors
-        if (rawMaterialsResponse.error) throw rawMaterialsResponse.error;
-        if (semiFinishedResponse.error) throw semiFinishedResponse.error;
-        if (packagingResponse.error) throw packagingResponse.error;
-        if (finishedResponse.error) throw finishedResponse.error;
+        if (rawMaterialsError) throw rawMaterialsError;
+        if (semiFinishedError) throw semiFinishedError;
+        if (packagingError) throw packagingError;
+        if (finishedError) throw finishedError;
+        
+        // Safely handle empty or null data with default values
+        const rawMaterialsData = rawMaterialsResponse || [];
+        const semiFinishedData = semiFinishedResponse || [];
+        const packagingData = packagingResponse || [];
+        const finishedData = finishedResponse || [];
         
         // حساب إجمالي القيمة لكل نوع
-        const rawMaterialsValue = rawMaterialsResponse.data?.reduce(
+        const rawMaterialsValue = rawMaterialsData.reduce(
           (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
-        ) || 0;
+        );
         
-        const semiFinishedValue = semiFinishedResponse.data?.reduce(
+        const semiFinishedValue = semiFinishedData.reduce(
           (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
-        ) || 0;
+        );
         
-        const packagingValue = packagingResponse.data?.reduce(
+        const packagingValue = packagingData.reduce(
           (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
-        ) || 0;
+        );
         
-        const finishedValue = finishedResponse.data?.reduce(
+        const finishedValue = finishedData.reduce(
           (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
-        ) || 0;
+        );
         
         const totalValue = rawMaterialsValue + semiFinishedValue + packagingValue + finishedValue;
         
         // استخراج عدد العناصر
-        const rawMaterialsCount = rawMaterialsResponse.data?.length || 0;
-        const semiFinishedCount = semiFinishedResponse.data?.length || 0;
-        const packagingCount = packagingResponse.data?.length || 0;
-        const finishedCount = finishedResponse.data?.length || 0;
+        const rawMaterialsCount = rawMaterialsData.length || 0;
+        const semiFinishedCount = semiFinishedData.length || 0;
+        const packagingCount = packagingData.length || 0;
+        const finishedCount = finishedData.length || 0;
         
         console.log("Inventory Stats Data:", {
           rawMaterialsValue,
@@ -141,50 +147,50 @@ const Analytics = () => {
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">المواد الأولية</span>
-                          <span className="text-blue-600 font-medium">{inventoryStats?.counts.rawMaterials} عنصر</span>
+                          <span className="text-blue-600 font-medium">{inventoryStats?.counts.rawMaterials || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {inventoryStats?.values.rawMaterials.toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values.rawMaterials || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">المنتجات النصف مصنعة</span>
-                          <span className="text-purple-600 font-medium">{inventoryStats?.counts.semiFinished} عنصر</span>
+                          <span className="text-purple-600 font-medium">{inventoryStats?.counts.semiFinished || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {inventoryStats?.values.semiFinished.toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values.semiFinished || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">مستلزمات التعبئة</span>
-                          <span className="text-green-600 font-medium">{inventoryStats?.counts.packaging} عنصر</span>
+                          <span className="text-green-600 font-medium">{inventoryStats?.counts.packaging || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {inventoryStats?.values.packaging.toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values.packaging || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="border rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">المنتجات النهائية</span>
-                          <span className="text-amber-600 font-medium">{inventoryStats?.counts.finished} عنصر</span>
+                          <span className="text-amber-600 font-medium">{inventoryStats?.counts.finished || 0} عنصر</span>
                         </div>
                         <div className="text-lg font-bold">
-                          {inventoryStats?.values.finished.toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values.finished || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                       
                       <div className="bg-muted rounded-md p-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium">القيمة الإجمالية</span>
-                          <span className="text-primary font-medium">{inventoryStats?.counts.total} عنصر</span>
+                          <span className="text-primary font-medium">{inventoryStats?.counts.total || 0} عنصر</span>
                         </div>
                         <div className="text-xl font-bold text-primary">
-                          {inventoryStats?.values.total.toLocaleString('ar-EG')} ج.م
+                          {(inventoryStats?.values.total || 0).toLocaleString('ar-EG')} ج.م
                         </div>
                       </div>
                     </div>

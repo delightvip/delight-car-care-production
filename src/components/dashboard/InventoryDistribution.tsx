@@ -23,10 +23,12 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
   
   // تحديث البيانات عندما تتغير البيانات الخارجية أو بيانات قاعدة البيانات
   useEffect(() => {
-    const data = propData || databaseData || [];
-    if (data.length > 0) {
+    // Use provided data or fetched data, with proper null checks
+    const dataToUse = propData || databaseData || [];
+    
+    if (dataToUse.length > 0) {
       // استبعاد العناصر التي قيمتها صفر
-      const filteredData = data.filter(item => (item?.value || 0) > 0);
+      const filteredData = dataToUse.filter(item => (item?.value || 0) > 0);
       setChartData(filteredData);
     } else {
       setChartData([]);

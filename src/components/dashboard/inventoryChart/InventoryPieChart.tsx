@@ -1,121 +1,85 @@
 
-import React, { useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { motion } from 'framer-motion';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { CHART_COLORS, InventoryDistributionData } from './InventoryChartUtils';
+import React from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { InventoryDistributionData, CHART_COLORS } from './InventoryChartUtils';
 
 interface InventoryPieChartProps {
   data: InventoryDistributionData[];
-  height?: number | string;
+  height?: string | number;
 }
 
-const InventoryPieChart: React.FC<InventoryPieChartProps> = ({ 
-  data, 
-  height = '100%' 
+const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
+  data,
+  height = '16rem',
 }) => {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  // Calculate the total to derive percentages
+  const total = data.reduce((sum, item) => sum + (item.value || 0), 0);
   
-  const total = data.reduce((sum, item) => sum + (item?.value || 0), 0);
-  
-  const onPieEnter = (_: any, index: number) => {
-    setActiveIndex(index);
+  // Custom tooltip formatter
+  const customTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const item = payload[0].payload;
+      const percentage = ((item.value / total) * 100).toFixed(1);
+      
+      return (
+        <div className="p-3 bg-white border rounded-md shadow-md">
+          <p className="font-medium">{item.name}</p>
+          <p className="text-gray-700">
+            {item.value.toLocaleString('ar-EG')} ج.م ({percentage}%)
+          </p>
+        </div>
+      );
+    }
+    return null;
   };
   
-  const onPieLeave = () => {
-    setActiveIndex(null);
-  };
-  
-  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }: any) => {
-    const RADIAN = Math.PI / 180;
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    
-    const isActive = index === activeIndex;
+  // Custom legend
+  const renderLegend = (props: any) => {
+    const { payload } = props;
     
     return (
-      <text 
-        x={x} 
-        y={y} 
-        fill="white" 
-        textAnchor={x > cx ? 'start' : 'end'} 
-        dominantBaseline="central"
-        className={`font-medium transition-all duration-300 ${isActive ? 'font-bold text-lg' : ''}`}
-      >
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
+      <ul className="flex flex-wrap justify-center gap-4 text-sm mt-4">
+        {payload.map((entry: any, index: number) => {
+          const percentage = ((entry.payload.value / total) * 100).toFixed(1);
+          
+          return (
+            <li key={`item-${index}`} className="flex items-center">
+              <span
+                className="inline-block w-3 h-3 mr-2 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span>{entry.value} ({percentage}%)</span>
+            </li>
+          );
+        })}
+      </ul>
     );
   };
   
   return (
     <div style={{ width: '100%', height }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer>
         <PieChart>
-          <motion.g
-            animate={{ 
-              rotate: [0, 5, 0],
-              scale: [0.9, 1]
-            }}
-            transition={{ duration: 0.8, ease: "easeInOut" }}
+          <Pie
+            data={data}
+            innerRadius="60%"
+            outerRadius="80%"
+            paddingAngle={5}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            labelLine={false}
           >
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              outerRadius={80}
-              innerRadius={40}
-              paddingAngle={5}
-              dataKey="value"
-              label={renderCustomizedLabel}
-              onMouseEnter={onPieEnter}
-              onMouseLeave={onPieLeave}
-              animationDuration={800}
-            >
-              {data.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={CHART_COLORS[index % CHART_COLORS.length]} 
-                  strokeWidth={index === activeIndex ? 2 : 1}
-                  stroke={index === activeIndex ? '#fff' : 'none'}
-                />
-              ))}
-            </Pie>
-          </motion.g>
-          <Tooltip
-            formatter={(value: number) => [`${value.toLocaleString('ar-EG')} ج.م (${((value / total) * 100).toFixed(1)}%)`, 'القيمة']}
-            contentStyle={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              border: 'none',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-            }}
-          />
-          <Legend 
-            wrapperStyle={{ paddingTop: '10px' }}
-            formatter={(value) => {
-              const itemData = data.find(item => item.name === value);
-              const percentage = itemData ? ((itemData.value / total) * 100).toFixed(1) : '0';
-              return (
-                <HoverCard>
-                  <HoverCardTrigger asChild>
-                    <span className="text-sm font-medium cursor-pointer">
-                      {value}
-                    </span>
-                  </HoverCardTrigger>
-                  <HoverCardContent className="w-48">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">{value}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {itemData?.value.toLocaleString('ar-EG')} ج.م ({percentage}%)
-                      </p>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              );
-            }}
-          />
+            {data.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={CHART_COLORS[index % CHART_COLORS.length]}
+              />
+            ))}
+          </Pie>
+          <Tooltip content={customTooltip} />
+          <Legend content={renderLegend} />
         </PieChart>
       </ResponsiveContainer>
     </div>

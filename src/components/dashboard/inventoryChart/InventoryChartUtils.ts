@@ -36,11 +36,18 @@ export async function fetchInventoryDistributionData(): Promise<InventoryDistrib
     
     if (finishedError) throw new Error(finishedError.message);
     
-    // حساب القيم الإجمالية لكل نوع
-    const rawMaterialsValue = (rawMaterialsData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
-    const semiFinishedValue = (semiFinishedData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
-    const packagingValue = (packagingData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
-    const finishedValue = (finishedData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
+    // حساب القيم الإجمالية لكل نوع - ensure data arrays are not null
+    const rawMaterialsValue = (rawMaterialsData || []).reduce((sum, item) => 
+      sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
+    
+    const semiFinishedValue = (semiFinishedData || []).reduce((sum, item) => 
+      sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
+    
+    const packagingValue = (packagingData || []).reduce((sum, item) => 
+      sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
+    
+    const finishedValue = (finishedData || []).reduce((sum, item) => 
+      sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
     
     console.log("Inventory distribution data:", {
       rawMaterialsValue,
