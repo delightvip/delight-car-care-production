@@ -3,14 +3,15 @@ import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Package, Beaker, Box, ShoppingBag } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const LowStockNotifier = () => {
   const { toast } = useToast();
   
   // استعلام الحصول على عناصر المخزون المنخفض
-  const { data: lowStockCount, error } = useQuery({
-    queryKey: ['notifierLowStockCount'],
+  const { data: lowStockItems, error } = useQuery({
+    queryKey: ['notifierLowStockItems'],
     queryFn: async () => {
       try {
         // فحص المواد الأولية ذات المخزون المنخفض
@@ -58,13 +59,15 @@ const LowStockNotifier = () => {
         console.log("إجمالي عناصر المخزون المنخفض:", totalCount);
         console.log("المواد الأولية:", rawMaterialsCount);
         console.log("مستلزمات التعبئة:", packagingCount);
+        console.log("المنتجات النصف مصنعة:", semiFinishedCount);
+        console.log("المنتجات النهائية:", finishedCount);
         
         // تجميع قائمة بالعناصر المنخفضة
         const lowStockItems = [
-          ...(rawMaterialsResponse.data || []).map(item => ({ ...item, type: 'مواد أولية' })),
-          ...(semiFinishedResponse.data || []).map(item => ({ ...item, type: 'منتجات نصف مصنعة' })),
-          ...(packagingResponse.data || []).map(item => ({ ...item, type: 'مستلزمات تعبئة' })),
-          ...(finishedResponse.data || []).map(item => ({ ...item, type: 'منتجات نهائية' }))
+          ...(rawMaterialsResponse.data || []).map(item => ({ ...item, type: 'raw', typeName: 'مواد أولية' })),
+          ...(semiFinishedResponse.data || []).map(item => ({ ...item, type: 'semi', typeName: 'منتجات نصف مصنعة' })),
+          ...(packagingResponse.data || []).map(item => ({ ...item, type: 'packaging', typeName: 'مستلزمات تعبئة' })),
+          ...(finishedResponse.data || []).map(item => ({ ...item, type: 'finished', typeName: 'منتجات نهائية' }))
         ];
         
         return {
@@ -82,7 +85,7 @@ const LowStockNotifier = () => {
         throw error;
       }
     },
-    refetchInterval: 30000, // التحقق كل 30 ثانية
+    refetchInterval: 45000, // التحقق كل 45 ثانية
   });
   
   useEffect(() => {
@@ -91,50 +94,101 @@ const LowStockNotifier = () => {
       return;
     }
     
-    if (lowStockCount && lowStockCount.totalCount > 0) {
-      // تحضير نص وصف إضافي للإشعار
-      let description = `يوجد ${lowStockCount.totalCount} عنصر منخفض في المخزون يحتاج إلى تجديد.`;
+    if (lowStockItems && lowStockItems.totalCount > 0) {
+      // شعار أيقونة المخزون المنخفض حسب النوع
+      const getIconForType = (type: string) => {
+        switch (type) {
+          case 'raw':
+            return <Package size={16} className="text-white" />;
+          case 'semi':
+            return <Beaker size={16} className="text-white" />;
+          case 'packaging':
+            return <Box size={16} className="text-white" />;
+          case 'finished':
+            return <ShoppingBag size={16} className="text-white" />;
+          default:
+            return <AlertTriangle size={16} className="text-white" />;
+        }
+      };
       
-      // إضافة تفاصيل أكثر حول أنواع العناصر المنخفضة
-      const itemDetails = [];
-      if (lowStockCount.counts.rawMaterials > 0) {
-        itemDetails.push(`${lowStockCount.counts.rawMaterials} مواد أولية`);
-      }
-      if (lowStockCount.counts.semiFinished > 0) {
-        itemDetails.push(`${lowStockCount.counts.semiFinished} منتجات نصف مصنعة`);
-      }
-      if (lowStockCount.counts.packaging > 0) {
-        itemDetails.push(`${lowStockCount.counts.packaging} مستلزمات تعبئة`);
-      }
-      if (lowStockCount.counts.finished > 0) {
-        itemDetails.push(`${lowStockCount.counts.finished} منتجات نهائية`);
-      }
-      
-      if (itemDetails.length > 0) {
-        description += ` (${itemDetails.join('، ')})`;
-      }
-      
-      // معلومات إضافية عن بعض العناصر المهمة
-      if (lowStockCount.items.length > 0) {
-        // عرض أول ثلاثة عناصر كمثال
-        const exampleItems = lowStockCount.items.slice(0, 3);
-        description += `\nمثال: ${exampleItems.map(item => `${item.name} (${item.type})`).join('، ')}`;
+      // إنشاء إشعارات منفصلة لكل نوع من المخزون المنخفض
+      if (lowStockItems.counts.rawMaterials > 0) {
+        const rawItems = lowStockItems.items.filter(item => item.type === 'raw');
+        displayToast('المواد الأولية', rawItems, 'raw');
       }
       
-      // عرض الإشعار
-      toast({
-        title: "تنبيه المخزون المنخفض",
-        description: description,
-        variant: "destructive",
-        duration: 7000,
-        action: (
-          <div className="h-8 w-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
-            <AlertTriangle size={18} />
-          </div>
-        )
-      });
+      if (lowStockItems.counts.semiFinished > 0) {
+        const semiItems = lowStockItems.items.filter(item => item.type === 'semi');
+        displayToast('المنتجات النصف مصنعة', semiItems, 'semi');
+      }
+      
+      if (lowStockItems.counts.packaging > 0) {
+        const packagingItems = lowStockItems.items.filter(item => item.type === 'packaging');
+        displayToast('مستلزمات التعبئة', packagingItems, 'packaging');
+      }
+      
+      if (lowStockItems.counts.finished > 0) {
+        const finishedItems = lowStockItems.items.filter(item => item.type === 'finished');
+        displayToast('المنتجات النهائية', finishedItems, 'finished');
+      }
     }
-  }, [lowStockCount, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lowStockItems, toast]);
+  
+  // دالة عرض الإشعار
+  const displayToast = (categoryName: string, items: any[], type: string) => {
+    const count = items.length;
+    
+    // تحضير نص وصف إضافي للإشعار
+    let description = `يوجد ${count} عنصر منخفض في ${categoryName} يحتاج إلى تجديد.`;
+    
+    // عرض أول ثلاثة عناصر كمثال إذا كان هناك أكثر من عنصر
+    if (items.length > 0) {
+      const exampleItems = items.slice(0, 3);
+      const exampleText = exampleItems.map(item => `${item.name}`).join('، ');
+      description += `\nمثال: ${exampleText}`;
+    }
+    
+    // تحديد لون الخلفية حسب نوع المخزون
+    let bgColor = 'bg-red-600';
+    switch (type) {
+      case 'raw':
+        bgColor = 'bg-blue-600';
+        break;
+      case 'semi':
+        bgColor = 'bg-purple-600';
+        break;
+      case 'packaging':
+        bgColor = 'bg-green-600';
+        break;
+      case 'finished':
+        bgColor = 'bg-amber-600';
+        break;
+    }
+    
+    // عرض الإشعار
+    toast({
+      title: `تنبيه مخزون ${categoryName} المنخفض`,
+      description: (
+        <div>
+          <p>{description}</p>
+          <Link 
+            to="/inventory/low-stock" 
+            className="block mt-2 text-sm font-semibold text-primary hover:underline"
+          >
+            عرض كل المخزون المنخفض
+          </Link>
+        </div>
+      ),
+      variant: "destructive",
+      duration: 7000,
+      action: (
+        <div className={`h-8 w-8 ${bgColor} rounded-full flex items-center justify-center`}>
+          {getIconForType(type)}
+        </div>
+      )
+    });
+  };
   
   return null; // هذا المكون لا يعرض أي شيء
 };
