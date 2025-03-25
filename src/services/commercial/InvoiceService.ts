@@ -2,10 +2,8 @@ import BaseCommercialService from './BaseCommercialService';
 import { Invoice, InvoiceItem } from '../CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
-import { RawMaterial } from '../inventory/RawMaterialService';
-import { PackagingMaterial } from '../inventory/PackagingMaterialService';
-import { SemiFinishedProduct } from '../inventory/SemiFinishedProductService';
-import { FinishedProduct } from '../inventory/FinishedProductService';
+// Remove the problematic imports and use a more generic approach
+// that doesn't depend on specific type imports
 
 class InvoiceService extends BaseCommercialService {
   private static instance: InvoiceService;
@@ -43,7 +41,8 @@ class InvoiceService extends BaseCommercialService {
         status: invoice.status,
         payment_status: invoice.status || 'draft',
         notes: invoice.notes,
-        created_at: invoice.created_at
+        created_at: invoice.created_at,
+        items: [] // Initialize with empty items array
       }));
       
       return invoicesWithParties;
@@ -77,7 +76,8 @@ class InvoiceService extends BaseCommercialService {
         status: invoice.status,
         payment_status: invoice.status || 'draft',
         notes: invoice.notes,
-        created_at: invoice.created_at
+        created_at: invoice.created_at,
+        items: [] // Initialize with empty items array
       }));
       
       return invoicesWithParties;

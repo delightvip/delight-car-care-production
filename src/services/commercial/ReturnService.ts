@@ -92,12 +92,10 @@ class ReturnService extends BaseCommercialService {
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      // Format date if it's a Date object
       const formattedDate = typeof returnData.date === 'object' ? 
         format(returnData.date, 'yyyy-MM-dd') : 
         returnData.date;
       
-      // Set default payment status to draft
       const paymentStatus = returnData.payment_status || 'draft';
       
       const { data: returnRecord, error } = await this.supabase
@@ -116,7 +114,6 @@ class ReturnService extends BaseCommercialService {
       
       if (error) throw error;
       
-      // If there are items for this return, insert them
       if (returnData.items && returnData.items.length > 0) {
         const returnItems = returnData.items.map(item => ({
           return_id: returnRecord.id,
@@ -135,7 +132,6 @@ class ReturnService extends BaseCommercialService {
         if (itemsError) throw itemsError;
       }
       
-      // Get party details for response
       const party = await this.partyService.getPartyById(returnData.party_id || '');
       
       toast.success('تم تسجيل المرتجع بنجاح');
@@ -175,7 +171,6 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
-      // Format date if it's a Date object
       const formattedDate = returnData.date && typeof returnData.date === 'object' ? 
         format(returnData.date, 'yyyy-MM-dd') : 
         returnData.date;
@@ -212,9 +207,7 @@ class ReturnService extends BaseCommercialService {
         return true;
       }
       
-      // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
-        // Increase inventory for returned sales
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -232,19 +225,17 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
-        // Update financial records for returned sales
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            false, // credit for sales returns (reduce customer's debt)
+            false,
             'مرتجع مبيعات',
             'sales_return',
             returnData.id
           );
         }
       } else if (returnData.return_type === 'purchase_return') {
-        // Decrease inventory for returned purchases
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -262,12 +253,11 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
-        // Update financial records for returned purchases
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            true, // debit for purchase returns (reduce our debt)
+            true,
             'مرتجع مشتريات',
             'purchase_return',
             returnData.id
@@ -275,7 +265,6 @@ class ReturnService extends BaseCommercialService {
         }
       }
       
-      // Update return status to confirmed
       const { error } = await this.supabase
         .from('returns')
         .update({ payment_status: 'confirmed' })
@@ -305,9 +294,7 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
-      // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
-        // Decrease inventory for cancelled returned sales
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -325,19 +312,17 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
-        // Update financial records for cancelled returned sales
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            true, // debit for cancelled sales returns (add back customer's debt)
+            true,
             'إلغاء مرتجع مبيعات',
             'cancel_sales_return',
             returnData.id
           );
         }
       } else if (returnData.return_type === 'purchase_return') {
-        // Increase inventory for cancelled returned purchases
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -355,12 +340,11 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
-        // Update financial records for cancelled returned purchases
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            false, // credit for cancelled purchase returns (add back our debt)
+            false,
             'إلغاء مرتجع مشتريات',
             'cancel_purchase_return',
             returnData.id
@@ -368,7 +352,6 @@ class ReturnService extends BaseCommercialService {
         }
       }
       
-      // Update return status to cancelled
       const { error } = await this.supabase
         .from('returns')
         .update({ payment_status: 'cancelled' })
@@ -398,7 +381,6 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
-      // Delete return items first
       const { error: itemsError } = await this.supabase
         .from('return_items')
         .delete()
@@ -406,7 +388,6 @@ class ReturnService extends BaseCommercialService {
       
       if (itemsError) throw itemsError;
       
-      // Delete the return
       const { error } = await this.supabase
         .from('returns')
         .delete()

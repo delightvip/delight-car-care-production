@@ -32,31 +32,7 @@ import { Return, ReturnItem } from '@/services/CommercialTypes';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
 
-// Define ReturnItem interface to fix the missing interface error
-interface ReturnItem {
-  id?: string;
-  item_id: number;
-  item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
-  item_name: string;
-  quantity: number;
-  unit_price: number;
-  total?: number;
-}
-
-// Update the Return interface from CommercialService to include items
-declare module '@/services/CommercialService' {
-  interface Return {
-    id: string;
-    return_type: "sales_return" | "purchase_return";
-    invoice_id?: string;
-    date: string;
-    amount: number;
-    notes?: string;
-    created_at?: string;
-    items?: ReturnItem[];
-  }
-}
-
+// Define the ReturnFormValues schema
 const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
   invoice_id: z.string().optional(),
@@ -170,6 +146,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       amount: values.amount,
       notes: values.notes,
       payment_status: 'draft', // Add the payment_status field with default value
+      party_id: undefined, // Add this field to match the Return type
       items: values.items.map(item => ({
         item_id: item.item_id,
         item_type: item.item_type,

@@ -427,7 +427,6 @@ const PartyDetails = () => {
         </Tabs>
       </div>
       
-      {/* نافذة تعديل بيانات الطرف */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>

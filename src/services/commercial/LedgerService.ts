@@ -65,7 +65,12 @@ class LedgerService extends BaseCommercialService {
       // Get parties of the specified type or all if not specified
       let parties;
       if (partyType && partyType !== 'all') {
-        parties = await this.partyService.getPartiesByType(partyType as "customer" | "supplier" | "other");
+        // Convert partyType to the correct type
+        const validPartyType = (partyType === 'customer' || partyType === 'supplier' || partyType === 'other') 
+          ? partyType as "customer" | "supplier" | "other"
+          : "customer"; // Default to customer if invalid value
+        
+        parties = await this.partyService.getPartiesByType(validPartyType);
       } else {
         parties = await this.partyService.getParties();
       }
