@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
 }) => {
   const [product, setProduct] = useState(initialData || {
     name: '',
-    unit: '',
+    unit: units[0], // Default to first unit instead of empty string
     quantity: 0,
     unitCost: 0,
     minStock: 0,
@@ -144,6 +145,24 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
               value={product.name}
               onChange={e => setProduct({...product, name: e.target.value})}
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="unit">وحدة القياس</Label>
+            <Select
+              value={product.unit || units[0]} // Ensure we never have empty value
+              onValueChange={value => setProduct({...product, unit: value})}
+            >
+              <SelectTrigger id="unit">
+                <SelectValue placeholder="اختر وحدة القياس" />
+              </SelectTrigger>
+              <SelectContent>
+                {units.map(unit => (
+                  <SelectItem key={unit} value={unit}>
+                    {unit}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="quantity">الكمية</Label>

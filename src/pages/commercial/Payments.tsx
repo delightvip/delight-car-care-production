@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CommercialService, { Payment } from '@/services/CommercialService';
@@ -34,7 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import PageTransition from '@/components/ui/PageTransition';
 import { Badge } from '@/components/ui/badge';
-import { PaymentForm } from '@/components/commercial/PaymentForm';
+import { PaymentForm, PaymentFormValues } from '@/components/commercial/PaymentForm';
 import { toast } from 'sonner';
 
 const Payments = () => {
@@ -74,13 +75,13 @@ const Payments = () => {
     return filtered;
   }, [payments, activeTab, searchQuery]);
 
-  const handleAddPayment = async (paymentData: any) => {
+  const handleAddPayment = async (paymentData: PaymentFormValues & { party_id: string }) => {
     try {
-      const payment: Omit<Payment, 'id' | 'created_at'> = {
-        party_id: paymentData.party_id || "",
+      const payment = {
+        party_id: paymentData.party_id,
         date: paymentData.date,
         amount: paymentData.amount,
-        payment_type: paymentData.payment_type as 'collection' | 'disbursement',
+        payment_type: paymentData.payment_type,
         method: paymentData.method,
         related_invoice_id: paymentData.related_invoice_id || "",
         notes: paymentData.notes || ""
@@ -96,16 +97,16 @@ const Payments = () => {
     }
   };
 
-  const handleEditPayment = async (paymentData: any) => {
+  const handleEditPayment = async (paymentData: PaymentFormValues & { party_id: string }) => {
     if (!selectedPayment || !selectedPayment.id) return;
     
     try {
-      const payment: Partial<Omit<Payment, 'id' | 'created_at'>> = {
-        party_id: paymentData.party_id || selectedPayment.party_id,
+      const payment = {
+        party_id: paymentData.party_id,
         date: paymentData.date,
         amount: paymentData.amount,
-        payment_type: paymentData.payment_type as 'collection' | 'disbursement',
-        method: paymentData.method as 'cash' | 'check' | 'bank_transfer' | 'other',
+        payment_type: paymentData.payment_type,
+        method: paymentData.method,
         related_invoice_id: paymentData.related_invoice_id || "",
         notes: paymentData.notes || ""
       };
@@ -123,6 +124,16 @@ const Payments = () => {
   };
   
   const handleEditClick = (payment: Payment) => {
+    // Convert payment to match PaymentFormValues format
+    const formData = {
+      payment_type: payment.payment_type as "collection" | "disbursement",
+      amount: payment.amount,
+      date: new Date(payment.date),
+      method: payment.method as "cash" | "check" | "bank_transfer" | "other",
+      related_invoice_id: payment.related_invoice_id,
+      notes: payment.notes
+    };
+    
     setSelectedPayment(payment);
     setIsEditMode(true);
     setIsFormOpen(true);
@@ -307,7 +318,14 @@ const Payments = () => {
           </DialogHeader>
           <PaymentForm 
             onSubmit={isEditMode ? handleEditPayment : handleAddPayment} 
-            initialData={selectedPayment || undefined}
+            initialData={selectedPayment && {
+              payment_type: selectedPayment.payment_type as "collection" | "disbursement",
+              amount: selectedPayment.amount,
+              date: new Date(selectedPayment.date),
+              method: selectedPayment.method as "cash" | "check" | "bank_transfer" | "other",
+              related_invoice_id: selectedPayment.related_invoice_id,
+              notes: selectedPayment.notes
+            }} 
             isEditing={isEditMode}
             partyId={selectedPayment?.party_id || ""}
             partyType="customer"

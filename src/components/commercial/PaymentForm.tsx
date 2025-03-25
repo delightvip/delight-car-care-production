@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -210,7 +211,7 @@ export function PaymentForm({ partyId, partyType, initialData, onSubmit, isEditi
           render={({ field }) => (
             <FormItem>
               <FormLabel>الفاتورة المرتبطة (اختياري)</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+              <Select onValueChange={field.onChange} value={field.value || "no_invoice"}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="اختر الفاتورة المرتبطة بالدفعة" />
