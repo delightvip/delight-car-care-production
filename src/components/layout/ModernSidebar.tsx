@@ -186,7 +186,7 @@ const ModernSidebar = () => {
   // للأجهزة المحمولة
   if (useIsMobile().isMobile) {
     return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile} direction="right">
+      <Sheet open={openMobile} onOpenChange={setOpenMobile}>
         <SheetContent side="right" className="p-0 w-72 bg-background">
           {sidebarContent}
         </SheetContent>

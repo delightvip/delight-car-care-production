@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Button } from '@/components/ui/button';
@@ -21,12 +22,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, Clock, Edit, Eye, Plus, Trash } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Edit, Eye, Plus, Trash, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 import { PackagingOrder } from '@/services/ProductionService';
 import { FinishedProduct } from '@/services/InventoryService';
+import { useQuery } from '@tanstack/react-query';
 
 const statusTranslations = {
   pending: 'قيد الانتظار',
@@ -49,8 +51,6 @@ const statusIcons = {
 };
 
 const PackagingOrders = () => {
-  const [orders, setOrders] = useState<PackagingOrder[]>([]);
-  const [finishedProducts, setFinishedProducts] = useState<FinishedProduct[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -69,30 +69,55 @@ const PackagingOrders = () => {
     quantity: 0,
     unit: ''
   });
-  const [isLoading, setIsLoading] = useState(true);
   
   const productionService = ProductionService.getInstance();
   const inventoryService = InventoryService.getInstance();
   
-  useEffect(() => {
-    const fetchData = async () => {
+  // استخدام React Query لجلب البيانات
+  const { 
+    data: orders = [], 
+    isLoading: isOrdersLoading,
+    refetch: refetchOrders
+  } = useQuery({
+    queryKey: ['packagingOrders'],
+    queryFn: async () => {
       try {
-        setIsLoading(true);
-        const ordersData = await productionService.getPackagingOrders();
-        const finishedData = await inventoryService.getFinishedProducts();
-        
-        setOrders(ordersData);
-        setFinishedProducts(finishedData);
+        return await productionService.getPackagingOrders();
       } catch (error) {
-        console.error("Error loading data:", error);
-        toast.error("حدث خطأ أثناء تحميل البيانات");
-      } finally {
-        setIsLoading(false);
+        console.error("Error loading packaging orders:", error);
+        toast.error("حدث خطأ أثناء تحميل أوامر التعبئة");
+        return [];
       }
-    };
-    
-    fetchData();
-  }, []);
+    }
+  });
+  
+  const { 
+    data: finishedProducts = [], 
+    isLoading: isProductsLoading,
+    refetch: refetchProducts
+  } = useQuery({
+    queryKey: ['finishedProducts'],
+    queryFn: async () => {
+      try {
+        const products = await inventoryService.getFinishedProducts();
+        console.log("Fetched finished products:", products);
+        return products;
+      } catch (error) {
+        console.error("Error loading finished products:", error);
+        toast.error("حدث خطأ أثناء تحميل المنتجات النهائية");
+        return [];
+      }
+    }
+  });
+  
+  const isLoading = isOrdersLoading || isProductsLoading;
+  
+  // تحديث البيانات
+  const refreshData = useCallback(() => {
+    refetchOrders();
+    refetchProducts();
+    toast.info("جاري تحديث البيانات...");
+  }, [refetchOrders, refetchProducts]);
   
   const columns = [
     { key: 'code', title: 'كود الأمر' },
@@ -132,8 +157,7 @@ const PackagingOrders = () => {
         newOrder.quantity
       );
       if (createdOrder) {
-        const updatedOrders = await productionService.getPackagingOrders();
-        setOrders(updatedOrders);
+        refetchOrders();
         setNewOrder({
           productCode: '',
           quantity: 0
@@ -155,8 +179,7 @@ const PackagingOrders = () => {
         newStatus as 'pending' | 'inProgress' | 'completed' | 'cancelled'
       );
       if (success) {
-        const updatedOrders = await productionService.getPackagingOrders();
-        setOrders(updatedOrders);
+        refetchOrders();
         setIsStatusDialogOpen(false);
       }
     } catch (error) {
@@ -171,8 +194,7 @@ const PackagingOrders = () => {
     try {
       const success = await productionService.deletePackagingOrder(currentOrder.id);
       if (success) {
-        const updatedOrders = await productionService.getPackagingOrders();
-        setOrders(updatedOrders);
+        refetchOrders();
         setIsDeleteDialogOpen(false);
       }
     } catch (error) {
@@ -222,8 +244,7 @@ const PackagingOrders = () => {
       );
       
       if (success) {
-        const updatedOrders = await productionService.getPackagingOrders();
-        setOrders(updatedOrders);
+        refetchOrders();
         setIsEditDialogOpen(false);
         toast.success("تم تحديث أمر التعبئة بنجاح");
       }
@@ -327,91 +348,97 @@ const PackagingOrders = () => {
             <h1 className="text-3xl font-bold tracking-tight">أوامر التعبئة</h1>
             <p className="text-muted-foreground mt-1">إدارة عمليات تعبئة المنتجات النهائية</p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus size={18} className="mr-2" />
-                أمر تعبئة جديد
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>إضافة أمر تعبئة جديد</DialogTitle>
-                <DialogDescription>
-                  اختر المنتج النهائي وحدد الكمية المطلوب تعبئتها.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="product">المنتج</Label>
-                  <Select 
-                    value={newOrder.productCode} 
-                    onValueChange={value => setNewOrder({...newOrder, productCode: value})}
-                  >
-                    <SelectTrigger id="product">
-                      <SelectValue placeholder="اختر المنتج" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {finishedProducts.map(product => (
-                        <SelectItem key={product.code} value={product.code}>
-                          {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="quantity">الكمية</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={newOrder.quantity}
-                    onChange={e => setNewOrder({...newOrder, quantity: Number(e.target.value)})}
-                  />
-                </div>
-                
-                {newOrder.productCode && newOrder.quantity > 0 && (
-                  <div className="border-t pt-4">
-                    <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
-                    <div className="space-y-2">
-                      {checkComponentsAvailability(newOrder.productCode, newOrder.quantity).map(component => (
-                        <div key={component.code} className="flex justify-between p-2 border rounded-md">
-                          <div>
-                            <span className="font-medium">{component.name}</span>
-                            <span className="text-sm text-muted-foreground mr-2">
-                              ({component.requiredQuantity.toFixed(2)} {component.unit})
-                            </span>
-                            <Badge 
-                              variant="outline" 
-                              className="mr-2"
-                            >
-                              {component.type === 'semi' ? 'سائل' : 'تعبئة'}
-                            </Badge>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={refreshData}>
+              <RefreshCw size={16} className="ml-2" />
+              تحديث
+            </Button>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus size={18} className="mr-2" />
+                  أمر تعبئة جديد
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>إضافة أمر تعبئة جديد</DialogTitle>
+                  <DialogDescription>
+                    اختر المنتج النهائي وحدد الكمية المطلوب تعبئتها.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="product">المنتج</Label>
+                    <Select 
+                      value={newOrder.productCode} 
+                      onValueChange={value => setNewOrder({...newOrder, productCode: value})}
+                    >
+                      <SelectTrigger id="product">
+                        <SelectValue placeholder="اختر المنتج" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {finishedProducts.map(product => (
+                          <SelectItem key={product.code} value={product.code}>
+                            {product.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="quantity">الكمية</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      value={newOrder.quantity}
+                      onChange={e => setNewOrder({...newOrder, quantity: Number(e.target.value)})}
+                    />
+                  </div>
+                  
+                  {newOrder.productCode && newOrder.quantity > 0 && (
+                    <div className="border-t pt-4">
+                      <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
+                      <div className="space-y-2">
+                        {checkComponentsAvailability(newOrder.productCode, newOrder.quantity).map((component, index) => (
+                          <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
+                            <div>
+                              <span className="font-medium">{component.name}</span>
+                              <span className="text-sm text-muted-foreground mr-2">
+                                ({component.requiredQuantity.toFixed(2)} {component.unit})
+                              </span>
+                              <Badge 
+                                variant="outline" 
+                                className="mr-2"
+                              >
+                                {component.type === 'semi' ? 'سائل' : 'تعبئة'}
+                              </Badge>
+                            </div>
+                            <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
                           </div>
-                          <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-4 p-2 border rounded-md bg-muted/50">
+                        <div className="flex justify-between">
+                          <span className="font-medium">التكلفة الإجمالية:</span>
+                          <span>{calculateTotalCost(newOrder.productCode, newOrder.quantity)} ج.م</span>
                         </div>
-                      ))}
-                    </div>
-                    
-                    <div className="mt-4 p-2 border rounded-md bg-muted/50">
-                      <div className="flex justify-between">
-                        <span className="font-medium">التكلفة الإجمالية:</span>
-                        <span>{calculateTotalCost(newOrder.productCode, newOrder.quantity)} ج.م</span>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  إلغاء
-                </Button>
-                <Button onClick={handleAddOrder}>
-                  إضافة
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    إلغاء
+                  </Button>
+                  <Button onClick={handleAddOrder}>
+                    إضافة
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
         
         <DataTableWithLoading
@@ -478,8 +505,8 @@ const PackagingOrders = () => {
                       )}
                     </div>
                     
-                    {currentOrder.packagingMaterials.map((material) => (
-                      <div key={material.code} className="flex justify-between p-2 border rounded-md">
+                    {currentOrder.packagingMaterials.map((material, index) => (
+                      <div key={`${material.code}-${index}`} className="flex justify-between p-2 border rounded-md">
                         <div>
                           <span className="font-medium">{material.name}</span>
                           <span className="text-sm text-muted-foreground mr-2">
@@ -629,8 +656,8 @@ const PackagingOrders = () => {
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                   <div className="space-y-2">
-                    {checkComponentsAvailability(editOrder.productCode, editOrder.quantity).map(component => (
-                      <div key={component.code} className="flex justify-between p-2 border rounded-md">
+                    {checkComponentsAvailability(editOrder.productCode, editOrder.quantity).map((component, index) => (
+                      <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
                         <div>
                           <span className="font-medium">{component.name}</span>
                           <span className="text-sm text-muted-foreground mr-2">

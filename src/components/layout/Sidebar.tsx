@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,7 +20,7 @@ import {
   Users,
   TrendingUp
 } from 'lucide-react';
-import { useAppSidebar } from './SidebarContext';
+import { useSidebar } from './SidebarContext';
 
 interface NavItemProps {
   to: string;
@@ -75,7 +76,7 @@ const NavGroup: React.FC<NavGroupProps> = ({ title, icon, children, defaultOpen 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const pathname = location.pathname;
-  const { isOpen } = useAppSidebar();
+  const { isOpen } = useSidebar();
   
   return (
     <aside className={`w-64 h-screen border-r border-gray-200 bg-white fixed top-0 pt-16 z-10 transition-all duration-300 ${

@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { 
   AlertTriangle, Package, Beaker, Box, 
@@ -53,15 +53,23 @@ export const useNotifications = () => {
 
 const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
+  const [prevLowStockCounts, setPrevLowStockCounts] = useState({
+    rawMaterials: 0,
+    semiFinished: 0,
+    packaging: 0,
+    finished: 0,
+    totalCount: 0
+  });
   
   const { data: lowStockItems, refetch: refetchLowStock } = useQuery({
     queryKey: ['lowStockItems'],
     queryFn: fetchLowStockItems,
-    refetchInterval: 60000, // كل دقيقة
+    refetchInterval: 30000, // كل 30 ثانية
+    staleTime: 20000, // تعتبر البيانات قديمة بعد 20 ثانية
   });
 
   // إضافة إشعار جديد
-  const addNotification = (notification: Omit<NotificationType, 'id' | 'date' | 'read'>) => {
+  const addNotification = useCallback((notification: Omit<NotificationType, 'id' | 'date' | 'read'>) => {
     const newNotification = {
       ...notification,
       id: crypto.randomUUID(),
@@ -69,14 +77,27 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       read: false,
     };
     
-    setNotifications(prev => [newNotification, ...prev]);
+    setNotifications(prev => {
+      // تجنب تكرار الإشعارات المتشابهة خلال فترة قصيرة
+      const isDuplicate = prev.some(
+        n => n.title === notification.title && 
+        n.message === notification.message &&
+        Date.now() - new Date(n.date).getTime() < 300000 // 5 دقائق
+      );
+      
+      if (isDuplicate) {
+        return prev;
+      }
+      
+      return [newNotification, ...prev];
+    });
     
     // عرض إشعار toast
     showToast(newNotification);
-  };
+  }, []);
 
   // عرض إشعار toast
-  const showToast = (notification: NotificationType) => {
+  const showToast = useCallback((notification: NotificationType) => {
     const getIconByType = () => {
       switch (notification.type) {
         case 'info': return <InfoIcon size={18} />;
@@ -96,47 +117,92 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         onClick: () => window.location.href = notification.link as string,
       } : undefined,
     });
-  };
+  }, []);
 
   // تحديث حالة قراءة الإشعار
-  const markAsRead = (id: string) => {
+  const markAsRead = useCallback((id: string) => {
     setNotifications(prev => 
       prev.map(item => 
         item.id === id ? { ...item, read: true } : item
       )
     );
-  };
+  }, []);
 
   // تحديث حالة قراءة كل الإشعارات
-  const markAllAsRead = () => {
+  const markAllAsRead = useCallback(() => {
     setNotifications(prev => 
       prev.map(item => ({ ...item, read: true }))
     );
-  };
+  }, []);
 
   // حذف إشعار
-  const clearNotification = (id: string) => {
+  const clearNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(item => item.id !== id));
-  };
+  }, []);
 
   // حذف كل الإشعارات
-  const clearAllNotifications = () => {
+  const clearAllNotifications = useCallback(() => {
     setNotifications([]);
-  };
+  }, []);
 
   // حساب عدد الإشعارات غير المقروءة
   const unreadCount = notifications.filter(n => !n.read).length;
 
   // إعادة تحميل بيانات المخزون المنخفض
-  const refreshLowStockData = () => {
+  const refreshLowStockData = useCallback(() => {
     refetchLowStock();
-  };
+  }, [refetchLowStock]);
 
-  // إضافة إشعارات المخزون المنخفض عند تغير البيانات
+  // إضافة مستمع للتغييرات في قاعدة البيانات
   useEffect(() => {
-    if (lowStockItems && lowStockItems.totalCount > 0) {
-      // عرض إشعارات لكل نوع من المخزون المنخفض
-      if (lowStockItems.counts.rawMaterials > 0) {
+    const setupRealtimeSubscriptions = async () => {
+      // إعداد قناة Supabase الحقيقية للاستماع للتغييرات
+      const channel = supabase
+        .channel('db-changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'raw_materials',
+        }, () => refreshLowStockData())
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'semi_finished_products',
+        }, () => refreshLowStockData())
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'packaging_materials',
+        }, () => refreshLowStockData())
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'finished_products',
+        }, () => refreshLowStockData())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+
+    setupRealtimeSubscriptions();
+  }, [refreshLowStockData]);
+
+  // مقارنة أعداد المخزون المنخفض بالأعداد السابقة وإظهار إشعارات إذا تغيرت
+  useEffect(() => {
+    if (!lowStockItems) return;
+
+    // تحقق مما إذا كانت هناك تغييرات في عدد عناصر المخزون المنخفض
+    const hasChanges = lowStockItems.counts.rawMaterials !== prevLowStockCounts.rawMaterials ||
+                      lowStockItems.counts.semiFinished !== prevLowStockCounts.semiFinished ||
+                      lowStockItems.counts.packaging !== prevLowStockCounts.packaging ||
+                      lowStockItems.counts.finished !== prevLowStockCounts.finished;
+
+    if (hasChanges) {
+      // عرض إشعارات المخزون المنخفض للأقسام التي تغيرت
+      if (lowStockItems.counts.rawMaterials > 0 && 
+          lowStockItems.counts.rawMaterials !== prevLowStockCounts.rawMaterials) {
         addNotification({
           title: 'تنبيه المواد الأولية',
           message: `يوجد ${lowStockItems.counts.rawMaterials} من المواد الأولية بمخزون منخفض`,
@@ -145,7 +211,8 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
       }
       
-      if (lowStockItems.counts.semiFinished > 0) {
+      if (lowStockItems.counts.semiFinished > 0 && 
+          lowStockItems.counts.semiFinished !== prevLowStockCounts.semiFinished) {
         addNotification({
           title: 'تنبيه المنتجات النصف مصنعة',
           message: `يوجد ${lowStockItems.counts.semiFinished} من المنتجات النصف مصنعة بمخزون منخفض`,
@@ -154,7 +221,8 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
       }
       
-      if (lowStockItems.counts.packaging > 0) {
+      if (lowStockItems.counts.packaging > 0 && 
+          lowStockItems.counts.packaging !== prevLowStockCounts.packaging) {
         addNotification({
           title: 'تنبيه مستلزمات التعبئة',
           message: `يوجد ${lowStockItems.counts.packaging} من مستلزمات التعبئة بمخزون منخفض`,
@@ -163,7 +231,8 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
       }
       
-      if (lowStockItems.counts.finished > 0) {
+      if (lowStockItems.counts.finished > 0 && 
+          lowStockItems.counts.finished !== prevLowStockCounts.finished) {
         addNotification({
           title: 'تنبيه المنتجات النهائية',
           message: `يوجد ${lowStockItems.counts.finished} من المنتجات النهائية بمخزون منخفض`,
@@ -171,10 +240,28 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           link: '/inventory/low-stock'
         });
       }
+      
+      // حفظ القيم الجديدة للمقارنة في المرة القادمة
+      setPrevLowStockCounts({
+        rawMaterials: lowStockItems.counts.rawMaterials,
+        semiFinished: lowStockItems.counts.semiFinished,
+        packaging: lowStockItems.counts.packaging,
+        finished: lowStockItems.counts.finished,
+        totalCount: lowStockItems.totalCount
+      });
     }
-  // استخدمت lowStockItems.totalCount لتجنب التكرار المستمر للإشعارات
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lowStockItems?.totalCount]);
+  }, [lowStockItems, prevLowStockCounts, addNotification]);
+
+  // مراقبة تحديثات وإضافات قاعدة البيانات لضمان ظهور الإشعارات
+  useEffect(() => {
+    // تنفيذ فحص أولي للمخزون المنخفض عند تحميل الصفحة
+    refreshLowStockData();
+    
+    // فحص دوري كل دقيقة
+    const interval = setInterval(refreshLowStockData, 60000);
+    
+    return () => clearInterval(interval);
+  }, [refreshLowStockData]);
 
   return (
     <NotificationContext.Provider

@@ -4,35 +4,54 @@ import { supabase } from '@/integrations/supabase/client';
 // استدعاء بيانات المخزون المنخفض
 export async function fetchLowStockItems() {
   try {
+    console.log("Fetching low stock items...");
+    
     // فحص المواد الأولية ذات المخزون المنخفض
     const rawMaterialsResponse = await supabase
       .from('raw_materials')
-      .select('id, name, quantity, min_stock, code')
-      .lt('quantity', 10);
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .lt('quantity', 'min_stock');
     
     // فحص المنتجات نصف المصنعة ذات المخزون المنخفض
     const semiFinishedResponse = await supabase
       .from('semi_finished_products')
-      .select('id, name, quantity, min_stock, code')
-      .lt('quantity', 10);
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .lt('quantity', 'min_stock');
     
     // فحص مستلزمات التعبئة ذات المخزون المنخفض
     const packagingResponse = await supabase
       .from('packaging_materials')
-      .select('id, name, quantity, min_stock, code')
-      .lt('quantity', 10);
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .lt('quantity', 'min_stock');
     
     // فحص المنتجات النهائية ذات المخزون المنخفض
     const finishedResponse = await supabase
       .from('finished_products')
-      .select('id, name, quantity, min_stock, code')
-      .lt('quantity', 10);
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .lt('quantity', 'min_stock');
     
     // تحقق من الأخطاء
-    if (rawMaterialsResponse.error) throw rawMaterialsResponse.error;
-    if (semiFinishedResponse.error) throw semiFinishedResponse.error;
-    if (packagingResponse.error) throw packagingResponse.error;
-    if (finishedResponse.error) throw finishedResponse.error;
+    if (rawMaterialsResponse.error) {
+      console.error("Error fetching raw materials:", rawMaterialsResponse.error);
+      throw rawMaterialsResponse.error;
+    }
+    if (semiFinishedResponse.error) {
+      console.error("Error fetching semi-finished products:", semiFinishedResponse.error);
+      throw semiFinishedResponse.error;
+    }
+    if (packagingResponse.error) {
+      console.error("Error fetching packaging materials:", packagingResponse.error);
+      throw packagingResponse.error;
+    }
+    if (finishedResponse.error) {
+      console.error("Error fetching finished products:", finishedResponse.error);
+      throw finishedResponse.error;
+    }
+    
+    console.log("Raw materials low stock count:", rawMaterialsResponse.data?.length || 0);
+    console.log("Semi-finished low stock count:", semiFinishedResponse.data?.length || 0);
+    console.log("Packaging low stock count:", packagingResponse.data?.length || 0);
+    console.log("Finished products low stock count:", finishedResponse.data?.length || 0);
     
     // حساب إجمالي العناصر ذات المخزون المنخفض
     const rawMaterialsCount = rawMaterialsResponse.data?.length || 0;
