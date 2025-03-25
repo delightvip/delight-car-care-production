@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -72,22 +71,19 @@ const Invoices = () => {
   const partyService = PartyService.getInstance();
   const inventoryService = InventoryService.getInstance();
   
-  // استعلام جلب بيانات الفواتير
   const { data: invoices, isLoading: isLoadingInvoices, error: invoicesError, refetch } = useQuery({
     queryKey: ['invoices'],
     queryFn: () => commercialService.getInvoices(),
-    refetchInterval: 60000, // تحديث كل دقيقة
+    refetchInterval: 60000,
     refetchOnWindowFocus: false,
   });
   
-  // استعلام جلب بيانات الأطراف التجارية
   const { data: parties, isLoading: isLoadingParties } = useQuery({
     queryKey: ['parties'],
     queryFn: () => partyService.getParties(),
     refetchOnWindowFocus: false,
   });
   
-  // استعلام جلب بيانات المنتجات
   const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
     queryKey: ['rawMaterials'],
     queryFn: () => inventoryService.getRawMaterials(),
@@ -112,7 +108,6 @@ const Invoices = () => {
     refetchOnWindowFocus: false,
   });
   
-  // تحضير بيانات العناصر للنموذج
   const inventoryItems = React.useMemo(() => {
     const items = [];
     
@@ -159,18 +154,15 @@ const Invoices = () => {
     return items;
   }, [rawMaterials, packaging, semiFinished, finished]);
   
-  // تصفية الفواتير حسب النوع المحدد والبحث
   const filteredInvoices = React.useMemo(() => {
     if (!invoices) return [];
     
     let filtered = invoices;
     
-    // تصفية حسب النوع
     if (activeTab !== 'all') {
       filtered = invoices.filter(invoice => invoice.invoice_type === activeTab);
     }
     
-    // تصفية حسب البحث
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(invoice => 
@@ -185,6 +177,7 @@ const Invoices = () => {
   
   const handleCreateInvoice = async (invoiceData: Omit<Invoice, 'id' | 'created_at'>) => {
     try {
+      const { items, ...invoiceWithoutItems } = invoiceData;
       await commercialService.createInvoice(invoiceData);
       refetch();
       setIsAddDialogOpen(false);
@@ -382,7 +375,6 @@ const Invoices = () => {
         </Tabs>
       </div>
       
-      {/* نافذة إنشاء فاتورة جديدة */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
@@ -401,7 +393,6 @@ const Invoices = () => {
         </DialogContent>
       </Dialog>
       
-      {/* نافذة تأكيد الحذف */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

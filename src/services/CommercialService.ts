@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -12,6 +11,7 @@ export interface Invoice {
   status: 'paid' | 'partial' | 'unpaid';
   notes?: string;
   created_at: string;
+  items?: InvoiceItem[];
 }
 
 export interface InvoiceItem {
@@ -39,6 +39,15 @@ export interface Payment {
   created_at?: string;
 }
 
+export interface ReturnItem {
+  item_id: number;
+  item_type: 'finished_products' | 'packaging_materials' | 'semi_finished_products' | 'raw_materials';
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  total?: number;
+}
+
 export interface Return {
   id: string;
   invoice_id?: string;
@@ -48,6 +57,7 @@ export interface Return {
   amount: number;
   notes?: string;
   created_at?: string;
+  items?: ReturnItem[];
 }
 
 export interface LedgerEntry {
@@ -199,7 +209,7 @@ class CommercialService {
   }
   
   // إنشاء فاتورة جديدة
-  public async createInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>, items: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>[]): Promise<Invoice | null> {
+  public async createInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
       // Convert Date objects to ISO string for the database
       const dateStr = typeof invoice.date === 'string' ? 
@@ -222,8 +232,8 @@ class CommercialService {
       if (invoiceError) throw invoiceError;
       
       // 2. إضافة عناصر الفاتورة
-      if (items.length > 0) {
-        const invoiceItems = items.map(item => ({
+      if (invoice.items && invoice.items.length > 0) {
+        const invoiceItems = invoice.items.map(item => ({
           invoice_id: invoiceData.id,
           item_id: item.item_id,
           item_name: item.item_name,
@@ -487,7 +497,21 @@ class CommercialService {
       }
       
       toast.success(`تم تسجيل ${paymentData.payment_type === 'collection' ? 'التحصيل' : 'السداد'} بنجاح`);
-      return payment;
+      
+      // Convert payment object to the correct type
+      const typedPayment: Payment = {
+        id: payment.id,
+        party_id: payment.party_id,
+        date: payment.date,
+        amount: payment.amount,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method,
+        related_invoice_id: payment.related_invoice_id,
+        notes: payment.notes,
+        created_at: payment.created_at
+      };
+      
+      return typedPayment;
     } catch (error) {
       console.error('Error recording payment:', error);
       toast.error('حدث خطأ أثناء تسجيل الدفعة');
@@ -518,7 +542,7 @@ class CommercialService {
       
       if (error) throw error;
       
-      // تحديث حالة الفاتورة إذا كانت الدفعة مرتبطة بفاتورة
+      // Updating invoice payment status if related invoice ID is provided
       if (paymentData.related_invoice_id) {
         await this.updateInvoicePaymentStatus(paymentData.related_invoice_id);
       }
@@ -656,13 +680,30 @@ class CommercialService {
         }
       }
       
+      // Convert return object to the correct type
+      const typedReturn: Return = {
+        id: returnRecord.id,
+        invoice_id: returnRecord.invoice_id,
+        date: returnRecord.date,
+        return_type: returnRecord.return_type as 'sales_return' | 'purchase_return',
+        amount: returnRecord.amount,
+        notes: returnRecord.notes,
+        created_at: returnRecord.created_at,
+        items: returnData.items // Copy items from input data
+      };
+      
       toast.success('تم تسجيل المرتجع بنجاح');
-      return returnRecord;
+      return typedReturn;
     } catch (error) {
       console.error('Error creating return:', error);
       toast.error('حدث خطأ أثناء تسجيل المرتجع');
       return null;
     }
+  }
+  
+  // For compatibility with existing code
+  public async recordReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
+    return this.createReturn(returnData);
   }
   
   // تحديث مرتجع موجود
@@ -721,7 +762,7 @@ class CommercialService {
         .from('ledger')
         .select(`
           *,
-          parties!ledger_party_id_fkey (type)
+          parties!ledger_party_id_fkey (name, type)
         `)
         .eq('party_id', partyId)
         .order('date', { ascending: false });

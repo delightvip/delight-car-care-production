@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -38,28 +37,28 @@ const AccountStatements = () => {
   const [partyType, setPartyType] = useState('all');
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [ledgerFilters, setLedgerFilters] = useState<any>({});
+  const [isFiltering, setIsFiltering] = useState(false);
   
   const navigate = useNavigate();
   const commercialService = CommercialService.getInstance();
   const partyService = PartyService.getInstance();
   
-  // جلب جميع الأطراف التجارية
   const { data: parties, isLoading: isLoadingParties } = useQuery({
     queryKey: ['parties'],
     queryFn: () => partyService.getParties(),
   });
   
-  // جلب بيانات كشف الحساب
   const { data: ledgerEntries, isLoading } = useQuery({
-    queryKey: ['ledger', dateRange, partyType, selectedPartyId, sortDirection],
+    queryKey: ['ledger', dateRange, partyType, selectedPartyId, sortDirection, ledgerFilters],
     queryFn: () => commercialService.getLedgerEntries({
       startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
       endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
-      partyType: partyType !== 'all' ? partyType : undefined
+      partyType: partyType !== 'all' ? partyType : undefined,
+      ...ledgerFilters
     }),
   });
   
-  // تصفية حسب الطرف المحدد
   const filteredByParty = React.useMemo(() => {
     if (!ledgerEntries) return [];
     
@@ -70,7 +69,6 @@ const AccountStatements = () => {
     return ledgerEntries;
   }, [ledgerEntries, selectedPartyId]);
   
-  // تصفية حسب البحث
   const filteredEntries = React.useMemo(() => {
     if (!filteredByParty) return [];
     
@@ -86,18 +84,16 @@ const AccountStatements = () => {
     return filteredByParty;
   }, [filteredByParty, searchQuery]);
   
-  // ترتيب النتائج
   const sortedEntries = React.useMemo(() => {
     if (!filteredEntries) return [];
     
     return [...filteredEntries].sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
-      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+      return sortDirection === 'asc' ? dateA - dateB : dateB - a;
     });
   }, [filteredEntries, sortDirection]);
   
-  // حساب إجماليات الحساب
   const accountSummary = React.useMemo(() => {
     if (!sortedEntries || sortedEntries.length === 0) {
       return {
@@ -127,10 +123,11 @@ const AccountStatements = () => {
     setPartyType('all');
     setSelectedPartyId(null);
     setSearchQuery('');
+    setLedgerFilters({});
+    setIsFiltering(false);
   };
   
   const handleExportData = () => {
-    // تنفيذ تصدير البيانات (مثلاً إلى ملف Excel)
     toast.info('سيتم دعم تصدير البيانات قريباً');
   };
   
@@ -172,7 +169,16 @@ const AccountStatements = () => {
         return null;
     }
   };
-
+  
+  const filterLedger = (filters: any) => {
+    setLedgerFilters(filters);
+    setIsFiltering(true);
+    
+    if (selectedParty) {
+      refetchLedger(selectedParty.id);
+    }
+  };
+  
   return (
     <PageTransition>
       <div className="space-y-6">

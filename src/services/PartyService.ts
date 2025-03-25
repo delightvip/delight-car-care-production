@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -26,7 +25,6 @@ export interface Transaction {
   credit: number;
   balance: number;
   created_at: string;
-  // Adding these fields to match the actual usage in PartyDetails.tsx
   transaction_type?: string;
   transaction_id?: string;
 }
@@ -43,7 +41,6 @@ class PartyService {
     return PartyService.instance;
   }
   
-  // جلب جميع الأطراف التجارية
   public async getParties(): Promise<Party[]> {
     try {
       const { data, error } = await supabase
@@ -75,7 +72,6 @@ class PartyService {
     }
   }
   
-  // جلب طرف تجاري محدد بالمعرف
   public async getPartyById(id: string): Promise<Party | null> {
     try {
       const { data, error } = await supabase
@@ -108,7 +104,6 @@ class PartyService {
     }
   }
   
-  // جلب الأطراف حسب النوع
   public async getPartiesByType(type: 'customer' | 'supplier' | 'other'): Promise<Party[]> {
     try {
       const { data, error } = await supabase
@@ -141,7 +136,6 @@ class PartyService {
     }
   }
   
-  // إضافة طرف تجاري جديد
   public async addParty(party: Omit<Party, 'id' | 'balance' | 'created_at'>): Promise<Party | null> {
     try {
       const { data, error } = await supabase
@@ -162,7 +156,6 @@ class PartyService {
       
       toast.success(`تم إضافة ${party.name} بنجاح`);
       
-      // الحصول على البيانات المحدثة بما في ذلك رصيد الطرف
       const { data: partyWithBalance, error: balanceError } = await supabase
         .from('parties')
         .select(`
@@ -193,7 +186,6 @@ class PartyService {
     }
   }
   
-  // تحديث طرف تجاري
   public async updateParty(id: string, partyData: Partial<Omit<Party, 'id' | 'created_at' | 'balance'>>): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -212,7 +204,6 @@ class PartyService {
     }
   }
   
-  // تحديث رصيد طرف تجاري مباشرة (مع إضافة سجل في الحركات المالية)
   public async updatePartyBalance(
     partyId: string, 
     amount: number, 
@@ -222,21 +213,18 @@ class PartyService {
     reference?: string
   ): Promise<boolean> {
     try {
-      // 1. الحصول على رصيد الطرف الحالي
       const currentParty = await this.getPartyById(partyId);
       if (!currentParty) throw new Error('الطرف التجاري غير موجود');
       
       const currentBalance = currentParty.balance;
       
-      // 2. حساب الرصيد الجديد
       let newBalance = currentBalance;
       if (isDebit) {
-        newBalance += amount; // زيادة المديونية على الطرف
+        newBalance += amount;
       } else {
-        newBalance -= amount; // تخفيض المديونية على الطرف (دفع)
+        newBalance -= amount;
       }
       
-      // 3. تحديث رصيد الطرف في جدول party_balances
       const { error: balanceError } = await supabase
         .from('party_balances')
         .update({ balance: newBalance, last_updated: new Date().toISOString() })
@@ -244,7 +232,6 @@ class PartyService {
       
       if (balanceError) throw balanceError;
       
-      // 4. إضافة سجل في جدول ledger
       const { error: ledgerError } = await supabase
         .from('ledger')
         .insert({
@@ -267,10 +254,8 @@ class PartyService {
     }
   }
   
-  // حذف طرف تجاري
   public async deleteParty(id: string): Promise<boolean> {
     try {
-      // 1. التحقق من عدم وجود فواتير أو مدفوعات مرتبطة بالطرف
       const { count: invoiceCount, error: invoiceError } = await supabase
         .from('invoices')
         .select('id', { count: 'exact', head: true })
@@ -295,7 +280,6 @@ class PartyService {
         return false;
       }
       
-      // 2. حذف سجلات الرصيد المرتبطة بالطرف
       const { error: balanceError } = await supabase
         .from('party_balances')
         .delete()
@@ -303,7 +287,6 @@ class PartyService {
       
       if (balanceError) throw balanceError;
       
-      // 3. حذف سجلات الحركات المالية المرتبطة بالطرف
       const { error: ledgerError } = await supabase
         .from('ledger')
         .delete()
@@ -311,7 +294,6 @@ class PartyService {
       
       if (ledgerError) throw ledgerError;
       
-      // 4. حذف الطرف نفسه
       const { error } = await supabase
         .from('parties')
         .delete()
@@ -328,7 +310,6 @@ class PartyService {
     }
   }
   
-  // جلب الحركات المالية للطرف التجاري
   public async getPartyTransactions(partyId: string): Promise<Transaction[]> {
     try {
       const { data, error } = await supabase
@@ -339,7 +320,6 @@ class PartyService {
       
       if (error) throw error;
       
-      // Map the ledger data to match our Transaction interface
       return data.map(item => ({
         id: item.id,
         party_id: item.party_id,
@@ -351,7 +331,7 @@ class PartyService {
         credit: item.credit || 0,
         balance: item.balance_after,
         created_at: item.created_at,
-        transaction_type: item.transaction_type // Add this to satisfy the component usage
+        transaction_type: item.transaction_type
       }));
     } catch (error) {
       console.error('Error fetching party transactions:', error);
@@ -360,7 +340,27 @@ class PartyService {
     }
   }
   
-  // تحديث رصيد افتتاحي للطرف
+  public async getPartyLedger(partyId: string): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('ledger')
+        .select('*')
+        .eq('party_id', partyId)
+        .order('date', { ascending: true });
+      
+      if (error) throw error;
+      
+      return data.map(entry => ({
+        ...entry,
+        description: this.getTransactionDescription(entry.transaction_type)
+      }));
+    } catch (error) {
+      console.error('Error fetching party ledger:', error);
+      toast.error('فشل في جلب سجل الحساب');
+      return [];
+    }
+  }
+  
   public async updateOpeningBalance(
     partyId: string, 
     newOpeningBalance: number, 
@@ -370,12 +370,10 @@ class PartyService {
       const currentParty = await this.getPartyById(partyId);
       if (!currentParty) throw new Error('الطرف التجاري غير موجود');
       
-      // حساب الفرق بين الرصيد الافتتاحي الجديد والقديم
       const oldOpeningValue = currentParty.opening_balance * (currentParty.balance_type === 'debit' ? 1 : -1);
       const newOpeningValue = newOpeningBalance * (balanceType === 'debit' ? 1 : -1);
       const balanceDifference = newOpeningValue - oldOpeningValue;
       
-      // تحديث بيانات الطرف
       const { error } = await supabase
         .from('parties')
         .update({
@@ -386,7 +384,6 @@ class PartyService {
       
       if (error) throw error;
       
-      // تحديث رصيد الطرف
       const newBalance = currentParty.balance + balanceDifference;
       
       const { error: balanceError } = await supabase
@@ -399,7 +396,6 @@ class PartyService {
       
       if (balanceError) throw balanceError;
       
-      // إضافة حركة مالية لتعكس التغيير في الرصيد الافتتاحي
       const { error: ledgerError } = await supabase
         .from('ledger')
         .insert({
@@ -422,6 +418,20 @@ class PartyService {
       toast.error('حدث خطأ أثناء تحديث الرصيد الافتتاحي');
       return false;
     }
+  }
+  
+  private getTransactionDescription(transaction_type: string): string {
+    const descriptions: { [key: string]: string } = {
+      'sale_invoice': 'فاتورة مبيعات',
+      'purchase_invoice': 'فاتورة مشتريات',
+      'payment_received': 'دفعة مستلمة',
+      'payment_made': 'دفعة مدفوعة',
+      'sales_return': 'مرتجع مبيعات',
+      'purchase_return': 'مرتجع مشتريات',
+      'opening_balance': 'رصيد افتتاحي'
+    };
+    
+    return descriptions[transaction_type] || transaction_type;
   }
 }
 

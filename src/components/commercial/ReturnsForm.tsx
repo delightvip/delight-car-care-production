@@ -29,7 +29,7 @@ import { CalendarIcon, PlusCircle, Trash } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Return, ReturnItem } from '@/services/CommercialService';
+import { Return } from '@/services/CommercialService';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
 
@@ -141,7 +141,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     // Create a return object from form values
     const returnData: Omit<Return, 'id' | 'created_at'> = {
       return_type: values.return_type,
-      invoice_id: values.invoice_id,
+      invoice_id: values.invoice_id === 'no_invoice' ? undefined : values.invoice_id,
       date: format(values.date, 'yyyy-MM-dd'),
       amount: values.amount,
       notes: values.notes,

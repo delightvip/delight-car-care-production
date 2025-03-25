@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import CommercialService, { Return, ReturnItem } from '@/services/CommercialService';
+import CommercialService, { Return } from '@/services/CommercialService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -80,12 +79,11 @@ const Returns = () => {
 
   const handleAddNewReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
     try {
-      // Convert "no_invoice" to null/undefined before sending to the server
       if (returnData.invoice_id === 'no_invoice') {
         returnData.invoice_id = undefined;
       }
       
-      await commercialService.recordReturn(returnData);
+      await commercialService.createReturn(returnData);
       refetch();
       setIsFormOpen(false);
       toast.success('تم تسجيل المرتجع بنجاح');

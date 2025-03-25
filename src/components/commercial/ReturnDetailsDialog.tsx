@@ -26,11 +26,15 @@ export function ReturnDetailsDialog({
   onOpenChange,
   onDelete
 }: ReturnDetailsDialogProps) {
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | Date) => {
     try {
-      return format(new Date(dateString), 'yyyy-MM-dd');
+      if (typeof dateString === 'string') {
+        return format(new Date(dateString), 'yyyy-MM-dd');
+      } else {
+        return format(dateString, 'yyyy-MM-dd');
+      }
     } catch (error) {
-      return dateString;
+      return String(dateString);
     }
   };
 
