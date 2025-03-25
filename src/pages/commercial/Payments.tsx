@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CommercialService, { Payment } from '@/services/CommercialService';
@@ -75,18 +74,16 @@ const Payments = () => {
     return filtered;
   }, [payments, activeTab, searchQuery]);
 
-  // Fixed this function to correctly handle the form data
   const handleAddPayment = async (paymentData: any) => {
     try {
-      // Since PaymentForm doesn't include party_id, we need to create a custom Payment object
       const payment: Omit<Payment, 'id' | 'created_at'> = {
-        party_id: paymentData.party_id || "", // Added party_id to fix the TypeScript error
+        party_id: paymentData.party_id || "",
         date: paymentData.date,
         amount: paymentData.amount,
         payment_type: paymentData.payment_type as 'collection' | 'disbursement',
         method: paymentData.method,
-        related_invoice_id: paymentData.related_invoice_id,
-        notes: paymentData.notes
+        related_invoice_id: paymentData.related_invoice_id || "",
+        notes: paymentData.notes || ""
       };
       
       await commercialService.recordPayment(payment);
@@ -103,15 +100,14 @@ const Payments = () => {
     if (!selectedPayment || !selectedPayment.id) return;
     
     try {
-      // Create a payment object that includes the party_id from the selected payment
       const payment: Partial<Omit<Payment, 'id' | 'created_at'>> = {
         party_id: paymentData.party_id || selectedPayment.party_id,
         date: paymentData.date,
         amount: paymentData.amount,
         payment_type: paymentData.payment_type as 'collection' | 'disbursement',
-        method: paymentData.method,
-        related_invoice_id: paymentData.related_invoice_id,
-        notes: paymentData.notes
+        method: paymentData.method as 'cash' | 'check' | 'bank_transfer' | 'other',
+        related_invoice_id: paymentData.related_invoice_id || "",
+        notes: paymentData.notes || ""
       };
       
       await commercialService.updatePayment(selectedPayment.id, payment);
@@ -313,6 +309,8 @@ const Payments = () => {
             onSubmit={isEditMode ? handleEditPayment : handleAddPayment} 
             initialData={selectedPayment || undefined}
             isEditing={isEditMode}
+            partyId={selectedPayment?.party_id || ""}
+            partyType="customer"
           />
         </DialogContent>
       </Dialog>

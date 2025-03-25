@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
@@ -59,14 +58,12 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
   const [selectedRawMaterial, setSelectedRawMaterial] = useState('');
   const [percentage, setPercentage] = useState(0);
 
-  // إضافة مكون للمنتج النصف مصنع
   const handleAddIngredient = () => {
     if (!selectedRawMaterial || percentage <= 0 || percentage > 100) {
       toast.error("يرجى اختيار مادة أولية وتحديد نسبة صحيحة (1-100%)");
       return;
     }
 
-    // التحقق من عدم تكرار المكون
     const existingIndex = product.ingredients.findIndex(
       (i: Ingredient) => i.code === selectedRawMaterial
     );
@@ -95,7 +92,6 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
     setPercentage(0);
   };
 
-  // إزالة مكون من المنتج
   const handleRemoveIngredient = (index: number) => {
     const updatedIngredients = product.ingredients.filter((_: any, i: number) => i !== index);
     setProduct({
@@ -104,7 +100,6 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
     });
   };
 
-  // التحقق من صحة إجمالي النسب
   const validateTotalPercentage = (): boolean => {
     const total = product.ingredients.reduce((sum: number, ing: Ingredient) => sum + ing.percentage, 0);
     if (Math.abs(total - 100) > 0.01) {
@@ -114,7 +109,6 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
     return true;
   };
 
-  // معالجة تقديم النموذج
   const handleSubmit = () => {
     if (!product.name || !product.unit) {
       toast.error("يجب ملء جميع الحقول المطلوبة");
@@ -150,24 +144,6 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
               value={product.name}
               onChange={e => setProduct({...product, name: e.target.value})}
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="unit">وحدة القياس</Label>
-            <Select 
-              value={product.unit} 
-              onValueChange={value => setProduct({...product, unit: value})}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="اختر وحدة القياس" />
-              </SelectTrigger>
-              <SelectContent>
-                {units.map(unit => (
-                  <SelectItem key={unit} value={unit || "unknown_unit"}>
-                    {unit}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="quantity">الكمية</Label>

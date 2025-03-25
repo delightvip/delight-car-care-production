@@ -39,7 +39,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
         <SelectContent>
           {rawMaterials.map(material => (
             <SelectItem 
-              key={material.code} 
+              key={material.code || `material_${material.id}`} 
               value={material.code || `material_${material.id}`} // Ensure non-empty value
             >
               {material.name}

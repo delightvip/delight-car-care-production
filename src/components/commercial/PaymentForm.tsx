@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,10 +46,11 @@ interface PaymentFormProps {
   partyId: string;
   partyType: 'customer' | 'supplier' | 'other';
   initialData?: Partial<PaymentFormValues>;
-  onSubmit: (data: PaymentFormValues) => void;
+  onSubmit: (data: PaymentFormValues & { party_id: string }) => void;
+  isEditing?: boolean;
 }
 
-export function PaymentForm({ partyId, partyType, initialData, onSubmit }: PaymentFormProps) {
+export function PaymentForm({ partyId, partyType, initialData, onSubmit, isEditing }: PaymentFormProps) {
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
@@ -76,7 +76,8 @@ export function PaymentForm({ partyId, partyType, initialData, onSubmit }: Payme
   );
 
   const handleSubmit = (values: PaymentFormValues) => {
-    onSubmit(values);
+    // Include the party_id when submitting the form
+    onSubmit({ ...values, party_id: partyId });
   };
 
   return (
@@ -216,7 +217,7 @@ export function PaymentForm({ partyId, partyType, initialData, onSubmit }: Payme
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="">بدون ربط بفاتورة</SelectItem>
+                  <SelectItem value="no_invoice">بدون ربط بفاتورة</SelectItem>
                   {unpaidInvoices?.map((invoice) => (
                     <SelectItem key={invoice.id} value={invoice.id}>
                       {`${invoice.id.substring(0, 8)}... - ${format(new Date(invoice.date), 'yyyy-MM-dd')} - ${invoice.total_amount}`}
