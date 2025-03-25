@@ -2,85 +2,118 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import PartyService from '@/services/PartyService';
-import CommercialService from '@/services/CommercialService';
 import PageTransition from '@/components/ui/PageTransition';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
-import { ArrowLeft, Edit, Plus, Receipt, FileText, Banknote } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, FileText, Banknote } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import PartyService, { Party } from '@/services/PartyService';
+import CommercialService from '@/services/CommercialService';
 import { PartyForm } from '@/components/parties/PartyForm';
-import { PaymentForm } from '@/components/commercial/PaymentForm';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 const PartyDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('details');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   
   const partyService = PartyService.getInstance();
   const commercialService = CommercialService.getInstance();
   
-  const { data: party, isLoading: partyLoading, refetch: refetchParty } = useQuery({
+  // مانع للأخطاء في حال كان المعرف غير موجود
+  if (!id) {
+    navigate('/commercial/parties');
+    return null;
+  }
+  
+  // استعلام جلب بيانات الطرف التجاري
+  const { 
+    data: party, 
+    isLoading: isLoadingParty, 
+    error: partyError,
+    refetch: refetchParty
+  } = useQuery({
     queryKey: ['party', id],
-    queryFn: () => partyService.getPartyById(id!),
-    enabled: !!id,
+    queryFn: () => partyService.getPartyById(id),
   });
   
-  const { data: transactions, isLoading: transactionsLoading } = useQuery({
-    queryKey: ['party-transactions', id],
-    queryFn: () => partyService.getPartyTransactions(id!),
-    enabled: !!id,
+  // استعلام جلب الفواتير الخاصة بالطرف
+  const { 
+    data: invoices,
+    isLoading: isLoadingInvoices,
+  } = useQuery({
+    queryKey: ['invoices', id],
+    queryFn: () => commercialService.getInvoicesByParty(id),
+    enabled: !!id
   });
   
-  const { data: invoices, isLoading: invoicesLoading } = useQuery({
-    queryKey: ['party-invoices', id],
-    queryFn: () => commercialService.getInvoicesByParty(id!),
-    enabled: !!id,
-  });
-
-  const { data: payments, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['party-payments', id],
-    queryFn: () => commercialService.getPaymentsByParty(id!),
-    enabled: !!id,
+  // استعلام جلب المدفوعات الخاصة بالطرف
+  const { 
+    data: payments,
+    isLoading: isLoadingPayments,
+  } = useQuery({
+    queryKey: ['payments', id],
+    queryFn: () => commercialService.getPaymentsByParty(id),
+    enabled: !!id
   });
   
-  const handleUpdateParty = async (updatedData: any) => {
-    if (id) {
-      await partyService.updateParty(id, updatedData);
+  // استعلام جلب سجل الحساب
+  const { 
+    data: ledgerEntries,
+    isLoading: isLoadingLedger,
+  } = useQuery({
+    queryKey: ['ledger', id],
+    queryFn: () => commercialService.getLedgerEntries(id),
+    enabled: !!id
+  });
+  
+  const handleUpdateParty = async (partyData: Partial<Party>) => {
+    try {
+      await partyService.updateParty(id, partyData);
+      toast.success('تم تحديث بيانات الطرف بنجاح');
       refetchParty();
       setIsEditDialogOpen(false);
+    } catch (error) {
+      toast.error('حدث خطأ أثناء تحديث البيانات');
+      console.error(error);
     }
   };
   
-  const handlePaymentSubmit = async (paymentData: any) => {
-    await commercialService.recordPayment({
-      ...paymentData,
-      party_id: id!,
-      party_name: party?.name,
-    });
-    refetchParty();
-    setIsPaymentDialogOpen(false);
-  };
-  
-  if (partyLoading || !party) {
+  // التعامل مع حالة التحميل
+  if (isLoadingParty) {
     return (
       <PageTransition>
         <div className="space-y-6">
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" onClick={() => navigate('/commercial/parties')}>
+          <div className="flex items-center">
+            <Button variant="ghost" onClick={() => navigate('/commercial/parties')} className="mr-4">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              عودة
+              العودة للقائمة
             </Button>
-            <h1 className="text-3xl font-bold tracking-tight">تفاصيل الطرف التجاري</h1>
+            <Skeleton className="h-8 w-60" />
           </div>
-          <div className="h-[400px] flex items-center justify-center">
-            <p className="text-muted-foreground">جاري تحميل البيانات...</p>
+          <Skeleton className="h-12 w-full max-w-md" />
+          <Skeleton className="h-[500px] w-full" />
+        </div>
+      </PageTransition>
+    );
+  }
+  
+  // التعامل مع حالة الخطأ
+  if (partyError || !party) {
+    return (
+      <PageTransition>
+        <div className="space-y-6">
+          <Button variant="ghost" onClick={() => navigate('/commercial/parties')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            العودة للقائمة
+          </Button>
+          <div className="bg-destructive/10 p-4 rounded-md text-destructive">
+            <p>حدث خطأ أثناء تحميل بيانات الطرف التجاري. الرجاء المحاولة مرة أخرى.</p>
+            <p>{String(partyError || 'الطرف التجاري غير موجود')}</p>
           </div>
         </div>
       </PageTransition>
@@ -90,377 +123,320 @@ const PartyDetails = () => {
   return (
     <PageTransition>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" onClick={() => navigate('/commercial/parties')}>
+        <div className="flex flex-row items-center justify-between">
+          <div className="flex items-center">
+            <Button variant="ghost" onClick={() => navigate('/commercial/parties')} className="mr-4">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              عودة
+              العودة للقائمة
             </Button>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">{party.name}</h1>
-              <div className="flex items-center space-x-2 mt-1">
-                <Badge variant={party.type === 'customer' ? 'default' : party.type === 'supplier' ? 'secondary' : 'outline'}>
-                  {party.type === 'customer' ? 'عميل' : party.type === 'supplier' ? 'مورد' : 'أخرى'}
-                </Badge>
-                <Badge variant={party.balance > 0 ? 'destructive' : 'success'} className="mr-2">
-                  {`الرصيد: ${Math.abs(party.balance).toFixed(2)} (${party.balance > 0 ? 'مدين' : party.balance < 0 ? 'دائن' : 'متزن'})`}
-                </Badge>
-              </div>
+              <p className="text-muted-foreground">
+                {party.type === 'customer' ? 'عميل' : 
+                 party.type === 'supplier' ? 'مورّد' : 'طرف آخر'}
+                 {party.code ? ` - الكود: ${party.code}` : ''}
+              </p>
             </div>
           </div>
-          
-          <div className="flex space-x-2">
-            <Button onClick={() => setIsEditDialogOpen(true)}>
-              <Edit className="mr-2 h-4 w-4" />
-              تعديل
-            </Button>
-            <Button onClick={() => setIsPaymentDialogOpen(true)} variant="secondary">
-              <Receipt className="mr-2 h-4 w-4" />
-              تسجيل دفعة
-            </Button>
-            <Button 
-              onClick={() => navigate(`/commercial/invoices/new?party=${id}`)} 
-              variant={party.type === 'customer' ? 'default' : 'outline'}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {party.type === 'customer' ? 'فاتورة مبيعات جديدة' : 'فاتورة مشتريات جديدة'}
-            </Button>
-          </div>
+          <Button onClick={() => setIsEditDialogOpen(true)}>
+            تعديل البيانات
+          </Button>
         </div>
         
-        <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
+        <Card>
+          <CardHeader className="p-4">
+            <div className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-xl">معلومات الحساب</CardTitle>
+                <CardDescription>ملخص الحساب والرصيد</CardDescription>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">الرصيد الحالي</div>
+                <div className={`text-2xl font-bold ${party.balance > 0 ? 'text-red-600' : party.balance < 0 ? 'text-green-600' : ''}`}>
+                  {Math.abs(party.balance).toFixed(2)} {party.balance > 0 ? '(مدين)' : party.balance < 0 ? '(دائن)' : ''}
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+        
+        <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
-            <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
-            <TabsTrigger value="transactions">المعاملات المالية</TabsTrigger>
+            <TabsTrigger value="details">التفاصيل</TabsTrigger>
             <TabsTrigger value="invoices">الفواتير</TabsTrigger>
             <TabsTrigger value="payments">المدفوعات</TabsTrigger>
+            <TabsTrigger value="ledger">سجل الحساب</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="overview" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>معلومات الاتصال</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <dl className="space-y-4">
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">رقم الهاتف:</dt>
-                      <dd>{party.phone || 'غير محدد'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">البريد الإلكتروني:</dt>
-                      <dd>{party.email || 'غير محدد'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">العنوان:</dt>
-                      <dd>{party.address || 'غير محدد'}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">تاريخ الإنشاء:</dt>
-                      <dd>{format(new Date(party.created_at), 'yyyy-MM-dd')}</dd>
-                    </div>
-                  </dl>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>معلومات الحساب</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <dl className="space-y-4">
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">رصيد الافتتاح:</dt>
-                      <dd>{party.opening_balance.toFixed(2)} ({party.balance_type === 'debit' ? 'مدين' : 'دائن'})</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">الرصيد الحالي:</dt>
-                      <dd className={party.balance > 0 ? 'text-destructive font-medium' : party.balance < 0 ? 'text-green-600 font-medium' : ''}>
-                        {Math.abs(party.balance).toFixed(2)} ({party.balance > 0 ? 'مدين' : party.balance < 0 ? 'دائن' : 'متزن'})
-                      </dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">عدد الفواتير:</dt>
-                      <dd>{invoices?.length || 0}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">عدد الدفعات:</dt>
-                      <dd>{payments?.length || 0}</dd>
-                    </div>
-                  </dl>
-                </CardContent>
-              </Card>
-              
-              <Card className="md:col-span-2">
-                <CardHeader>
-                  <CardTitle>ملخص النشاط</CardTitle>
-                  <CardDescription>آخر 5 معاملات للطرف التجاري</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {transactionsLoading ? (
-                    <p className="text-muted-foreground text-center py-4">جاري تحميل البيانات...</p>
-                  ) : transactions && transactions.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>التاريخ</TableHead>
-                          <TableHead>المعاملة</TableHead>
-                          <TableHead>الوصف</TableHead>
-                          <TableHead>مدين</TableHead>
-                          <TableHead>دائن</TableHead>
-                          <TableHead>الرصيد</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {transactions.slice(0, 5).map((tx) => (
-                          <TableRow key={tx.id}>
-                            <TableCell>{format(new Date(tx.transaction_date), 'yyyy-MM-dd')}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {tx.transaction_type === 'sale_invoice' ? 'فاتورة مبيعات' :
-                                  tx.transaction_type === 'purchase_invoice' ? 'فاتورة مشتريات' :
-                                  tx.transaction_type === 'payment_received' ? 'دفعة مستلمة' :
-                                  tx.transaction_type === 'payment_made' ? 'دفعة مسددة' : tx.transaction_type}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{tx.description || '-'}</TableCell>
-                            <TableCell>{tx.debit > 0 ? tx.debit.toFixed(2) : '-'}</TableCell>
-                            <TableCell>{tx.credit > 0 ? tx.credit.toFixed(2) : '-'}</TableCell>
-                            <TableCell className={tx.balance > 0 ? 'text-destructive' : tx.balance < 0 ? 'text-green-600' : ''}>
-                              {Math.abs(tx.balance).toFixed(2)} {tx.balance > 0 ? '(مدين)' : tx.balance < 0 ? '(دائن)' : ''}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-center py-6 text-muted-foreground">لا توجد معاملات لعرضها</p>
-                  )}
-                  {transactions && transactions.length > 5 && (
-                    <div className="flex justify-center mt-4">
-                      <Button variant="ghost" onClick={() => setActiveTab('transactions')}>
-                        عرض جميع المعاملات
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="transactions" className="mt-0">
+          <TabsContent value="details" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>المعاملات المالية</CardTitle>
-                <CardDescription>سجل كامل بجميع المعاملات المالية للطرف التجاري</CardDescription>
+                <CardTitle>بيانات الطرف التجاري</CardTitle>
               </CardHeader>
-              <CardContent>
-                {transactionsLoading ? (
-                  <p className="text-muted-foreground text-center py-4">جاري تحميل البيانات...</p>
-                ) : transactions && transactions.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>التاريخ</TableHead>
-                        <TableHead>المعاملة</TableHead>
-                        <TableHead>الوصف</TableHead>
-                        <TableHead>المرجع</TableHead>
-                        <TableHead>مدين</TableHead>
-                        <TableHead>دائن</TableHead>
-                        <TableHead>الرصيد</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transactions.map((tx) => (
-                        <TableRow key={tx.id}>
-                          <TableCell>{format(new Date(tx.transaction_date), 'yyyy-MM-dd')}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {tx.transaction_type === 'sale_invoice' ? 'فاتورة مبيعات' :
-                                tx.transaction_type === 'purchase_invoice' ? 'فاتورة مشتريات' :
-                                tx.transaction_type === 'payment_received' ? 'دفعة مستلمة' :
-                                tx.transaction_type === 'payment_made' ? 'دفعة مسددة' : tx.transaction_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{tx.description || '-'}</TableCell>
-                          <TableCell>
-                            {tx.reference ? 
-                              <Button variant="link" className="p-0 h-auto" onClick={() => {
-                                if (tx.transaction_type === 'sale_invoice' || tx.transaction_type === 'purchase_invoice') {
-                                  navigate(`/commercial/invoices/${tx.reference}`);
-                                }
-                              }}>
-                                {tx.reference.substring(0, 8)}...
-                              </Button> : '-'}
-                          </TableCell>
-                          <TableCell>{tx.debit > 0 ? tx.debit.toFixed(2) : '-'}</TableCell>
-                          <TableCell>{tx.credit > 0 ? tx.credit.toFixed(2) : '-'}</TableCell>
-                          <TableCell className={tx.balance > 0 ? 'text-destructive' : tx.balance < 0 ? 'text-green-600' : ''}>
-                            {Math.abs(tx.balance).toFixed(2)} {tx.balance > 0 ? '(مدين)' : tx.balance < 0 ? '(دائن)' : ''}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="text-center py-6 text-muted-foreground">لا توجد معاملات لعرضها</p>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">الاسم</h3>
+                  <p>{party.name}</p>
+                </div>
+                
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">النوع</h3>
+                  <p>
+                    {party.type === 'customer' ? 'عميل' : 
+                     party.type === 'supplier' ? 'مورّد' : 'أخرى'}
+                  </p>
+                </div>
+                
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">رقم الهاتف</h3>
+                  <p>{party.phone || 'غير محدد'}</p>
+                </div>
+                
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">البريد الإلكتروني</h3>
+                  <p>{party.email || 'غير محدد'}</p>
+                </div>
+                
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">العنوان</h3>
+                  <p>{party.address || 'غير محدد'}</p>
+                </div>
+                
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">الرصيد</h3>
+                  <p className={party.balance > 0 ? 'text-red-600' : party.balance < 0 ? 'text-green-600' : ''}>
+                    {Math.abs(party.balance).toFixed(2)} {party.balance > 0 ? '(مدين)' : party.balance < 0 ? '(دائن)' : ''}
+                  </p>
+                </div>
+                
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">تاريخ الإضافة</h3>
+                  <p>{party.created_at ? format(new Date(party.created_at), 'yyyy-MM-dd') : 'غير محدد'}</p>
+                </div>
+                
+                {party.notes && (
+                  <div className="col-span-2">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-1">ملاحظات</h3>
+                    <p>{party.notes}</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
           
-          <TabsContent value="invoices" className="mt-0">
+          <TabsContent value="invoices" className="space-y-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>الفواتير</CardTitle>
-                  <CardDescription>جميع فواتير {party.type === 'customer' ? 'المبيعات' : 'المشتريات'} المرتبطة</CardDescription>
-                </div>
-                <Button onClick={() => navigate(`/commercial/invoices/new?party=${id}`)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  فاتورة جديدة
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>الفواتير</CardTitle>
+                <Button size="sm" onClick={() => navigate('/commercial/invoices')}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  إنشاء فاتورة جديدة
                 </Button>
               </CardHeader>
               <CardContent>
-                {invoicesLoading ? (
-                  <p className="text-muted-foreground text-center py-4">جاري تحميل البيانات...</p>
+                {isLoadingInvoices ? (
+                  <div className="py-6 text-center">
+                    <Skeleton className="h-6 w-full max-w-md mx-auto" />
+                    <Skeleton className="h-16 w-full mt-4" />
+                    <Skeleton className="h-16 w-full mt-2" />
+                    <Skeleton className="h-16 w-full mt-2" />
+                  </div>
                 ) : invoices && invoices.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>رقم الفاتورة</TableHead>
-                        <TableHead>التاريخ</TableHead>
-                        <TableHead>المبلغ</TableHead>
-                        <TableHead>الحالة</TableHead>
-                        <TableHead>ملاحظات</TableHead>
-                        <TableHead>الإجراءات</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {invoices.map((invoice) => (
-                        <TableRow key={invoice.id}>
-                          <TableCell>{invoice.id.substring(0, 8)}...</TableCell>
-                          <TableCell>{format(new Date(invoice.date), 'yyyy-MM-dd')}</TableCell>
-                          <TableCell>{invoice.total_amount.toFixed(2)}</TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              invoice.status === 'paid' ? 'success' :
-                              invoice.status === 'partial' ? 'warning' : 'destructive'
-                            }>
-                              {invoice.status === 'paid' ? 'مدفوعة' :
-                               invoice.status === 'partial' ? 'مدفوعة جزئياً' : 'غير مدفوعة'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{invoice.notes || '-'}</TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm" onClick={() => navigate(`/commercial/invoices/${invoice.id}`)}>
-                              <FileText className="h-4 w-4 mr-2" />
-                              عرض
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="py-2 px-4 text-right">الرقم</th>
+                          <th className="py-2 px-4 text-right">النوع</th>
+                          <th className="py-2 px-4 text-right">التاريخ</th>
+                          <th className="py-2 px-4 text-right">المبلغ</th>
+                          <th className="py-2 px-4 text-right">الحالة</th>
+                          <th className="py-2 px-4 text-center">الإجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoices.map(invoice => (
+                          <tr key={invoice.id} className="border-b">
+                            <td className="py-2 px-4">{invoice.id.substring(0, 8)}...</td>
+                            <td className="py-2 px-4">
+                              {invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'}
+                            </td>
+                            <td className="py-2 px-4">{invoice.date}</td>
+                            <td className="py-2 px-4">{invoice.total_amount.toFixed(2)}</td>
+                            <td className="py-2 px-4">
+                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                invoice.payment_status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                invoice.payment_status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {invoice.payment_status === 'confirmed' ? 'مؤكدة' :
+                                 invoice.payment_status === 'cancelled' ? 'ملغية' : 'مسودة'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-4 text-center">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => navigate(`/commercial/invoices/${invoice.id}`)}
+                              >
+                                عرض
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <p className="text-center py-6 text-muted-foreground">لا توجد فواتير لعرضها</p>
+                  <div className="py-10 text-center text-muted-foreground">
+                    لا توجد فواتير لهذا الطرف
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
           
-          <TabsContent value="payments" className="mt-0">
+          <TabsContent value="payments" className="space-y-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>المدفوعات</CardTitle>
-                  <CardDescription>سجل المدفوعات المستلمة والمسددة</CardDescription>
-                </div>
-                <Button onClick={() => setIsPaymentDialogOpen(true)}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>المدفوعات والتحصيلات</CardTitle>
+                <Button size="sm" onClick={() => navigate('/commercial/payments')}>
                   <Banknote className="mr-2 h-4 w-4" />
-                  تسجيل دفعة جديدة
+                  تسجيل معاملة جديدة
                 </Button>
               </CardHeader>
               <CardContent>
-                {paymentsLoading ? (
-                  <p className="text-muted-foreground text-center py-4">جاري تحميل البيانات...</p>
+                {isLoadingPayments ? (
+                  <div className="py-6 text-center">
+                    <Skeleton className="h-6 w-full max-w-md mx-auto" />
+                    <Skeleton className="h-16 w-full mt-4" />
+                    <Skeleton className="h-16 w-full mt-2" />
+                    <Skeleton className="h-16 w-full mt-2" />
+                  </div>
                 ) : payments && payments.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>رقم المعاملة</TableHead>
-                        <TableHead>النوع</TableHead>
-                        <TableHead>التاريخ</TableHead>
-                        <TableHead>المبلغ</TableHead>
-                        <TableHead>طريقة الدفع</TableHead>
-                        <TableHead>الفاتورة المرتبطة</TableHead>
-                        <TableHead>ملاحظات</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {payments.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>{payment.id?.substring(0, 8)}...</TableCell>
-                          <TableCell>
-                            <Badge variant={payment.payment_type === 'collection' ? 'success' : 'destructive'}>
-                              {payment.payment_type === 'collection' ? 'تحصيل' : 'سداد'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{format(new Date(payment.date), 'yyyy-MM-dd')}</TableCell>
-                          <TableCell>{payment.amount.toFixed(2)}</TableCell>
-                          <TableCell>{payment.method === 'cash' ? 'نقدي' : 
-                                      payment.method === 'check' ? 'شيك' : 
-                                      payment.method === 'bank_transfer' ? 'تحويل بنكي' : payment.method}</TableCell>
-                          <TableCell>
-                            {payment.related_invoice_id ? (
-                              <Button variant="link" className="p-0 h-auto" onClick={() => 
-                                navigate(`/commercial/invoices/${payment.related_invoice_id}`)
-                              }>
-                                {payment.related_invoice_id.substring(0, 8)}...
-                              </Button>
-                            ) : '-'}
-                          </TableCell>
-                          <TableCell>{payment.notes || '-'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="py-2 px-4 text-right">الرقم</th>
+                          <th className="py-2 px-4 text-right">النوع</th>
+                          <th className="py-2 px-4 text-right">التاريخ</th>
+                          <th className="py-2 px-4 text-right">المبلغ</th>
+                          <th className="py-2 px-4 text-right">طريقة الدفع</th>
+                          <th className="py-2 px-4 text-right">الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payments.map(payment => (
+                          <tr key={payment.id} className="border-b">
+                            <td className="py-2 px-4">{payment.id.substring(0, 8)}...</td>
+                            <td className="py-2 px-4">
+                              {payment.payment_type === 'collection' ? 'تحصيل' : 'صرف'}
+                            </td>
+                            <td className="py-2 px-4">{payment.date}</td>
+                            <td className="py-2 px-4">{payment.amount.toFixed(2)}</td>
+                            <td className="py-2 px-4">
+                              {payment.method === 'cash' ? 'نقداً' :
+                               payment.method === 'check' ? 'شيك' :
+                               payment.method === 'bank_transfer' ? 'حوالة بنكية' : 'أخرى'}
+                            </td>
+                            <td className="py-2 px-4">
+                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                payment.payment_status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                payment.payment_status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {payment.payment_status === 'confirmed' ? 'مؤكدة' :
+                                 payment.payment_status === 'cancelled' ? 'ملغية' : 'مسودة'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <p className="text-center py-6 text-muted-foreground">لا توجد مدفوعات لعرضها</p>
+                  <div className="py-10 text-center text-muted-foreground">
+                    لا توجد مدفوعات أو تحصيلات لهذا الطرف
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="ledger" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>سجل الحساب</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingLedger ? (
+                  <div className="py-6 text-center">
+                    <Skeleton className="h-6 w-full max-w-md mx-auto" />
+                    <Skeleton className="h-16 w-full mt-4" />
+                    <Skeleton className="h-16 w-full mt-2" />
+                    <Skeleton className="h-16 w-full mt-2" />
+                  </div>
+                ) : ledgerEntries && ledgerEntries.length > 0 ? (
+                  <div className="rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="py-2 px-4 text-right">التاريخ</th>
+                          <th className="py-2 px-4 text-right">المعاملة</th>
+                          <th className="py-2 px-4 text-right">مدين</th>
+                          <th className="py-2 px-4 text-right">دائن</th>
+                          <th className="py-2 px-4 text-right">الرصيد</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ledgerEntries.map(entry => (
+                          <tr key={entry.id} className="border-b">
+                            <td className="py-2 px-4">{entry.date}</td>
+                            <td className="py-2 px-4">
+                              {entry.transaction_type === 'sale_invoice' ? 'فاتورة مبيعات' :
+                               entry.transaction_type === 'purchase_invoice' ? 'فاتورة مشتريات' :
+                               entry.transaction_type === 'payment_received' ? 'دفعة مستلمة' :
+                               entry.transaction_type === 'payment_made' ? 'دفعة مدفوعة' :
+                               entry.transaction_type === 'sales_return' ? 'مرتجع مبيعات' :
+                               entry.transaction_type === 'purchase_return' ? 'مرتجع مشتريات' :
+                               entry.transaction_type === 'opening_balance' ? 'رصيد افتتاحي' :
+                               entry.transaction_type}
+                            </td>
+                            <td className="py-2 px-4 text-red-600">
+                              {entry.debit > 0 ? entry.debit.toFixed(2) : '-'}
+                            </td>
+                            <td className="py-2 px-4 text-green-600">
+                              {entry.credit > 0 ? entry.credit.toFixed(2) : '-'}
+                            </td>
+                            <td className={`py-2 px-4 ${entry.balance_after > 0 ? 'text-red-600' : entry.balance_after < 0 ? 'text-green-600' : ''}`}>
+                              {Math.abs(entry.balance_after).toFixed(2)} {entry.balance_after > 0 ? '(مدين)' : entry.balance_after < 0 ? '(دائن)' : ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="py-10 text-center text-muted-foreground">
+                    لا توجد حركات في سجل الحساب
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-      
-        {/* Edit Party Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>تعديل بيانات {party.name}</DialogTitle>
-            </DialogHeader>
-            <PartyForm initialData={party} onSubmit={handleUpdateParty} />
-          </DialogContent>
-        </Dialog>
-        
-        {/* Add Payment Dialog */}
-        <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>تسجيل دفعة {party.type === 'customer' ? 'مستلمة من' : 'مسددة إلى'} {party.name}</DialogTitle>
-            </DialogHeader>
-            <PaymentForm
-              partyId={id!}
-              partyType={party.type}
-              initialData={{
-                payment_type: party.type === 'customer' ? 'collection' : 'disbursement',
-              }}
-              onSubmit={handlePaymentSubmit}
-            />
-          </DialogContent>
-        </Dialog>
       </div>
+      
+      {/* نافذة تعديل بيانات الطرف */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات الطرف</DialogTitle>
+          </DialogHeader>
+          <PartyForm onSubmit={handleUpdateParty} initialData={party} isEditing={true} />
+        </DialogContent>
+      </Dialog>
     </PageTransition>
   );
 };

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import CommercialService from '@/services/CommercialService';
 
 const formSchema = z.object({
   startDate: z.date({
@@ -46,6 +47,7 @@ const AccountStatements: React.FC<AccountStatementsProps> = () => {
   const [activeTab, setActiveTab] = useState("customers");
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
+  const commercialService = CommercialService.getInstance();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -59,9 +61,12 @@ const AccountStatements: React.FC<AccountStatementsProps> = () => {
   const generateAccountStatements = async (params: { startDate: string; endDate: string; partyType: string }) => {
     try {
       setIsGenerating(true);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setReportData({ message: "Account statements generated successfully!" });
+      const statements = await commercialService.generateAccountStatement(
+        params.startDate,
+        params.endDate,
+        params.partyType
+      );
+      setReportData(statements);
     } catch (error) {
       console.error('Error generating account statements:', error);
     } finally {
@@ -161,7 +166,15 @@ const AccountStatements: React.FC<AccountStatementsProps> = () => {
             {reportData && (
               <div className="mt-6">
                 <h3 className="text-lg font-semibold">Report:</h3>
-                <p>{reportData.message}</p>
+                <p>{reportData.statements?.length || 0} account statements generated.</p>
+                {reportData.statements?.map((statement: any, index: number) => (
+                  <div key={index} className="mt-4 p-4 border rounded-md">
+                    <p><strong>Party:</strong> {statement.party_name}</p>
+                    <p><strong>Opening Balance:</strong> {statement.opening_balance.toFixed(2)}</p>
+                    <p><strong>Closing Balance:</strong> {statement.closing_balance.toFixed(2)}</p>
+                    <p><strong>Total Transactions:</strong> {statement.entries.length}</p>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
