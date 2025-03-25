@@ -139,6 +139,10 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
             <Progress 
               value={percentage} 
               className={`h-2 ${progressClasses.bg}`}
+              style={{
+                backgroundColor: progressClasses.bg.replace('bg-', ''),
+                "--tw-bg-opacity": 1
+              }}
             />
           </div>
         );
@@ -225,7 +229,7 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
             columns={columns}
             searchable={false}
             pagination={true}
-            paginationPageSize={5}
+            itemsPerPage={5}
             noDataMessage={noDataMessage}
           />
         )}

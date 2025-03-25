@@ -257,7 +257,7 @@ const InventoryDistributionPage = () => {
                     columns={columns} 
                     searchable={false}
                     pagination={true}
-                    paginationPageSize={10}
+                    itemsPerPage={10}
                   />
                 )}
               </CardContent>
