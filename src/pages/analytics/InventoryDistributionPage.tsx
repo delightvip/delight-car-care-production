@@ -23,71 +23,82 @@ const InventoryDistributionPage = () => {
   const { data: inventoryData, isLoading } = useQuery({
     queryKey: ['inventoryItems'],
     queryFn: async () => {
-      // جلب بيانات المخزون المختلفة
-      const [rawMaterials, semiFinished, packaging, finished] = await Promise.all([
-        supabase
-          .from('raw_materials')
-          .select('*')
-          .then(res => res.data || []),
-          
-        supabase
-          .from('semi_finished_products')
-          .select('*')
-          .then(res => res.data || []),
-          
-        supabase
-          .from('packaging_materials')
-          .select('*')
-          .then(res => res.data || []),
-          
-        supabase
-          .from('finished_products')
-          .select('*')
-          .then(res => res.data || [])
-      ]);
-      
-      // معالجة البيانات وتوحيد الحقول
-      const processedRawMaterials = rawMaterials.map(item => ({
-        ...item,
-        type: 'raw',
-        typeName: 'مواد أولية',
-        totalValue: item.quantity * item.unit_cost
-      }));
-      
-      const processedSemiFinished = semiFinished.map(item => ({
-        ...item,
-        type: 'semi',
-        typeName: 'منتجات نصف مصنعة',
-        totalValue: item.quantity * item.unit_cost
-      }));
-      
-      const processedPackaging = packaging.map(item => ({
-        ...item,
-        type: 'packaging',
-        typeName: 'مستلزمات تعبئة',
-        totalValue: item.quantity * item.unit_cost
-      }));
-      
-      const processedFinished = finished.map(item => ({
-        ...item,
-        type: 'finished',
-        typeName: 'منتجات نهائية',
-        totalValue: item.quantity * item.unit_cost
-      }));
-      
-      // دمج جميع البيانات
-      return {
-        rawMaterials: processedRawMaterials,
-        semiFinished: processedSemiFinished,
-        packaging: processedPackaging,
-        finished: processedFinished,
-        all: [
-          ...processedRawMaterials,
-          ...processedSemiFinished,
-          ...processedPackaging,
-          ...processedFinished
-        ]
-      };
+      try {
+        // جلب بيانات المخزون المختلفة
+        const [rawMaterials, semiFinished, packaging, finished] = await Promise.all([
+          supabase
+            .from('raw_materials')
+            .select('*')
+            .then(res => res.data || []),
+            
+          supabase
+            .from('semi_finished_products')
+            .select('*')
+            .then(res => res.data || []),
+            
+          supabase
+            .from('packaging_materials')
+            .select('*')
+            .then(res => res.data || []),
+            
+          supabase
+            .from('finished_products')
+            .select('*')
+            .then(res => res.data || [])
+        ]);
+        
+        // معالجة البيانات وتوحيد الحقول
+        const processedRawMaterials = rawMaterials.map(item => ({
+          ...item,
+          type: 'raw',
+          typeName: 'مواد أولية',
+          totalValue: item.quantity * item.unit_cost
+        }));
+        
+        const processedSemiFinished = semiFinished.map(item => ({
+          ...item,
+          type: 'semi',
+          typeName: 'منتجات نصف مصنعة',
+          totalValue: item.quantity * item.unit_cost
+        }));
+        
+        const processedPackaging = packaging.map(item => ({
+          ...item,
+          type: 'packaging',
+          typeName: 'مستلزمات تعبئة',
+          totalValue: item.quantity * item.unit_cost
+        }));
+        
+        const processedFinished = finished.map(item => ({
+          ...item,
+          type: 'finished',
+          typeName: 'منتجات نهائية',
+          totalValue: item.quantity * item.unit_cost
+        }));
+        
+        // دمج جميع البيانات
+        return {
+          rawMaterials: processedRawMaterials,
+          semiFinished: processedSemiFinished,
+          packaging: processedPackaging,
+          finished: processedFinished,
+          all: [
+            ...processedRawMaterials,
+            ...processedSemiFinished,
+            ...processedPackaging,
+            ...processedFinished
+          ]
+        };
+      } catch (error) {
+        console.error("Error fetching inventory data:", error);
+        return {
+          rawMaterials: [],
+          semiFinished: [],
+          packaging: [],
+          finished: [],
+          all: []
+        };
+      }
     },
     refetchInterval: 60000
   });
@@ -129,7 +140,7 @@ const InventoryDistributionPage = () => {
     { 
       key: "code", 
       title: "الرمز",
-      render: (item: any) => <span className="font-medium">{item.code}</span>
+      render: (value: any, item: any) => <span className="font-medium">{item.code}</span>
     },
     { 
       key: "name", 
@@ -138,28 +149,28 @@ const InventoryDistributionPage = () => {
     { 
       key: "quantity", 
       title: "الكمية",
-      render: (item: any) => (
+      render: (value: any, item: any) => (
         <span className="font-medium">{item.quantity} {item.unit}</span>
       )
     },
     {
       key: "unit_cost",
       title: "تكلفة الوحدة",
-      render: (item: any) => (
+      render: (value: any, item: any) => (
         <span>{item.unit_cost?.toLocaleString('ar-EG')} ج.م</span>
       )
     },
     {
       key: "totalValue",
       title: "القيمة الإجمالية",
-      render: (item: any) => (
+      render: (value: any, item: any) => (
         <span className="font-medium">{item.totalValue?.toLocaleString('ar-EG')} ج.م</span>
       )
     },
     {
       key: "typeName",
       title: "النوع",
-      render: (item: any) => {
+      render: (value: any, item: any) => {
         const typeColors: Record<string, string> = {
           raw: 'bg-blue-100 text-blue-800',
           semi: 'bg-purple-100 text-purple-800',
@@ -245,7 +256,8 @@ const InventoryDistributionPage = () => {
                     data={filteredData} 
                     columns={columns} 
                     searchable={false}
-                    pagination={{ pageSize: 10 }}
+                    pagination={true}
+                    paginationPageSize={10}
                   />
                 )}
               </CardContent>

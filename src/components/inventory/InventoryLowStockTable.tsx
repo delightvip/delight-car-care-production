@@ -224,9 +224,8 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
             data={sortedData}
             columns={columns}
             searchable={false}
-            pagination={{
-              pageSize: 5
-            }}
+            pagination={true}
+            paginationPageSize={5}
             noDataMessage={noDataMessage}
           />
         )}

@@ -53,10 +53,10 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
         if (finishedError) throw new Error(finishedError.message);
         
         // حساب القيم الإجمالية لكل نوع
-        const rawMaterialsValue = rawMaterialsData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-        const semiFinishedValue = semiFinishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-        const packagingValue = packagingData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-        const finishedValue = finishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+        const rawMaterialsValue = (rawMaterialsData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
+        const semiFinishedValue = (semiFinishedData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
+        const packagingValue = (packagingData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
+        const finishedValue = (finishedData || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0);
         
         console.log("Inventory distribution data:", {
           rawMaterialsValue,
@@ -74,7 +74,7 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
         ];
       } catch (error) {
         console.error("Error fetching inventory distribution data:", error);
-        throw error;
+        return [];
       }
     },
     // تحديث كل دقيقة
@@ -84,15 +84,17 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
   
   // تحديث البيانات عندما تتغير البيانات الخارجية أو بيانات قاعدة البيانات
   useEffect(() => {
-    const data = propData || databaseData;
-    if (data && data.length > 0) {
+    const data = propData || databaseData || [];
+    if (data.length > 0) {
       // استبعاد العناصر التي قيمتها صفر
-      const filteredData = data.filter(item => item.value > 0);
+      const filteredData = data.filter(item => (item?.value || 0) > 0);
       setChartData(filteredData);
+    } else {
+      setChartData([]);
     }
   }, [propData, databaseData]);
   
-  const total = chartData.reduce((sum, item) => sum + item.value, 0);
+  const total = chartData.reduce((sum, item) => sum + (item?.value || 0), 0);
   
   const onPieEnter = (_: any, index: number) => {
     setActiveIndex(index);
@@ -144,7 +146,7 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
     );
   }
   
-  if (chartData.length === 0) {
+  if (!chartData || chartData.length === 0) {
     return (
       <Alert className="h-72 flex flex-col justify-center">
         <AlertCircle className="h-5 w-5" />
