@@ -1,11 +1,22 @@
 
-import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import CommercialService from '@/services/CommercialService';
+import CommercialService, { Invoice } from '@/services/CommercialService';
 import PageTransition from '@/components/ui/PageTransition';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { 
+  Printer, 
+  ArrowLeft, 
+  FileText, 
+  User, 
+  Calendar, 
+  Bookmark,
+  Trash2,
+  Edit
+} from 'lucide-react';
+import { format } from 'date-fns';
 import { 
   Table, 
   TableBody, 
@@ -15,25 +26,10 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { 
-  ArrowLeft, 
-  Printer, 
-  Edit, 
-  Trash2,
-  Receipt,
-  RefreshCw, 
-  RotateCcw
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogDescription
-} from '@/components/ui/dialog';
+import InvoiceStatusBadge from '@/components/commercial/InvoiceStatusBadge';
+import TransactionStatusActions from '@/components/commercial/TransactionStatusActions';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -43,148 +39,87 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { InvoiceForm } from '@/components/commercial/InvoiceForm';
-import PartyService from '@/services/PartyService';
-import InventoryService from '@/services/InventoryService';
 
 const InvoiceDetails = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams();
   const navigate = useNavigate();
-  
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   
   const commercialService = CommercialService.getInstance();
-  const partyService = PartyService.getInstance();
-  const inventoryService = InventoryService.getInstance();
   
-  const { data: invoice, isLoading: isLoadingInvoice, error: invoiceError, refetch } = useQuery({
+  const { data: invoice, isLoading, error, refetch } = useQuery({
     queryKey: ['invoice', id],
-    queryFn: () => id ? commercialService.getInvoiceById(id) : null,
-    enabled: !!id
+    queryFn: () => commercialService.getInvoiceById(id || ''),
+    enabled: !!id,
   });
   
-  const { data: invoiceItems, isLoading: isLoadingItems } = useQuery({
-    queryKey: ['invoiceItems', id],
-    queryFn: () => id ? commercialService.getInvoiceItems(id) : [],
-    enabled: !!id
-  });
+  if (isLoading) {
+    return (
+      <PageTransition>
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold tracking-tight">تفاصيل الفاتورة</h1>
+            <Button variant="outline" onClick={() => navigate(-1)}>
+              <ArrowLeft className="ml-2 h-4 w-4" />
+              العودة
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="animate-pulse">
+              <CardHeader className="bg-muted h-12" />
+              <CardContent className="space-y-4 pt-6">
+                <div className="bg-muted h-6 rounded w-1/2" />
+                <div className="bg-muted h-6 rounded w-2/3" />
+                <div className="bg-muted h-6 rounded w-1/3" />
+              </CardContent>
+            </Card>
+            <Card className="animate-pulse">
+              <CardHeader className="bg-muted h-12" />
+              <CardContent className="space-y-4 pt-6">
+                <div className="bg-muted h-6 rounded w-3/4" />
+                <div className="bg-muted h-6 rounded w-1/2" />
+                <div className="bg-muted h-6 rounded w-2/3" />
+              </CardContent>
+            </Card>
+          </div>
+          <Card className="animate-pulse">
+            <CardHeader className="bg-muted h-12" />
+            <CardContent className="pt-6">
+              <div className="bg-muted h-64 rounded" />
+            </CardContent>
+          </Card>
+        </div>
+      </PageTransition>
+    );
+  }
   
-  const { data: parties, isLoading: isLoadingParties } = useQuery({
-    queryKey: ['parties'],
-    queryFn: () => partyService.getParties(),
-    refetchOnWindowFocus: false,
-  });
-  
-  const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
-    queryKey: ['rawMaterials'],
-    queryFn: () => inventoryService.getRawMaterials(),
-    refetchOnWindowFocus: false,
-  });
-  
-  const { data: packaging, isLoading: isLoadingPackaging } = useQuery({
-    queryKey: ['packaging'],
-    queryFn: () => inventoryService.getPackagingMaterials(),
-    refetchOnWindowFocus: false,
-  });
-  
-  const { data: semiFinished, isLoading: isLoadingSemiFinished } = useQuery({
-    queryKey: ['semiFinished'],
-    queryFn: () => inventoryService.getSemiFinishedProducts(),
-    refetchOnWindowFocus: false,
-  });
-  
-  const { data: finished, isLoading: isLoadingFinished } = useQuery({
-    queryKey: ['finished'],
-    queryFn: () => inventoryService.getFinishedProducts(),
-    refetchOnWindowFocus: false,
-  });
-  
-  const inventoryItems = React.useMemo(() => {
-    const items = [];
-    
-    if (rawMaterials) {
-      items.push(...rawMaterials.map(item => ({
-        id: item.id,
-        name: item.name,
-        type: 'raw_materials' as const,
-        quantity: item.quantity,
-        unit_cost: item.unit_cost
-      })));
-    }
-    
-    if (packaging) {
-      items.push(...packaging.map(item => ({
-        id: item.id,
-        name: item.name,
-        type: 'packaging_materials' as const,
-        quantity: item.quantity,
-        unit_cost: item.unit_cost || 0
-      })));
-    }
-    
-    if (semiFinished) {
-      items.push(...semiFinished.map(item => ({
-        id: item.id,
-        name: item.name,
-        type: 'semi_finished_products' as const,
-        quantity: item.quantity,
-        unit_cost: item.unit_cost
-      })));
-    }
-    
-    if (finished) {
-      items.push(...finished.map(item => ({
-        id: item.id,
-        name: item.name,
-        type: 'finished_products' as const,
-        quantity: item.quantity,
-        unit_cost: item.unit_cost
-      })));
-    }
-    
-    return items;
-  }, [rawMaterials, packaging, semiFinished, finished]);
-  
-  const handleUpdateInvoice = async (updatedInvoiceData: any) => {
-    if (!id) return;
-    
-    try {
-      const { items, ...invoiceData } = updatedInvoiceData;
-      
-      // First update the invoice
-      await commercialService.updateInvoice(id, {
-        ...invoiceData,
-        total_amount: items.reduce((sum: number, item: any) => sum + (item.quantity * item.unit_price), 0)
-      });
-      
-      // Delete old items
-      if (invoiceItems && invoiceItems.length > 0) {
-        // This is handled server-side when updating the invoice
-      }
-      
-      refetch();
-      setIsEditDialogOpen(false);
-      toast.success('تم تحديث الفاتورة بنجاح');
-    } catch (error) {
-      console.error('Error updating invoice:', error);
-      toast.error('حدث خطأ أثناء تحديث الفاتورة');
-    }
-  };
-  
-  const handleDeleteInvoice = async () => {
-    if (!id) return;
-    
-    try {
-      await commercialService.deleteInvoice(id);
-      toast.success('تم حذف الفاتورة بنجاح');
-      navigate('/commercial/invoices');
-    } catch (error) {
-      console.error('Error deleting invoice:', error);
-      toast.error('حدث خطأ أثناء حذف الفاتورة');
-    }
-  };
+  if (error || !invoice) {
+    return (
+      <PageTransition>
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold tracking-tight">تفاصيل الفاتورة</h1>
+            <Button variant="outline" onClick={() => navigate(-1)}>
+              <ArrowLeft className="ml-2 h-4 w-4" />
+              العودة
+            </Button>
+          </div>
+          <Card className="bg-destructive/10">
+            <CardContent className="p-6">
+              <p className="text-destructive text-lg">
+                حدث خطأ أثناء جلب بيانات الفاتورة. الرجاء المحاولة مرة أخرى لاحقًا.
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {error instanceof Error ? error.message : 'خطأ غير معروف'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageTransition>
+    );
+  }
   
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -199,264 +134,217 @@ const InvoiceDetails = () => {
     }
   };
   
-  if (isLoadingInvoice || isLoadingItems) {
-    return (
-      <PageTransition>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" onClick={() => navigate('/commercial/invoices')}>
-                <ArrowLeft className="ml-2 h-4 w-4" />
-                العودة للفواتير
-              </Button>
-              <Skeleton className="h-8 w-40" />
-            </div>
-            <Skeleton className="h-10 w-32" />
-          </div>
-          <div className="grid grid-cols-3 gap-6">
-            <Skeleton className="h-28 w-full" />
-            <Skeleton className="h-28 w-full" />
-            <Skeleton className="h-28 w-full" />
-          </div>
-          <Skeleton className="h-[400px] w-full" />
-        </div>
-      </PageTransition>
-    );
-  }
+  const handleDelete = async () => {
+    if (!id) return;
+    
+    try {
+      const success = await commercialService.deleteInvoice(id);
+      if (success) {
+        toast.success('تم حذف الفاتورة بنجاح');
+        navigate('/commercial/invoices');
+      }
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      toast.error('حدث خطأ أثناء حذف الفاتورة');
+    }
+  };
   
-  if (invoiceError || !invoice) {
-    return (
-      <PageTransition>
-        <div className="space-y-6">
-          <div className="flex items-center">
-            <Button variant="ghost" onClick={() => navigate('/commercial/invoices')}>
-              <ArrowLeft className="ml-2 h-4 w-4" />
-              العودة للفواتير
-            </Button>
-            <h1 className="text-3xl font-bold tracking-tight mr-4">تفاصيل الفاتورة</h1>
-          </div>
-          <div className="bg-destructive/10 p-4 rounded-md text-destructive">
-            <p>عذراً، لم يتم العثور على الفاتورة المطلوبة أو حدث خطأ أثناء تحميل البيانات.</p>
-            <Button variant="outline" className="mt-4" onClick={() => navigate('/commercial/invoices')}>
-              العودة لصفحة الفواتير
-            </Button>
-          </div>
-        </div>
-      </PageTransition>
-    );
-  }
+  const handleConfirmInvoice = async () => {
+    if (!id) return;
+    
+    try {
+      const success = await commercialService.confirmInvoice(id);
+      if (success) {
+        refetch();
+        toast.success('تم تأكيد الفاتورة بنجاح');
+      }
+    } catch (error) {
+      console.error('Error confirming invoice:', error);
+      toast.error('حدث خطأ أثناء تأكيد الفاتورة');
+    }
+  };
+  
+  const handleCancelInvoice = async () => {
+    if (!id) return;
+    
+    try {
+      const success = await commercialService.cancelInvoice(id);
+      if (success) {
+        refetch();
+        toast.success('تم إلغاء الفاتورة بنجاح');
+      }
+    } catch (error) {
+      console.error('Error cancelling invoice:', error);
+      toast.error('حدث خطأ أثناء إلغاء الفاتورة');
+    }
+  };
   
   return (
     <PageTransition>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Button variant="ghost" onClick={() => navigate('/commercial/invoices')}>
-              <ArrowLeft className="ml-2 h-4 w-4" />
-              العودة للفواتير
-            </Button>
-            <h1 className="text-3xl font-bold tracking-tight mr-4">
-              فاتورة {invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} #{invoice.id.substring(0, 8)}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {invoice.invoice_type === 'sale' ? 'فاتورة مبيعات' : 'فاتورة مشتريات'}
             </h1>
+            <p className="text-muted-foreground">
+              رقم الفاتورة: {invoice.id.substring(0, 8)}...
+            </p>
           </div>
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => window.print()}>
               <Printer className="ml-2 h-4 w-4" />
               طباعة
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
-              <Edit className="ml-2 h-4 w-4" />
-              تعديل
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
-              <Trash2 className="ml-2 h-4 w-4" />
-              حذف
+            {invoice.payment_status === 'draft' && (
+              <>
+                <Button variant="outline" onClick={() => navigate(`/commercial/invoices/edit/${id}`)}>
+                  <Edit className="ml-2 h-4 w-4" />
+                  تعديل
+                </Button>
+                <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">
+                      <Trash2 className="ml-2 h-4 w-4" />
+                      حذف
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>تأكيد حذف الفاتورة</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        هل أنت متأكد من حذف هذه الفاتورة؟ هذا الإجراء لا يمكن التراجع عنه.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                        حذف
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+            <Button variant="outline" onClick={() => navigate(-1)}>
+              <ArrowLeft className="ml-2 h-4 w-4" />
+              العودة
             </Button>
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">معلومات الفاتورة</CardTitle>
+            <CardHeader>
+              <CardTitle className="text-xl">معلومات الفاتورة</CardTitle>
             </CardHeader>
-            <CardContent>
-              <dl className="space-y-2">
-                <div className="flex justify-between">
-                  <dt className="font-medium text-muted-foreground">رقم الفاتورة:</dt>
-                  <dd className="font-mono">{invoice.id.substring(0, 8)}...</dd>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium">نوع الفاتورة:</span>
+                <span>{invoice.invoice_type === 'sale' ? 'فاتورة مبيعات' : 'فاتورة مشتريات'}</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <User className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium">الطرف:</span>
+                <span>{invoice.party_name}</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium">التاريخ:</span>
+                <span>{format(new Date(invoice.date), 'yyyy-MM-dd')}</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Bookmark className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium">الحالة:</span>
+                {getStatusBadge(invoice.status)}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Bookmark className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium">حالة المعاملة:</span>
+                <InvoiceStatusBadge status={invoice.payment_status as any} />
+              </div>
+              
+              {invoice.notes && (
+                <div className="pt-2">
+                  <h4 className="font-medium mb-1">ملاحظات:</h4>
+                  <p className="text-sm text-muted-foreground bg-secondary p-3 rounded">{invoice.notes}</p>
                 </div>
-                <div className="flex justify-between">
-                  <dt className="font-medium text-muted-foreground">التاريخ:</dt>
-                  <dd>{format(new Date(invoice.date), 'yyyy-MM-dd')}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="font-medium text-muted-foreground">نوع الفاتورة:</dt>
-                  <dd>{invoice.invoice_type === 'sale' ? 'بيع' : 'شراء'}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="font-medium text-muted-foreground">الحالة:</dt>
-                  <dd>{getStatusBadge(invoice.status)}</dd>
-                </div>
-              </dl>
+              )}
             </CardContent>
           </Card>
           
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">معلومات {invoice.invoice_type === 'sale' ? 'العميل' : 'المورد'}</CardTitle>
+            <CardHeader>
+              <CardTitle className="text-xl">ملخص الفاتورة</CardTitle>
             </CardHeader>
-            <CardContent>
-              <dl className="space-y-2">
+            <CardContent className="space-y-6">
+              <div className="flex flex-col space-y-2">
                 <div className="flex justify-between">
-                  <dt className="font-medium text-muted-foreground">الاسم:</dt>
-                  <dd>{invoice.party_name}</dd>
+                  <span>عدد العناصر</span>
+                  <span className="font-medium">{invoice.items.length}</span>
                 </div>
-                {invoice.party_id && (
-                  <div className="flex justify-between">
-                    <Button 
-                      variant="link" 
-                      size="sm" 
-                      className="p-0 h-auto" 
-                      onClick={() => navigate(`/commercial/parties/${invoice.party_id}`)}
-                    >
-                      عرض بيانات {invoice.invoice_type === 'sale' ? 'العميل' : 'المورد'}
-                    </Button>
-                  </div>
-                )}
-              </dl>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">ملخص المبالغ</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="space-y-2">
-                <div className="flex justify-between text-xl font-bold">
-                  <dt>الإجمالي:</dt>
-                  <dd>{invoice.total_amount.toFixed(2)}</dd>
+                <Separator />
+                <div className="flex justify-between">
+                  <span className="text-lg font-bold">المجموع</span>
+                  <span className="text-lg font-bold">{invoice.total_amount.toFixed(2)}</span>
                 </div>
-                <div className="pt-4 flex justify-end">
-                  {invoice.status !== 'paid' && (
-                    <Button 
-                      variant="outline" 
-                      className="w-full" 
-                      onClick={() => navigate('/commercial/payments')}
-                    >
-                      <Receipt className="ml-2 h-4 w-4" />
-                      تسجيل دفعة
-                    </Button>
-                  )}
-                </div>
-              </dl>
+              </div>
+              
+              <TransactionStatusActions 
+                status={invoice.payment_status as any} 
+                onConfirm={handleConfirmInvoice}
+                onCancel={handleCancelInvoice}
+              />
             </CardContent>
           </Card>
         </div>
         
         <Card>
           <CardHeader>
-            <CardTitle>عناصر الفاتورة</CardTitle>
+            <CardTitle className="text-xl">تفاصيل العناصر</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>الصنف</TableHead>
-                  <TableHead>النوع</TableHead>
+                  <TableHead className="w-[50px]">#</TableHead>
+                  <TableHead>المنتج</TableHead>
                   <TableHead className="text-center">الكمية</TableHead>
-                  <TableHead className="text-center">سعر الوحدة</TableHead>
-                  <TableHead className="text-left">الإجمالي</TableHead>
+                  <TableHead className="text-center">السعر</TableHead>
+                  <TableHead className="text-right">المجموع</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoiceItems && invoiceItems.length > 0 ? (
-                  invoiceItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.item_name}</TableCell>
-                      <TableCell>
-                        {item.item_type === 'raw_materials' ? 'مواد خام' :
-                         item.item_type === 'packaging_materials' ? 'مواد تعبئة' :
-                         item.item_type === 'semi_finished_products' ? 'منتجات نصف مصنعة' :
-                         'منتجات نهائية'}
-                      </TableCell>
-                      <TableCell className="text-center">{item.quantity}</TableCell>
-                      <TableCell className="text-center">{item.unit_price.toFixed(2)}</TableCell>
-                      <TableCell className="text-left font-medium">
-                        {(item.quantity * item.unit_price).toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                      لا توجد عناصر في هذه الفاتورة
+                {invoice.items.map((item, index) => (
+                  <TableRow key={item.id || index}>
+                    <TableCell>{index + 1}</TableCell>
+                    <TableCell className="font-medium">{item.item_name}</TableCell>
+                    <TableCell className="text-center">{item.quantity}</TableCell>
+                    <TableCell className="text-center">{item.unit_price.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      {(item.quantity * item.unit_price).toFixed(2)}
                     </TableCell>
                   </TableRow>
-                )}
+                ))}
+                
+                <TableRow className="bg-secondary/50">
+                  <TableCell colSpan={4} className="text-right font-bold">
+                    المجموع الكلي
+                  </TableCell>
+                  <TableCell className="text-right font-bold">
+                    {invoice.total_amount.toFixed(2)}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </CardContent>
         </Card>
-        
-        {invoice.notes && (
-          <Card>
-            <CardHeader>
-              <CardTitle>ملاحظات</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-wrap">{invoice.notes}</p>
-            </CardContent>
-          </Card>
-        )}
       </div>
-      
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>تعديل الفاتورة</DialogTitle>
-            <DialogDescription>
-              قم بتعديل بيانات الفاتورة وعناصرها.
-            </DialogDescription>
-          </DialogHeader>
-          {parties && inventoryItems && invoice && (
-            <InvoiceForm 
-              onSubmit={handleUpdateInvoice} 
-              parties={parties}
-              items={inventoryItems}
-              initialData={{
-                party_id: invoice.party_id,
-                invoice_type: invoice.invoice_type as 'sale' | 'purchase',
-                date: new Date(invoice.date),
-                status: invoice.status as 'paid' | 'partial' | 'unpaid',
-                notes: invoice.notes,
-                items: invoiceItems || []
-              }}
-              isEditing={true}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-      
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد حذف الفاتورة</AlertDialogTitle>
-            <AlertDialogDescription>
-              هل أنت متأكد من حذف هذه الفاتورة؟ سيتم أيضاً إلغاء تأثيرها على حساب الطرف المرتبط بها والمخزون.
-              <br />
-              هذا الإجراء لا يمكن التراجع عنه.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteInvoice} className="bg-red-600 hover:bg-red-700">
-              حذف
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PageTransition>
   );
 };

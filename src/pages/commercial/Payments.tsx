@@ -35,7 +35,11 @@ const Payments = () => {
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [paymentToConfirm, setPaymentToConfirm] = useState<Payment | null>(null);
+  const [paymentToCancel, setPaymentToCancel] = useState<Payment | null>(null);
   
   const commercialService = CommercialService.getInstance();
   
@@ -74,7 +78,8 @@ const Payments = () => {
         payment_type: paymentData.payment_type,
         method: paymentData.method,
         related_invoice_id: paymentData.related_invoice_id || "",
-        notes: paymentData.notes || ""
+        notes: paymentData.notes || "",
+        payment_status: "draft" as const
       };
       
       await commercialService.recordPayment(payment);
@@ -98,7 +103,8 @@ const Payments = () => {
         payment_type: paymentData.payment_type,
         method: paymentData.method,
         related_invoice_id: paymentData.related_invoice_id || "",
-        notes: paymentData.notes || ""
+        notes: paymentData.notes || "",
+        payment_status: "draft" as const
       };
       
       await commercialService.updatePayment(selectedPayment.id, payment);
@@ -133,6 +139,16 @@ const Payments = () => {
     setIsDeleteDialogOpen(true);
   };
   
+  const handleConfirmClick = (payment: Payment) => {
+    setPaymentToConfirm(payment);
+    setIsConfirmDialogOpen(true);
+  };
+  
+  const handleCancelClick = (payment: Payment) => {
+    setPaymentToCancel(payment);
+    setIsCancelDialogOpen(true);
+  };
+  
   const confirmDeletePayment = async () => {
     if (!paymentToDelete || !paymentToDelete.id) return;
     
@@ -145,6 +161,36 @@ const Payments = () => {
     } catch (error) {
       console.error('Error deleting payment:', error);
       toast.error('حدث خطأ أثناء حذف المعاملة');
+    }
+  };
+  
+  const confirmPayment = async () => {
+    if (!paymentToConfirm || !paymentToConfirm.id) return;
+    
+    try {
+      await commercialService.confirmPayment(paymentToConfirm.id);
+      refetch();
+      setIsConfirmDialogOpen(false);
+      setPaymentToConfirm(null);
+      toast.success('تم تأكيد المعاملة بنجاح');
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      toast.error('حدث خطأ أثناء تأكيد المعاملة');
+    }
+  };
+  
+  const cancelPayment = async () => {
+    if (!paymentToCancel || !paymentToCancel.id) return;
+    
+    try {
+      await commercialService.cancelPayment(paymentToCancel.id);
+      refetch();
+      setIsCancelDialogOpen(false);
+      setPaymentToCancel(null);
+      toast.success('تم إلغاء المعاملة بنجاح');
+    } catch (error) {
+      console.error('Error cancelling payment:', error);
+      toast.error('حدث خطأ أثناء إلغاء المعاملة');
     }
   };
 
@@ -197,6 +243,8 @@ const Payments = () => {
               onSearchChange={setSearchQuery}
               onEditClick={handleEditClick}
               onDeleteClick={handleDeleteClick}
+              onConfirmClick={handleConfirmClick}
+              onCancelClick={handleCancelClick}
               activeTab={activeTab}
             />
           </TabsContent>
@@ -248,6 +296,44 @@ const Payments = () => {
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeletePayment} className="bg-red-600 hover:bg-red-700">
               حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد المعاملة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من تأكيد هذه المعاملة؟ سيتم تحديث حساب الطرف المرتبط بها.
+              <br />
+              لا يمكن تعديل المعاملة بعد تأكيدها.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPayment} className="bg-green-600 hover:bg-green-700">
+              تأكيد
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>إلغاء المعاملة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من إلغاء هذه المعاملة؟ سيتم إلغاء تأثيرها على حسابات الأطراف المرتبطة بها.
+              <br />
+              هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={cancelPayment} className="bg-red-600 hover:bg-red-700">
+              تأكيد الإلغاء
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

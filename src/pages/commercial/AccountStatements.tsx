@@ -102,6 +102,10 @@ const AccountStatements = () => {
       'opening_balance': 'رصيد افتتاحي',
       'cancel_sale_invoice': 'إلغاء فاتورة مبيعات',
       'cancel_purchase_invoice': 'إلغاء فاتورة مشتريات',
+      'cancel_payment_received': 'إلغاء دفعة مستلمة',
+      'cancel_payment_made': 'إلغاء دفعة مدفوعة',
+      'cancel_sales_return': 'إلغاء مرتجع مبيعات',
+      'cancel_purchase_return': 'إلغاء مرتجع مشتريات',
       'invoice_amount_adjustment': 'تعديل قيمة فاتورة',
       'opening_balance_update': 'تعديل الرصيد الافتتاحي'
     };

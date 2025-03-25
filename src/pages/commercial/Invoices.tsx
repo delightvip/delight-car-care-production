@@ -15,7 +15,9 @@ import {
   MoreHorizontal, 
   Printer,
   Trash2,
-  Edit
+  Edit,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -58,6 +60,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import InvoiceStatusBadge from '@/components/commercial/InvoiceStatusBadge';
 
 const Invoices = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -65,6 +68,9 @@ const Invoices = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   
   const navigate = useNavigate();
   
@@ -210,6 +216,38 @@ const Invoices = () => {
     }
   };
   
+  const handleConfirmInvoice = async () => {
+    if (!selectedInvoiceId) return;
+    
+    try {
+      const success = await commercialService.confirmInvoice(selectedInvoiceId);
+      if (success) {
+        refetch();
+        setIsConfirmDialogOpen(false);
+        setSelectedInvoiceId(null);
+      }
+    } catch (error) {
+      console.error('Error confirming invoice:', error);
+      toast.error('حدث خطأ أثناء تأكيد الفاتورة');
+    }
+  };
+  
+  const handleCancelInvoice = async () => {
+    if (!selectedInvoiceId) return;
+    
+    try {
+      const success = await commercialService.cancelInvoice(selectedInvoiceId);
+      if (success) {
+        refetch();
+        setIsCancelDialogOpen(false);
+        setSelectedInvoiceId(null);
+      }
+    } catch (error) {
+      console.error('Error cancelling invoice:', error);
+      toast.error('حدث خطأ أثناء إلغاء الفاتورة');
+    }
+  };
+  
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
@@ -223,9 +261,7 @@ const Invoices = () => {
     }
   };
   
-  const isLoading = isLoadingInvoices || isLoadingParties || 
-                    isLoadingRawMaterials || isLoadingPackaging || 
-                    isLoadingSemiFinished || isLoadingFinished;
+  const isLoading = isLoadingInvoices || /* ... other loading states */;
   
   if (isLoading) {
     return (
@@ -311,6 +347,7 @@ const Invoices = () => {
                       <TableHead>التاريخ</TableHead>
                       <TableHead className="text-right">المبلغ</TableHead>
                       <TableHead>الحالة</TableHead>
+                      <TableHead>حالة المعاملة</TableHead>
                       <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -333,6 +370,9 @@ const Invoices = () => {
                           </TableCell>
                           <TableCell>{getStatusBadge(invoice.status)}</TableCell>
                           <TableCell>
+                            <InvoiceStatusBadge status={invoice.payment_status as any} />
+                          </TableCell>
+                          <TableCell>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" className="h-8 w-8 p-0">
@@ -347,17 +387,40 @@ const Invoices = () => {
                                   <FileText className="mr-2 h-4 w-4" />
                                   <span>عرض التفاصيل</span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => navigate(`/commercial/invoices/${invoice.id}`)}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  <span>تعديل</span>
-                                </DropdownMenuItem>
+                                
+                                {invoice.payment_status === 'draft' && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => navigate(`/commercial/invoices/edit/${invoice.id}`)}>
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      <span>تعديل</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                      setSelectedInvoiceId(invoice.id);
+                                      setIsConfirmDialogOpen(true);
+                                    }}>
+                                      <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                      <span>تأكيد الفاتورة</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDeleteClick(invoice)}>
+                                      <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                                      <span>حذف</span>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                
+                                {invoice.payment_status === 'confirmed' && (
+                                  <DropdownMenuItem onClick={() => {
+                                    setSelectedInvoiceId(invoice.id);
+                                    setIsCancelDialogOpen(true);
+                                  }}>
+                                    <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                                    <span>إلغاء الفاتورة</span>
+                                  </DropdownMenuItem>
+                                )}
+                                
                                 <DropdownMenuItem onClick={() => window.print()}>
                                   <Printer className="mr-2 h-4 w-4" />
                                   <span>طباعة</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDeleteClick(invoice)}>
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  <span>حذف</span>
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -366,7 +429,7 @@ const Invoices = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
                           لا توجد فواتير للعرض
                         </TableCell>
                       </TableRow>
@@ -402,15 +465,51 @@ const Invoices = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد حذف الفاتورة</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف هذه الفاتورة؟ سيتم أيضاً إلغاء تأثيرها على حساب الطرف المرتبط بها والمخزون.
-              <br />
-              هذا الإجراء لا يمكن التراجع عنه.
+              هل أنت متأكد من حذف هذه الفاتورة؟ هذا الإجراء لا يمكن التراجع عنه.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteInvoice} className="bg-red-600 hover:bg-red-700">
               حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد الفاتورة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من تأكيد هذه الفاتورة؟ سيتم تحديث المخزون وحساب الطرف المرتبط بها.
+              <br />
+              لا يمكن تعديل الفاتورة بعد تأكيدها.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmInvoice} className="bg-green-600 hover:bg-green-700">
+              تأكيد
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>إلغاء الفاتورة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من إلغاء هذه الفاتورة؟ سيتم إلغاء تأثيرها على حساب الطرف المرتبط بها والمخزون.
+              <br />
+              هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelInvoice} className="bg-red-600 hover:bg-red-700">
+              تأكيد الإلغاء
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
