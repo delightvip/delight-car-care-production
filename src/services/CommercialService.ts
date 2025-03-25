@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -264,7 +265,7 @@ class CommercialService {
   }
   
   // تحديث فاتورة موجودة
-  public async updateInvoice(id: string, invoiceData: Partial<Omit<Invoice, 'id' | 'created_at'>>>): Promise<boolean> {
+  public async updateInvoice(id: string, invoiceData: Partial<Omit<Invoice, 'id' | 'created_at'>>): Promise<boolean> {
     try {
       // Convert Date objects to ISO string for the database
       const dateStr = typeof invoiceData.date === 'string' ? 
@@ -455,7 +456,6 @@ class CommercialService {
         .from('payments')
         .insert({
           party_id: paymentData.party_id,
-          party_name: paymentData.party_name, // This will be ignored by the database if not in the schema
           date: dateStr,
           amount: paymentData.amount,
           payment_type: paymentData.payment_type,
@@ -666,7 +666,7 @@ class CommercialService {
   }
   
   // تحديث مرتجع موجود
-  public async updateReturn(id: string, returnData: Partial<Omit<Return, 'id' | 'created_at'>>>): Promise<boolean> {
+  public async updateReturn(id: string, returnData: Partial<Omit<Return, 'id' | 'created_at'>>): Promise<boolean> {
     try {
       // Convert Date objects to ISO string for the database
       const dateStr = typeof returnData.date === 'string' ? 

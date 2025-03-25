@@ -5,7 +5,7 @@ import CommercialService, { Payment } from '@/services/CommercialService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, Trash2, FileDown, Edit, Eye } from 'lucide-react';
+import { PlusCircle, Search, Trash2, FileDown, Edit } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import {
@@ -80,7 +80,7 @@ const Payments = () => {
     try {
       // Since PaymentForm doesn't include party_id, we need to create a custom Payment object
       const payment: Omit<Payment, 'id' | 'created_at'> = {
-        party_id: "", // This will be set properly when used with a specific party
+        party_id: paymentData.party_id || "", // Added party_id to fix the TypeScript error
         date: paymentData.date,
         amount: paymentData.amount,
         payment_type: paymentData.payment_type as 'collection' | 'disbursement',
@@ -105,10 +105,10 @@ const Payments = () => {
     try {
       // Create a payment object that includes the party_id from the selected payment
       const payment: Partial<Omit<Payment, 'id' | 'created_at'>> = {
-        party_id: selectedPayment.party_id,
+        party_id: paymentData.party_id || selectedPayment.party_id,
         date: paymentData.date,
         amount: paymentData.amount,
-        payment_type: paymentData.payment_type,
+        payment_type: paymentData.payment_type as 'collection' | 'disbursement',
         method: paymentData.method,
         related_invoice_id: paymentData.related_invoice_id,
         notes: paymentData.notes
