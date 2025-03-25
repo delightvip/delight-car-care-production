@@ -93,13 +93,13 @@ class ReturnService extends BaseCommercialService {
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      // Set default payment status to draft if not provided
-      const paymentStatus = returnData.payment_status || 'draft';
-      
-      // Format date if needed
-      const formattedDate = returnData.date instanceof Date ? 
+      // Format date if it's a Date object
+      const formattedDate = typeof returnData.date === 'object' ? 
         format(returnData.date, 'yyyy-MM-dd') : 
         returnData.date;
+      
+      // Set default payment status to draft
+      const paymentStatus = returnData.payment_status || 'draft';
       
       const { data: returnRecord, error } = await this.supabase
         .from('returns')
@@ -163,7 +163,7 @@ class ReturnService extends BaseCommercialService {
   
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
-      const { data: existingReturn, error: fetchError } = await this.supabase
+      const { data: returnRecord, error: fetchError } = await this.supabase
         .from('returns')
         .select('payment_status')
         .eq('id', id)
@@ -171,56 +171,25 @@ class ReturnService extends BaseCommercialService {
       
       if (fetchError) throw fetchError;
       
-      if (existingReturn.payment_status !== 'draft') {
+      if (returnRecord.payment_status !== 'draft') {
         toast.error('يمكن تعديل المرتجعات في حالة المسودة فقط');
         return false;
       }
       
       // Format date if it's a Date object
-      const formattedDate = returnData.date instanceof Date ? 
+      const formattedDate = returnData.date && typeof returnData.date === 'object' ? 
         format(returnData.date, 'yyyy-MM-dd') : 
         returnData.date;
-      
-      const updateData: any = {};
-      if (returnData.invoice_id) updateData.invoice_id = returnData.invoice_id;
-      if (returnData.party_id) updateData.party_id = returnData.party_id;
-      if (formattedDate) updateData.date = formattedDate;
-      if (returnData.return_type) updateData.return_type = returnData.return_type;
-      if (returnData.amount) updateData.amount = returnData.amount;
-      if (returnData.notes !== undefined) updateData.notes = returnData.notes;
-      
+        
       const { error } = await this.supabase
         .from('returns')
-        .update(updateData)
+        .update({
+          ...returnData,
+          date: formattedDate
+        })
         .eq('id', id);
       
       if (error) throw error;
-      
-      // If there are updated items, handle them
-      if (returnData.items && returnData.items.length > 0) {
-        // Delete existing items
-        await this.supabase
-          .from('return_items')
-          .delete()
-          .eq('return_id', id);
-        
-        // Insert new items
-        const returnItems = returnData.items.map(item => ({
-          return_id: id,
-          item_id: item.item_id,
-          item_type: item.item_type,
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
-        }));
-        
-        const { error: itemsError } = await this.supabase
-          .from('return_items')
-          .insert(returnItems);
-        
-        if (itemsError) throw itemsError;
-      }
       
       toast.success('تم تحديث المرتجع بنجاح');
       return true;
@@ -233,14 +202,12 @@ class ReturnService extends BaseCommercialService {
   
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      // Get the return with items
       const returnData = await this.getReturnById(returnId);
       if (!returnData) {
         toast.error('لم يتم العثور على المرتجع');
         return false;
       }
       
-      // Check if the return is already confirmed
       if (returnData.payment_status === 'confirmed') {
         toast.info('المرتجع مؤكد بالفعل');
         return true;
@@ -248,27 +215,25 @@ class ReturnService extends BaseCommercialService {
       
       // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
-        // Increase inventory for sales returns (customer returning items)
-        if (returnData.items) {
-          for (const item of returnData.items) {
-            switch (item.item_type) {
-              case 'raw_materials':
-                await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-              case 'packaging_materials':
-                await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-              case 'semi_finished_products':
-                await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-              case 'finished_products':
-                await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-            }
+        // Increase inventory for returned sales
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
+              break;
           }
         }
         
-        // Update customer financial records for sales returns
+        // Update financial records for returned sales
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
@@ -280,27 +245,25 @@ class ReturnService extends BaseCommercialService {
           );
         }
       } else if (returnData.return_type === 'purchase_return') {
-        // Decrease inventory for purchase returns (returning items to supplier)
-        if (returnData.items) {
-          for (const item of returnData.items) {
-            switch (item.item_type) {
-              case 'raw_materials':
-                await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-              case 'packaging_materials':
-                await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-              case 'semi_finished_products':
-                await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-              case 'finished_products':
-                await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-            }
+        // Decrease inventory for returned purchases
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
+              break;
           }
         }
         
-        // Update supplier financial records for purchase returns
+        // Update financial records for returned purchases
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
@@ -330,90 +293,40 @@ class ReturnService extends BaseCommercialService {
     }
   }
   
-  private async getNewQuantity(itemType: string, itemId: number, quantityChange: number): Promise<number> {
-    try {
-      let currentQuantity = 0;
-      
-      switch (itemType) {
-        case 'raw_materials':
-          const { data: rawMaterial } = await this.supabase
-            .from('raw_materials')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = rawMaterial?.quantity || 0;
-          break;
-        case 'packaging_materials':
-          const { data: packagingMaterial } = await this.supabase
-            .from('packaging_materials')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = packagingMaterial?.quantity || 0;
-          break;
-        case 'semi_finished_products':
-          const { data: semiFinishedProduct } = await this.supabase
-            .from('semi_finished_products')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = semiFinishedProduct?.quantity || 0;
-          break;
-        case 'finished_products':
-          const { data: finishedProduct } = await this.supabase
-            .from('finished_products')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = finishedProduct?.quantity || 0;
-          break;
-      }
-      
-      return currentQuantity + quantityChange;
-    } catch (error) {
-      console.error('Error getting current quantity:', error);
-      throw error;
-    }
-  }
-  
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      // Get the return with items
       const returnData = await this.getReturnById(returnId);
       if (!returnData) {
         toast.error('لم يتم العثور على المرتجع');
         return false;
       }
       
-      // Only confirmed returns can be cancelled
       if (returnData.payment_status !== 'confirmed') {
         toast.error('يمكن إلغاء المرتجعات المؤكدة فقط');
         return false;
       }
       
-      // Reverse inventory updates based on return type
+      // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
-        // Decrease inventory for cancelled sales returns
-        if (returnData.items) {
-          for (const item of returnData.items) {
-            switch (item.item_type) {
-              case 'raw_materials':
-                await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-              case 'packaging_materials':
-                await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-              case 'semi_finished_products':
-                await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-              case 'finished_products':
-                await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
-                break;
-            }
+        // Decrease inventory for cancelled returned sales
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
+              break;
           }
         }
         
-        // Reverse customer financial records for cancelled sales returns
+        // Update financial records for cancelled returned sales
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
@@ -425,27 +338,25 @@ class ReturnService extends BaseCommercialService {
           );
         }
       } else if (returnData.return_type === 'purchase_return') {
-        // Increase inventory for cancelled purchase returns
-        if (returnData.items) {
-          for (const item of returnData.items) {
-            switch (item.item_type) {
-              case 'raw_materials':
-                await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-              case 'packaging_materials':
-                await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-              case 'semi_finished_products':
-                await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-              case 'finished_products':
-                await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
-                break;
-            }
+        // Increase inventory for cancelled returned purchases
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
+              break;
           }
         }
         
-        // Reverse supplier financial records for cancelled purchase returns
+        // Update financial records for cancelled returned purchases
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
@@ -483,9 +394,8 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
-      // Only draft returns can be deleted
       if (returnData.payment_status !== 'draft') {
-        toast.error('لا يمكن حذف المرتجعات المؤكدة، يمكن إلغاءها فقط');
+        toast.error('يمكن حذف المرتجعات في حالة المسودة فقط');
         return false;
       }
       

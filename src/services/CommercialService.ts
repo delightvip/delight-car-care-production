@@ -9,10 +9,10 @@ import {
   ReturnItem, 
   LedgerEntry 
 } from "./CommercialTypes";
-import InvoiceService from "./commercial/InvoiceService";
-import PaymentService from "./commercial/PaymentService";
-import ReturnService from "./commercial/ReturnService";
-import LedgerService from "./commercial/LedgerService";
+import InvoiceService from './commercial/InvoiceService';
+import PaymentService from './commercial/PaymentService';
+import ReturnService from './commercial/ReturnService';
+import LedgerService from './commercial/LedgerService';
 import { format } from "date-fns";
 
 class CommercialService {
@@ -140,5 +140,15 @@ class CommercialService {
     return this.ledgerService.generateAccountStatement(startDate, endDate, partyType);
   }
 }
+
+// Re-export the CommercialTypes so they can be imported from this module as well
+export type { 
+  Invoice, 
+  InvoiceItem, 
+  Payment, 
+  Return, 
+  ReturnItem, 
+  LedgerEntry 
+};
 
 export default CommercialService;

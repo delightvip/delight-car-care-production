@@ -2,6 +2,7 @@
 import BaseCommercialService from './BaseCommercialService';
 import { Invoice, InvoiceItem } from '../CommercialTypes';
 import { toast } from "sonner";
+import { format } from 'date-fns';
 
 class InvoiceService extends BaseCommercialService {
   private static instance: InvoiceService;
@@ -128,8 +129,8 @@ class InvoiceService extends BaseCommercialService {
   
   public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
-      // Set default payment status to draft if not provided
-      const paymentStatus = invoiceData.payment_status || 'draft';
+      // Set default payment status to draft
+      const paymentStatus = 'draft';
       
       // First insert the invoice
       const { data: invoice, error: invoiceError } = await this.supabase
@@ -215,16 +216,16 @@ class InvoiceService extends BaseCommercialService {
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
               break;
           }
         }
@@ -243,16 +244,16 @@ class InvoiceService extends BaseCommercialService {
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
               break;
           }
         }
@@ -285,52 +286,6 @@ class InvoiceService extends BaseCommercialService {
     }
   }
   
-  private async getNewQuantity(itemType: string, itemId: number, quantityChange: number): Promise<number> {
-    try {
-      let currentQuantity = 0;
-      
-      switch (itemType) {
-        case 'raw_materials':
-          const { data: rawMaterial } = await this.supabase
-            .from('raw_materials')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = rawMaterial?.quantity || 0;
-          break;
-        case 'packaging_materials':
-          const { data: packagingMaterial } = await this.supabase
-            .from('packaging_materials')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = packagingMaterial?.quantity || 0;
-          break;
-        case 'semi_finished_products':
-          const { data: semiFinishedProduct } = await this.supabase
-            .from('semi_finished_products')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = semiFinishedProduct?.quantity || 0;
-          break;
-        case 'finished_products':
-          const { data: finishedProduct } = await this.supabase
-            .from('finished_products')
-            .select('quantity')
-            .eq('id', itemId)
-            .single();
-          currentQuantity = finishedProduct?.quantity || 0;
-          break;
-      }
-      
-      return currentQuantity + quantityChange;
-    } catch (error) {
-      console.error('Error getting current quantity:', error);
-      throw error;
-    }
-  }
-  
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
       // Get the invoice with items
@@ -352,16 +307,16 @@ class InvoiceService extends BaseCommercialService {
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updateRawMaterial(item.item_id, Number(item.quantity));
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updatePackagingMaterial(item.item_id, Number(item.quantity));
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, Number(item.quantity));
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, item.quantity) });
+              await this.inventoryService.updateFinishedProduct(item.item_id, Number(item.quantity));
               break;
           }
         }
@@ -380,16 +335,16 @@ class InvoiceService extends BaseCommercialService {
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updateRawMaterial(item.item_id, -Number(item.quantity));
               break;
             case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updatePackagingMaterial(item.item_id, -Number(item.quantity));
               break;
             case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, -Number(item.quantity));
               break;
             case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: this.getNewQuantity(item.item_type, item.item_id, -item.quantity) });
+              await this.inventoryService.updateFinishedProduct(item.item_id, -Number(item.quantity));
               break;
           }
         }
@@ -461,7 +416,7 @@ class InvoiceService extends BaseCommercialService {
     }
   }
   
-  private async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
+  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
       const { data: invoice, error } = await this.supabase
         .from('invoices')
@@ -501,7 +456,7 @@ class InvoiceService extends BaseCommercialService {
     }
   }
   
-  private async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
+  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
       const { data: invoice, error } = await this.supabase
         .from('invoices')

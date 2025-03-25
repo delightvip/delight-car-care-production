@@ -93,7 +93,7 @@ class PaymentService extends BaseCommercialService {
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
     try {
       // Format date if it's a Date object
-      const formattedDate = paymentData.date instanceof Date ? 
+      const formattedDate = typeof paymentData.date === 'object' ? 
         format(paymentData.date, 'yyyy-MM-dd') : 
         paymentData.date;
         
@@ -294,7 +294,7 @@ class PaymentService extends BaseCommercialService {
       }
       
       // Format date if it's a Date object
-      const formattedDate = paymentData.date instanceof Date ? 
+      const formattedDate = typeof paymentData.date === 'object' ? 
         format(paymentData.date, 'yyyy-MM-dd') : 
         paymentData.date;
         
