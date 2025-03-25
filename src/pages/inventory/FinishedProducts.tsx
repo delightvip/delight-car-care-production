@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
-import DataTable from '@/components/ui/DataTable';
+import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -167,14 +167,14 @@ const FinishedProducts = () => {
             unit: semiFinished.unit
           },
           // إضافة مستلزمات التعبئة كمكونات
-          ...packagingItems.map((item: any) => ({
-            id: item.packaging_materials.id,
+          ...(packagingItems || []).map((item: any) => ({
+            id: item.packaging_materials?.id,
             type: 'packaging' as const,
-            code: item.packaging_materials.code,
-            name: item.packaging_materials.name,
+            code: item.packaging_materials?.code,
+            name: item.packaging_materials?.name,
             quantity: item.quantity,
-            unit: item.packaging_materials.unit
-          }))
+            unit: item.packaging_materials?.unit
+          })).filter((item: any) => item.id) // فلترة العناصر التي لا تحتوي على معرف صالح
         ];
         
         // حساب إجمالي القيمة
@@ -390,7 +390,11 @@ const FinishedProducts = () => {
   
   // حساب تكلفة الوحدة بناءً على المكونات
   const calculateUnitCost = (components: any[]) => {
+    if (!components || !Array.isArray(components)) return 0;
+    
     return components.reduce((sum, component) => {
+      if (!component) return sum;
+      
       if (component.type === 'semi') {
         const semiProduct = semiFinishedProducts.find(item => item.code === component.code);
         return sum + (semiProduct ? semiProduct.unit_cost * component.quantity : 0);
@@ -533,7 +537,7 @@ const FinishedProducts = () => {
     if (!currentProduct) return;
     
     // التحقق من صحة البيانات
-    if (!currentProduct.name || !currentProduct.unit || currentProduct.components.length === 0) {
+    if (!currentProduct.name || !currentProduct.unit || !currentProduct.components || currentProduct.components.length === 0) {
       toast.error("يجب ملء جميع الحقول المطلوبة وإضافة مكون واحد على الأقل");
       return;
     }
@@ -548,7 +552,7 @@ const FinishedProducts = () => {
     const unitCost = calculateUnitCost(currentProduct.components);
     
     // إعداد مصفوفة مستلزمات التعبئة
-    const packagingComponents = currentProduct.components
+    const packagingComponents = (currentProduct.components || [])
       .filter(c => c.type === 'packaging')
       .map(c => ({
         id: c.id,
@@ -583,7 +587,7 @@ const FinishedProducts = () => {
     { 
       key: 'components', 
       title: 'عدد المكونات',
-      render: (value: any[]) => value.length
+      render: (value: any[]) => Array.isArray(value) ? value.length : 0
     },
     { 
       key: 'unitCost', 
@@ -853,20 +857,14 @@ const FinishedProducts = () => {
           </Dialog>
         </div>
         
-        {isLoadingProducts ? (
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="mr-2">جاري تحميل البيانات...</span>
-          </div>
-        ) : (
-          <DataTable
-            columns={columns}
-            data={products}
-            searchable
-            searchKeys={['code', 'name']}
-            actions={renderActions}
-          />
-        )}
+        <DataTableWithLoading
+          columns={columns}
+          data={products}
+          searchable
+          searchKeys={['code', 'name']}
+          actions={renderActions}
+          isLoading={isLoadingProducts}
+        />
         
         {/* مربع حوار التعديل */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -935,14 +933,14 @@ const FinishedProducts = () => {
                 <div className="border-t pt-4">
                   <div className="text-sm font-medium mb-2">
                     المكونات
-                    {currentProduct.components.length > 0 && (
+                    {currentProduct.components && currentProduct.components.length > 0 && (
                       <span className="text-muted-foreground mr-2">
                         (التكلفة التقديرية: {Math.round(calculateUnitCost(currentProduct.components) * 100) / 100} ج.م)
                       </span>
                     )}
                   </div>
                   
-                  {currentProduct.components.length > 0 ? (
+                  {currentProduct.components && currentProduct.components.length > 0 ? (
                     <div className="space-y-2">
                       {currentProduct.components.map((component: any, index: number) => (
                         <div key={`${component.code}-${index}`} className="flex items-center justify-between p-2 border rounded-md">
