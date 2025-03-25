@@ -170,6 +170,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       date: format(values.date, 'yyyy-MM-dd'),
       amount: values.amount,
       notes: values.notes,
+      payment_status: 'draft', // Add the payment_status field with default value
       items: values.items.map(item => ({
         item_id: item.item_id,
         item_type: item.item_type,

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CommercialService, { Payment } from '@/services/CommercialService';
@@ -27,6 +26,7 @@ import PageTransition from '@/components/ui/PageTransition';
 import { PaymentForm, PaymentFormValues } from '@/components/commercial/PaymentForm';
 import { toast } from 'sonner';
 import PaymentsList from '@/components/commercial/PaymentsList';
+import { format } from 'date-fns';
 
 const Payments = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -73,7 +73,7 @@ const Payments = () => {
     try {
       const payment = {
         party_id: paymentData.party_id,
-        date: paymentData.date,
+        date: format(paymentData.date, 'yyyy-MM-dd'),
         amount: paymentData.amount,
         payment_type: paymentData.payment_type,
         method: paymentData.method,
@@ -98,7 +98,7 @@ const Payments = () => {
     try {
       const payment = {
         party_id: paymentData.party_id,
-        date: paymentData.date,
+        date: format(paymentData.date, 'yyyy-MM-dd'),
         amount: paymentData.amount,
         payment_type: paymentData.payment_type,
         method: paymentData.method,

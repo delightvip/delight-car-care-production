@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -152,7 +153,8 @@ export function InvoiceForm({
       total_amount: total,
       items: invoiceItems,
       status: data.status,
-      notes: data.notes
+      payment_status: 'draft', // Add the payment_status field with default value
+      notes: data.notes || ''
     });
   };
 

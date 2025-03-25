@@ -1,29 +1,17 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CommercialService, { Return } from '@/services/CommercialService';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, FileDown, Eye, Receipt, Trash2, CheckCircle, XCircle } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { format } from 'date-fns';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
+import { PlusCircle, MoreHorizontal } from 'lucide-react';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { 
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -33,27 +21,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import PageTransition from '@/components/ui/PageTransition';
-import { Badge } from '@/components/ui/badge';
 import { ReturnsForm } from '@/components/commercial/ReturnsForm';
 import { toast } from 'sonner';
-import { ReturnDetailsDialog } from '@/components/commercial/ReturnDetailsDialog';
-import PaymentStatusBadge from '@/components/commercial/PaymentStatusBadge';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
+import { format } from 'date-fns';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const Returns = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<Return | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
@@ -80,34 +66,52 @@ const Returns = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(r => 
-        r.invoice_id?.toLowerCase().includes(query) ||
+        r.party_name?.toLowerCase().includes(query) ||
         r.amount.toString().includes(query) ||
-        r.party_name?.toLowerCase().includes(query)
+        (r.notes && r.notes.toLowerCase().includes(query))
       );
     }
     
     return filtered;
   }, [returns, activeTab, searchQuery]);
 
-  const handleAddNewReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
+  const handleAddReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
     try {
-      if (returnData.invoice_id === 'no_invoice') {
-        returnData.invoice_id = undefined;
-      }
-      
       await commercialService.createReturn(returnData);
       refetch();
       setIsFormOpen(false);
       toast.success('تم تسجيل المرتجع بنجاح');
     } catch (error) {
-      console.error('Error recording return:', error);
+      console.error('Error creating return:', error);
       toast.error('حدث خطأ أثناء تسجيل المرتجع');
     }
   };
 
-  const handleViewDetails = (returnItem: Return) => {
+  const handleEditReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
+    if (!selectedReturn || !selectedReturn.id) return;
+    
+    try {
+      await commercialService.updateReturn(selectedReturn.id, returnData);
+      refetch();
+      setIsFormOpen(false);
+      setSelectedReturn(null);
+      setIsEditMode(false);
+      toast.success('تم تعديل المرتجع بنجاح');
+    } catch (error) {
+      console.error('Error updating return:', error);
+      toast.error('حدث خطأ أثناء تعديل المرتجع');
+    }
+  };
+  
+  const handleEditClick = (returnItem: Return) => {
     setSelectedReturn(returnItem);
-    setIsDetailsOpen(true);
+    setIsEditMode(true);
+    setIsFormOpen(true);
+  };
+  
+  const handleDeleteClick = (returnItem: Return) => {
+    setReturnToDelete(returnItem);
+    setIsDeleteDialogOpen(true);
   };
   
   const handleConfirmClick = (returnItem: Return) => {
@@ -120,8 +124,23 @@ const Returns = () => {
     setIsCancelDialogOpen(true);
   };
   
+  const confirmDeleteReturn = async () => {
+    if (!returnToDelete || !returnToDelete.id) return;
+    
+    try {
+      await commercialService.deleteReturn(returnToDelete.id);
+      refetch();
+      setIsDeleteDialogOpen(false);
+      setReturnToDelete(null);
+      toast.success('تم حذف المرتجع بنجاح');
+    } catch (error) {
+      console.error('Error deleting return:', error);
+      toast.error('حدث خطأ أثناء حذف المرتجع');
+    }
+  };
+  
   const confirmReturn = async () => {
-    if (!returnToConfirm) return;
+    if (!returnToConfirm || !returnToConfirm.id) return;
     
     try {
       await commercialService.confirmReturn(returnToConfirm.id);
@@ -136,7 +155,7 @@ const Returns = () => {
   };
   
   const cancelReturn = async () => {
-    if (!returnToCancel) return;
+    if (!returnToCancel || !returnToCancel.id) return;
     
     try {
       await commercialService.cancelReturn(returnToCancel.id);
@@ -149,65 +168,10 @@ const Returns = () => {
       toast.error('حدث خطأ أثناء إلغاء المرتجع');
     }
   };
-  
-  const confirmDeleteReturn = async () => {
-    if (!returnToDelete) return;
-    
-    try {
-      const success = await commercialService.deleteReturn(returnToDelete.id);
-      if (success) {
-        refetch();
-        setIsDeleteDialogOpen(false);
-        setReturnToDelete(null);
-        toast.success('تم حذف المرتجع بنجاح');
-      }
-    } catch (error) {
-      console.error('Error deleting return:', error);
-      toast.error('حدث خطأ أثناء حذف المرتجع');
-    }
-  };
-  
-  const handleDeleteClick = (returnItem: Return) => {
-    setReturnToDelete(returnItem);
-    setIsDeleteDialogOpen(true);
-  };
-  
-  const handleDeleteFromDialog = async (returnId: string) => {
-    try {
-      const success = await commercialService.deleteReturn(returnId);
-      if (success) {
-        refetch();
-        setIsDetailsOpen(false);
-        toast.success('تم حذف المرتجع بنجاح');
-      }
-    } catch (error) {
-      console.error('Error deleting return:', error);
-      toast.error('حدث خطأ أثناء حذف المرتجع');
-    }
-  };
-  
-  const handleConfirmFromDialog = async (returnId: string) => {
-    try {
-      await commercialService.confirmReturn(returnId);
-      refetch();
-      setIsDetailsOpen(false);
-      toast.success('تم تأكيد المرتجع بنجاح');
-    } catch (error) {
-      console.error('Error confirming return:', error);
-      toast.error('حدث خطأ أثناء تأكيد المرتجع');
-    }
-  };
-  
-  const handleCancelFromDialog = async (returnId: string) => {
-    try {
-      await commercialService.cancelReturn(returnId);
-      refetch();
-      setIsDetailsOpen(false);
-      toast.success('تم إلغاء المرتجع بنجاح');
-    } catch (error) {
-      console.error('Error cancelling return:', error);
-      toast.error('حدث خطأ أثناء إلغاء المرتجع');
-    }
+
+  const resetForm = () => {
+    setSelectedReturn(null);
+    setIsEditMode(false);
   };
 
   if (isLoading) {
@@ -216,7 +180,7 @@ const Returns = () => {
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المرتجعات</h1>
-            <p className="text-muted-foreground">إدارة مرتجعات المبيعات والمشتريات</p>
+            <p className="text-muted-foreground">إدارة سجل المرتجعات</p>
           </div>
         </div>
       </PageTransition>
@@ -229,162 +193,130 @@ const Returns = () => {
         <div className="flex flex-row items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المرتجعات</h1>
-            <p className="text-muted-foreground">إدارة مرتجعات المبيعات والمشتريات</p>
+            <p className="text-muted-foreground">إدارة سجل المرتجعات</p>
           </div>
-          <Button onClick={() => setIsFormOpen(true)}>
+          <Button onClick={() => {
+            resetForm();
+            setIsFormOpen(true);
+          }}>
             <PlusCircle className="ml-2 h-4 w-4" />
-            إضافة مرتجع جديد
+            تسجيل مرتجع جديد
           </Button>
         </div>
 
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
             <TabsTrigger value="all">الكل</TabsTrigger>
-            <TabsTrigger value="sales_return">مرتجع مبيعات</TabsTrigger>
-            <TabsTrigger value="purchase_return">مرتجع مشتريات</TabsTrigger>
+            <TabsTrigger value="sales_return">مرتجعات مبيعات</TabsTrigger>
+            <TabsTrigger value="purchase_return">مرتجعات مشتريات</TabsTrigger>
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xl font-bold">
-                  {activeTab === 'all' ? 'جميع المرتجعات' :
-                   activeTab === 'sales_return' ? 'مرتجعات المبيعات' : 'مرتجعات المشتريات'}
-                </CardTitle>
-                <div className="flex items-center space-x-2">
-                  <div className="relative w-64">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="بحث في المرتجعات..."
-                      className="pl-8"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Input
+                  placeholder="ابحث عن طريق اسم الطرف أو المبلغ أو الملاحظات..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="max-w-md"
+                />
+              </div>
+              
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                {filteredReturns.map((returnItem) => (
+                  <Card key={returnItem.id} className="bg-white shadow-md rounded-md">
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold">{returnItem.party_name || 'غير محدد'}</h3>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditClick(returnItem)}>
+                              تعديل
+                            </DropdownMenuItem>
+                            {returnItem.payment_status === 'draft' && (
+                              <DropdownMenuItem onClick={() => handleDeleteClick(returnItem)}>
+                                حذف
+                              </DropdownMenuItem>
+                            )}
+                            {returnItem.payment_status === 'draft' && (
+                              <DropdownMenuItem onClick={() => handleConfirmClick(returnItem)}>
+                                تأكيد
+                              </DropdownMenuItem>
+                            )}
+                            {returnItem.payment_status === 'confirmed' && (
+                              <DropdownMenuItem onClick={() => handleCancelClick(returnItem)}>
+                                إلغاء
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {returnItem.return_type === 'sales_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}
+                      </p>
+                      <p className="text-sm">
+                        المبلغ: {returnItem.amount}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        التاريخ: {format(new Date(returnItem.date), 'yyyy-MM-dd')}
+                      </p>
+                      {returnItem.notes && (
+                        <p className="text-sm text-muted-foreground">
+                          ملاحظات: {returnItem.notes}
+                        </p>
+                      )}
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">
+                          {returnItem.payment_status === 'draft'
+                            ? 'مسودة'
+                            : returnItem.payment_status === 'confirmed'
+                              ? 'مؤكدة'
+                              : 'ملغاة'}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                
+                {filteredReturns.length === 0 && (
+                  <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-4 text-muted-foreground">
+                    لا توجد مرتجعات مطابقة
                   </div>
-                  <Button variant="outline" size="icon">
-                    <FileDown className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>رقم المرتجع</TableHead>
-                      <TableHead>النوع</TableHead>
-                      <TableHead>الطرف</TableHead>
-                      <TableHead>رقم الفاتورة</TableHead>
-                      <TableHead>التاريخ</TableHead>
-                      <TableHead className="text-left">المبلغ</TableHead>
-                      <TableHead>حالة المعاملة</TableHead>
-                      <TableHead>الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredReturns.length > 0 ? (
-                      filteredReturns.map((returnItem) => (
-                        <TableRow key={returnItem.id}>
-                          <TableCell className="font-medium">
-                            {returnItem.id?.substring(0, 8)}...
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={returnItem.return_type === 'sales_return' ? 'destructive' : 'default'}>
-                              {returnItem.return_type === 'sales_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{returnItem.party_name || '-'}</TableCell>
-                          <TableCell>{returnItem.invoice_id ? returnItem.invoice_id.substring(0, 8) + '...' : '-'}</TableCell>
-                          <TableCell>
-                            {format(new Date(returnItem.date), 'yyyy-MM-dd')}
-                          </TableCell>
-                          <TableCell className="text-left font-medium">
-                            {returnItem.amount.toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <PaymentStatusBadge status={returnItem.payment_status as any} />
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                  <span className="sr-only">فتح القائمة</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleViewDetails(returnItem)}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  <span>عرض التفاصيل</span>
-                                </DropdownMenuItem>
-                                
-                                {returnItem.payment_status === 'draft' && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleConfirmClick(returnItem)}>
-                                      <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                                      <span>تأكيد المرتجع</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDeleteClick(returnItem)}>
-                                      <Trash2 className="mr-2 h-4 w-4 text-red-500" />
-                                      <span>حذف</span>
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                                
-                                {returnItem.payment_status === 'confirmed' && (
-                                  <DropdownMenuItem onClick={() => handleCancelClick(returnItem)}>
-                                    <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                                    <span>إلغاء المرتجع</span>
-                                  </DropdownMenuItem>
-                                )}
-                                
-                                <DropdownMenuItem>
-                                  <Receipt className="mr-2 h-4 w-4" />
-                                  <span>طباعة سند المرتجع</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
-                          لا توجد مرتجعات للعرض
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                )}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
 
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-[800px]">
+      <Dialog open={isFormOpen} onOpenChange={(open) => {
+        setIsFormOpen(open);
+        if (!open) resetForm();
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>إضافة مرتجع جديد</DialogTitle>
+            <DialogTitle>
+              {isEditMode ? 'تعديل مرتجع' : 'تسجيل مرتجع جديد'}
+            </DialogTitle>
             <DialogDescription>
-              قم بإدخال بيانات المرتجع لتسجيله في النظام
+              {isEditMode 
+                ? 'قم بتعديل بيانات المرتجع حسب الحاجة'
+                : 'قم بإدخال بيانات المرتجع لتسجيله في النظام'
+              }
             </DialogDescription>
           </DialogHeader>
-          <ReturnsForm onSubmit={handleAddNewReturn} />
+          <ReturnsForm 
+            onSubmit={isEditMode ? handleEditReturn : handleAddReturn} 
+            initialData={selectedReturn}
+          />
         </DialogContent>
       </Dialog>
-
-      {selectedReturn && (
-        <ReturnDetailsDialog
-          returnData={selectedReturn}
-          open={isDetailsOpen}
-          onOpenChange={setIsDetailsOpen}
-          onDelete={handleDeleteFromDialog}
-          onConfirm={handleConfirmFromDialog}
-          onCancel={handleCancelFromDialog}
-        />
-      )}
       
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
@@ -427,7 +359,7 @@ const Returns = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>إلغاء المرتجع</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من إلغاء هذا المرتجع؟ سيتم إلغاء تأثيره على المخزون وحساب الطرف المرتبط به.
+              هل أنت متأكد من إلغاء هذا المرتجع؟ سيتم إلغاء تأثيره على المخزون وحسابات الأطراف المرتبطة به.
               <br />
               هذا الإجراء لا يمكن التراجع عنه.
             </AlertDialogDescription>
