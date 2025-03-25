@@ -201,10 +201,8 @@ class CommercialService {
   
   public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
-      // Set default payment status to draft
       const paymentStatus = 'draft';
       
-      // First insert the invoice
       const { data: invoice, error: invoiceError } = await this.supabase
         .from('invoices')
         .insert({
@@ -221,7 +219,6 @@ class CommercialService {
       
       if (invoiceError) throw invoiceError;
       
-      // Then insert all the invoice items
       const invoiceItems = invoiceData.items.map(item => ({
         invoice_id: invoice.id,
         item_id: item.item_id,
@@ -238,7 +235,6 @@ class CommercialService {
       
       if (itemsError) throw itemsError;
       
-      // Get the party name for the response
       const party = await this.partyService.getPartyById(invoiceData.party_id);
       
       toast.success('تم إنشاء الفاتورة بنجاح');
@@ -269,22 +265,18 @@ class CommercialService {
   
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
-      // Get the invoice with items
       const invoice = await this.getInvoiceById(invoiceId);
       if (!invoice) {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
       
-      // Check if the invoice is already confirmed
       if (invoice.payment_status === 'confirmed') {
         toast.info('الفاتورة مؤكدة بالفعل');
         return true;
       }
       
-      // Update inventory based on invoice type
       if (invoice.invoice_type === 'sale') {
-        // Decrease inventory for sales
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -302,17 +294,15 @@ class CommercialService {
           }
         }
         
-        // Update customer financial records for sales
         await this.partyService.updatePartyBalance(
           invoice.party_id,
           invoice.total_amount,
-          true, // debit for sales (customer owes money)
+          true,
           'فاتورة مبيعات',
           'sale_invoice',
           invoice.id
         );
       } else if (invoice.invoice_type === 'purchase') {
-        // Increase inventory for purchases
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -330,18 +320,16 @@ class CommercialService {
           }
         }
         
-        // Update supplier financial records for purchases
         await this.partyService.updatePartyBalance(
           invoice.party_id,
           invoice.total_amount,
-          false, // credit for purchases (we owe money)
+          false,
           'فاتورة مشتريات',
           'purchase_invoice',
           invoice.id
         );
       }
       
-      // Update invoice status to confirmed
       const { error } = await this.supabase
         .from('invoices')
         .update({ payment_status: 'confirmed' })
@@ -360,22 +348,18 @@ class CommercialService {
   
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
-      // Get the invoice with items
       const invoice = await this.getInvoiceById(invoiceId);
       if (!invoice) {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
       
-      // Only confirmed invoices can be cancelled
       if (invoice.payment_status !== 'confirmed') {
         toast.error('يمكن إلغاء الفواتير المؤكدة فقط');
         return false;
       }
       
-      // Reverse inventory updates based on invoice type
       if (invoice.invoice_type === 'sale') {
-        // Increase inventory for cancelled sales
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -393,17 +377,15 @@ class CommercialService {
           }
         }
         
-        // Update customer financial records for cancelled sales
         await this.partyService.updatePartyBalance(
           invoice.party_id,
           invoice.total_amount,
-          false, // credit for cancelled sales (reverse the debit)
+          false,
           'إلغاء فاتورة مبيعات',
           'cancel_sale_invoice',
           invoice.id
         );
       } else if (invoice.invoice_type === 'purchase') {
-        // Decrease inventory for cancelled purchases
         for (const item of invoice.items) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -421,18 +403,16 @@ class CommercialService {
           }
         }
         
-        // Update supplier financial records for cancelled purchases
         await this.partyService.updatePartyBalance(
           invoice.party_id,
           invoice.total_amount,
-          true, // debit for cancelled purchases (reverse the credit)
+          true,
           'إلغاء فاتورة مشتريات',
           'cancel_purchase_invoice',
           invoice.id
         );
       }
       
-      // Update invoice status to cancelled
       const { error } = await this.supabase
         .from('invoices')
         .update({ payment_status: 'cancelled' })
@@ -457,13 +437,11 @@ class CommercialService {
         return false;
       }
       
-      // Only draft invoices can be deleted
       if (invoice.payment_status !== 'draft') {
         toast.error('لا يمكن حذف الفواتير المؤكدة، يمكن إلغاءها فقط');
         return false;
       }
       
-      // Delete invoice items first
       const { error: itemsError } = await this.supabase
         .from('invoice_items')
         .delete()
@@ -471,7 +449,6 @@ class CommercialService {
       
       if (itemsError) throw itemsError;
       
-      // Delete the invoice
       const { error } = await this.supabase
         .from('invoices')
         .delete()
@@ -524,7 +501,6 @@ class CommercialService {
   
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
     try {
-      // Set default payment status to draft
       const paymentStatus = 'draft';
       
       const { data: payment, error } = await this.supabase
@@ -544,7 +520,6 @@ class CommercialService {
       
       if (error) throw error;
       
-      // Get party details for response
       const party = await this.partyService.getPartyById(paymentData.party_id);
       
       toast.success('تم تسجيل المعاملة بنجاح');
@@ -587,40 +562,34 @@ class CommercialService {
         return true;
       }
       
-      // Update party balance based on payment type
       if (payment.payment_type === 'collection') {
-        // Collection (customer paying us)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          false, // credit for collections (reduce customer's debt)
+          false,
           'دفعة مستلمة',
           'payment_received',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
           await this.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
         }
       } else if (payment.payment_type === 'disbursement') {
-        // Disbursement (we paying supplier)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          true, // debit for disbursements (reduce our debt)
+          true,
           'دفعة مدفوعة',
           'payment_made',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
           await this.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
         }
       }
       
-      // Update payment status to confirmed
       const { error } = await this.supabase
         .from('payments')
         .update({ payment_status: 'confirmed' })
@@ -655,40 +624,34 @@ class CommercialService {
         return false;
       }
       
-      // Reverse party balance update based on payment type
       if (payment.payment_type === 'collection') {
-        // Reverse collection (customer paying us)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          true, // debit for cancelling collections (add back customer's debt)
+          true,
           'إلغاء دفعة مستلمة',
           'cancel_payment_received',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
           await this.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
         }
       } else if (payment.payment_type === 'disbursement') {
-        // Reverse disbursement (we paying supplier)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          false, // credit for cancelling disbursements (add back our debt)
+          false,
           'إلغاء دفعة مدفوعة',
           'cancel_payment_made',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
           await this.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
         }
       }
       
-      // Update payment status to cancelled
       const { error } = await this.supabase
         .from('payments')
         .update({ payment_status: 'cancelled' })
@@ -717,7 +680,6 @@ class CommercialService {
       
       let newStatus = invoice.status;
       
-      // Calculate how much has been paid including this payment
       const { data: payments, error: paymentsError } = await this.supabase
         .from('payments')
         .select('amount, payment_status')
@@ -757,7 +719,6 @@ class CommercialService {
       
       let newStatus = invoice.status;
       
-      // Calculate how much has been paid after cancelling this payment
       const { data: payments, error: paymentsError } = await this.supabase
         .from('payments')
         .select('amount, payment_status')
@@ -890,7 +851,6 @@ class CommercialService {
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      // Set default payment status to draft
       const paymentStatus = 'draft';
       
       const { data: returnRecord, error } = await this.supabase
@@ -909,7 +869,6 @@ class CommercialService {
       
       if (error) throw error;
       
-      // If there are items for this return, insert them
       if (returnData.items && returnData.items.length > 0) {
         const returnItems = returnData.items.map(item => ({
           return_id: returnRecord.id,
@@ -928,7 +887,6 @@ class CommercialService {
         if (itemsError) throw itemsError;
       }
       
-      // Get party details for response
       const party = await this.partyService.getPartyById(returnData.party_id || '');
       
       toast.success('تم تسجيل المرتجع بنجاح');
@@ -946,4 +904,288 @@ class CommercialService {
         created_at: returnRecord.created_at,
         items: returnData.items
       };
-    } catch (
+    } catch (error) {
+      console.error('Error creating return:', error);
+      toast.error('حدث خطأ أثناء تسجيل المرتجع');
+      return null;
+    }
+  }
+  
+  public async getReturnById(id: string): Promise<Return | null> {
+    try {
+      const { data: returnData, error: returnError } = await this.supabase
+        .from('returns')
+        .select(`
+          *,
+          parties (name)
+        `)
+        .eq('id', id)
+        .single();
+      
+      if (returnError) throw returnError;
+      
+      const { data: items, error: itemsError } = await this.supabase
+        .from('return_items')
+        .select('*')
+        .eq('return_id', id);
+      
+      if (itemsError) throw itemsError;
+      
+      return {
+        id: returnData.id,
+        invoice_id: returnData.invoice_id,
+        party_id: returnData.party_id,
+        party_name: returnData.parties?.name,
+        date: returnData.date,
+        return_type: returnData.return_type,
+        amount: returnData.amount,
+        status: returnData.status,
+        payment_status: returnData.payment_status || 'draft',
+        notes: returnData.notes,
+        created_at: returnData.created_at,
+        items: items || []
+      };
+    } catch (error) {
+      console.error(`Error fetching return with id ${id}:`, error);
+      toast.error('حدث خطأ أثناء جلب بيانات المرتجع');
+      return null;
+    }
+  }
+  
+  public async confirmReturn(returnId: string): Promise<boolean> {
+    try {
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.payment_status === 'confirmed') {
+        toast.info('المرتجع مؤكد بالفعل');
+        return true;
+      }
+      
+      if (returnData.return_type === 'sales_return') {
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterialQuantity(item.item_id, item.quantity);
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterialQuantity(item.item_id, item.quantity);
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedQuantity(item.item_id, item.quantity);
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProductQuantity(item.item_id, item.quantity);
+              break;
+          }
+        }
+        
+        await this.partyService.updatePartyBalance(
+          returnData.party_id || '',
+          returnData.amount,
+          false,
+          'مرتجع مبيعات',
+          'sales_return',
+          returnData.id
+        );
+      } else if (returnData.return_type === 'purchase_return') {
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterialQuantity(item.item_id, -item.quantity);
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterialQuantity(item.item_id, -item.quantity);
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedQuantity(item.item_id, -item.quantity);
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProductQuantity(item.item_id, -item.quantity);
+              break;
+          }
+        }
+        
+        await this.partyService.updatePartyBalance(
+          returnData.party_id || '',
+          returnData.amount,
+          true,
+          'مرتجع مشتريات',
+          'purchase_return',
+          returnData.id
+        );
+      }
+      
+      const { error } = await this.supabase
+        .from('returns')
+        .update({ payment_status: 'confirmed' })
+        .eq('id', returnId);
+      
+      if (error) throw error;
+      
+      toast.success('تم تأكيد المرتجع بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error confirming return:', error);
+      toast.error('حدث خطأ أثناء تأكيد المرتجع');
+      return false;
+    }
+  }
+  
+  public async cancelReturn(returnId: string): Promise<boolean> {
+    try {
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.payment_status !== 'confirmed') {
+        toast.error('يمكن إلغاء المرتجعات المؤكدة فقط');
+        return false;
+      }
+      
+      if (returnData.return_type === 'sales_return') {
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterialQuantity(item.item_id, -item.quantity);
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterialQuantity(item.item_id, -item.quantity);
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedQuantity(item.item_id, -item.quantity);
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProductQuantity(item.item_id, -item.quantity);
+              break;
+          }
+        }
+        
+        await this.partyService.updatePartyBalance(
+          returnData.party_id || '',
+          returnData.amount,
+          true,
+          'إلغاء مرتجع مبيعات',
+          'cancel_sales_return',
+          returnData.id
+        );
+      } else if (returnData.return_type === 'purchase_return') {
+        for (const item of returnData.items || []) {
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterialQuantity(item.item_id, item.quantity);
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterialQuantity(item.item_id, item.quantity);
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedQuantity(item.item_id, item.quantity);
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProductQuantity(item.item_id, item.quantity);
+              break;
+          }
+        }
+        
+        await this.partyService.updatePartyBalance(
+          returnData.party_id || '',
+          returnData.amount,
+          false,
+          'إلغاء مرتجع مشتريات',
+          'cancel_purchase_return',
+          returnData.id
+        );
+      }
+      
+      const { error } = await this.supabase
+        .from('returns')
+        .update({ payment_status: 'cancelled' })
+        .eq('id', returnId);
+      
+      if (error) throw error;
+      
+      toast.success('تم إلغاء المرتجع بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error cancelling return:', error);
+      toast.error('حدث خطأ أثناء إلغاء المرتجع');
+      return false;
+    }
+  }
+  
+  public async deleteReturn(id: string): Promise<boolean> {
+    try {
+      const returnData = await this.getReturnById(id);
+      if (!returnData) {
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.payment_status !== 'draft') {
+        toast.error('لا يمكن حذف المرتجعات المؤكدة، يمكن إلغاءها فقط');
+        return false;
+      }
+      
+      const { error: itemsError } = await this.supabase
+        .from('return_items')
+        .delete()
+        .eq('return_id', id);
+      
+      if (itemsError) throw itemsError;
+      
+      const { error } = await this.supabase
+        .from('returns')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast.success('تم حذف المرتجع بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error deleting return:', error);
+      toast.error('حدث خطأ أثناء حذف المرتجع');
+      return false;
+    }
+  }
+  
+  public async getLedgerEntries(partyId: string): Promise<LedgerEntry[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('ledger')
+        .select(`
+          *,
+          parties (name)
+        `)
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(entry => ({
+        id: entry.id,
+        party_id: entry.party_id,
+        party_name: entry.parties?.name,
+        transaction_id: entry.transaction_id,
+        transaction_type: entry.transaction_type,
+        date: entry.date,
+        debit: entry.debit,
+        credit: entry.credit,
+        balance_after: entry.balance_after,
+        created_at: entry.created_at,
+        notes: ''
+      }));
+    } catch (error) {
+      console.error('Error fetching ledger entries:', error);
+      toast.error('حدث خطأ أثناء جلب سجل الحساب');
+      return [];
+    }
+  }
+}
+
+export default CommercialService;
