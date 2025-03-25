@@ -26,6 +26,9 @@ export interface Transaction {
   credit: number;
   balance: number;
   created_at: string;
+  // Adding these fields to match the actual usage in PartyDetails.tsx
+  transaction_type?: string;
+  transaction_id?: string;
 }
 
 class PartyService {
@@ -236,7 +239,7 @@ class PartyService {
       // 3. تحديث رصيد الطرف في جدول party_balances
       const { error: balanceError } = await supabase
         .from('party_balances')
-        .update({ balance: newBalance, last_updated: new Date() })
+        .update({ balance: newBalance, last_updated: new Date().toISOString() })
         .eq('party_id', partyId);
       
       if (balanceError) throw balanceError;
@@ -246,7 +249,7 @@ class PartyService {
         .from('ledger')
         .insert({
           party_id: partyId,
-          date: new Date(),
+          date: new Date().toISOString().split('T')[0],
           transaction_type: transactionType,
           debit: isDebit ? amount : 0,
           credit: !isDebit ? amount : 0,
@@ -336,7 +339,20 @@ class PartyService {
       
       if (error) throw error;
       
-      return data;
+      // Map the ledger data to match our Transaction interface
+      return data.map(item => ({
+        id: item.id,
+        party_id: item.party_id,
+        transaction_date: item.date,
+        type: item.transaction_type,
+        description: item.description || '',
+        reference: item.transaction_id,
+        debit: item.debit || 0,
+        credit: item.credit || 0,
+        balance: item.balance_after,
+        created_at: item.created_at,
+        transaction_type: item.transaction_type // Add this to satisfy the component usage
+      }));
     } catch (error) {
       console.error('Error fetching party transactions:', error);
       toast.error('حدث خطأ أثناء جلب الحركات المالية');
@@ -377,7 +393,7 @@ class PartyService {
         .from('party_balances')
         .update({ 
           balance: newBalance,
-          last_updated: new Date()
+          last_updated: new Date().toISOString()
         })
         .eq('party_id', partyId);
       
@@ -388,12 +404,13 @@ class PartyService {
         .from('ledger')
         .insert({
           party_id: partyId,
-          date: new Date(),
+          date: new Date().toISOString().split('T')[0],
           transaction_type: 'opening_balance_update',
           description: 'تعديل الرصيد الافتتاحي',
           debit: balanceDifference > 0 ? Math.abs(balanceDifference) : 0,
           credit: balanceDifference < 0 ? Math.abs(balanceDifference) : 0,
-          balance_after: newBalance
+          balance_after: newBalance,
+          transaction_id: undefined
         });
       
       if (ledgerError) throw ledgerError;

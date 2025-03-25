@@ -75,9 +75,21 @@ const Payments = () => {
     return filtered;
   }, [payments, activeTab, searchQuery]);
 
-  const handleAddPayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
+  // Fixed this function to correctly handle the form data
+  const handleAddPayment = async (paymentData: any) => {
     try {
-      await commercialService.recordPayment(paymentData);
+      // Since PaymentForm doesn't include party_id, we need to create a custom Payment object
+      const payment: Omit<Payment, 'id' | 'created_at'> = {
+        party_id: "", // This will be set properly when used with a specific party
+        date: paymentData.date,
+        amount: paymentData.amount,
+        payment_type: paymentData.payment_type as 'collection' | 'disbursement',
+        method: paymentData.method,
+        related_invoice_id: paymentData.related_invoice_id,
+        notes: paymentData.notes
+      };
+      
+      await commercialService.recordPayment(payment);
       refetch();
       setIsFormOpen(false);
       toast.success('تم تسجيل المعاملة بنجاح');
@@ -87,11 +99,22 @@ const Payments = () => {
     }
   };
 
-  const handleEditPayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
+  const handleEditPayment = async (paymentData: any) => {
     if (!selectedPayment || !selectedPayment.id) return;
     
     try {
-      await commercialService.updatePayment(selectedPayment.id, paymentData);
+      // Create a payment object that includes the party_id from the selected payment
+      const payment: Partial<Omit<Payment, 'id' | 'created_at'>> = {
+        party_id: selectedPayment.party_id,
+        date: paymentData.date,
+        amount: paymentData.amount,
+        payment_type: paymentData.payment_type,
+        method: paymentData.method,
+        related_invoice_id: paymentData.related_invoice_id,
+        notes: paymentData.notes
+      };
+      
+      await commercialService.updatePayment(selectedPayment.id, payment);
       refetch();
       setIsFormOpen(false);
       setSelectedPayment(null);
