@@ -5,7 +5,7 @@ import PageTransition from '@/components/ui/PageTransition';
 import InventoryDistribution from '@/components/dashboard/InventoryDistribution';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DataTable } from '@/components/ui/DataTable';
+import DataTable from '@/components/ui/DataTable';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { 

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { BarChart3, Search } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { DataTable } from '@/components/ui/DataTable';
+import DataTable from '@/components/ui/DataTable';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface InventoryItem {
@@ -67,14 +67,14 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     {
       key: "code",
       title: "الرمز",
-      render: (row: InventoryItem) => (
+      render: (value: any, row: InventoryItem) => (
         <div className="font-medium">{row.code}</div>
       )
     },
     {
       key: "name",
       title: "الاسم",
-      render: (row: InventoryItem) => (
+      render: (value: any, row: InventoryItem) => (
         <div className="max-w-[200px] truncate" title={row.name}>
           {row.name}
         </div>
@@ -83,7 +83,7 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     {
       key: "current_stock",
       title: "المخزون الحالي",
-      render: (row: InventoryItem) => (
+      render: (value: any, row: InventoryItem) => (
         <div className="font-medium">
           {row.quantity} {row.unit}
         </div>
@@ -92,7 +92,7 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     {
       key: "min_stock",
       title: "الحد الأدنى",
-      render: (row: InventoryItem) => (
+      render: (value: any, row: InventoryItem) => (
         <div>
           {row.min_stock} {row.unit}
         </div>
@@ -101,13 +101,30 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     {
       key: "status",
       title: "الحالة",
-      render: (row: InventoryItem) => {
+      render: (value: any, row: InventoryItem) => {
         const percentage = (row.quantity / row.min_stock) * 100;
         const getColor = () => {
           if (percentage <= 30) return "text-red-600";
           if (percentage <= 60) return "text-amber-600";
           return "text-green-600";
         };
+        
+        const getProgressClasses = () => {
+          if (percentage <= 30) return {
+            bg: "bg-red-100",
+            indicator: "bg-red-600"
+          };
+          if (percentage <= 60) return {
+            bg: "bg-amber-100",
+            indicator: "bg-amber-600"
+          };
+          return {
+            bg: "bg-green-100",
+            indicator: "bg-green-600"
+          };
+        };
+        
+        const progressClasses = getProgressClasses();
         
         return (
           <div className="w-full max-w-[180px]">
@@ -121,21 +138,7 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
             </div>
             <Progress 
               value={percentage} 
-              max={100}
-              className={`h-2 ${
-                percentage <= 30 
-                  ? 'bg-red-100' 
-                  : percentage <= 60 
-                    ? 'bg-amber-100' 
-                    : 'bg-green-100'
-              }`}
-              indicatorClassName={
-                percentage <= 30 
-                  ? 'bg-red-600' 
-                  : percentage <= 60 
-                    ? 'bg-amber-600' 
-                    : 'bg-green-600'
-              }
+              className={`h-2 ${progressClasses.bg}`}
             />
           </div>
         );
@@ -144,7 +147,7 @@ export const InventoryLowStockTable: React.FC<InventoryLowStockTableProps> = ({
     {
       key: "importance",
       title: "الأهمية",
-      render: (row: InventoryItem) => {
+      render: (value: any, row: InventoryItem) => {
         const importance = row.importance || 0;
         
         // تحديد مستوى الأهمية بناءً على القيمة
