@@ -38,7 +38,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
         </SelectTrigger>
         <SelectContent>
           {rawMaterials.map(material => (
-            <SelectItem key={material.code} value={material.code}>
+            <SelectItem key={material.code} value={material.code || "unknown_code"}>
               {material.name}
             </SelectItem>
           ))}

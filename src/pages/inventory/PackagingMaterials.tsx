@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
@@ -44,7 +43,6 @@ const PackagingMaterials = () => {
   
   const queryClient = useQueryClient();
   
-  // جلب مواد التعبئة من قاعدة البيانات
   const { data: packagingMaterials, isLoading, error } = useQuery({
     queryKey: ['packagingMaterials'],
     queryFn: async () => {
@@ -57,7 +55,6 @@ const PackagingMaterials = () => {
         throw new Error(error.message);
       }
       
-      // تحويل البيانات إلى الصيغة المتوافقة مع الواجهة
       return data.map(item => ({
         id: item.id,
         code: item.code,
@@ -72,10 +69,8 @@ const PackagingMaterials = () => {
     }
   });
   
-  // إضافة مادة تعبئة جديدة
   const addMutation = useMutation({
     mutationFn: async (newItem: any) => {
-      // توليد كود جديد (في بيئة الإنتاج يمكن أن يتم ذلك من الخادم)
       const { data: maxCode } = await supabase
         .from('packaging_materials')
         .select('code')
@@ -121,7 +116,6 @@ const PackagingMaterials = () => {
     }
   });
   
-  // تعديل مادة تعبئة
   const updateMutation = useMutation({
     mutationFn: async (material: any) => {
       const { data, error } = await supabase
@@ -149,7 +143,6 @@ const PackagingMaterials = () => {
     }
   });
   
-  // حذف مادة تعبئة
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const { error } = await supabase
@@ -170,7 +163,6 @@ const PackagingMaterials = () => {
     }
   });
   
-  // معالجة إضافة مادة جديدة
   const handleAddMaterial = () => {
     if (!newMaterial.name || !newMaterial.unit) {
       toast.error('يجب ملء جميع الحقول المطلوبة');
@@ -180,7 +172,6 @@ const PackagingMaterials = () => {
     addMutation.mutate(newMaterial);
   };
   
-  // معالجة تعديل مادة
   const handleEditMaterial = () => {
     if (!currentMaterial) return;
     
@@ -194,13 +185,11 @@ const PackagingMaterials = () => {
     });
   };
   
-  // معالجة حذف مادة
   const handleDeleteMaterial = () => {
     if (!currentMaterial) return;
     deleteMutation.mutate(currentMaterial.id);
   };
   
-  // تعريف أعمدة الجدول
   const columns = [
     { key: 'code', title: 'الكود' },
     { key: 'name', title: 'اسم المنتج' },
@@ -228,7 +217,6 @@ const PackagingMaterials = () => {
     }
   ];
   
-  // إضافة أيقونات التعديل والحذف
   const renderActions = (record: any) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
@@ -374,7 +362,6 @@ const PackagingMaterials = () => {
           />
         )}
         
-        {/* نافذة تعديل المادة */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -459,7 +446,6 @@ const PackagingMaterials = () => {
           </DialogContent>
         </Dialog>
         
-        {/* نافذة حذف المادة */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent>
             <DialogHeader>

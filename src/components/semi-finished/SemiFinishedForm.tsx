@@ -162,7 +162,7 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
               </SelectTrigger>
               <SelectContent>
                 {units.map(unit => (
-                  <SelectItem key={unit} value={unit}>
+                  <SelectItem key={unit} value={unit || "unknown_unit"}>
                     {unit}
                   </SelectItem>
                 ))}
@@ -199,39 +199,14 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
           
           <div className="border-t pt-4">
             <Label className="mb-2 block font-semibold">مكونات المنتج (المواد الأولية)</Label>
-            <div className="flex gap-2 mb-4">
-              <Select 
-                value={selectedRawMaterial} 
-                onValueChange={setSelectedRawMaterial}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="اختر مادة أولية" />
-                </SelectTrigger>
-                <SelectContent>
-                  {rawMaterials.map(material => (
-                    <SelectItem key={material.code} value={material.code}>
-                      {material.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="w-32 flex">
-                <Input
-                  type="number"
-                  value={percentage}
-                  onChange={e => setPercentage(Number(e.target.value))}
-                  min={1}
-                  max={100}
-                  placeholder="النسبة %"
-                />
-              </div>
-              <Button 
-                type="button" 
-                onClick={handleAddIngredient}
-              >
-                إضافة
-              </Button>
-            </div>
+            <IngredientSelector
+              rawMaterials={rawMaterials}
+              selectedMaterial={selectedRawMaterial}
+              percentage={percentage}
+              onMaterialChange={setSelectedRawMaterial}
+              onPercentageChange={setPercentage}
+              onAdd={handleAddIngredient}
+            />
           </div>
           
           <div>
