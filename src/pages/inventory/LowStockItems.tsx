@@ -1,11 +1,9 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Package, Beaker, Box, ShoppingBag } from 'lucide-react';
-import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import LowStockStats from '@/components/inventory/LowStockStats';
 import LowStockCard from '@/components/inventory/LowStockCard';
 import PageTransition from '@/components/ui/PageTransition';
@@ -28,7 +26,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('raw_materials')
         .select('*')
-        .lt('quantity', 'min_stock')
+        .lte('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;
@@ -43,7 +41,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('semi_finished_products')
         .select('*')
-        .lt('quantity', 'min_stock')
+        .lte('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;
@@ -58,7 +56,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('packaging_materials')
         .select('*')
-        .lt('quantity', 'min_stock')
+        .lte('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;
@@ -73,7 +71,7 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('finished_products')
         .select('*')
-        .lt('quantity', 'min_stock')
+        .lte('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;

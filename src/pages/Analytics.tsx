@@ -13,71 +13,97 @@ const Analytics = () => {
   const { data: inventoryStats, isLoading: inventoryLoading } = useQuery({
     queryKey: ['inventoryStats'],
     queryFn: async () => {
-      // جلب إحصائيات المخزون
-      const rawMaterialsResponse = await supabase
-        .from('raw_materials')
-        .select('quantity, unit_cost');
+      try {
+        // جلب إحصائيات المخزون
+        const rawMaterialsResponse = await supabase
+          .from('raw_materials')
+          .select('quantity, unit_cost');
+          
+        const semiFinishedResponse = await supabase
+          .from('semi_finished_products')
+          .select('quantity, unit_cost');
+          
+        const packagingResponse = await supabase
+          .from('packaging_materials')
+          .select('quantity, unit_cost');
+          
+        const finishedResponse = await supabase
+          .from('finished_products')
+          .select('quantity, unit_cost');
         
-      const semiFinishedResponse = await supabase
-        .from('semi_finished_products')
-        .select('quantity, unit_cost');
+        // Check for errors
+        if (rawMaterialsResponse.error) throw rawMaterialsResponse.error;
+        if (semiFinishedResponse.error) throw semiFinishedResponse.error;
+        if (packagingResponse.error) throw packagingResponse.error;
+        if (finishedResponse.error) throw finishedResponse.error;
         
-      const packagingResponse = await supabase
-        .from('packaging_materials')
-        .select('quantity, unit_cost');
+        // حساب إجمالي القيمة لكل نوع
+        const rawMaterialsValue = rawMaterialsResponse.data?.reduce(
+          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+        ) || 0;
         
-      const finishedResponse = await supabase
-        .from('finished_products')
-        .select('quantity, unit_cost');
-      
-      // حساب إجمالي القيمة لكل نوع
-      const rawMaterialsValue = rawMaterialsResponse.data?.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || 0;
-      const semiFinishedValue = semiFinishedResponse.data?.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || 0;
-      const packagingValue = packagingResponse.data?.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || 0;
-      const finishedValue = finishedResponse.data?.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || 0;
-      
-      const totalValue = rawMaterialsValue + semiFinishedValue + packagingValue + finishedValue;
-      
-      // استخراج عدد العناصر
-      const rawMaterialsCount = rawMaterialsResponse.data?.length || 0;
-      const semiFinishedCount = semiFinishedResponse.data?.length || 0;
-      const packagingCount = packagingResponse.data?.length || 0;
-      const finishedCount = finishedResponse.data?.length || 0;
-      
-      console.log("Inventory Stats Data:", {
-        rawMaterialsValue,
-        semiFinishedValue,
-        packagingValue,
-        finishedValue
-      });
-      
-      return {
-        values: {
-          rawMaterials: rawMaterialsValue,
-          semiFinished: semiFinishedValue,
-          packaging: packagingValue,
-          finished: finishedValue,
-          total: totalValue
-        },
-        counts: {
-          rawMaterials: rawMaterialsCount,
-          semiFinished: semiFinishedCount,
-          packaging: packagingCount,
-          finished: finishedCount,
-          total: rawMaterialsCount + semiFinishedCount + packagingCount + finishedCount
-        }
-      };
+        const semiFinishedValue = semiFinishedResponse.data?.reduce(
+          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+        ) || 0;
+        
+        const packagingValue = packagingResponse.data?.reduce(
+          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+        ) || 0;
+        
+        const finishedValue = finishedResponse.data?.reduce(
+          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+        ) || 0;
+        
+        const totalValue = rawMaterialsValue + semiFinishedValue + packagingValue + finishedValue;
+        
+        // استخراج عدد العناصر
+        const rawMaterialsCount = rawMaterialsResponse.data?.length || 0;
+        const semiFinishedCount = semiFinishedResponse.data?.length || 0;
+        const packagingCount = packagingResponse.data?.length || 0;
+        const finishedCount = finishedResponse.data?.length || 0;
+        
+        console.log("Inventory Stats Data:", {
+          rawMaterialsValue,
+          semiFinishedValue,
+          packagingValue,
+          finishedValue
+        });
+        
+        return {
+          values: {
+            rawMaterials: rawMaterialsValue,
+            semiFinished: semiFinishedValue,
+            packaging: packagingValue,
+            finished: finishedValue,
+            total: totalValue
+          },
+          counts: {
+            rawMaterials: rawMaterialsCount,
+            semiFinished: semiFinishedCount,
+            packaging: packagingCount,
+            finished: finishedCount,
+            total: rawMaterialsCount + semiFinishedCount + packagingCount + finishedCount
+          }
+        };
+      } catch (error) {
+        console.error("Error fetching inventory stats:", error);
+        throw error;
+      }
     },
     refetchInterval: 60000
   });
   
   // بيانات توزيع المخزون للتمريرها إلى مكون الرسم البياني
-  const distributionData = inventoryStats ? [
-    { name: 'المواد الأولية', value: inventoryStats.values.rawMaterials },
-    { name: 'المنتجات النصف مصنعة', value: inventoryStats.values.semiFinished },
-    { name: 'مواد التعبئة', value: inventoryStats.values.packaging },
-    { name: 'المنتجات النهائية', value: inventoryStats.values.finished }
-  ] : [];
+  const distributionData = React.useMemo(() => {
+    if (!inventoryStats) return [];
+    
+    return [
+      { name: 'المواد الأولية', value: inventoryStats.values.rawMaterials },
+      { name: 'المنتجات النصف مصنعة', value: inventoryStats.values.semiFinished },
+      { name: 'مواد التعبئة', value: inventoryStats.values.packaging },
+      { name: 'المنتجات النهائية', value: inventoryStats.values.finished }
+    ];
+  }, [inventoryStats]);
   
   return (
     <PageTransition>

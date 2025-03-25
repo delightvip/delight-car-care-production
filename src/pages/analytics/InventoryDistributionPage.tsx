@@ -29,22 +29,34 @@ const InventoryDistributionPage = () => {
           supabase
             .from('raw_materials')
             .select('*')
-            .then(res => res.data || []),
+            .then(res => {
+              if (res.error) throw res.error;
+              return res.data || [];
+            }),
             
           supabase
             .from('semi_finished_products')
             .select('*')
-            .then(res => res.data || []),
+            .then(res => {
+              if (res.error) throw res.error;
+              return res.data || [];
+            }),
             
           supabase
             .from('packaging_materials')
             .select('*')
-            .then(res => res.data || []),
+            .then(res => {
+              if (res.error) throw res.error;
+              return res.data || [];
+            }),
             
           supabase
             .from('finished_products')
             .select('*')
-            .then(res => res.data || [])
+            .then(res => {
+              if (res.error) throw res.error;
+              return res.data || [];
+            })
         ]);
         
         // معالجة البيانات وتوحيد الحقول
@@ -52,28 +64,28 @@ const InventoryDistributionPage = () => {
           ...item,
           type: 'raw',
           typeName: 'مواد أولية',
-          totalValue: item.quantity * item.unit_cost
+          totalValue: (item.quantity || 0) * (item.unit_cost || 0)
         }));
         
         const processedSemiFinished = semiFinished.map(item => ({
           ...item,
           type: 'semi',
           typeName: 'منتجات نصف مصنعة',
-          totalValue: item.quantity * item.unit_cost
+          totalValue: (item.quantity || 0) * (item.unit_cost || 0)
         }));
         
         const processedPackaging = packaging.map(item => ({
           ...item,
           type: 'packaging',
           typeName: 'مستلزمات تعبئة',
-          totalValue: item.quantity * item.unit_cost
+          totalValue: (item.quantity || 0) * (item.unit_cost || 0)
         }));
         
         const processedFinished = finished.map(item => ({
           ...item,
           type: 'finished',
           typeName: 'منتجات نهائية',
-          totalValue: item.quantity * item.unit_cost
+          totalValue: (item.quantity || 0) * (item.unit_cost || 0)
         }));
         
         // دمج جميع البيانات
@@ -91,13 +103,7 @@ const InventoryDistributionPage = () => {
         };
       } catch (error) {
         console.error("Error fetching inventory data:", error);
-        return {
-          rawMaterials: [],
-          semiFinished: [],
-          packaging: [],
-          finished: [],
-          all: []
-        };
+        throw error;
       }
     },
     refetchInterval: 60000

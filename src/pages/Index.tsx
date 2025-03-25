@@ -1,4 +1,3 @@
-
 import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DashboardCard from '@/components/dashboard/DashboardCard';
@@ -78,7 +77,7 @@ const Index = () => {
     refetchInterval: 60000, 
   });
   
-  // Fetch low stock count
+  // Fetch low stock count with correct logic
   const { data: lowStockCount } = useQuery({
     queryKey: ['lowStockCount'],
     queryFn: async () => {
@@ -87,22 +86,26 @@ const Index = () => {
         const rawMaterialsResponse = await supabase
           .from('raw_materials')
           .select('id')
-          .lt('quantity', 10); // استخدام قيمة افتراضية في حالة عدم وجود عمود min_stock
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
         
         const semiFinishedResponse = await supabase
           .from('semi_finished_products')
           .select('id')
-          .lt('quantity', 10);
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
         
         const packagingResponse = await supabase
           .from('packaging_materials')
           .select('id')
-          .lt('quantity', 10);
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
         
         const finishedResponse = await supabase
           .from('finished_products')
           .select('id')
-          .lt('quantity', 10);
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
         
         const totalCount = 
           (rawMaterialsResponse.data?.length || 0) + 

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -18,13 +17,13 @@ import {
   Boxes,
   Tags,
   Settings,
-  PieChart
+  PieChart,
+  Calculator
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useSidebar } from '@/components/layout/SidebarContext';
 import { useNotifications } from '@/components/notifications/NotificationProvider';
 import { Button } from '@/components/ui/button';
-import { Calculator } from 'lucide-react';
 import ImportanceCalculationService from '@/services/ImportanceCalculationService';
 
 interface MenuItemProps {
@@ -40,7 +39,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ to, icon, label, isActive, badge, b
   <Link
     to={to}
     className={cn(
-      'flex items-center py-2.5 px-4 space-x-3 space-x-reverse rounded-md transition-colors group hover:bg-muted',
+      'flex items-center py-2.5 px-4 gap-3 rounded-md transition-colors group hover:bg-muted',
       isActive && 'bg-primary/10 text-primary font-medium'
     )}
   >
@@ -73,7 +72,6 @@ const ModernSidebar = () => {
   const { openMobile, setOpenMobile, isOpen } = useSidebar();
   const { lowStockItems } = useNotifications();
   
-  // عدد عناصر المخزون المنخفض
   const totalLowStock = lowStockItems?.totalCount || 0;
   
   const isActive = (path: string) => {
@@ -212,7 +210,6 @@ const ModernSidebar = () => {
     </div>
   );
 
-  // للأجهزة المحمولة
   if (useIsMobile().isMobile) {
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile}>
@@ -223,7 +220,6 @@ const ModernSidebar = () => {
     );
   }
 
-  // للشاشات الكبيرة
   return (
     <div className={cn(
       "fixed top-0 right-0 h-full w-64 bg-background border-l transition-all z-10",
