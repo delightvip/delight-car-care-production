@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -73,7 +72,6 @@ const PackagingOrders = () => {
   const productionService = ProductionService.getInstance();
   const inventoryService = InventoryService.getInstance();
   
-  // استخدام React Query لجلب البيانات
   const { 
     data: orders = [], 
     isLoading: isOrdersLoading,
@@ -112,7 +110,6 @@ const PackagingOrders = () => {
   
   const isLoading = isOrdersLoading || isProductsLoading;
   
-  // تحديث البيانات
   const refreshData = useCallback(() => {
     refetchOrders();
     refetchProducts();
@@ -283,7 +280,7 @@ const PackagingOrders = () => {
     const product = finishedProducts.find(p => p.code === productCode);
     if (!product) return 0;
     
-    return product.unitCost * quantity;
+    return product.unit_cost * quantity;
   };
   
   const renderActions = (record: PackagingOrder) => (

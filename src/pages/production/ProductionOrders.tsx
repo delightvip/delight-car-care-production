@@ -235,7 +235,7 @@ const ProductionOrders = () => {
     const product = semiFinishedProducts.find(p => p.code === productCode);
     if (!product) return 0;
     
-    return product.unitCost * quantity;
+    return product.unit_cost * quantity;
   };
   
   const renderActions = (record: ProductionOrder) => (
