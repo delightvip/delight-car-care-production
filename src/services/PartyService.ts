@@ -43,12 +43,12 @@ class PartyService {
       return data.map(party => ({
         id: party.id,
         name: party.name,
-        type: party.type,
+        type: party.type as 'customer' | 'supplier' | 'other',
         phone: party.phone || '',
         email: party.email || '',
         address: party.address || '',
         opening_balance: party.opening_balance || 0,
-        balance_type: party.balance_type || 'debit',
+        balance_type: party.balance_type as 'credit' | 'debit',
         balance: party.party_balances[0]?.balance || 0,
         created_at: party.created_at
       }));
@@ -76,12 +76,12 @@ class PartyService {
       return data.map(party => ({
         id: party.id,
         name: party.name,
-        type: party.type,
+        type: party.type as 'customer' | 'supplier' | 'other',
         phone: party.phone || '',
         email: party.email || '',
         address: party.address || '',
         opening_balance: party.opening_balance || 0,
-        balance_type: party.balance_type || 'debit',
+        balance_type: party.balance_type as 'credit' | 'debit',
         balance: party.party_balances[0]?.balance || 0,
         created_at: party.created_at
       }));
@@ -99,7 +99,7 @@ class PartyService {
         .from('parties')
         .insert({
           name: party.name,
-          type: party.type,
+          type: party.type as 'customer' | 'supplier' | 'other',
           phone: party.phone,
           email: party.email,
           address: party.address,
@@ -128,12 +128,12 @@ class PartyService {
       return {
         id: partyWithBalance.id,
         name: partyWithBalance.name,
-        type: partyWithBalance.type,
+        type: partyWithBalance.type as 'customer' | 'supplier' | 'other',
         phone: partyWithBalance.phone || '',
         email: partyWithBalance.email || '',
         address: partyWithBalance.address || '',
         opening_balance: partyWithBalance.opening_balance || 0,
-        balance_type: partyWithBalance.balance_type || 'debit',
+        balance_type: partyWithBalance.balance_type as 'credit' | 'debit',
         balance: partyWithBalance.party_balances[0]?.balance || 0,
         created_at: partyWithBalance.created_at
       };
