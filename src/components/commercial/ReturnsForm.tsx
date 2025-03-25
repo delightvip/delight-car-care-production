@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -61,15 +60,26 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<string>('finished_products');
   
+  // Prepare form default values, converting string date to Date object if initialData is provided
+  const defaultValues = initialData 
+    ? {
+        ...initialData,
+        // Convert string date to Date object
+        date: initialData.date ? new Date(initialData.date) : new Date(),
+        // Ensure items are properly formatted
+        items: initialData.items || []
+      }
+    : {
+        return_type: 'sales_return' as const,
+        date: new Date(),
+        amount: 0,
+        notes: '',
+        items: []
+      };
+  
   const form = useForm<ReturnFormValues>({
     resolver: zodResolver(returnFormSchema),
-    defaultValues: initialData ?? {
-      return_type: 'sales_return',
-      date: new Date(),
-      amount: 0,
-      notes: '',
-      items: []
-    }
+    defaultValues
   });
 
   const { data: invoices } = useQuery({
