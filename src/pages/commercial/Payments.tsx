@@ -1,11 +1,11 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import CommercialService from '@/services/CommercialService';
+import CommercialService, { Payment } from '@/services/CommercialService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search } from 'lucide-react';
+import { PlusCircle, Search, Trash2, FileDown, Edit, Eye } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import {
@@ -16,16 +16,40 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import PageTransition from '@/components/ui/PageTransition';
 import { Badge } from '@/components/ui/badge';
+import { PaymentForm } from '@/components/commercial/PaymentForm';
+import { toast } from 'sonner';
 
 const Payments = () => {
-  const [activeTab, setActiveTab] = React.useState('all');
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
   
   const commercialService = CommercialService.getInstance();
   
-  const { data: payments, isLoading } = useQuery({
+  const { data: payments, isLoading, refetch } = useQuery({
     queryKey: ['payments'],
     queryFn: () => commercialService.getPayments(),
   });
@@ -43,12 +67,72 @@ const Payments = () => {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(p => 
         p.party_name?.toLowerCase().includes(query) ||
-        p.amount.toString().includes(query)
+        p.amount.toString().includes(query) ||
+        (p.notes && p.notes.toLowerCase().includes(query))
       );
     }
     
     return filtered;
   }, [payments, activeTab, searchQuery]);
+
+  const handleAddPayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
+    try {
+      await commercialService.recordPayment(paymentData);
+      refetch();
+      setIsFormOpen(false);
+      toast.success('تم تسجيل المعاملة بنجاح');
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast.error('حدث خطأ أثناء تسجيل المعاملة');
+    }
+  };
+
+  const handleEditPayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
+    if (!selectedPayment || !selectedPayment.id) return;
+    
+    try {
+      await commercialService.updatePayment(selectedPayment.id, paymentData);
+      refetch();
+      setIsFormOpen(false);
+      setSelectedPayment(null);
+      setIsEditMode(false);
+      toast.success('تم تعديل المعاملة بنجاح');
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      toast.error('حدث خطأ أثناء تعديل المعاملة');
+    }
+  };
+  
+  const handleEditClick = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setIsEditMode(true);
+    setIsFormOpen(true);
+  };
+  
+  const handleDeleteClick = (payment: Payment) => {
+    setPaymentToDelete(payment);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const confirmDeletePayment = async () => {
+    if (!paymentToDelete || !paymentToDelete.id) return;
+    
+    try {
+      await commercialService.deletePayment(paymentToDelete.id);
+      refetch();
+      setIsDeleteDialogOpen(false);
+      setPaymentToDelete(null);
+      toast.success('تم حذف المعاملة بنجاح');
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast.error('حدث خطأ أثناء حذف المعاملة');
+    }
+  };
+
+  const resetForm = () => {
+    setSelectedPayment(null);
+    setIsEditMode(false);
+  };
 
   if (isLoading) {
     return (
@@ -71,7 +155,10 @@ const Payments = () => {
             <h1 className="text-3xl font-bold tracking-tight">المدفوعات والتحصيلات</h1>
             <p className="text-muted-foreground">إدارة المدفوعات والتحصيلات النقدية</p>
           </div>
-          <Button>
+          <Button onClick={() => {
+            resetForm();
+            setIsFormOpen(true);
+          }}>
             <PlusCircle className="ml-2 h-4 w-4" />
             تسجيل معاملة جديدة
           </Button>
@@ -101,6 +188,9 @@ const Payments = () => {
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
+                  <Button variant="outline" size="icon">
+                    <FileDown className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -114,6 +204,7 @@ const Payments = () => {
                       <TableHead className="text-left">المبلغ</TableHead>
                       <TableHead>طريقة الدفع</TableHead>
                       <TableHead>ملاحظات</TableHead>
+                      <TableHead>الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -121,7 +212,7 @@ const Payments = () => {
                       filteredPayments.map((payment) => (
                         <TableRow key={payment.id}>
                           <TableCell className="font-medium">
-                            {payment.id.substring(0, 8)}...
+                            {payment.id?.substring(0, 8)}...
                           </TableCell>
                           <TableCell>
                             <Badge variant={payment.payment_type === 'collection' ? 'default' : 'destructive'}>
@@ -135,13 +226,38 @@ const Payments = () => {
                           <TableCell className="text-left font-medium">
                             {payment.amount.toFixed(2)}
                           </TableCell>
-                          <TableCell>{payment.method}</TableCell>
+                          <TableCell>
+                            {payment.method === 'cash' ? 'نقدي' : 
+                             payment.method === 'check' ? 'شيك' : 
+                             payment.method === 'bank_transfer' ? 'تحويل بنكي' : 'أخرى'}
+                          </TableCell>
                           <TableCell>{payment.notes || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditClick(payment)}
+                                title="تعديل"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteClick(payment)}
+                                title="حذف"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
                           لا توجد معاملات للعرض
                         </TableCell>
                       </TableRow>
@@ -153,6 +269,47 @@ const Payments = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={isFormOpen} onOpenChange={(open) => {
+        setIsFormOpen(open);
+        if (!open) resetForm();
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditMode ? 'تعديل معاملة' : 'تسجيل معاملة جديدة'}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditMode 
+                ? 'قم بتعديل بيانات المعاملة حسب الحاجة'
+                : 'قم بإدخال بيانات المعاملة المالية لتسجيلها في النظام'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <PaymentForm 
+            onSubmit={isEditMode ? handleEditPayment : handleAddPayment} 
+            initialData={selectedPayment || undefined}
+            isEditing={isEditMode}
+          />
+        </DialogContent>
+      </Dialog>
+      
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف المعاملة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذه المعاملة؟ هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeletePayment} className="bg-red-600 hover:bg-red-700">
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageTransition>
   );
 };

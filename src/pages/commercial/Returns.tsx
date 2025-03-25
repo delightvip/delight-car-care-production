@@ -5,7 +5,7 @@ import CommercialService, { Return, ReturnItem } from '@/services/CommercialServ
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, FileDown, Eye, Receipt } from 'lucide-react';
+import { PlusCircle, Search, FileDown, Eye, Receipt, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { useForm } from "react-hook-form";
@@ -15,6 +15,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -24,6 +25,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import PageTransition from '@/components/ui/PageTransition';
 import { Badge } from '@/components/ui/badge';
 import { ReturnsForm } from '@/components/commercial/ReturnsForm';
@@ -36,6 +48,8 @@ const Returns = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<Return | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [returnToDelete, setReturnToDelete] = useState<Return | null>(null);
   
   const commercialService = CommercialService.getInstance();
   
@@ -84,6 +98,42 @@ const Returns = () => {
   const handleViewDetails = (returnItem: Return) => {
     setSelectedReturn(returnItem);
     setIsDetailsOpen(true);
+  };
+  
+  const confirmDeleteReturn = async () => {
+    if (!returnToDelete) return;
+    
+    try {
+      const success = await commercialService.deleteReturn(returnToDelete.id);
+      if (success) {
+        refetch();
+        setIsDeleteDialogOpen(false);
+        setReturnToDelete(null);
+        toast.success('تم حذف المرتجع بنجاح');
+      }
+    } catch (error) {
+      console.error('Error deleting return:', error);
+      toast.error('حدث خطأ أثناء حذف المرتجع');
+    }
+  };
+  
+  const handleDeleteClick = (returnItem: Return) => {
+    setReturnToDelete(returnItem);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const handleDeleteFromDialog = async (returnId: string) => {
+    try {
+      const success = await commercialService.deleteReturn(returnId);
+      if (success) {
+        refetch();
+        setIsDetailsOpen(false);
+        toast.success('تم حذف المرتجع بنجاح');
+      }
+    } catch (error) {
+      console.error('Error deleting return:', error);
+      toast.error('حدث خطأ أثناء حذف المرتجع');
+    }
   };
 
   if (isLoading) {
@@ -189,6 +239,15 @@ const Returns = () => {
                               >
                                 <Receipt className="h-4 w-4" />
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="حذف المرتجع"
+                                onClick={() => handleDeleteClick(returnItem)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -225,8 +284,26 @@ const Returns = () => {
           returnData={selectedReturn}
           open={isDetailsOpen}
           onOpenChange={setIsDetailsOpen}
+          onDelete={handleDeleteFromDialog}
         />
       )}
+      
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف المرتجع</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا المرتجع؟ هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteReturn} className="bg-red-600 hover:bg-red-700">
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageTransition>
   );
 };

@@ -15,6 +15,19 @@ export interface Party {
   created_at: string;
 }
 
+export interface Transaction {
+  id: string;
+  party_id: string;
+  transaction_date: string;
+  type: string;
+  description: string;
+  reference?: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  created_at: string;
+}
+
 class PartyService {
   private static instance: PartyService;
   
@@ -132,7 +145,7 @@ class PartyService {
         .from('parties')
         .insert({
           name: party.name,
-          type: party.type as 'customer' | 'supplier' | 'other',
+          type: party.type,
           phone: party.phone,
           email: party.email,
           address: party.address,
@@ -196,9 +209,106 @@ class PartyService {
     }
   }
   
+  // تحديث رصيد طرف تجاري مباشرة (مع إضافة سجل في الحركات المالية)
+  public async updatePartyBalance(
+    partyId: string, 
+    amount: number, 
+    isDebit: boolean,
+    description: string,
+    transactionType: string,
+    reference?: string
+  ): Promise<boolean> {
+    try {
+      // 1. الحصول على رصيد الطرف الحالي
+      const currentParty = await this.getPartyById(partyId);
+      if (!currentParty) throw new Error('الطرف التجاري غير موجود');
+      
+      const currentBalance = currentParty.balance;
+      
+      // 2. حساب الرصيد الجديد
+      let newBalance = currentBalance;
+      if (isDebit) {
+        newBalance += amount; // زيادة المديونية على الطرف
+      } else {
+        newBalance -= amount; // تخفيض المديونية على الطرف (دفع)
+      }
+      
+      // 3. تحديث رصيد الطرف في جدول party_balances
+      const { error: balanceError } = await supabase
+        .from('party_balances')
+        .update({ balance: newBalance, last_updated: new Date() })
+        .eq('party_id', partyId);
+      
+      if (balanceError) throw balanceError;
+      
+      // 4. إضافة سجل في جدول ledger
+      const { error: ledgerError } = await supabase
+        .from('ledger')
+        .insert({
+          party_id: partyId,
+          date: new Date(),
+          transaction_type: transactionType,
+          debit: isDebit ? amount : 0,
+          credit: !isDebit ? amount : 0,
+          balance_after: newBalance,
+          transaction_id: reference || undefined
+        });
+      
+      if (ledgerError) throw ledgerError;
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating party balance:', error);
+      toast.error('حدث خطأ أثناء تحديث رصيد الطرف التجاري');
+      return false;
+    }
+  }
+  
   // حذف طرف تجاري
   public async deleteParty(id: string): Promise<boolean> {
     try {
+      // 1. التحقق من عدم وجود فواتير أو مدفوعات مرتبطة بالطرف
+      const { count: invoiceCount, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('id', { count: 'exact', head: true })
+        .eq('party_id', id);
+        
+      if (invoiceError) throw invoiceError;
+      
+      if (invoiceCount && invoiceCount > 0) {
+        toast.error('لا يمكن حذف هذا الطرف لوجود فواتير مرتبطة به');
+        return false;
+      }
+      
+      const { count: paymentCount, error: paymentError } = await supabase
+        .from('payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('party_id', id);
+        
+      if (paymentError) throw paymentError;
+      
+      if (paymentCount && paymentCount > 0) {
+        toast.error('لا يمكن حذف هذا الطرف لوجود مدفوعات مرتبطة به');
+        return false;
+      }
+      
+      // 2. حذف سجلات الرصيد المرتبطة بالطرف
+      const { error: balanceError } = await supabase
+        .from('party_balances')
+        .delete()
+        .eq('party_id', id);
+      
+      if (balanceError) throw balanceError;
+      
+      // 3. حذف سجلات الحركات المالية المرتبطة بالطرف
+      const { error: ledgerError } = await supabase
+        .from('ledger')
+        .delete()
+        .eq('party_id', id);
+      
+      if (ledgerError) throw ledgerError;
+      
+      // 4. حذف الطرف نفسه
       const { error } = await supabase
         .from('parties')
         .delete()
@@ -216,7 +326,7 @@ class PartyService {
   }
   
   // جلب الحركات المالية للطرف التجاري
-  public async getPartyTransactions(partyId: string): Promise<any[]> {
+  public async getPartyTransactions(partyId: string): Promise<Transaction[]> {
     try {
       const { data, error } = await supabase
         .from('ledger')
@@ -231,6 +341,69 @@ class PartyService {
       console.error('Error fetching party transactions:', error);
       toast.error('حدث خطأ أثناء جلب الحركات المالية');
       return [];
+    }
+  }
+  
+  // تحديث رصيد افتتاحي للطرف
+  public async updateOpeningBalance(
+    partyId: string, 
+    newOpeningBalance: number, 
+    balanceType: 'credit' | 'debit'
+  ): Promise<boolean> {
+    try {
+      const currentParty = await this.getPartyById(partyId);
+      if (!currentParty) throw new Error('الطرف التجاري غير موجود');
+      
+      // حساب الفرق بين الرصيد الافتتاحي الجديد والقديم
+      const oldOpeningValue = currentParty.opening_balance * (currentParty.balance_type === 'debit' ? 1 : -1);
+      const newOpeningValue = newOpeningBalance * (balanceType === 'debit' ? 1 : -1);
+      const balanceDifference = newOpeningValue - oldOpeningValue;
+      
+      // تحديث بيانات الطرف
+      const { error } = await supabase
+        .from('parties')
+        .update({
+          opening_balance: newOpeningBalance,
+          balance_type: balanceType
+        })
+        .eq('id', partyId);
+      
+      if (error) throw error;
+      
+      // تحديث رصيد الطرف
+      const newBalance = currentParty.balance + balanceDifference;
+      
+      const { error: balanceError } = await supabase
+        .from('party_balances')
+        .update({ 
+          balance: newBalance,
+          last_updated: new Date()
+        })
+        .eq('party_id', partyId);
+      
+      if (balanceError) throw balanceError;
+      
+      // إضافة حركة مالية لتعكس التغيير في الرصيد الافتتاحي
+      const { error: ledgerError } = await supabase
+        .from('ledger')
+        .insert({
+          party_id: partyId,
+          date: new Date(),
+          transaction_type: 'opening_balance_update',
+          description: 'تعديل الرصيد الافتتاحي',
+          debit: balanceDifference > 0 ? Math.abs(balanceDifference) : 0,
+          credit: balanceDifference < 0 ? Math.abs(balanceDifference) : 0,
+          balance_after: newBalance
+        });
+      
+      if (ledgerError) throw ledgerError;
+      
+      toast.success('تم تحديث الرصيد الافتتاحي بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error updating opening balance:', error);
+      toast.error('حدث خطأ أثناء تحديث الرصيد الافتتاحي');
+      return false;
     }
   }
 }

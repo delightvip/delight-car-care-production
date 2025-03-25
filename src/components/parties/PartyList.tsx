@@ -36,17 +36,18 @@ import {
   FileText, 
   Plus, 
   Search,
-  FileDown
+  FileDown,
+  ExternalLink
 } from 'lucide-react';
 import { Party } from '@/services/PartyService';
 import { PartyForm } from './PartyForm';
+import { useNavigate } from 'react-router-dom';
 
 interface PartyListProps {
   parties: Party[];
   onAddParty: (party: Omit<Party, 'id' | 'balance' | 'created_at'>) => void;
   onUpdateParty: (id: string, party: Partial<Party>) => void;
   onDeleteParty: (id: string) => void;
-  onViewDetails?: (party: Party) => void;
   title?: string;
   type?: 'all' | 'customer' | 'supplier' | 'other';
 }
@@ -56,7 +57,6 @@ export function PartyList({
   onAddParty, 
   onUpdateParty, 
   onDeleteParty,
-  onViewDetails,
   title = 'الأطراف التجارية',
   type = 'all'
 }: PartyListProps) {
@@ -66,6 +66,8 @@ export function PartyList({
   const [partyToDelete, setPartyToDelete] = useState<Party | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  
+  const navigate = useNavigate();
 
   // تصفية الأطراف حسب البحث
   const filteredParties = parties.filter(party => 
@@ -103,6 +105,10 @@ export function PartyList({
       setIsEditDialogOpen(false);
       setEditingParty(null);
     }
+  };
+  
+  const handleViewDetails = (party: Party) => {
+    navigate(`/commercial/parties/${party.id}`);
   };
 
   return (
@@ -161,8 +167,8 @@ export function PartyList({
                     </TableCell>
                     <TableCell>{party.phone || '-'}</TableCell>
                     <TableCell className="text-right">
-                      <span className={party.balance < 0 ? 'text-red-600' : 'text-green-600'}>
-                        {party.balance.toFixed(2)}
+                      <span className={party.balance > 0 ? 'text-red-600' : party.balance < 0 ? 'text-green-600' : ''}>
+                        {Math.abs(party.balance).toFixed(2)} {party.balance > 0 ? '(مدين)' : party.balance < 0 ? '(دائن)' : ''}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -176,12 +182,10 @@ export function PartyList({
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {onViewDetails && (
-                            <DropdownMenuItem onClick={() => onViewDetails(party)}>
-                              <FileText className="mr-2 h-4 w-4" />
-                              <span>عرض التفاصيل</span>
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem onClick={() => handleViewDetails(party)}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            <span>عرض التفاصيل</span>
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleEditClick(party)}>
                             <Edit className="mr-2 h-4 w-4" />
                             <span>تعديل</span>

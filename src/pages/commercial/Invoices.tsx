@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,9 +14,26 @@ import {
   FileText, 
   MoreHorizontal, 
   Printer,
-  Trash2
+  Trash2,
+  Edit
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from '@/components/ui/skeleton';
 import { InvoiceForm } from '@/components/commercial/InvoiceForm';
 import { Input } from '@/components/ui/input';
@@ -38,11 +56,17 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 const Invoices = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  
+  const navigate = useNavigate();
   
   const commercialService = CommercialService.getInstance();
   const partyService = PartyService.getInstance();
@@ -160,9 +184,37 @@ const Invoices = () => {
   }, [invoices, activeTab, searchQuery]);
   
   const handleCreateInvoice = async (invoiceData: Omit<Invoice, 'id' | 'created_at'>) => {
-    await commercialService.createInvoice(invoiceData);
-    refetch();
-    setIsAddDialogOpen(false);
+    try {
+      await commercialService.createInvoice(invoiceData);
+      refetch();
+      setIsAddDialogOpen(false);
+      toast.success('تم إنشاء الفاتورة بنجاح');
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      toast.error('حدث خطأ أثناء إنشاء الفاتورة');
+    }
+  };
+  
+  const handleDeleteClick = (invoice: Invoice) => {
+    setInvoiceToDelete(invoice);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const confirmDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    
+    try {
+      const success = await commercialService.deleteInvoice(invoiceToDelete.id);
+      if (success) {
+        refetch();
+        setIsDeleteDialogOpen(false);
+        setInvoiceToDelete(null);
+        toast.success('تم حذف الفاتورة بنجاح');
+      }
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      toast.error('حدث خطأ أثناء حذف الفاتورة');
+    }
   };
   
   const getStatusBadge = (status: string) => {
@@ -298,7 +350,7 @@ const Invoices = () => {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => navigate(`/commercial/invoices/${invoice.id}`)}>
                                   <FileText className="mr-2 h-4 w-4" />
                                   <span>عرض التفاصيل</span>
                                 </DropdownMenuItem>
@@ -306,7 +358,7 @@ const Invoices = () => {
                                   <Printer className="mr-2 h-4 w-4" />
                                   <span>طباعة</span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteClick(invoice)}>
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   <span>حذف</span>
                                 </DropdownMenuItem>
@@ -335,6 +387,9 @@ const Invoices = () => {
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>إنشاء فاتورة جديدة</DialogTitle>
+            <DialogDescription>
+              قم بإدخال بيانات الفاتورة وإضافة العناصر.
+            </DialogDescription>
           </DialogHeader>
           {parties && inventoryItems && (
             <InvoiceForm 
@@ -345,6 +400,26 @@ const Invoices = () => {
           )}
         </DialogContent>
       </Dialog>
+      
+      {/* نافذة تأكيد الحذف */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف الفاتورة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذه الفاتورة؟ سيتم أيضاً إلغاء تأثيرها على حساب الطرف المرتبط بها.
+              <br />
+              هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteInvoice} className="bg-red-600 hover:bg-red-700">
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageTransition>
   );
 };
