@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CommercialService, { Return } from '@/services/CommercialService';
@@ -41,6 +42,24 @@ import { ReturnsForm } from '@/components/commercial/ReturnsForm';
 import { toast } from 'sonner';
 import { ReturnDetailsDialog } from '@/components/commercial/ReturnDetailsDialog';
 
+// Define ReturnItem interface if it doesn't exist in CommercialService
+interface ReturnItem {
+  id?: string;
+  item_id: number;
+  item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  total?: number;
+}
+
+// Make TypeScript know that Return objects might include ReturnItems
+declare module '@/services/CommercialService' {
+  interface Return {
+    items?: ReturnItem[];
+  }
+}
+
 const Returns = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,7 +88,7 @@ const Returns = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(r => 
-        r.invoice_number?.toLowerCase().includes(query) ||
+        r.invoice_id?.toLowerCase().includes(query) ||
         r.amount.toString().includes(query)
       );
     }

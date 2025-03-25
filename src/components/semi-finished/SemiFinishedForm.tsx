@@ -56,11 +56,11 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
     ingredients: []
   });
 
-  const [selectedRawMaterial, setSelectedRawMaterial] = useState('');
+  const [selectedRawMaterial, setSelectedRawMaterial] = useState('none'); // Changed from empty string to 'none'
   const [percentage, setPercentage] = useState(0);
 
   const handleAddIngredient = () => {
-    if (!selectedRawMaterial || percentage <= 0 || percentage > 100) {
+    if (!selectedRawMaterial || selectedRawMaterial === 'none' || percentage <= 0 || percentage > 100) {
       toast.error("يرجى اختيار مادة أولية وتحديد نسبة صحيحة (1-100%)");
       return;
     }
@@ -89,7 +89,7 @@ const SemiFinishedForm: React.FC<SemiFinishedProductFormProps> = ({
       ingredients: [...product.ingredients, newIngredient]
     });
 
-    setSelectedRawMaterial('');
+    setSelectedRawMaterial('none'); // Reset to 'none' instead of empty string
     setPercentage(0);
   };
 

@@ -1,4 +1,5 @@
-import { supabase } from "@/integrations/supabase/client";
+import { createClient, PostgrestError, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from "sonner";
 
 export interface Invoice {
@@ -27,14 +28,13 @@ export interface InvoiceItem {
 }
 
 export interface Payment {
-  id?: string;
-  party_id: string;
-  party_name?: string;
-  date: string | Date;
-  amount: number;
+  id: string;
   payment_type: 'collection' | 'disbursement';
+  party_id: string;
   method: string;
+  amount: number;
   related_invoice_id?: string;
+  date: string | Date;
   notes?: string;
   created_at?: string;
 }
@@ -50,10 +50,9 @@ export interface ReturnItem {
 
 export interface Return {
   id: string;
+  return_type: "sales_return" | "purchase_return";
   invoice_id?: string;
-  invoice_number?: string;
-  date: string | Date;
-  return_type: 'sales_return' | 'purchase_return';
+  date: string;
   amount: number;
   notes?: string;
   created_at?: string;
@@ -75,17 +74,17 @@ export interface LedgerEntry {
 
 class CommercialService {
   private static instance: CommercialService;
-  
+  private supabase: SupabaseClient;
+
   private constructor() {}
-  
+
   public static getInstance(): CommercialService {
     if (!CommercialService.instance) {
       CommercialService.instance = new CommercialService();
     }
     return CommercialService.instance;
   }
-  
-  // الحصول على جميع الفواتير
+
   public async getInvoices(): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
@@ -95,9 +94,9 @@ class CommercialService {
           parties!invoices_party_id_fkey (name)
         `)
         .order('date', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       return data.map(invoice => ({
         id: invoice.id,
         party_id: invoice.party_id,
@@ -115,8 +114,7 @@ class CommercialService {
       return [];
     }
   }
-  
-  // الحصول على فاتورة محددة بالمعرف
+
   public async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
       const { data, error } = await supabase
@@ -127,9 +125,9 @@ class CommercialService {
         `)
         .eq('id', id)
         .single();
-      
+
       if (error) throw error;
-      
+
       return {
         id: data.id,
         party_id: data.party_id,
@@ -147,17 +145,16 @@ class CommercialService {
       return null;
     }
   }
-  
-  // الحصول على عناصر فاتورة محددة
+
   public async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
     try {
       const { data, error } = await supabase
         .from('invoice_items')
         .select('*')
         .eq('invoice_id', invoiceId);
-      
+
       if (error) throw error;
-      
+
       return data.map(item => ({
         id: item.id,
         invoice_id: item.invoice_id,
@@ -175,8 +172,7 @@ class CommercialService {
       return [];
     }
   }
-  
-  // الحصول على فواتير لطرف محدد
+
   public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
@@ -187,9 +183,9 @@ class CommercialService {
         `)
         .eq('party_id', partyId)
         .order('date', { ascending: false });
-      
+
       if (error) throw error;
-      
+
       return data.map(invoice => ({
         id: invoice.id,
         party_id: invoice.party_id,
@@ -207,16 +203,13 @@ class CommercialService {
       return [];
     }
   }
-  
-  // إنشاء فاتورة جديدة
+
   public async createInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
-      // Convert Date objects to ISO string for the database
       const dateStr = typeof invoice.date === 'string' ? 
         invoice.date : 
         invoice.date.toISOString().split('T')[0];
 
-      // 1. إنشاء الفاتورة
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
@@ -228,10 +221,9 @@ class CommercialService {
         })
         .select()
         .single();
-      
+
       if (invoiceError) throw invoiceError;
-      
-      // 2. إضافة عناصر الفاتورة
+
       if (invoice.items && invoice.items.length > 0) {
         const invoiceItems = invoice.items.map(item => ({
           invoice_id: invoiceData.id,
@@ -249,12 +241,11 @@ class CommercialService {
         
         if (itemsError) throw itemsError;
       }
-      
-      // 3. تحديث رصيد الطرف التجاري
+
       if (invoice.party_id) {
         const partyService = (await import('./PartyService')).default.getInstance();
-        const isDebit = invoice.invoice_type === 'sale'; // المبيعات تزيد مديونية العميل
-        
+        const isDebit = invoice.invoice_type === 'sale';
+
         await partyService.updatePartyBalance(
           invoice.party_id,
           invoice.total_amount,
@@ -264,7 +255,7 @@ class CommercialService {
           invoiceData.id
         );
       }
-      
+
       toast.success('تم إنشاء الفاتورة بنجاح');
       return this.getInvoiceById(invoiceData.id);
     } catch (error) {
@@ -273,11 +264,9 @@ class CommercialService {
       return null;
     }
   }
-  
-  // تحديث فاتورة موجودة
+
   public async updateInvoice(id: string, invoiceData: Partial<Omit<Invoice, 'id' | 'created_at'>>): Promise<boolean> {
     try {
-      // Convert Date objects to ISO string for the database
       const dateStr = typeof invoiceData.date === 'string' ? 
         invoiceData.date : 
         invoiceData.date?.toISOString().split('T')[0];
@@ -304,11 +293,9 @@ class CommercialService {
       return false;
     }
   }
-  
-  // حذف فاتورة
+
   public async deleteInvoice(id: string): Promise<boolean> {
     try {
-      // 1. حذف عناصر الفاتورة المرتبطة
       const { error: itemsError } = await supabase
         .from('invoice_items')
         .delete()
@@ -316,7 +303,6 @@ class CommercialService {
       
       if (itemsError) throw itemsError;
       
-      // 2. حذف الفاتورة نفسها
       const { error } = await supabase
         .from('invoices')
         .delete()
@@ -332,8 +318,7 @@ class CommercialService {
       return false;
     }
   }
-  
-  // تحديث حالة الدفع للفاتورة
+
   public async updateInvoiceStatus(invoiceId: string, status: 'paid' | 'partial' | 'unpaid'): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -351,17 +336,14 @@ class CommercialService {
       return false;
     }
   }
-  
-  // تحديث حالة الدفع للفاتورة بناءً على المدفوعات المرتبطة
+
   public async updateInvoicePaymentStatus(invoiceId: string): Promise<void> {
     try {
-      // 1. الحصول على إجمالي مبلغ الفاتورة
       const invoice = await this.getInvoiceById(invoiceId);
       if (!invoice) throw new Error('الفاتورة غير موجودة');
       
       const totalAmount = invoice.total_amount;
       
-      // 2. الحصول على إجمالي المدفوعات المرتبطة بالفاتورة
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount')
@@ -371,7 +353,6 @@ class CommercialService {
       
       const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
       
-      // 3. تحديد الحالة بناءً على المبلغ المدفوع
       let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
       
       if (totalPayments >= totalAmount) {
@@ -380,15 +361,13 @@ class CommercialService {
         newStatus = 'partial';
       }
       
-      // 4. تحديث حالة الفاتورة
       await this.updateInvoiceStatus(invoiceId, newStatus);
     } catch (error) {
       console.error('Error updating invoice payment status:', error);
       toast.error('حدث خطأ أثناء تحديث حالة دفع الفاتورة');
     }
   }
-  
-  // الحصول على جميع المدفوعات
+
   public async getPayments(): Promise<Payment[]> {
     try {
       const { data, error } = await supabase
@@ -419,8 +398,7 @@ class CommercialService {
       return [];
     }
   }
-  
-  // الحصول على مدفوعات لطرف محدد
+
   public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
     try {
       const { data, error } = await supabase
@@ -452,16 +430,13 @@ class CommercialService {
       return [];
     }
   }
-  
-  // تسجيل دفعة جديدة
+
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
     try {
-      // Convert Date objects to ISO string for the database
       const dateStr = typeof paymentData.date === 'string' ? 
         paymentData.date : 
         paymentData.date.toISOString().split('T')[0];
       
-      // 1. تسجيل الدفعة
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .insert({
@@ -478,9 +453,8 @@ class CommercialService {
       
       if (paymentError) throw paymentError;
       
-      // 2. تحديث رصيد الطرف التجاري
       const partyService = (await import('./PartyService')).default.getInstance();
-      const isDebit = paymentData.payment_type === 'disbursement'; // المدفوعات تزيد مديونية الطرف (إذا كان مورد)
+      const isDebit = paymentData.payment_type === 'disbursement';
       
       await partyService.updatePartyBalance(
         paymentData.party_id,
@@ -491,14 +465,12 @@ class CommercialService {
         payment.id
       );
       
-      // 3. تحديث حالة الفاتورة إذا كانت الدفعة مرتبطة بفاتورة
       if (paymentData.related_invoice_id) {
         await this.updateInvoicePaymentStatus(paymentData.related_invoice_id);
       }
       
       toast.success(`تم تسجيل ${paymentData.payment_type === 'collection' ? 'التحصيل' : 'السداد'} بنجاح`);
       
-      // Convert payment object to the correct type
       const typedPayment: Payment = {
         id: payment.id,
         party_id: payment.party_id,
@@ -518,11 +490,9 @@ class CommercialService {
       return null;
     }
   }
-  
-  // تحديث دفعة موجودة
+
   public async updatePayment(id: string, paymentData: Partial<Omit<Payment, 'id' | 'created_at'>>): Promise<boolean> {
     try {
-      // Convert Date objects to ISO string for the database
       const dateStr = typeof paymentData.date === 'string' ? 
         paymentData.date : 
         paymentData.date?.toISOString().split('T')[0];
@@ -542,7 +512,6 @@ class CommercialService {
       
       if (error) throw error;
       
-      // Updating invoice payment status if related invoice ID is provided
       if (paymentData.related_invoice_id) {
         await this.updateInvoicePaymentStatus(paymentData.related_invoice_id);
       }
@@ -555,8 +524,7 @@ class CommercialService {
       return false;
     }
   }
-  
-  // حذف دفعة
+
   public async deletePayment(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -574,8 +542,7 @@ class CommercialService {
       return false;
     }
   }
-  
-  // الحصول على المرتجعات
+
   public async getReturns(): Promise<Return[]> {
     try {
       const { data, error } = await supabase
@@ -601,8 +568,7 @@ class CommercialService {
       return [];
     }
   }
-  
-  // الحصول على مرتجعات لفاتورة محددة
+
   public async getReturnsByInvoice(invoiceId: string): Promise<Return[]> {
     try {
       const { data, error } = await supabase
@@ -629,16 +595,13 @@ class CommercialService {
       return [];
     }
   }
-  
-  // إنشاء مرتجع جديد
+
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      // Convert Date objects to ISO string for the database
       const dateStr = typeof returnData.date === 'string' ? 
         returnData.date : 
         returnData.date.toISOString().split('T')[0];
 
-      // 1. تسجيل المرتجع
       const { data: returnRecord, error: returnError } = await supabase
         .from('returns')
         .insert({
@@ -653,7 +616,6 @@ class CommercialService {
       
       if (returnError) throw returnError;
       
-      // 2. تحديث رصيد الطرف التجاري (إذا كان المرتجع مرتبط بفاتورة)
       if (returnData.invoice_id) {
         const { data: invoice, error: invoiceError } = await supabase
           .from('invoices')
@@ -666,7 +628,6 @@ class CommercialService {
         if (invoice && invoice.party_id) {
           const partyService = (await import('./PartyService')).default.getInstance();
           
-          // المرتجعات تؤثر عكس الفواتير - مرتجع المبيعات يقلل مديونية العميل، ومرتجع المشتريات يزيد مديونية المورد
           const isDebit = returnData.return_type === 'purchase_return';
           
           await partyService.updatePartyBalance(
@@ -680,7 +641,6 @@ class CommercialService {
         }
       }
       
-      // Convert return object to the correct type
       const typedReturn: Return = {
         id: returnRecord.id,
         invoice_id: returnRecord.invoice_id,
@@ -689,7 +649,7 @@ class CommercialService {
         amount: returnRecord.amount,
         notes: returnRecord.notes,
         created_at: returnRecord.created_at,
-        items: returnData.items // Copy items from input data
+        items: returnData.items
       };
       
       toast.success('تم تسجيل المرتجع بنجاح');
@@ -700,16 +660,13 @@ class CommercialService {
       return null;
     }
   }
-  
-  // For compatibility with existing code
+
   public async recordReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     return this.createReturn(returnData);
   }
-  
-  // تحديث مرتجع موجود
+
   public async updateReturn(id: string, returnData: Partial<Omit<Return, 'id' | 'created_at'>>): Promise<boolean> {
     try {
-      // Convert Date objects to ISO string for the database
       const dateStr = typeof returnData.date === 'string' ? 
         returnData.date : 
         returnData.date?.toISOString().split('T')[0];
@@ -735,8 +692,7 @@ class CommercialService {
       return false;
     }
   }
-  
-  // حذف مرتجع
+
   public async deleteReturn(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -754,9 +710,8 @@ class CommercialService {
       return false;
     }
   }
-  
-  // جلب سجل القيود اليومية
-  public async getLedgerEntries(partyId: string): Promise<LedgerEntry[]> {
+
+  public async getLedgerEntries(filters: any = {}): Promise<any[]> {
     try {
       const { data, error } = await supabase
         .from('ledger')
@@ -764,7 +719,7 @@ class CommercialService {
           *,
           parties!ledger_party_id_fkey (name, type)
         `)
-        .eq('party_id', partyId)
+        .eq('party_id', filters.party_id)
         .order('date', { ascending: false });
       
       if (error) throw error;

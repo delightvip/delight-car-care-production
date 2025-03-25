@@ -33,6 +33,31 @@ import { Return } from '@/services/CommercialService';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
 
+// Define ReturnItem interface to fix the missing interface error
+interface ReturnItem {
+  id?: string;
+  item_id: number;
+  item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  total?: number;
+}
+
+// Update the Return interface from CommercialService to include items
+declare module '@/services/CommercialService' {
+  interface Return {
+    id: string;
+    return_type: "sales_return" | "purchase_return";
+    invoice_id?: string;
+    date: string;
+    amount: number;
+    notes?: string;
+    created_at?: string;
+    items?: ReturnItem[];
+  }
+}
+
 const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
   invoice_id: z.string().optional(),
@@ -192,7 +217,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>رقم الفاتورة (اختياري)</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value || "no_invoice"}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="اختر الفاتورة المرتبطة" />
@@ -345,7 +370,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                                   form.setValue(`items.${index}.item_type`, selectedItemType as any);
                                 }
                               }}
-                              value={field.value?.toString()}
+                              value={field.value?.toString() || "0"}
                             >
                               <FormControl>
                                 <SelectTrigger>

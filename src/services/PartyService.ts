@@ -1,5 +1,5 @@
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { createClient, PostgrestFilterBuilder, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Party {
   id: string;
@@ -31,8 +31,11 @@ export interface Transaction {
 
 class PartyService {
   private static instance: PartyService;
-  
-  private constructor() {}
+  private supabase: SupabaseClient;
+
+  private constructor() {
+    this.supabase = supabase;
+  }
   
   public static getInstance(): PartyService {
     if (!PartyService.instance) {
@@ -43,7 +46,7 @@ class PartyService {
   
   public async getParties(): Promise<Party[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('parties')
         .select(`
           *,
@@ -74,7 +77,7 @@ class PartyService {
   
   public async getPartyById(id: string): Promise<Party | null> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('parties')
         .select(`
           *,
@@ -106,7 +109,7 @@ class PartyService {
   
   public async getPartiesByType(type: 'customer' | 'supplier' | 'other'): Promise<Party[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('parties')
         .select(`
           *,
@@ -138,7 +141,7 @@ class PartyService {
   
   public async addParty(party: Omit<Party, 'id' | 'balance' | 'created_at'>): Promise<Party | null> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('parties')
         .insert({
           name: party.name,
@@ -156,7 +159,7 @@ class PartyService {
       
       toast.success(`تم إضافة ${party.name} بنجاح`);
       
-      const { data: partyWithBalance, error: balanceError } = await supabase
+      const { data: partyWithBalance, error: balanceError } = await this.supabase
         .from('parties')
         .select(`
           *,
@@ -188,7 +191,7 @@ class PartyService {
   
   public async updateParty(id: string, partyData: Partial<Omit<Party, 'id' | 'created_at' | 'balance'>>): Promise<boolean> {
     try {
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('parties')
         .update(partyData)
         .eq('id', id);
@@ -225,14 +228,14 @@ class PartyService {
         newBalance -= amount;
       }
       
-      const { error: balanceError } = await supabase
+      const { error: balanceError } = await this.supabase
         .from('party_balances')
         .update({ balance: newBalance, last_updated: new Date().toISOString() })
         .eq('party_id', partyId);
       
       if (balanceError) throw balanceError;
       
-      const { error: ledgerError } = await supabase
+      const { error: ledgerError } = await this.supabase
         .from('ledger')
         .insert({
           party_id: partyId,
@@ -256,7 +259,7 @@ class PartyService {
   
   public async deleteParty(id: string): Promise<boolean> {
     try {
-      const { count: invoiceCount, error: invoiceError } = await supabase
+      const { count: invoiceCount, error: invoiceError } = await this.supabase
         .from('invoices')
         .select('id', { count: 'exact', head: true })
         .eq('party_id', id);
@@ -268,7 +271,7 @@ class PartyService {
         return false;
       }
       
-      const { count: paymentCount, error: paymentError } = await supabase
+      const { count: paymentCount, error: paymentError } = await this.supabase
         .from('payments')
         .select('id', { count: 'exact', head: true })
         .eq('party_id', id);
@@ -280,21 +283,21 @@ class PartyService {
         return false;
       }
       
-      const { error: balanceError } = await supabase
+      const { error: balanceError } = await this.supabase
         .from('party_balances')
         .delete()
         .eq('party_id', id);
       
       if (balanceError) throw balanceError;
       
-      const { error: ledgerError } = await supabase
+      const { error: ledgerError } = await this.supabase
         .from('ledger')
         .delete()
         .eq('party_id', id);
       
       if (ledgerError) throw ledgerError;
       
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('parties')
         .delete()
         .eq('id', id);
@@ -312,7 +315,7 @@ class PartyService {
   
   public async getPartyTransactions(partyId: string): Promise<Transaction[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('ledger')
         .select('*')
         .eq('party_id', partyId)
@@ -340,9 +343,9 @@ class PartyService {
     }
   }
   
-  public async getPartyLedger(partyId: string): Promise<any[]> {
+  public async getLedgerEntries(partyId: string): Promise<any[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('ledger')
         .select('*')
         .eq('party_id', partyId)
@@ -350,10 +353,20 @@ class PartyService {
       
       if (error) throw error;
       
-      return data.map(entry => ({
-        ...entry,
-        description: this.getTransactionDescription(entry.transaction_type)
+      const ledgerEntries = data.map(entry => ({
+        id: entry.id,
+        party_id: entry.party_id,
+        transaction_id: entry.transaction_id,
+        transaction_type: entry.transaction_type,
+        date: entry.date,
+        debit: entry.debit,
+        credit: entry.credit,
+        balance_after: entry.balance_after,
+        created_at: entry.created_at,
+        notes: ''
       }));
+      
+      return ledgerEntries;
     } catch (error) {
       console.error('Error fetching party ledger:', error);
       toast.error('فشل في جلب سجل الحساب');
@@ -374,7 +387,7 @@ class PartyService {
       const newOpeningValue = newOpeningBalance * (balanceType === 'debit' ? 1 : -1);
       const balanceDifference = newOpeningValue - oldOpeningValue;
       
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('parties')
         .update({
           opening_balance: newOpeningBalance,
@@ -386,7 +399,7 @@ class PartyService {
       
       const newBalance = currentParty.balance + balanceDifference;
       
-      const { error: balanceError } = await supabase
+      const { error: balanceError } = await this.supabase
         .from('party_balances')
         .update({ 
           balance: newBalance,
@@ -396,7 +409,7 @@ class PartyService {
       
       if (balanceError) throw balanceError;
       
-      const { error: ledgerError } = await supabase
+      const { error: ledgerError } = await this.supabase
         .from('ledger')
         .insert({
           party_id: partyId,

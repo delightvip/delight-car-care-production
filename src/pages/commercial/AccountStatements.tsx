@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -49,7 +50,7 @@ const AccountStatements = () => {
     queryFn: () => partyService.getParties(),
   });
   
-  const { data: ledgerEntries, isLoading } = useQuery({
+  const { data: ledgerEntries, isLoading, refetch } = useQuery({
     queryKey: ['ledger', dateRange, partyType, selectedPartyId, sortDirection, ledgerFilters],
     queryFn: () => commercialService.getLedgerEntries({
       startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
@@ -90,7 +91,8 @@ const AccountStatements = () => {
     return [...filteredEntries].sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
-      return sortDirection === 'asc' ? dateA - dateB : dateB - a;
+      // Fixed the comparison to use dateA and dateB
+      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
     });
   }, [filteredEntries, sortDirection]);
   
@@ -174,9 +176,10 @@ const AccountStatements = () => {
     setLedgerFilters(filters);
     setIsFiltering(true);
     
-    if (selectedParty) {
-      refetchLedger(selectedParty.id);
-    }
+    // Remove the references to undefined variables
+    // if (selectedPartyId) {
+    //   refetch();
+    // }
   };
   
   return (
@@ -246,12 +249,12 @@ const AccountStatements = () => {
               </PopoverContent>
             </Popover>
             
-            <Select value={selectedPartyId || ''} onValueChange={setSelectedPartyId}>
+            <Select value={selectedPartyId || 'all'} onValueChange={setSelectedPartyId}>
               <SelectTrigger>
                 <SelectValue placeholder="اختر طرف محدد" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">جميع الأطراف</SelectItem>
+                <SelectItem value="all">جميع الأطراف</SelectItem>
                 {parties && parties.map(party => (
                   <SelectItem key={party.id} value={party.id}>
                     {party.name} ({party.type === 'customer' ? 'عميل' : party.type === 'supplier' ? 'مورد' : 'أخرى'})

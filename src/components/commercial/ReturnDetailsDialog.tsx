@@ -31,6 +31,7 @@ export function ReturnDetailsDialog({
       if (typeof dateString === 'string') {
         return format(new Date(dateString), 'yyyy-MM-dd');
       } else {
+        // Convert Date object to string format that format() expects
         return format(dateString, 'yyyy-MM-dd');
       }
     } catch (error) {

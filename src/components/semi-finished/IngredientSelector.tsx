@@ -30,7 +30,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
   return (
     <div className="flex gap-2 mb-4">
       <Select 
-        value={selectedMaterial} 
+        value={selectedMaterial || "none"} 
         onValueChange={onMaterialChange}
       >
         <SelectTrigger className="flex-1">
