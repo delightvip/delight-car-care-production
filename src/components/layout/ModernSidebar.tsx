@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -24,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { useSidebar } from '@/components/layout/SidebarContext';
 import { useNotifications } from '@/components/notifications/NotificationProvider';
 import { Button } from '@/components/ui/button';
+import { motion } from 'framer-motion';
 import ImportanceCalculationService from '@/services/ImportanceCalculationService';
 
 interface MenuItemProps {
@@ -43,7 +45,9 @@ const MenuItem: React.FC<MenuItemProps> = ({ to, icon, label, isActive, badge, b
       isActive && 'bg-primary/10 text-primary font-medium'
     )}
   >
-    <div className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-primary')}>{icon}</div>
+    <div className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-primary')}>
+      {icon}
+    </div>
     <span className="flex-1 text-sm">{label}</span>
     {typeof badge === 'number' && badge > 0 && (
       <Badge variant={badgeVariant} className="ml-auto">
@@ -59,12 +63,17 @@ interface SectionProps {
 }
 
 const Section: React.FC<SectionProps> = ({ title, children }) => (
-  <div className="space-y-1.5">
+  <motion.div 
+    className="space-y-1.5"
+    initial={{ opacity: 0, y: 5 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+  >
     <div className="px-4 py-2">
       <h2 className="text-xs font-semibold text-muted-foreground tracking-tight">{title}</h2>
     </div>
     {children}
-  </div>
+  </motion.div>
 );
 
 const ModernSidebar = () => {
@@ -85,10 +94,15 @@ const ModernSidebar = () => {
   
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      <div className="p-4">
+      <motion.div 
+        className="p-4" 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
         <h2 className="text-lg font-bold text-primary">نظام إدارة المصنع</h2>
         <p className="text-sm text-muted-foreground">مرحباً بك في نظام ديلايت</p>
-      </div>
+      </motion.div>
       <Separator />
       <ScrollArea className="flex-1 py-4">
         <div className="space-y-6 px-2">
@@ -113,7 +127,7 @@ const ModernSidebar = () => {
               icon={<Package />} 
               label="المواد الأولية" 
               isActive={isActive('/inventory/raw-materials')} 
-              badge={lowStockItems?.counts.rawMaterials}
+              badge={lowStockItems?.counts?.rawMaterials || 0}
               badgeVariant="destructive"
             />
             <MenuItem 
@@ -121,7 +135,7 @@ const ModernSidebar = () => {
               icon={<Layers />} 
               label="المنتجات النصف مصنعة" 
               isActive={isActive('/inventory/semi-finished')} 
-              badge={lowStockItems?.counts.semiFinished}
+              badge={lowStockItems?.counts?.semiFinished || 0}
               badgeVariant="destructive"
             />
             <MenuItem 
@@ -129,7 +143,7 @@ const ModernSidebar = () => {
               icon={<Box />} 
               label="مستلزمات التعبئة" 
               isActive={isActive('/inventory/packaging')} 
-              badge={lowStockItems?.counts.packaging}
+              badge={lowStockItems?.counts?.packaging || 0}
               badgeVariant="destructive"
             />
             <MenuItem 
@@ -137,7 +151,7 @@ const ModernSidebar = () => {
               icon={<ShoppingBag />} 
               label="المنتجات النهائية" 
               isActive={isActive('/inventory/finished-products')} 
-              badge={lowStockItems?.counts.finished}
+              badge={lowStockItems?.counts?.finished || 0}
               badgeVariant="destructive"
             />
             <MenuItem 
@@ -198,7 +212,7 @@ const ModernSidebar = () => {
                 variant="outline" 
                 size="sm" 
                 onClick={handleRecalculateImportance}
-                className="w-full flex items-center justify-center gap-2 text-xs"
+                className="w-full flex items-center justify-center gap-2 text-xs transition-all hover:bg-primary/10"
               >
                 <Calculator className="h-3.5 w-3.5" />
                 إعادة حساب الأهمية
@@ -222,7 +236,7 @@ const ModernSidebar = () => {
 
   return (
     <div className={cn(
-      "fixed top-0 right-0 h-full w-64 bg-background border-l transition-all z-10",
+      "fixed top-0 right-0 h-full w-64 bg-background border-l shadow-sm transition-all z-10",
       !isOpen && "translate-x-full"
     )}>
       <div className="pt-16 h-full">

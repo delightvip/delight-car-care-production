@@ -2,6 +2,7 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { InventoryDistributionData, CHART_COLORS } from './InventoryChartUtils';
+import { motion } from 'framer-motion';
 
 interface InventoryPieChartProps {
   data: InventoryDistributionData[];
@@ -13,7 +14,7 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
   height = '16rem',
 }) => {
   // Calculate the total to derive percentages
-  const total = data.reduce((sum, item) => sum + (item?.value || 0), 0);
+  const total = data?.reduce((sum, item) => sum + (item?.value || 0), 0) || 0;
   
   // Custom tooltip formatter
   const customTooltip = ({ active, payload }: any) => {
@@ -22,9 +23,9 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
       const percentage = ((item.value / total) * 100).toFixed(1);
       
       return (
-        <div className="p-3 bg-white border rounded-md shadow-md">
+        <div className="p-3 bg-background border rounded-md shadow-md">
           <p className="font-medium">{item.name}</p>
-          <p className="text-gray-700">
+          <p className="text-muted-foreground">
             {item.value.toLocaleString('ar-EG')} ج.م ({percentage}%)
           </p>
         </div>
@@ -47,13 +48,19 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
           const percentage = ((entry.payload.value / total) * 100).toFixed(1);
           
           return (
-            <li key={`item-${index}`} className="flex items-center">
+            <motion.li 
+              key={`item-${index}`} 
+              className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent transition-colors"
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
               <span
-                className="inline-block w-3 h-3 mr-2 rounded-full"
+                className="inline-block w-3 h-3 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
               <span>{entry.value} ({percentage}%)</span>
-            </li>
+            </motion.li>
           );
         })}
       </ul>
@@ -82,6 +89,8 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
             cx="50%"
             cy="50%"
             labelLine={false}
+            animationBegin={0}
+            animationDuration={1000}
           >
             {data.map((entry, index) => (
               <Cell

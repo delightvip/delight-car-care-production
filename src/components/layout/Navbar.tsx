@@ -6,20 +6,13 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from "@/components/layout/SidebarContext";
 import { Settings, BellRing, AlertTriangle, RefreshCw } from 'lucide-react';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useNotifications } from '@/components/notifications/NotificationProvider';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 import DatabaseSyncService from '@/services/DatabaseSyncService';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 
 const Navbar = () => {
   const { unreadCount, lowStockItems, refreshLowStockData } = useNotifications();
@@ -52,20 +45,40 @@ const Navbar = () => {
       <div className="flex items-center gap-3">
         <SidebarTrigger className="md:hidden" />
         <Link to="/" className="text-xl font-bold">
-          <span className="text-primary">ديلايت</span>
-          <span className="text-muted-foreground">مصنع</span>
+          <motion.span 
+            className="text-primary"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            ديلايت
+          </motion.span>
+          <motion.span 
+            className="text-muted-foreground"
+            initial={{ opacity: 0, x: -5 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            مصنع
+          </motion.span>
         </Link>
       </div>
       
       <div className="flex items-center gap-3">
         {totalLowStock > 0 && (
-          <Button variant="outline" size="sm" className="mr-2 text-destructive" asChild>
-            <Link to="/inventory/low-stock" className="flex items-center gap-1">
-              <AlertTriangle className="h-4 w-4" />
-              <span>المخزون المنخفض</span>
-              <Badge variant="destructive" className="ml-1">{totalLowStock}</Badge>
-            </Link>
-          </Button>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Button variant="outline" size="sm" className="mr-2 text-destructive hover:bg-destructive/10" asChild>
+              <Link to="/inventory/low-stock" className="flex items-center gap-1">
+                <AlertTriangle className="h-4 w-4" />
+                <span>المخزون المنخفض</span>
+                <Badge variant="destructive" className="ml-1">{totalLowStock}</Badge>
+              </Link>
+            </Button>
+          </motion.div>
         )}
         
         <Button 
@@ -74,13 +87,18 @@ const Navbar = () => {
           onClick={handleRefresh}
           disabled={syncing}
           title="تحديث البيانات"
+          className="hover:bg-muted/80 transition-colors"
         >
           <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
         </Button>
         
         <NotificationPanel />
         
-        <Button variant="ghost" size="icon">
+        <Button 
+          variant="ghost" 
+          size="icon"
+          className="hover:bg-muted/80 transition-colors"
+        >
           <Settings className="h-5 w-5" />
         </Button>
         

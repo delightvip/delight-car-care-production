@@ -44,10 +44,14 @@ const InventoryDistribution: React.FC<InventoryDistributionProps> = ({ data: pro
   }
   
   if (!chartData || chartData.length === 0) {
-    return <ChartEmpty height="18rem" />;
+    return <ChartEmpty height="18rem" message="لا توجد بيانات توزيع المخزون لعرضها حالياً" />;
   }
   
-  return <InventoryPieChart data={chartData} height="18rem" />;
+  return (
+    <div className="transition-all duration-300 hover:scale-[1.02]">
+      <InventoryPieChart data={chartData} height="18rem" />
+    </div>
+  );
 };
 
 export default InventoryDistribution;
