@@ -1,0 +1,712 @@
+
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import InventoryService from "./InventoryService";
+
+export interface Invoice {
+  id: string;
+  invoice_type: 'sale' | 'purchase';
+  party_id: string;
+  party_name?: string;
+  date: string;
+  total_amount: number;
+  status: 'paid' | 'partial' | 'unpaid';
+  notes?: string;
+  created_at: string;
+  items: InvoiceItem[];
+}
+
+export interface InvoiceItem {
+  id?: string;
+  invoice_id?: string;
+  item_id: number;
+  item_type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  total?: number;
+}
+
+export interface Payment {
+  id?: string;
+  party_id: string;
+  party_name?: string;
+  payment_type: 'collection' | 'disbursement';
+  amount: number;
+  date: string;
+  related_invoice_id?: string;
+  method: string;
+  notes?: string;
+  created_at?: string;
+}
+
+export interface Return {
+  id?: string;
+  return_type: 'sales_return' | 'purchase_return';
+  invoice_id?: string;
+  invoice_number?: string;
+  amount: number;
+  date: string;
+  notes?: string;
+  created_at?: string;
+  items?: ReturnItem[];
+}
+
+export interface ReturnItem {
+  id?: string;
+  return_id?: string;
+  item_id: number;
+  item_type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  total?: number;
+}
+
+class CommercialService {
+  private static instance: CommercialService;
+  private inventoryService: InventoryService;
+  
+  private constructor() {
+    this.inventoryService = InventoryService.getInstance();
+  }
+  
+  public static getInstance(): CommercialService {
+    if (!CommercialService.instance) {
+      CommercialService.instance = new CommercialService();
+    }
+    return CommercialService.instance;
+  }
+  
+  // جلب جميع الفواتير
+  public async getInvoices(): Promise<Invoice[]> {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          parties(name)
+        `)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      const invoices = await Promise.all(data.map(async (invoice) => {
+        const { data: items, error: itemsError } = await supabase
+          .from('invoice_items')
+          .select('*')
+          .eq('invoice_id', invoice.id);
+        
+        if (itemsError) throw itemsError;
+        
+        return {
+          id: invoice.id,
+          invoice_type: invoice.invoice_type,
+          party_id: invoice.party_id,
+          party_name: invoice.parties?.name,
+          date: invoice.date,
+          total_amount: invoice.total_amount,
+          status: invoice.status,
+          notes: invoice.notes,
+          created_at: invoice.created_at,
+          items: items
+        };
+      }));
+      
+      return invoices;
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+      toast.error('حدث خطأ أثناء جلب الفواتير');
+      return [];
+    }
+  }
+  
+  // جلب الفواتير حسب النوع
+  public async getInvoicesByType(type: 'sale' | 'purchase'): Promise<Invoice[]> {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          parties(name)
+        `)
+        .eq('invoice_type', type)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      const invoices = await Promise.all(data.map(async (invoice) => {
+        const { data: items, error: itemsError } = await supabase
+          .from('invoice_items')
+          .select('*')
+          .eq('invoice_id', invoice.id);
+        
+        if (itemsError) throw itemsError;
+        
+        return {
+          id: invoice.id,
+          invoice_type: invoice.invoice_type,
+          party_id: invoice.party_id,
+          party_name: invoice.parties?.name,
+          date: invoice.date,
+          total_amount: invoice.total_amount,
+          status: invoice.status,
+          notes: invoice.notes,
+          created_at: invoice.created_at,
+          items: items
+        };
+      }));
+      
+      return invoices;
+    } catch (error) {
+      console.error(`Error fetching ${type} invoices:`, error);
+      toast.error(`حدث خطأ أثناء جلب فواتير ${type === 'sale' ? 'المبيعات' : 'المشتريات'}`);
+      return [];
+    }
+  }
+  
+  // إنشاء فاتورة جديدة
+  public async createInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
+    try {
+      // إنشاء الفاتورة
+      const { data, error } = await supabase
+        .from('invoices')
+        .insert({
+          invoice_type: invoice.invoice_type,
+          party_id: invoice.party_id,
+          date: invoice.date,
+          status: invoice.status,
+          notes: invoice.notes
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // إضافة عناصر الفاتورة
+      const itemsToInsert = invoice.items.map(item => ({
+        invoice_id: data.id,
+        item_id: item.item_id,
+        item_type: item.item_type,
+        item_name: item.item_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price
+      }));
+      
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .insert(itemsToInsert);
+      
+      if (itemsError) throw itemsError;
+      
+      // تحديث المخزون بناءً على نوع الفاتورة
+      if (invoice.invoice_type === 'sale') {
+        // بيع منتجات = خصم من المخزون
+        await this.updateInventoryForSale(invoice.items);
+      } else if (invoice.invoice_type === 'purchase') {
+        // شراء منتجات = إضافة للمخزون
+        await this.updateInventoryForPurchase(invoice.items);
+      }
+      
+      // إضافة الحركة في سجل الحسابات (ledger)
+      const { error: ledgerError } = await supabase
+        .from('ledger')
+        .insert({
+          party_id: invoice.party_id,
+          transaction_type: invoice.invoice_type === 'sale' ? 'sale_invoice' : 'purchase_invoice',
+          transaction_id: data.id,
+          debit: invoice.invoice_type === 'purchase' ? invoice.total_amount : 0,
+          credit: invoice.invoice_type === 'sale' ? invoice.total_amount : 0,
+          balance_after: 0, // سيتم تحديثه في وقت لاحق أو من خلال trigger
+          date: invoice.date
+        });
+      
+      if (ledgerError) throw ledgerError;
+      
+      toast.success(`تم إنشاء فاتورة ${invoice.invoice_type === 'sale' ? 'بيع' : 'شراء'} بنجاح`);
+      
+      // جلب الفاتورة مع العناصر
+      return this.getInvoiceById(data.id);
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      toast.error('حدث خطأ أثناء إنشاء الفاتورة');
+      return null;
+    }
+  }
+  
+  // جلب فاتورة بواسطة المعرف
+  public async getInvoiceById(id: string): Promise<Invoice | null> {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          parties(name)
+        `)
+        .eq('id', id)
+        .single();
+      
+      if (error) throw error;
+      
+      const { data: items, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', id);
+      
+      if (itemsError) throw itemsError;
+      
+      return {
+        id: data.id,
+        invoice_type: data.invoice_type,
+        party_id: data.party_id,
+        party_name: data.parties?.name,
+        date: data.date,
+        total_amount: data.total_amount,
+        status: data.status,
+        notes: data.notes,
+        created_at: data.created_at,
+        items: items
+      };
+    } catch (error) {
+      console.error('Error fetching invoice:', error);
+      toast.error('حدث خطأ أثناء جلب بيانات الفاتورة');
+      return null;
+    }
+  }
+  
+  // تحديث المخزون للبيع
+  private async updateInventoryForSale(items: InvoiceItem[]): Promise<void> {
+    try {
+      for (const item of items) {
+        const tableName = item.item_type;
+        
+        // جلب العنصر الحالي
+        const { data: currentItem, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity, id, name')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching item from ${tableName}:`, fetchError);
+          continue;
+        }
+        
+        // التحقق من توفر الكمية
+        if (currentItem.quantity < item.quantity) {
+          toast.warning(`لا تتوفر كمية كافية من ${currentItem.name} في المخزون`);
+          continue;
+        }
+        
+        // خصم الكمية من المخزون
+        const newQuantity = currentItem.quantity - item.quantity;
+        const { error: updateError } = await supabase
+          .from(tableName)
+          .update({ quantity: newQuantity })
+          .eq('id', item.item_id);
+        
+        if (updateError) {
+          console.error(`Error updating inventory for ${tableName}:`, updateError);
+          continue;
+        }
+        
+        // تسجيل حركة المخزون
+        const { error: movementError } = await supabase
+          .from('inventory_movements')
+          .insert({
+            type: 'out',
+            category: item.item_type,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: 'بيع بموجب فاتورة'
+          });
+        
+        if (movementError) {
+          console.error('Error recording inventory movement:', movementError);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating inventory for sale:', error);
+    }
+  }
+  
+  // تحديث المخزون للشراء
+  private async updateInventoryForPurchase(items: InvoiceItem[]): Promise<void> {
+    try {
+      for (const item of items) {
+        const tableName = item.item_type;
+        
+        // جلب العنصر الحالي
+        const { data: currentItem, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity, id, unit_cost')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching item from ${tableName}:`, fetchError);
+          continue;
+        }
+        
+        // حساب تكلفة الوحدة الجديدة (المتوسط المرجح)
+        const currentValue = currentItem.quantity * (currentItem.unit_cost || 0);
+        const newValue = item.quantity * item.unit_price;
+        const newTotal = currentItem.quantity + item.quantity;
+        const newUnitCost = newTotal > 0 ? (currentValue + newValue) / newTotal : item.unit_price;
+        
+        // إضافة الكمية للمخزون وتحديث تكلفة الوحدة
+        const { error: updateError } = await supabase
+          .from(tableName)
+          .update({ 
+            quantity: newTotal,
+            unit_cost: newUnitCost
+          })
+          .eq('id', item.item_id);
+        
+        if (updateError) {
+          console.error(`Error updating inventory for ${tableName}:`, updateError);
+          continue;
+        }
+        
+        // تسجيل حركة المخزون
+        const { error: movementError } = await supabase
+          .from('inventory_movements')
+          .insert({
+            type: 'in',
+            category: item.item_type,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: 'شراء بموجب فاتورة'
+          });
+        
+        if (movementError) {
+          console.error('Error recording inventory movement:', movementError);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating inventory for purchase:', error);
+    }
+  }
+  
+  // تسجيل دفعة
+  public async recordPayment(payment: Payment): Promise<Payment | null> {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .insert({
+          party_id: payment.party_id,
+          payment_type: payment.payment_type,
+          amount: payment.amount,
+          date: payment.date,
+          related_invoice_id: payment.related_invoice_id,
+          method: payment.method,
+          notes: payment.notes
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // تحديث حالة الفاتورة إذا كانت الدفعة مرتبطة بفاتورة
+      if (payment.related_invoice_id) {
+        await this.updateInvoiceStatusAfterPayment(payment.related_invoice_id);
+      }
+      
+      // إضافة الحركة في سجل الحسابات (ledger)
+      const { error: ledgerError } = await supabase
+        .from('ledger')
+        .insert({
+          party_id: payment.party_id,
+          transaction_type: payment.payment_type === 'collection' ? 'payment_received' : 'payment_made',
+          transaction_id: data.id,
+          debit: payment.payment_type === 'disbursement' ? payment.amount : 0,
+          credit: payment.payment_type === 'collection' ? payment.amount : 0,
+          balance_after: 0, // سيتم تحديثه في وقت لاحق أو من خلال trigger
+          date: payment.date
+        });
+      
+      if (ledgerError) throw ledgerError;
+      
+      toast.success(`تم تسجيل ${payment.payment_type === 'collection' ? 'تحصيل' : 'دفع'} بنجاح`);
+      
+      return {
+        ...data,
+        party_name: payment.party_name
+      };
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast.error('حدث خطأ أثناء تسجيل الدفعة');
+      return null;
+    }
+  }
+  
+  // تحديث حالة الفاتورة بعد الدفع
+  private async updateInvoiceStatusAfterPayment(invoiceId: string): Promise<void> {
+    try {
+      // جلب الفاتورة
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('total_amount, id')
+        .eq('id', invoiceId)
+        .single();
+      
+      if (invoiceError) throw invoiceError;
+      
+      // جلب إجمالي المدفوعات للفاتورة
+      const { data: payments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('related_invoice_id', invoiceId);
+      
+      if (paymentsError) throw paymentsError;
+      
+      const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      
+      // تحديد حالة الفاتورة
+      let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      
+      if (totalPaid >= invoice.total_amount) {
+        newStatus = 'paid';
+      } else if (totalPaid > 0) {
+        newStatus = 'partial';
+      }
+      
+      // تحديث حالة الفاتورة
+      const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ status: newStatus })
+        .eq('id', invoiceId);
+      
+      if (updateError) throw updateError;
+    } catch (error) {
+      console.error('Error updating invoice status after payment:', error);
+    }
+  }
+  
+  // تسجيل مرتجع
+  public async recordReturn(returnObj: Return): Promise<Return | null> {
+    try {
+      const { data, error } = await supabase
+        .from('returns')
+        .insert({
+          return_type: returnObj.return_type,
+          invoice_id: returnObj.invoice_id,
+          amount: returnObj.amount,
+          date: returnObj.date,
+          notes: returnObj.notes
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // تحديث المخزون بناءً على نوع المرتجع
+      if (returnObj.items && returnObj.items.length > 0) {
+        if (returnObj.return_type === 'sales_return') {
+          // مرتجع مبيعات: إعادة المنتجات للمخزون
+          await this.updateInventoryForSalesReturn(returnObj.items);
+        } else {
+          // مرتجع مشتريات: خصم المنتجات من المخزون
+          await this.updateInventoryForPurchaseReturn(returnObj.items);
+        }
+      }
+      
+      // إضافة الحركة في سجل الحسابات (ledger)
+      const { error: ledgerError } = await supabase
+        .from('ledger')
+        .insert({
+          party_id: null, // سيتم تحديثه لاحقًا بعد جلب معرف الطرف من الفاتورة
+          transaction_type: returnObj.return_type === 'sales_return' ? 'sales_return' : 'purchase_return',
+          transaction_id: data.id,
+          debit: returnObj.return_type === 'sales_return' ? returnObj.amount : 0,
+          credit: returnObj.return_type === 'purchase_return' ? returnObj.amount : 0,
+          balance_after: 0, // سيتم تحديثه في وقت لاحق
+          date: returnObj.date
+        });
+      
+      if (ledgerError) throw ledgerError;
+      
+      toast.success(`تم تسجيل مرتجع ${returnObj.return_type === 'sales_return' ? 'مبيعات' : 'مشتريات'} بنجاح`);
+      
+      return data;
+    } catch (error) {
+      console.error('Error recording return:', error);
+      toast.error('حدث خطأ أثناء تسجيل المرتجع');
+      return null;
+    }
+  }
+  
+  // تحديث المخزون لمرتجع المبيعات
+  private async updateInventoryForSalesReturn(items: ReturnItem[]): Promise<void> {
+    try {
+      for (const item of items) {
+        const tableName = item.item_type;
+        
+        // جلب العنصر الحالي
+        const { data: currentItem, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity, id')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching item from ${tableName}:`, fetchError);
+          continue;
+        }
+        
+        // إضافة الكمية المرتجعة للمخزون
+        const newQuantity = currentItem.quantity + item.quantity;
+        const { error: updateError } = await supabase
+          .from(tableName)
+          .update({ quantity: newQuantity })
+          .eq('id', item.item_id);
+        
+        if (updateError) {
+          console.error(`Error updating inventory for ${tableName}:`, updateError);
+          continue;
+        }
+        
+        // تسجيل حركة المخزون
+        const { error: movementError } = await supabase
+          .from('inventory_movements')
+          .insert({
+            type: 'return_in',
+            category: item.item_type,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: 'مرتجع مبيعات'
+          });
+        
+        if (movementError) {
+          console.error('Error recording inventory movement:', movementError);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating inventory for sales return:', error);
+    }
+  }
+  
+  // تحديث المخزون لمرتجع المشتريات
+  private async updateInventoryForPurchaseReturn(items: ReturnItem[]): Promise<void> {
+    try {
+      for (const item of items) {
+        const tableName = item.item_type;
+        
+        // جلب العنصر الحالي
+        const { data: currentItem, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity, id')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching item from ${tableName}:`, fetchError);
+          continue;
+        }
+        
+        // التحقق من توفر الكمية
+        if (currentItem.quantity < item.quantity) {
+          toast.warning(`لا تتوفر كمية كافية من ${item.item_name} في المخزون للإرجاع`);
+          continue;
+        }
+        
+        // خصم الكمية المرتجعة من المخزون
+        const newQuantity = currentItem.quantity - item.quantity;
+        const { error: updateError } = await supabase
+          .from(tableName)
+          .update({ quantity: newQuantity })
+          .eq('id', item.item_id);
+        
+        if (updateError) {
+          console.error(`Error updating inventory for ${tableName}:`, updateError);
+          continue;
+        }
+        
+        // تسجيل حركة المخزون
+        const { error: movementError } = await supabase
+          .from('inventory_movements')
+          .insert({
+            type: 'return_out',
+            category: item.item_type,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: 'مرتجع مشتريات'
+          });
+        
+        if (movementError) {
+          console.error('Error recording inventory movement:', movementError);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating inventory for purchase return:', error);
+    }
+  }
+  
+  // جلب جميع المدفوعات
+  public async getPayments(): Promise<Payment[]> {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          parties(name)
+        `)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(payment => ({
+        id: payment.id,
+        party_id: payment.party_id,
+        party_name: payment.parties?.name,
+        payment_type: payment.payment_type,
+        amount: payment.amount,
+        date: payment.date,
+        related_invoice_id: payment.related_invoice_id,
+        method: payment.method,
+        notes: payment.notes,
+        created_at: payment.created_at
+      }));
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      toast.error('حدث خطأ أثناء جلب المدفوعات');
+      return [];
+    }
+  }
+  
+  // جلب جميع المرتجعات
+  public async getReturns(): Promise<Return[]> {
+    try {
+      const { data, error } = await supabase
+        .from('returns')
+        .select(`
+          *,
+          invoices(id, party_id, parties(name))
+        `)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(returnItem => ({
+        id: returnItem.id,
+        return_type: returnItem.return_type,
+        invoice_id: returnItem.invoice_id,
+        invoice_number: returnItem.invoice_id,
+        amount: returnItem.amount,
+        date: returnItem.date,
+        notes: returnItem.notes,
+        created_at: returnItem.created_at
+      }));
+    } catch (error) {
+      console.error('Error fetching returns:', error);
+      toast.error('حدث خطأ أثناء جلب المرتجعات');
+      return [];
+    }
+  }
+}
+
+export default CommercialService;

@@ -98,6 +98,135 @@ export type Database = {
           },
         ]
       }
+      invoice_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          invoice_id: string | null
+          item_id: number | null
+          item_name: string
+          item_type: string
+          quantity: number
+          total: number | null
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          invoice_id?: string | null
+          item_id?: number | null
+          item_name: string
+          item_type: string
+          quantity: number
+          total?: number | null
+          unit_price: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          invoice_id?: string | null
+          item_id?: number | null
+          item_name?: string
+          item_type?: string
+          quantity?: number
+          total?: number | null
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          invoice_type: string
+          notes: string | null
+          party_id: string | null
+          status: string
+          total_amount: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          invoice_type: string
+          notes?: string | null
+          party_id?: string | null
+          status: string
+          total_amount?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          invoice_type?: string
+          notes?: string | null
+          party_id?: string | null
+          status?: string
+          total_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ledger: {
+        Row: {
+          balance_after: number
+          created_at: string | null
+          credit: number | null
+          date: string
+          debit: number | null
+          id: string
+          party_id: string | null
+          transaction_id: string
+          transaction_type: string
+        }
+        Insert: {
+          balance_after: number
+          created_at?: string | null
+          credit?: number | null
+          date?: string
+          debit?: number | null
+          id?: string
+          party_id?: string | null
+          transaction_id: string
+          transaction_type: string
+        }
+        Update: {
+          balance_after?: number
+          created_at?: string | null
+          credit?: number | null
+          date?: string
+          debit?: number | null
+          id?: string
+          party_id?: string | null
+          transaction_id?: string
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       packaging_materials: {
         Row: {
           code: string
@@ -223,6 +352,122 @@ export type Database = {
         }
         Relationships: []
       }
+      parties: {
+        Row: {
+          address: string | null
+          balance_type: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+          opening_balance: number | null
+          phone: string | null
+          type: string
+        }
+        Insert: {
+          address?: string | null
+          balance_type?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          opening_balance?: number | null
+          phone?: string | null
+          type: string
+        }
+        Update: {
+          address?: string | null
+          balance_type?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          opening_balance?: number | null
+          phone?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
+      party_balances: {
+        Row: {
+          balance: number | null
+          id: string
+          last_updated: string | null
+          party_id: string | null
+        }
+        Insert: {
+          balance?: number | null
+          id?: string
+          last_updated?: string | null
+          party_id?: string | null
+        }
+        Update: {
+          balance?: number | null
+          id?: string
+          last_updated?: string | null
+          party_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_balances_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          date: string
+          id: string
+          method: string
+          notes: string | null
+          party_id: string | null
+          payment_type: string
+          related_invoice_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          date?: string
+          id?: string
+          method?: string
+          notes?: string | null
+          party_id?: string | null
+          payment_type: string
+          related_invoice_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          date?: string
+          id?: string
+          method?: string
+          notes?: string | null
+          party_id?: string | null
+          payment_type?: string
+          related_invoice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_related_invoice_id_fkey"
+            columns: ["related_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_order_ingredients: {
         Row: {
           created_at: string | null
@@ -338,6 +583,44 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      returns: {
+        Row: {
+          amount: number
+          created_at: string | null
+          date: string
+          id: string
+          invoice_id: string | null
+          notes: string | null
+          return_type: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          date?: string
+          id?: string
+          invoice_id?: string | null
+          notes?: string | null
+          return_type: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          date?: string
+          id?: string
+          invoice_id?: string | null
+          notes?: string | null
+          return_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "returns_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       semi_finished_ingredients: {
         Row: {

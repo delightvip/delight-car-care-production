@@ -19,6 +19,8 @@ import InventoryTracking from '@/pages/inventory/InventoryTracking';
 import ProductionOrders from '@/pages/production/ProductionOrders';
 import ProductionPackaging from '@/pages/production/ProductionPackaging';
 import ProductionPlanning from '@/pages/production/ProductionPlanning';
+import Parties from '@/pages/commercial/Parties';
+import Invoices from '@/pages/commercial/Invoices';
 import Navbar from '@/components/layout/Navbar';
 import Sidebar from '@/components/layout/ModernSidebar';
 import { Toaster } from '@/components/ui/toaster';
@@ -59,6 +61,8 @@ function App() {
                           <Route path="/production/orders" element={<ProductionOrders />} />
                           <Route path="/production/packaging" element={<ProductionPackaging />} />
                           <Route path="/production/planning" element={<ProductionPlanning />} />
+                          <Route path="/commercial/parties" element={<Parties />} />
+                          <Route path="/commercial/invoices" element={<Invoices />} />
                           <Route path="*" element={<NotFound />} />
                         </Routes>
                       </div>
