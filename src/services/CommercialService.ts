@@ -940,9 +940,10 @@ class CommercialService {
         party_name: party?.name,
         date: returnRecord.date,
         return_type: returnData.return_type,
-        amount: returnData.amount,
+        amount: returnRecord.amount,
         payment_status: paymentStatus,
         notes: returnData.notes,
         created_at: returnRecord.created_at,
         items: returnData.items
       };
+    } catch (
