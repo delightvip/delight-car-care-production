@@ -59,6 +59,39 @@ class PartyService {
     }
   }
   
+  // جلب طرف تجاري محدد بالمعرف
+  public async getPartyById(id: string): Promise<Party | null> {
+    try {
+      const { data, error } = await supabase
+        .from('parties')
+        .select(`
+          *,
+          party_balances(balance)
+        `)
+        .eq('id', id)
+        .single();
+      
+      if (error) throw error;
+      
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type as 'customer' | 'supplier' | 'other',
+        phone: data.phone || '',
+        email: data.email || '',
+        address: data.address || '',
+        opening_balance: data.opening_balance || 0,
+        balance_type: data.balance_type as 'credit' | 'debit',
+        balance: data.party_balances[0]?.balance || 0,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error(`Error fetching party with id ${id}:`, error);
+      toast.error('حدث خطأ أثناء جلب بيانات الطرف التجاري');
+      return null;
+    }
+  }
+  
   // جلب الأطراف حسب النوع
   public async getPartiesByType(type: 'customer' | 'supplier' | 'other'): Promise<Party[]> {
     try {

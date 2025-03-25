@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   BrowserRouter as Router,
@@ -19,6 +20,7 @@ import ProductionOrders from '@/pages/production/ProductionOrders';
 import ProductionPackaging from '@/pages/production/ProductionPackaging';
 import ProductionPlanning from '@/pages/production/ProductionPlanning';
 import Parties from '@/pages/commercial/Parties';
+import PartyDetails from '@/pages/commercial/PartyDetails';
 import Invoices from '@/pages/commercial/Invoices';
 import Returns from '@/pages/commercial/Returns';
 import Payments from '@/pages/commercial/Payments';
@@ -64,6 +66,7 @@ function App() {
                           <Route path="/production/packaging" element={<ProductionPackaging />} />
                           <Route path="/production/planning" element={<ProductionPlanning />} />
                           <Route path="/commercial/parties" element={<Parties />} />
+                          <Route path="/commercial/parties/:id" element={<PartyDetails />} />
                           <Route path="/commercial/invoices" element={<Invoices />} />
                           <Route path="/commercial/returns" element={<Returns />} />
                           <Route path="/commercial/payments" element={<Payments />} />

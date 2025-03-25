@@ -1,13 +1,21 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import CommercialService from '@/services/CommercialService';
+import CommercialService, { Return, ReturnItem } from '@/services/CommercialService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search } from 'lucide-react';
+import { PlusCircle, Search, FileDown, Eye, Receipt } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
+import { useForm } from "react-hook-form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -18,14 +26,20 @@ import {
 } from '@/components/ui/table';
 import PageTransition from '@/components/ui/PageTransition';
 import { Badge } from '@/components/ui/badge';
+import { ReturnsForm } from '@/components/commercial/ReturnsForm';
+import { toast } from 'sonner';
+import { ReturnDetailsDialog } from '@/components/commercial/ReturnDetailsDialog';
 
 const Returns = () => {
-  const [activeTab, setActiveTab] = React.useState('all');
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedReturn, setSelectedReturn] = useState<Return | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   
   const commercialService = CommercialService.getInstance();
   
-  const { data: returns, isLoading } = useQuery({
+  const { data: returns, isLoading, refetch } = useQuery({
     queryKey: ['returns'],
     queryFn: () => commercialService.getReturns(),
   });
@@ -50,6 +64,23 @@ const Returns = () => {
     return filtered;
   }, [returns, activeTab, searchQuery]);
 
+  const handleAddNewReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
+    try {
+      await commercialService.recordReturn(returnData);
+      refetch();
+      setIsFormOpen(false);
+      toast.success('تم تسجيل المرتجع بنجاح');
+    } catch (error) {
+      console.error('Error recording return:', error);
+      toast.error('حدث خطأ أثناء تسجيل المرتجع');
+    }
+  };
+
+  const handleViewDetails = (returnItem: Return) => {
+    setSelectedReturn(returnItem);
+    setIsDetailsOpen(true);
+  };
+
   if (isLoading) {
     return (
       <PageTransition>
@@ -71,7 +102,7 @@ const Returns = () => {
             <h1 className="text-3xl font-bold tracking-tight">المرتجعات</h1>
             <p className="text-muted-foreground">إدارة مرتجعات المبيعات والمشتريات</p>
           </div>
-          <Button>
+          <Button onClick={() => setIsFormOpen(true)}>
             <PlusCircle className="ml-2 h-4 w-4" />
             إضافة مرتجع جديد
           </Button>
@@ -113,6 +144,7 @@ const Returns = () => {
                       <TableHead>التاريخ</TableHead>
                       <TableHead className="text-left">المبلغ</TableHead>
                       <TableHead>ملاحظات</TableHead>
+                      <TableHead>الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -120,10 +152,10 @@ const Returns = () => {
                       filteredReturns.map((returnItem) => (
                         <TableRow key={returnItem.id}>
                           <TableCell className="font-medium">
-                            {returnItem.id.substring(0, 8)}...
+                            {returnItem.id?.substring(0, 8)}...
                           </TableCell>
                           <TableCell>
-                            <Badge>
+                            <Badge variant={returnItem.return_type === 'sales_return' ? 'destructive' : 'default'}>
                               {returnItem.return_type === 'sales_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}
                             </Badge>
                           </TableCell>
@@ -135,11 +167,30 @@ const Returns = () => {
                             {returnItem.amount.toFixed(2)}
                           </TableCell>
                           <TableCell>{returnItem.notes || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleViewDetails(returnItem)}
+                                title="عرض التفاصيل"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="طباعة سند المرتجع"
+                              >
+                                <Receipt className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                           لا توجد مرتجعات للعرض
                         </TableCell>
                       </TableRow>
@@ -151,6 +202,26 @@ const Returns = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>إضافة مرتجع جديد</DialogTitle>
+            <DialogDescription>
+              قم بإدخال بيانات المرتجع لتسجيله في النظام
+            </DialogDescription>
+          </DialogHeader>
+          <ReturnsForm onSubmit={handleAddNewReturn} />
+        </DialogContent>
+      </Dialog>
+
+      {selectedReturn && (
+        <ReturnDetailsDialog
+          returnData={selectedReturn}
+          open={isDetailsOpen}
+          onOpenChange={setIsDetailsOpen}
+        />
+      )}
     </PageTransition>
   );
 };

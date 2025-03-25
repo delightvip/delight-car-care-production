@@ -78,6 +78,7 @@ class CommercialService {
     return CommercialService.instance;
   }
   
+  // جلب الفواتير
   public async getInvoices(): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
@@ -129,6 +130,7 @@ class CommercialService {
     }
   }
   
+  // جلب الفواتير حسب النوع
   public async getInvoicesByType(type: 'sale' | 'purchase'): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
@@ -181,6 +183,60 @@ class CommercialService {
     }
   }
   
+  // جلب الفواتير الخاصة بطرف تجاري معين
+  public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          parties(name)
+        `)
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      const invoices = await Promise.all(data.map(async (invoice) => {
+        const { data: items, error: itemsError } = await supabase
+          .from('invoice_items')
+          .select('*')
+          .eq('invoice_id', invoice.id);
+        
+        if (itemsError) throw itemsError;
+        
+        return {
+          id: invoice.id,
+          invoice_type: invoice.invoice_type as 'sale' | 'purchase',
+          party_id: invoice.party_id,
+          party_name: invoice.parties?.name,
+          date: invoice.date,
+          total_amount: invoice.total_amount,
+          status: invoice.status as 'paid' | 'partial' | 'unpaid',
+          notes: invoice.notes,
+          created_at: invoice.created_at,
+          items: items.map(item => ({
+            id: item.id,
+            invoice_id: item.invoice_id,
+            item_id: item.item_id,
+            item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total
+          }))
+        };
+      }));
+      
+      return invoices;
+    } catch (error) {
+      console.error(`Error fetching invoices for party ${partyId}:`, error);
+      toast.error('حدث خطأ أثناء جلب فواتير الطرف التجاري');
+      return [];
+    }
+  }
+  
+  // إنشاء فاتورة جديدة
   public async createInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
       const { data, error } = await supabase
@@ -242,6 +298,7 @@ class CommercialService {
     }
   }
   
+  // جلب معلومات الفاتورة بواسطة المعرف
   public async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
       const { data, error } = await supabase
@@ -290,6 +347,7 @@ class CommercialService {
     }
   }
   
+  // تحديث المخزون بعد عملية البيع
   private async updateInventoryForSale(items: InvoiceItem[]): Promise<void> {
     try {
       for (const item of items) {
@@ -329,6 +387,7 @@ class CommercialService {
     }
   }
   
+  // تحديث المخزون بعد عملية الشراء
   private async updateInventoryForPurchase(items: InvoiceItem[]): Promise<void> {
     try {
       for (const item of items) {
@@ -370,6 +429,7 @@ class CommercialService {
     }
   }
   
+  // تسجيل دفعة
   public async recordPayment(payment: Payment): Promise<Payment | null> {
     try {
       const { data, error } = await supabase
@@ -420,6 +480,7 @@ class CommercialService {
     }
   }
   
+  // تحديث حالة الفاتورة بعد تسجيل الدفعة
   private async updateInvoiceStatusAfterPayment(invoiceId: string): Promise<void> {
     try {
       const { data: invoice, error: invoiceError } = await supabase
@@ -458,6 +519,7 @@ class CommercialService {
     }
   }
   
+  // تسجيل مرتجع
   public async recordReturn(returnObj: Return): Promise<Return | null> {
     try {
       const { data, error } = await supabase
@@ -509,6 +571,7 @@ class CommercialService {
     }
   }
   
+  // تحديث المخزون بعد مرتجع مبيعات
   private async updateInventoryForSalesReturn(items: ReturnItem[]): Promise<void> {
     try {
       for (const item of items) {
@@ -543,6 +606,7 @@ class CommercialService {
     }
   }
   
+  // تحديث المخزون بعد مرتجع مشتريات
   private async updateInventoryForPurchaseReturn(items: ReturnItem[]): Promise<void> {
     try {
       for (const item of items) {
@@ -582,6 +646,7 @@ class CommercialService {
     }
   }
   
+  // تسجيل حركة في المخزون
   private async recordInventoryMovement(type: string, category: string, itemName: string, quantity: number, note: string): Promise<void> {
     try {
       await this.inventoryService.recordItemMovement({
@@ -597,6 +662,7 @@ class CommercialService {
     }
   }
   
+  // جلب حركات السجل المالي
   public async getLedgerEntries(filters: {
     startDate?: string;
     endDate?: string;
@@ -641,6 +707,7 @@ class CommercialService {
     }
   }
   
+  // جلب المدفوعات
   public async getPayments(): Promise<Payment[]> {
     try {
       const { data, error } = await supabase
@@ -672,6 +739,40 @@ class CommercialService {
     }
   }
   
+  // جلب المدفوعات لطرف تجاري محدد
+  public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          parties(name)
+        `)
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(payment => ({
+        id: payment.id,
+        party_id: payment.party_id,
+        party_name: payment.parties?.name,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        amount: payment.amount,
+        date: payment.date,
+        related_invoice_id: payment.related_invoice_id,
+        method: payment.method,
+        notes: payment.notes,
+        created_at: payment.created_at
+      }));
+    } catch (error) {
+      console.error(`Error fetching payments for party ${partyId}:`, error);
+      toast.error('حدث خطأ أثناء جلب المدفوعات الخاصة بالطرف التجاري');
+      return [];
+    }
+  }
+  
+  // جلب المرتجعات
   public async getReturns(): Promise<Return[]> {
     try {
       const { data, error } = await supabase
