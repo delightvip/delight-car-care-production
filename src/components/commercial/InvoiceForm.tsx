@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -112,7 +111,7 @@ export function InvoiceForm({
       
       const newItem: InvoiceItem = {
         item_id: Number(selectedItemId),
-        item_type: selectedItem.type as any,
+        item_type: selectedItem.type,
         item_name: selectedItem.name,
         quantity: itemQuantity,
         unit_price: itemPrice,
@@ -142,10 +141,13 @@ export function InvoiceForm({
     const formattedDate = format(data.date, 'yyyy-MM-dd');
     
     onSubmit({
-      ...data,
+      invoice_type: data.invoice_type,
+      party_id: data.party_id,
       date: formattedDate,
       total_amount: total,
-      items: invoiceItems
+      items: invoiceItems,
+      status: data.status,
+      notes: data.notes
     });
   };
 

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -99,7 +98,7 @@ const Invoices = () => {
         name: item.name,
         type: 'raw_materials' as const,
         quantity: item.quantity,
-        unit_cost: item.unitCost
+        unit_cost: item.unit_cost
       })));
     }
     
@@ -109,7 +108,7 @@ const Invoices = () => {
         name: item.name,
         type: 'packaging_materials' as const,
         quantity: item.quantity,
-        unit_cost: item.unitCost || 0
+        unit_cost: item.unit_cost || 0
       })));
     }
     
@@ -119,7 +118,7 @@ const Invoices = () => {
         name: item.name,
         type: 'semi_finished_products' as const,
         quantity: item.quantity,
-        unit_cost: item.unitCost
+        unit_cost: item.unit_cost
       })));
     }
     
@@ -129,7 +128,7 @@ const Invoices = () => {
         name: item.name,
         type: 'finished_products' as const,
         quantity: item.quantity,
-        unit_cost: item.unitCost
+        unit_cost: item.unit_cost
       })));
     }
     
