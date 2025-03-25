@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
@@ -602,7 +603,7 @@ class CommercialService {
     partyType?: string;
   } = {}) {
     try {
-      let query = this.supabase
+      let query = supabase
         .from('ledger')
         .select(`
           *,
