@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -19,7 +18,14 @@ import {
   Tags,
   Settings,
   PieChart,
-  Calculator
+  Calculator,
+  Users,
+  FileText,
+  Receipt,
+  RotateCcw,
+  CreditCard,
+  BanknoteIcon,
+  Wallet
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useSidebar } from '@/components/layout/SidebarContext';
@@ -218,6 +224,45 @@ const ModernSidebar = () => {
                 إعادة حساب الأهمية
               </Button>
             </div>
+          </Section>
+          
+          <Section title="الأطراف التجارية">
+            <MenuItem 
+              to="/commercial/parties" 
+              icon={<Users />} 
+              label="العملاء والموردين" 
+              isActive={isActive('/commercial/parties')} 
+            />
+            <MenuItem 
+              to="/commercial/invoices" 
+              icon={<FileText />} 
+              label="الفواتير" 
+              isActive={isActive('/commercial/invoices')} 
+            />
+            <MenuItem 
+              to="/commercial/returns" 
+              icon={<RotateCcw />} 
+              label="المرتجعات" 
+              isActive={isActive('/commercial/returns')} 
+            />
+            <MenuItem 
+              to="/commercial/payments" 
+              icon={<CreditCard />} 
+              label="المدفوعات" 
+              isActive={isActive('/commercial/payments')} 
+            />
+            <MenuItem 
+              to="/commercial/collections" 
+              icon={<BanknoteIcon />} 
+              label="التحصيلات" 
+              isActive={isActive('/commercial/collections')} 
+            />
+            <MenuItem 
+              to="/commercial/accounts" 
+              icon={<Wallet />} 
+              label="كشوف الحسابات" 
+              isActive={isActive('/commercial/accounts')} 
+            />
           </Section>
         </div>
       </ScrollArea>

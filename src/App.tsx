@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   BrowserRouter as Router,
@@ -21,6 +20,9 @@ import ProductionPackaging from '@/pages/production/ProductionPackaging';
 import ProductionPlanning from '@/pages/production/ProductionPlanning';
 import Parties from '@/pages/commercial/Parties';
 import Invoices from '@/pages/commercial/Invoices';
+import Returns from '@/pages/commercial/Returns';
+import Payments from '@/pages/commercial/Payments';
+import AccountStatements from '@/pages/commercial/AccountStatements';
 import Navbar from '@/components/layout/Navbar';
 import Sidebar from '@/components/layout/ModernSidebar';
 import { Toaster } from '@/components/ui/toaster';
@@ -63,6 +65,10 @@ function App() {
                           <Route path="/production/planning" element={<ProductionPlanning />} />
                           <Route path="/commercial/parties" element={<Parties />} />
                           <Route path="/commercial/invoices" element={<Invoices />} />
+                          <Route path="/commercial/returns" element={<Returns />} />
+                          <Route path="/commercial/payments" element={<Payments />} />
+                          <Route path="/commercial/collections" element={<Payments />} />
+                          <Route path="/commercial/accounts" element={<AccountStatements />} />
                           <Route path="*" element={<NotFound />} />
                         </Routes>
                       </div>
