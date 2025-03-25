@@ -1,4 +1,3 @@
-
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from "sonner";
@@ -14,6 +13,8 @@ export interface Party {
   balance_type?: 'credit' | 'debit';
   balance: number;
   created_at: string;
+  notes?: string;
+  code?: string;
 }
 
 export interface Transaction {
@@ -68,7 +69,9 @@ class PartyService {
         opening_balance: party.opening_balance || 0,
         balance_type: party.balance_type as 'credit' | 'debit',
         balance: party.party_balances[0]?.balance || 0,
-        created_at: party.created_at
+        created_at: party.created_at,
+        notes: party.notes || '',
+        code: party.code || ''
       }));
     } catch (error) {
       console.error('Error fetching parties:', error);
@@ -100,7 +103,9 @@ class PartyService {
         opening_balance: data.opening_balance || 0,
         balance_type: data.balance_type as 'credit' | 'debit',
         balance: data.party_balances[0]?.balance || 0,
-        created_at: data.created_at
+        created_at: data.created_at,
+        notes: data.notes || '',
+        code: data.code || ''
       };
     } catch (error) {
       console.error(`Error fetching party with id ${id}:`, error);
@@ -132,7 +137,9 @@ class PartyService {
         opening_balance: party.opening_balance || 0,
         balance_type: party.balance_type as 'credit' | 'debit',
         balance: party.party_balances[0]?.balance || 0,
-        created_at: party.created_at
+        created_at: party.created_at,
+        notes: party.notes || '',
+        code: party.code || ''
       }));
     } catch (error) {
       console.error(`Error fetching ${type}:`, error);
@@ -182,7 +189,9 @@ class PartyService {
         opening_balance: partyWithBalance.opening_balance || 0,
         balance_type: partyWithBalance.balance_type as 'credit' | 'debit',
         balance: partyWithBalance.party_balances[0]?.balance || 0,
-        created_at: partyWithBalance.created_at
+        created_at: partyWithBalance.created_at,
+        notes: partyWithBalance.notes || '',
+        code: partyWithBalance.code || ''
       };
     } catch (error) {
       console.error('Error adding party:', error);

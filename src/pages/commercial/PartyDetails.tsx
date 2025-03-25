@@ -23,13 +23,11 @@ const PartyDetails = () => {
   const partyService = PartyService.getInstance();
   const commercialService = CommercialService.getInstance();
   
-  // مانع للأخطاء في حال كان المعرف غير موجود
   if (!id) {
     navigate('/commercial/parties');
     return null;
   }
   
-  // استعلام جلب بيانات الطرف التجاري
   const { 
     data: party, 
     isLoading: isLoadingParty, 
@@ -40,7 +38,6 @@ const PartyDetails = () => {
     queryFn: () => partyService.getPartyById(id),
   });
   
-  // استعلام جلب الفواتير الخاصة بالطرف
   const { 
     data: invoices,
     isLoading: isLoadingInvoices,
@@ -50,7 +47,6 @@ const PartyDetails = () => {
     enabled: !!id
   });
   
-  // استعلام جلب المدفوعات الخاصة بالطرف
   const { 
     data: payments,
     isLoading: isLoadingPayments,
@@ -60,7 +56,6 @@ const PartyDetails = () => {
     enabled: !!id
   });
   
-  // استعلام جلب سجل الحساب
   const { 
     data: ledgerEntries,
     isLoading: isLoadingLedger,
@@ -82,7 +77,6 @@ const PartyDetails = () => {
     }
   };
   
-  // التعامل مع حالة التحميل
   if (isLoadingParty) {
     return (
       <PageTransition>
@@ -101,7 +95,6 @@ const PartyDetails = () => {
     );
   }
   
-  // التعامل مع حالة الخطأ
   if (partyError || !party) {
     return (
       <PageTransition>
