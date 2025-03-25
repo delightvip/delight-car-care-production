@@ -17,11 +17,15 @@ import {
   FileSpreadsheet,
   Boxes,
   Tags,
-  Settings
+  Settings,
+  PieChart
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useSidebar } from '@/components/layout/SidebarContext';
 import { useNotifications } from '@/components/notifications/NotificationProvider';
+import { Button } from '@/components/ui/button';
+import { Calculator } from 'lucide-react';
+import ImportanceCalculationService from '@/services/ImportanceCalculationService';
 
 interface MenuItemProps {
   to: string;
@@ -36,12 +40,12 @@ const MenuItem: React.FC<MenuItemProps> = ({ to, icon, label, isActive, badge, b
   <Link
     to={to}
     className={cn(
-      'flex items-center py-2 px-4 space-x-2 space-x-reverse text-muted-foreground rounded-md transition-colors group hover:bg-muted',
+      'flex items-center py-2.5 px-4 space-x-3 space-x-reverse rounded-md transition-colors group hover:bg-muted',
       isActive && 'bg-primary/10 text-primary font-medium'
     )}
   >
-    <div className={cn('h-5 w-5', isActive && 'text-primary')}>{icon}</div>
-    <span className="flex-1">{label}</span>
+    <div className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-primary')}>{icon}</div>
+    <span className="flex-1 text-sm">{label}</span>
     {typeof badge === 'number' && badge > 0 && (
       <Badge variant={badgeVariant} className="ml-auto">
         {badge}
@@ -56,7 +60,7 @@ interface SectionProps {
 }
 
 const Section: React.FC<SectionProps> = ({ title, children }) => (
-  <div className="space-y-2">
+  <div className="space-y-1.5">
     <div className="px-4 py-2">
       <h2 className="text-xs font-semibold text-muted-foreground tracking-tight">{title}</h2>
     </div>
@@ -74,6 +78,11 @@ const ModernSidebar = () => {
   
   const isActive = (path: string) => {
     return location.pathname === path;
+  };
+  
+  const handleRecalculateImportance = async () => {
+    const service = ImportanceCalculationService.getInstance();
+    await service.recalculateAllImportance();
   };
   
   const sidebarContent = (
@@ -170,6 +179,15 @@ const ModernSidebar = () => {
             />
           </Section>
           
+          <Section title="التحليل">
+            <MenuItem 
+              to="/analytics/distribution" 
+              icon={<PieChart />} 
+              label="توزيع المخزون" 
+              isActive={isActive('/analytics/distribution')} 
+            />
+          </Section>
+          
           <Section title="الإعدادات">
             <MenuItem 
               to="/settings" 
@@ -177,6 +195,17 @@ const ModernSidebar = () => {
               label="إعدادات النظام" 
               isActive={isActive('/settings')} 
             />
+            <div className="px-4 mt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRecalculateImportance}
+                className="w-full flex items-center justify-center gap-2 text-xs"
+              >
+                <Calculator className="h-3.5 w-3.5" />
+                إعادة حساب الأهمية
+              </Button>
+            </div>
           </Section>
         </div>
       </ScrollArea>

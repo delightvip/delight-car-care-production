@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,8 +9,18 @@ import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import LowStockStats from '@/components/inventory/LowStockStats';
 import LowStockCard from '@/components/inventory/LowStockCard';
 import PageTransition from '@/components/ui/PageTransition';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { InventoryLowStockTable } from '@/components/inventory/InventoryLowStockTable';
 
 const LowStockItems = () => {
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  
   // استعلام المواد الأولية ذات المخزون المنخفض
   const { data: rawMaterials, isLoading: rawMaterialsLoading, error: rawMaterialsError } = useQuery({
     queryKey: ['lowStockRawMaterials'],
@@ -18,7 +28,8 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('raw_materials')
         .select('*')
-        .lt('quantity', 10);
+        .lt('quantity', 'min_stock')
+        .gt('min_stock', 0);
         
       if (error) throw error;
       return data || [];
@@ -32,7 +43,8 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('semi_finished_products')
         .select('*')
-        .lt('quantity', 10);
+        .lt('quantity', 'min_stock')
+        .gt('min_stock', 0);
         
       if (error) throw error;
       return data || [];
@@ -46,7 +58,8 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('packaging_materials')
         .select('*')
-        .lt('quantity', 10);
+        .lt('quantity', 'min_stock')
+        .gt('min_stock', 0);
         
       if (error) throw error;
       return data || [];
@@ -60,7 +73,8 @@ const LowStockItems = () => {
       const { data, error } = await supabase
         .from('finished_products')
         .select('*')
-        .lt('quantity', 10);
+        .lt('quantity', 'min_stock')
+        .gt('min_stock', 0);
         
       if (error) throw error;
       return data || [];
@@ -82,44 +96,30 @@ const LowStockItems = () => {
     );
   };
 
-  const rawMaterialsColumns = [
-    { key: "code", title: "الرمز" },
-    { key: "name", title: "الاسم" },
-    { key: "quantity", title: "الكمية الحالية" },
-    { key: "unit", title: "الوحدة" },
-    { key: "min_stock", title: "الحد الأدنى" },
-  ];
+  const handleSortChange = (value: string) => {
+    setSortOrder(value as 'asc' | 'desc');
+  };
 
-  const semiFinishedColumns = [
-    { key: "code", title: "الرمز" },
-    { key: "name", title: "الاسم" },
-    { key: "quantity", title: "الكمية الحالية" },
-    { key: "unit", title: "الوحدة" },
-    { key: "min_stock", title: "الحد الأدنى" },
-  ];
-
-  const packagingColumns = [
-    { key: "code", title: "الرمز" },
-    { key: "name", title: "الاسم" },
-    { key: "quantity", title: "الكمية الحالية" },
-    { key: "unit", title: "الوحدة" },
-    { key: "min_stock", title: "الحد الأدنى" },
-  ];
-
-  const finishedProductsColumns = [
-    { key: "code", title: "الرمز" },
-    { key: "name", title: "الاسم" },
-    { key: "quantity", title: "الكمية الحالية" },
-    { key: "unit", title: "الوحدة" },
-    { key: "min_stock", title: "الحد الأدنى" },
-  ];
-  
   return (
     <PageTransition>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">المخزون المنخفض</h1>
-          <p className="text-muted-foreground mt-1">العناصر التي تحتاج إلى تجديد المخزون بسبب انخفاض كمياتها</p>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">المخزون المنخفض</h1>
+            <p className="text-muted-foreground mt-1">العناصر التي تحتاج إلى تجديد المخزون بسبب انخفاض كمياتها</p>
+          </div>
+          
+          <div className="w-full sm:w-48">
+            <Select defaultValue={sortOrder} onValueChange={handleSortChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="ترتيب حسب" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="asc">تصاعدي</SelectItem>
+                <SelectItem value="desc">تنازلي</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -172,46 +172,38 @@ const LowStockItems = () => {
             </TabsList>
             
             <TabsContent value="raw-materials">
-              <DataTableWithLoading
-                data={rawMaterials || []}
-                columns={rawMaterialsColumns}
-                isLoading={rawMaterialsLoading}
-                searchable={true}
-                searchPlaceholder="بحث في المواد الأولية..."
-                noDataMessage="لا توجد مواد أولية منخفضة المخزون."
+              <InventoryLowStockTable 
+                data={rawMaterials || []} 
+                isLoading={rawMaterialsLoading} 
+                sortOrder={sortOrder}
+                type="raw"
               />
             </TabsContent>
             
             <TabsContent value="semi-finished">
-              <DataTableWithLoading
-                data={semiFinished || []}
-                columns={semiFinishedColumns}
-                isLoading={semiFinishedLoading}
-                searchable={true}
-                searchPlaceholder="بحث في المنتجات النصف مصنعة..."
-                noDataMessage="لا توجد منتجات نصف مصنعة منخفضة المخزون."
+              <InventoryLowStockTable 
+                data={semiFinished || []} 
+                isLoading={semiFinishedLoading} 
+                sortOrder={sortOrder}
+                type="semi"
               />
             </TabsContent>
             
             <TabsContent value="packaging">
-              <DataTableWithLoading
-                data={packaging || []}
-                columns={packagingColumns}
-                isLoading={packagingLoading}
-                searchable={true}
-                searchPlaceholder="بحث في مستلزمات التعبئة..."
-                noDataMessage="لا توجد مستلزمات تعبئة منخفضة المخزون."
+              <InventoryLowStockTable 
+                data={packaging || []} 
+                isLoading={packagingLoading} 
+                sortOrder={sortOrder}
+                type="packaging"
               />
             </TabsContent>
             
             <TabsContent value="finished">
-              <DataTableWithLoading
-                data={finishedProducts || []}
-                columns={finishedProductsColumns}
-                isLoading={finishedProductsLoading}
-                searchable={true}
-                searchPlaceholder="بحث في المنتجات النهائية..."
-                noDataMessage="لا توجد منتجات نهائية منخفضة المخزون."
+              <InventoryLowStockTable 
+                data={finishedProducts || []} 
+                isLoading={finishedProductsLoading} 
+                sortOrder={sortOrder}
+                type="finished"
               />
             </TabsContent>
           </Tabs>

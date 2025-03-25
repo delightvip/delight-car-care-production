@@ -27,6 +27,7 @@ import NotificationProvider from '@/components/notifications/NotificationProvide
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import NotFound from '@/pages/NotFound';
 import { Toaster as SonnerToaster } from '@/components/ui/sonner';
+import InventoryDistributionPage from '@/pages/analytics/InventoryDistributionPage';
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ function App() {
                         <Routes>
                           <Route path="/" element={<Index />} />
                           <Route path="/analytics" element={<Analytics />} />
+                          <Route path="/analytics/distribution" element={<InventoryDistributionPage />} />
                           <Route path="/inventory/raw-materials" element={<InventoryRawMaterials />} />
                           <Route path="/inventory/semi-finished" element={<InventorySemiFinished />} />
                           <Route path="/inventory/packaging" element={<InventoryPackaging />} />
