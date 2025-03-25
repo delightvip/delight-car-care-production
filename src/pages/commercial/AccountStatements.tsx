@@ -33,8 +33,8 @@ import {
   SheetTitle, 
   SheetDescription,
   SheetFooter,
-  SheetTrigger,
-  SheetClose
+  SheetClose,
+  SheetTrigger
 } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -161,7 +161,7 @@ const AccountStatements = () => {
                     تصفية
                   </Button>
                 </SheetTrigger>
-                <SheetContent position="left" className="w-80">
+                <SheetContent side="left" className="w-80">
                   <SheetHeader>
                     <SheetTitle>تصفية البيانات</SheetTitle>
                     <SheetDescription>
