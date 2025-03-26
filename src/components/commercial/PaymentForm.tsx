@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -52,12 +51,21 @@ const paymentFormSchema = z.object({
 
 type PaymentFormValues = z.infer<typeof paymentFormSchema>;
 
+interface InvoiceForPayment {
+  id: string;
+  invoice_type: string;
+  party_id: string;
+  party_name: string;
+  total_amount: number;
+  date: string;
+}
+
 interface PaymentFormProps {
   onSubmit: (data: Omit<Payment, 'id' | 'created_at'>) => void;
   parties: Party[];
   initialData?: Partial<Payment>;
   isEditing?: boolean;
-  invoices?: Array<{ id: string, invoice_type: string, party_id: string, party_name: string, total_amount: number, date: string }>;
+  invoices?: InvoiceForPayment[];
 }
 
 export function PaymentForm({ 
@@ -88,7 +96,6 @@ export function PaymentForm({
 
   const handlePaymentTypeChange = (value: string) => {
     setSelectedPaymentType(value);
-    // Reset party selection when payment type changes
     form.setValue('party_id', '');
     form.setValue('related_invoice_id', '');
   };

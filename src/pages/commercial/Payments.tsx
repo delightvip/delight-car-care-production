@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import CommercialService, { Payment } from '@/services/CommercialService';
+import CommercialService, { Payment, Invoice } from '@/services/CommercialService';
 import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Search, FileDown } from 'lucide-react';
@@ -27,7 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { PaymentForm } from '@/components/commercial/PaymentForm';
-import { PaymentsList } from '@/components/commercial/PaymentsList';
+import PaymentsList from '@/components/commercial/PaymentsList';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -64,7 +63,6 @@ const Payments = () => {
     queryFn: () => commercialService.getInvoices(),
   });
   
-  // Force refresh on mount
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['payments'] });
   }, [queryClient]);
@@ -94,7 +92,6 @@ const Payments = () => {
     try {
       const result = await commercialService.recordPayment(paymentData);
       
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['parties'] });
       
@@ -199,7 +196,6 @@ const Payments = () => {
         return;
       }
       
-      // Create CSV content
       let csvContent = 'رقم المعاملة,النوع,الطرف,التاريخ,المبلغ,الطريقة,الحالة\n';
       
       filteredPayments.forEach(payment => {
@@ -212,7 +208,6 @@ const Payments = () => {
         csvContent += `${payment.payment_status}\n`;
       });
       
-      // Create download link
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -312,7 +307,14 @@ const Payments = () => {
             <PaymentForm 
               onSubmit={handleCreatePayment} 
               parties={parties}
-              invoices={invoices || []}
+              invoices={invoices ? invoices.map(invoice => ({
+                id: invoice.id,
+                invoice_type: invoice.invoice_type,
+                party_id: invoice.party_id,
+                party_name: invoice.party_name || '',
+                total_amount: invoice.total_amount,
+                date: invoice.date
+              })) : []}
             />
           )}
         </DialogContent>
@@ -332,7 +334,14 @@ const Payments = () => {
               parties={parties} 
               initialData={selectedPayment}
               isEditing={true}
-              invoices={invoices || []}
+              invoices={invoices ? invoices.map(invoice => ({
+                id: invoice.id,
+                invoice_type: invoice.invoice_type,
+                party_id: invoice.party_id,
+                party_name: invoice.party_name || '',
+                total_amount: invoice.total_amount,
+                date: invoice.date
+              })) : []}
             />
           )}
         </DialogContent>
