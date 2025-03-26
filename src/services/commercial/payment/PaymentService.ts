@@ -33,19 +33,8 @@ export class PaymentService {
       const payment = await PaymentEntity.create(paymentData);
       
       if (payment) {
-        // الحصول على اسم الطرف للإستجابة
-        const { data: party } = await supabase
-          .from('parties')
-          .select('name')
-          .eq('id', paymentData.party_id)
-          .single();
-        
         toast.success('تم تسجيل المعاملة بنجاح');
-        
-        return {
-          ...payment,
-          party_name: party?.name
-        };
+        return payment;
       }
       
       return null;
@@ -74,8 +63,5 @@ export class PaymentService {
     return PaymentEntity.delete(id);
   }
 }
-
-// استيراد ما يلزم
-import { supabase } from "@/integrations/supabase/client";
 
 export default PaymentService;

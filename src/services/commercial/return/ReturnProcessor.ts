@@ -42,28 +42,48 @@ export class ReturnProcessor {
           
           switch (item.item_type) {
             case 'raw_materials':
-              const rawMaterial = await this.inventoryService.getRawMaterialById(item.item_id);
+              const { data: rawMaterial } = await supabase
+                .from('raw_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = rawMaterial?.quantity || 0;
               await this.inventoryService.updateRawMaterial(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
               break;
             case 'packaging_materials':
-              const packagingMaterial = await this.inventoryService.getPackagingMaterialById(item.item_id);
+              const { data: packagingMaterial } = await supabase
+                .from('packaging_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = packagingMaterial?.quantity || 0;
               await this.inventoryService.updatePackagingMaterial(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
               break;
             case 'semi_finished_products':
-              const semiFinished = await this.inventoryService.getSemiFinishedProductById(item.item_id);
+              const { data: semiFinished } = await supabase
+                .from('semi_finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = semiFinished?.quantity || 0;
               await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
               break;
             case 'finished_products':
-              const finishedProduct = await this.inventoryService.getFinishedProductById(item.item_id);
+              const { data: finishedProduct } = await supabase
+                .from('finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = finishedProduct?.quantity || 0;
               await this.inventoryService.updateFinishedProduct(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
@@ -90,7 +110,12 @@ export class ReturnProcessor {
           
           switch (item.item_type) {
             case 'raw_materials':
-              const rawMaterial = await this.inventoryService.getRawMaterialById(item.item_id);
+              const { data: rawMaterial } = await supabase
+                .from('raw_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = rawMaterial?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية المادة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
@@ -101,7 +126,12 @@ export class ReturnProcessor {
               });
               break;
             case 'packaging_materials':
-              const packagingMaterial = await this.inventoryService.getPackagingMaterialById(item.item_id);
+              const { data: packagingMaterial } = await supabase
+                .from('packaging_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = packagingMaterial?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية مادة التعبئة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
@@ -112,7 +142,12 @@ export class ReturnProcessor {
               });
               break;
             case 'semi_finished_products':
-              const semiFinished = await this.inventoryService.getSemiFinishedProductById(item.item_id);
+              const { data: semiFinished } = await supabase
+                .from('semi_finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = semiFinished?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية المنتج نصف المصنع ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
@@ -123,7 +158,12 @@ export class ReturnProcessor {
               });
               break;
             case 'finished_products':
-              const finishedProduct = await this.inventoryService.getFinishedProductById(item.item_id);
+              const { data: finishedProduct } = await supabase
+                .from('finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = finishedProduct?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية المنتج النهائي ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
@@ -192,7 +232,12 @@ export class ReturnProcessor {
           
           switch (item.item_type) {
             case 'raw_materials':
-              const rawMaterial = await this.inventoryService.getRawMaterialById(item.item_id);
+              const { data: rawMaterial } = await supabase
+                .from('raw_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = rawMaterial?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية المادة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
@@ -203,7 +248,12 @@ export class ReturnProcessor {
               });
               break;
             case 'packaging_materials':
-              const packagingMaterial = await this.inventoryService.getPackagingMaterialById(item.item_id);
+              const { data: packagingMaterial } = await supabase
+                .from('packaging_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = packagingMaterial?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية مادة التعبئة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
@@ -214,7 +264,12 @@ export class ReturnProcessor {
               });
               break;
             case 'semi_finished_products':
-              const semiFinished = await this.inventoryService.getSemiFinishedProductById(item.item_id);
+              const { data: semiFinished } = await supabase
+                .from('semi_finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = semiFinished?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية المنتج نصف المصنع ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
@@ -225,7 +280,12 @@ export class ReturnProcessor {
               });
               break;
             case 'finished_products':
-              const finishedProduct = await this.inventoryService.getFinishedProductById(item.item_id);
+              const { data: finishedProduct } = await supabase
+                .from('finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = finishedProduct?.quantity || 0;
               if (currentQuantity < Number(item.quantity)) {
                 toast.error(`كمية المنتج النهائي ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
@@ -256,28 +316,48 @@ export class ReturnProcessor {
           
           switch (item.item_type) {
             case 'raw_materials':
-              const rawMaterial = await this.inventoryService.getRawMaterialById(item.item_id);
+              const { data: rawMaterial } = await supabase
+                .from('raw_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = rawMaterial?.quantity || 0;
               await this.inventoryService.updateRawMaterial(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
               break;
             case 'packaging_materials':
-              const packagingMaterial = await this.inventoryService.getPackagingMaterialById(item.item_id);
+              const { data: packagingMaterial } = await supabase
+                .from('packaging_materials')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = packagingMaterial?.quantity || 0;
               await this.inventoryService.updatePackagingMaterial(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
               break;
             case 'semi_finished_products':
-              const semiFinished = await this.inventoryService.getSemiFinishedProductById(item.item_id);
+              const { data: semiFinished } = await supabase
+                .from('semi_finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = semiFinished?.quantity || 0;
               await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
               break;
             case 'finished_products':
-              const finishedProduct = await this.inventoryService.getFinishedProductById(item.item_id);
+              const { data: finishedProduct } = await supabase
+                .from('finished_products')
+                .select('*')
+                .eq('id', item.item_id)
+                .single();
+                
               currentQuantity = finishedProduct?.quantity || 0;
               await this.inventoryService.updateFinishedProduct(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
