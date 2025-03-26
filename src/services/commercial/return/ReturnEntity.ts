@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Return, ReturnItem } from "@/services/CommercialTypes";
 
@@ -17,6 +16,12 @@ export class ReturnEntity {
         .order('date', { ascending: false });
       
       if (error) throw error;
+      
+      // Ensure data is not null or undefined
+      if (!data) {
+        console.warn('No return data found');
+        return [];
+      }
       
       // Map the data to our Return type with party name
       const returnsWithParties = data.map(returnData => ({
@@ -50,12 +55,12 @@ export class ReturnEntity {
           const typedItems = items ? items.map(item => ({
             id: item.id,
             return_id: item.return_id,
-            item_id: item.item_id,
+            item_id: Number(item.item_id),
             item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
             item_name: item.item_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total: item.total
+            quantity: Number(item.quantity),
+            unit_price: Number(item.unit_price),
+            total: item.total ? Number(item.total) : Number(item.quantity) * Number(item.unit_price)
           })) : [];
           
           return {
@@ -99,12 +104,12 @@ export class ReturnEntity {
       const typedItems = items ? items.map(item => ({
         id: item.id,
         return_id: item.return_id,
-        item_id: item.item_id,
+        item_id: Number(item.item_id),
         item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
         item_name: item.item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.total
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unit_price),
+        total: item.total ? Number(item.total) : Number(item.quantity) * Number(item.unit_price)
       })) : [];
       
       return {
