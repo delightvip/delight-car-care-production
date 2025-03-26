@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -586,7 +585,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                       <div className="col-span-1">
                         <Checkbox
                           checked={!!item.selected}
-                          onCheckedChange={(checked) => toggleItemSelection(index, !!checked)}
+                          onCheckedChange={(checked) => toggleItemSelection(index, checked === true)}
                         />
                       </div>
                     )}
