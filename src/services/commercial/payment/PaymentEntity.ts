@@ -164,7 +164,7 @@ export class PaymentEntity {
         payment_type: payment.payment_type as "collection" | "disbursement",
         method: payment.method as "cash" | "check" | "bank_transfer" | "other",
         related_invoice_id: payment.related_invoice_id,
-        payment_status: paymentStatus as "draft" | "confirmed" | "cancelled",
+        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled",
         notes: payment.notes,
         created_at: payment.created_at
       };

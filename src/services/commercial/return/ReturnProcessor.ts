@@ -11,7 +11,6 @@ export class ReturnProcessor {
   private partyService: PartyService;
 
   constructor() {
-    // استخدام getInstance بدلاً من الإنشاء المباشر
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
   }
@@ -38,63 +37,53 @@ export class ReturnProcessor {
       if (returnData.return_type === 'sales_return') {
         // زيادة المخزون لمرتجعات المبيعات
         for (const item of returnData.items || []) {
-          let currentQuantity = 0;
+          // التأكد من وجود المنتج والحصول على الكمية الحالية
+          const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
+            item.item_type,
+            item.item_id
+          );
           
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = rawMaterial?.quantity || 0;
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = packagingMaterial?.quantity || 0;
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = semiFinished?.quantity || 0;
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = finishedProduct?.quantity || 0;
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
+          if (itemError) {
+            console.error(`Error fetching item ${item.item_id}:`, itemError);
+            toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+            return false;
           }
+          
+          if (!currentItem) {
+            toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+            return false;
+          }
+          
+          // زيادة المخزون
+          const newQuantity = Number(currentItem.quantity) + Number(item.quantity);
+          
+          // تحديث المخزون
+          const { error: updateError } = await this.updateItemQuantity(
+            item.item_type,
+            item.item_id,
+            newQuantity
+          );
+          
+          if (updateError) {
+            console.error(`Error updating ${item.item_name} quantity:`, updateError);
+            toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+            return false;
+          }
+          
+          // تسجيل حركة المخزون
+          await this.recordInventoryMovement(
+            item.item_id,
+            item.item_type,
+            Number(item.quantity),
+            newQuantity,
+            'in',
+            `مرتجع مبيعات - رقم: ${returnId}`
+          );
         }
         
         // تحديث السجلات المالية لمرتجعات المبيعات
         if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
+          const result = await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
             false, // دائن لمرتجعات المبيعات (تقليل دين العميل)
@@ -102,83 +91,68 @@ export class ReturnProcessor {
             'sales_return',
             returnData.id
           );
+          
+          if (!result) {
+            toast.error('حدث خطأ أثناء تحديث حساب العميل');
+            return false;
+          }
         }
       } else if (returnData.return_type === 'purchase_return') {
         // خفض المخزون لمرتجعات المشتريات
         for (const item of returnData.items || []) {
-          let currentQuantity = 0;
+          // التأكد من وجود المنتج والحصول على الكمية الحالية
+          const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
+            item.item_type,
+            item.item_id
+          );
           
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = rawMaterial?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المادة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = packagingMaterial?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية مادة التعبئة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = semiFinished?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المنتج نصف المصنع ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = finishedProduct?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المنتج النهائي ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
+          if (itemError) {
+            console.error(`Error fetching item ${item.item_id}:`, itemError);
+            toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+            return false;
           }
+          
+          if (!currentItem) {
+            toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+            return false;
+          }
+          
+          // التحقق من وجود كمية كافية للإرجاع
+          if (Number(currentItem.quantity) < Number(item.quantity)) {
+            toast.error(`كمية ${item.item_name} في المخزون (${currentItem.quantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
+            return false;
+          }
+          
+          // خفض المخزون
+          const newQuantity = Number(currentItem.quantity) - Number(item.quantity);
+          
+          // تحديث المخزون
+          const { error: updateError } = await this.updateItemQuantity(
+            item.item_type,
+            item.item_id,
+            newQuantity
+          );
+          
+          if (updateError) {
+            console.error(`Error updating ${item.item_name} quantity:`, updateError);
+            toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+            return false;
+          }
+          
+          // تسجيل حركة المخزون
+          await this.recordInventoryMovement(
+            item.item_id,
+            item.item_type,
+            -Number(item.quantity),
+            newQuantity,
+            'out',
+            `مرتجع مشتريات - رقم: ${returnId}`
+          );
         }
         
         // تحديث السجلات المالية لمرتجعات المشتريات
         if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
+          const result = await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
             true, // مدين لمرتجعات المشتريات (زيادة دين المورد)
@@ -186,6 +160,11 @@ export class ReturnProcessor {
             'purchase_return',
             returnData.id
           );
+          
+          if (!result) {
+            toast.error('حدث خطأ أثناء تحديث حساب المورد');
+            return false;
+          }
         }
       }
       
@@ -197,7 +176,11 @@ export class ReturnProcessor {
       
       if (error) throw error;
       
-      toast.success('تم تأكيد المرتجع بنجاح');
+      // استخدام setTimeout لتجنب تعليق واجهة المستخدم
+      setTimeout(() => {
+        toast.success('تم تأكيد المرتجع بنجاح');
+      }, 100);
+      
       return true;
     } catch (error) {
       console.error('Error confirming return:', error);
@@ -228,79 +211,59 @@ export class ReturnProcessor {
       if (returnData.return_type === 'sales_return') {
         // خفض المخزون لمرتجعات المبيعات الملغاة
         for (const item of returnData.items || []) {
-          let currentQuantity = 0;
+          // التأكد من وجود المنتج والحصول على الكمية الحالية
+          const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
+            item.item_type,
+            item.item_id
+          );
           
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = rawMaterial?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المادة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = packagingMaterial?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية مادة التعبئة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = semiFinished?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المنتج نصف المصنع ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = finishedProduct?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المنتج النهائي ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
+          if (itemError) {
+            console.error(`Error fetching item ${item.item_id}:`, itemError);
+            toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+            return false;
           }
+          
+          if (!currentItem) {
+            toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+            return false;
+          }
+          
+          // التحقق من وجود كمية كافية للإلغاء
+          if (Number(currentItem.quantity) < Number(item.quantity)) {
+            toast.error(`كمية ${item.item_name} في المخزون (${currentItem.quantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
+            return false;
+          }
+          
+          // خفض المخزون
+          const newQuantity = Number(currentItem.quantity) - Number(item.quantity);
+          
+          // تحديث المخزون
+          const { error: updateError } = await this.updateItemQuantity(
+            item.item_type,
+            item.item_id,
+            newQuantity
+          );
+          
+          if (updateError) {
+            console.error(`Error updating ${item.item_name} quantity:`, updateError);
+            toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+            return false;
+          }
+          
+          // تسجيل حركة المخزون
+          await this.recordInventoryMovement(
+            item.item_id,
+            item.item_type,
+            -Number(item.quantity),
+            newQuantity,
+            'out',
+            `إلغاء مرتجع مبيعات - رقم: ${returnId}`
+          );
         }
         
         // تحديث السجلات المالية لمرتجعات المبيعات الملغاة
         if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
+          const result = await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
             true, // مدين لإلغاء مرتجعات المبيعات (استعادة دين العميل)
@@ -308,67 +271,62 @@ export class ReturnProcessor {
             'cancel_sales_return',
             returnData.id
           );
+          
+          if (!result) {
+            toast.error('حدث خطأ أثناء تحديث حساب العميل');
+            return false;
+          }
         }
       } else if (returnData.return_type === 'purchase_return') {
         // زيادة المخزون لمرتجعات المشتريات الملغاة
         for (const item of returnData.items || []) {
-          let currentQuantity = 0;
+          // التأكد من وجود المنتج والحصول على الكمية الحالية
+          const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
+            item.item_type,
+            item.item_id
+          );
           
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = rawMaterial?.quantity || 0;
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = packagingMaterial?.quantity || 0;
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = semiFinished?.quantity || 0;
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-                
-              currentQuantity = finishedProduct?.quantity || 0;
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
+          if (itemError) {
+            console.error(`Error fetching item ${item.item_id}:`, itemError);
+            toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+            return false;
           }
+          
+          if (!currentItem) {
+            toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+            return false;
+          }
+          
+          // زيادة المخزون
+          const newQuantity = Number(currentItem.quantity) + Number(item.quantity);
+          
+          // تحديث المخزون
+          const { error: updateError } = await this.updateItemQuantity(
+            item.item_type,
+            item.item_id,
+            newQuantity
+          );
+          
+          if (updateError) {
+            console.error(`Error updating ${item.item_name} quantity:`, updateError);
+            toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+            return false;
+          }
+          
+          // تسجيل حركة المخزون
+          await this.recordInventoryMovement(
+            item.item_id,
+            item.item_type,
+            Number(item.quantity),
+            newQuantity,
+            'in',
+            `إلغاء مرتجع مشتريات - رقم: ${returnId}`
+          );
         }
         
         // تحديث السجلات المالية لمرتجعات المشتريات الملغاة
         if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
+          const result = await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
             false, // دائن لإلغاء مرتجعات المشتريات (استعادة دين المورد)
@@ -376,6 +334,11 @@ export class ReturnProcessor {
             'cancel_purchase_return',
             returnData.id
           );
+          
+          if (!result) {
+            toast.error('حدث خطأ أثناء تحديث حساب المورد');
+            return false;
+          }
         }
       }
       
@@ -387,11 +350,106 @@ export class ReturnProcessor {
       
       if (error) throw error;
       
-      toast.success('تم إلغاء المرتجع بنجاح');
+      // استخدام setTimeout لتجنب تعليق واجهة المستخدم
+      setTimeout(() => {
+        toast.success('تم إلغاء المرتجع بنجاح');
+      }, 100);
+      
       return true;
     } catch (error) {
       console.error('Error cancelling return:', error);
       toast.error('حدث خطأ أثناء إلغاء المرتجع');
+      return false;
+    }
+  }
+  
+  /**
+   * الحصول على عنصر المخزون حسب النوع والمعرف
+   */
+  private async getItemByTypeAndId(itemType: string, itemId: string | number) {
+    let tableName = '';
+    
+    switch (itemType) {
+      case 'raw_materials':
+        tableName = 'raw_materials';
+        break;
+      case 'packaging_materials':
+        tableName = 'packaging_materials';
+        break;
+      case 'semi_finished_products':
+        tableName = 'semi_finished_products';
+        break;
+      case 'finished_products':
+        tableName = 'finished_products';
+        break;
+      default:
+        return { data: null, error: new Error('نوع المنتج غير معروف') };
+    }
+    
+    return await supabase
+      .from(tableName)
+      .select('*')
+      .eq('id', itemId)
+      .single();
+  }
+  
+  /**
+   * تحديث كمية العنصر في المخزون
+   */
+  private async updateItemQuantity(itemType: string, itemId: string | number, newQuantity: number) {
+    let tableName = '';
+    
+    switch (itemType) {
+      case 'raw_materials':
+        tableName = 'raw_materials';
+        break;
+      case 'packaging_materials':
+        tableName = 'packaging_materials';
+        break;
+      case 'semi_finished_products':
+        tableName = 'semi_finished_products';
+        break;
+      case 'finished_products':
+        tableName = 'finished_products';
+        break;
+      default:
+        return { error: new Error('نوع المنتج غير معروف') };
+    }
+    
+    return await supabase
+      .from(tableName)
+      .update({ quantity: newQuantity })
+      .eq('id', itemId);
+  }
+  
+  /**
+   * تسجيل حركة مخزون
+   */
+  private async recordInventoryMovement(
+    itemId: string | number, 
+    itemType: string, 
+    quantity: number, 
+    balanceAfter: number, 
+    movementType: 'in' | 'out' | 'adjustment', 
+    reason: string
+  ) {
+    try {
+      const { error } = await supabase
+        .from('inventory_movements')
+        .insert({
+          item_id: itemId.toString(),
+          item_type: itemType,
+          quantity: quantity,
+          balance_after: balanceAfter,
+          movement_type: movementType,
+          reason: reason
+        });
+      
+      if (error) throw error;
+      
+      return true;
+    } catch (error) {
+      console.error('Error recording inventory movement:', error);
       return false;
     }
   }
