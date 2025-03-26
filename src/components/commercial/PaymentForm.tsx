@@ -275,7 +275,7 @@ export function PaymentForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">بدون فاتورة</SelectItem>
+                          <SelectItem value="no_invoice">بدون فاتورة</SelectItem>
                           {relevantInvoices.map(invoice => (
                             <SelectItem key={invoice.id} value={invoice.id}>
                               {format(new Date(invoice.date), 'yyyy-MM-dd')} - {invoice.total_amount.toFixed(2)}
