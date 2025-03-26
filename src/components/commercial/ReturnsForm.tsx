@@ -46,7 +46,7 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
   const [isInvoiceRequired, setIsInvoiceRequired] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   
-  const inventoryService = InventoryService.getInstance();
+  const inventoryService = new InventoryService();
   const partyService = PartyService.getInstance();
   const commercialService = CommercialService.getInstance();
   
@@ -83,11 +83,40 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
   useEffect(() => {
     if (rawMaterials && packagingMaterials && semiFinishedProducts && finishedProducts) {
       const allItems = [
-        ...rawMaterials.map(item => ({ ...item, item_type: 'raw_materials', item_name: item.raw_material_name, item_id: item.id })),
-        ...packagingMaterials.map(item => ({ ...item, item_type: 'packaging_materials', item_name: item.packaging_material_name, item_id: item.id })),
-        ...semiFinishedProducts.map(item => ({ ...item, item_type: 'semi_finished_products', item_name: item.semi_finished_name, item_id: item.id })),
-        ...finishedProducts.map(item => ({ ...item, item_type: 'finished_products', item_name: item.finished_product_name, item_id: item.id }))
-      ] as ReturnFormItem[];
+        ...rawMaterials.map(item => ({ 
+          item_type: 'raw_materials' as const, 
+          item_name: item.name, 
+          item_id: item.id,
+          quantity: 0,
+          unit_price: item.unit_cost || 0,
+          selected: false
+        })),
+        ...packagingMaterials.map(item => ({ 
+          item_type: 'packaging_materials' as const, 
+          item_name: item.name, 
+          item_id: item.id,
+          quantity: 0,
+          unit_price: item.unit_cost || 0,
+          selected: false
+        })),
+        ...semiFinishedProducts.map(item => ({ 
+          item_type: 'semi_finished_products' as const, 
+          item_name: item.name, 
+          item_id: item.id,
+          quantity: 0,
+          unit_price: item.unit_cost || 0,
+          selected: false
+        })),
+        ...finishedProducts.map(item => ({ 
+          item_type: 'finished_products' as const, 
+          item_name: item.name, 
+          item_id: item.id,
+          quantity: 0,
+          unit_price: item.unit_cost || 0,
+          selected: false
+        }))
+      ];
+      
       setItems(allItems);
     }
   }, [rawMaterials, packagingMaterials, semiFinishedProducts, finishedProducts]);
@@ -122,7 +151,6 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
         if (invoice) {
           form.setValue('party_id', invoice.party_id);
           const itemsWithMaxQuantity = invoice.items.map(item => ({
-            ...item,
             item_id: item.item_id,
             item_name: item.item_name,
             item_type: item.item_type,
@@ -159,31 +187,41 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
   };
 
   const onSubmitHandler = async (values: ReturnFormValues) => {
-    const selectedItems = invoiceItems.filter(item => item.selected);
-    if (selectedItems.length === 0) {
+    try {
+      const selectedItems = invoiceItems.filter(item => item.selected);
+      if (selectedItems.length === 0) {
+        toast({
+          title: "خطأ",
+          description: "يجب اختيار صنف واحد على الأقل",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const totalAmount = selectedItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+      
+      const returnData = {
+        ...values,
+        amount: totalAmount,
+        payment_status: 'draft' as const, // Add payment_status to match the Return type
+        items: selectedItems.map(item => ({
+          item_id: item.item_id,
+          item_type: item.item_type,
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price
+        }))
+      };
+      
+      await onSubmit(returnData);
+    } catch (error) {
+      console.error('Error submitting form:', error);
       toast({
         title: "خطأ",
-        description: "يجب اختيار صنف واحد على الأقل",
+        description: "حدث خطأ أثناء معالجة النموذج",
         variant: "destructive"
       });
-      return;
     }
-    
-    const totalAmount = selectedItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-    
-    const returnData = {
-      ...values,
-      amount: totalAmount,
-      items: selectedItems.map(item => ({
-        item_id: item.item_id,
-        item_type: item.item_type,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price
-      }))
-    };
-    
-    await onSubmit(returnData);
   };
 
   return (
@@ -321,53 +359,34 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
           {invoiceItems.length > 0 ? (
             invoiceItems.map((item, index) => (
               <div key={index} className="grid grid-cols-6 gap-2 items-center">
-                <FormField
-                  control={form.control}
-                  name={`items[${index}].selected`}
-                  render={({ field }) => (
-                    <FormItem className="col-span-1">
-                      <FormControl>
-                        <Checkbox
-                          checked={item.selected}
-                          onCheckedChange={(checked) => {
-                            const updatedItems = [...invoiceItems];
-                            updatedItems[index] = { ...item, selected: checked };
-                            setInvoiceItems(updatedItems);
-                          }}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                <div className="col-span-1">
+                  <Checkbox
+                    checked={Boolean(item.selected)}
+                    onCheckedChange={(checked) => {
+                      const updatedItems = [...invoiceItems];
+                      updatedItems[index] = { ...item, selected: Boolean(checked) };
+                      setInvoiceItems(updatedItems);
+                    }}
+                  />
+                </div>
                 <Label htmlFor={`items[${index}].selected`} className="col-span-2 text-right">
                   {item.item_name}
                 </Label>
-                <FormField
-                  control={form.control}
-                  name={`items[${index}].quantity`}
-                  render={({ field }) => {
-                    return (
-                      <FormItem className="col-span-3">
-                        <FormControl>
-                          <Input
-                            type="number"
-                            defaultValue="0"
-                            min="0"
-                            max={item.max_quantity}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              const updatedItems = [...invoiceItems];
-                              updatedItems[index] = { ...item, quantity: value };
-                              setInvoiceItems(updatedItems);
-                            }}
-                            disabled={!item.selected}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
-                />
+                <div className="col-span-3">
+                  <Input
+                    type="number"
+                    defaultValue="0"
+                    min="0"
+                    max={item.max_quantity}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      const updatedItems = [...invoiceItems];
+                      updatedItems[index] = { ...item, quantity: value };
+                      setInvoiceItems(updatedItems);
+                    }}
+                    disabled={!item.selected}
+                  />
+                </div>
                 <Label className="col-span-6 text-right text-muted-foreground">
                   الكمية المتاحة: {item.max_quantity}
                 </Label>
@@ -387,7 +406,7 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
             <FormItem>
               <FormLabel>ملاحظات</FormLabel>
               <FormControl>
-                <Input type="text" {...field} />
+                <Input type="text" {...field} value={field.value || ''} />
               </FormControl>
               <FormMessage />
             </FormItem>

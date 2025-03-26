@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import InventoryService from '@/services/InventoryService';
 
@@ -7,7 +8,8 @@ class ReturnProcessor {
 
   constructor() {
     this.supabase = supabase;
-    this.inventoryService = InventoryService.getInstance();
+    // Fix getInstance access by using the static method correctly
+    this.inventoryService = new InventoryService();
   }
 
   async processReturn(returnId: string) {

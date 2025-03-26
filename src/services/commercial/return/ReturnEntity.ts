@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Return, ReturnItem } from "@/services/CommercialTypes";
 
@@ -113,9 +114,9 @@ export class ReturnEntity {
         party_id: returnData.party_id,
         party_name: returnData.parties?.name,
         date: returnData.date,
-        return_type: returnData.return_type,
+        return_type: returnData.return_type as "sales_return" | "purchase_return",
         amount: returnData.amount,
-        payment_status: returnData.payment_status || 'draft',
+        payment_status: returnData.payment_status as "draft" | "confirmed" | "cancelled",
         notes: returnData.notes,
         created_at: returnData.created_at,
         items: typedItems
@@ -175,7 +176,7 @@ export class ReturnEntity {
         date: returnData.date,
         return_type: returnData.return_type,
         amount: returnData.amount,
-        payment_status: returnRecord.payment_status,
+        payment_status: returnRecord.payment_status as "draft" | "confirmed" | "cancelled",
         notes: returnData.notes,
         created_at: returnRecord.created_at,
         items: returnData.items.map(item => ({
