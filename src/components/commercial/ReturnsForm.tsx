@@ -611,7 +611,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
         </div>
 
         {(!selectedInvoice || selectedInvoice === 'no_invoice') && (
-          <Alert variant="destructive">
+          <Alert variant="default">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>تنبيه</AlertTitle>
             <AlertDescription>

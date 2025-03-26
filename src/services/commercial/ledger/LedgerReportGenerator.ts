@@ -1,17 +1,25 @@
-
-import { supabase } from "@/integrations/supabase/client";
-import { LedgerEntry } from '@/services/CommercialTypes';
-import { toast } from "sonner";
-import PartyService from '../../PartyService';
-import { LedgerEntity } from './LedgerEntity';
+import { PartyService } from '@/services/PartyService';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { LedgerEntry } from '@/services/CommercialTypes';
 
-// خدمة تُعنى بإنشاء التقارير المالية
-export class LedgerReportGenerator {
-  private static partyService = PartyService.getInstance();
-
-  // إنشاء كشف حساب عام
-  public static async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
+class LedgerReportGenerator {
+  private static instance: LedgerReportGenerator;
+  private partyService: PartyService;
+  
+  private constructor() {
+    this.partyService = PartyService.getInstance();
+  }
+  
+  public static getInstance(): LedgerReportGenerator {
+    if (!LedgerReportGenerator.instance) {
+      LedgerReportGenerator.instance = new LedgerReportGenerator();
+    }
+    return LedgerReportGenerator.instance;
+  }
+  
+  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
     try {
       // Get parties of the specified type or all if not specified
       let parties;
@@ -64,8 +72,7 @@ export class LedgerReportGenerator {
     }
   }
   
-  // إنشاء كشف حساب لطرف محدد
-  public static async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
+  public async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
     try {
       const party = await this.partyService.getPartyById(partyId);
       if (!party) {
@@ -103,8 +110,7 @@ export class LedgerReportGenerator {
     }
   }
   
-  // تصدير سجل الحساب إلى CSV
-  public static async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
+  public async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
     try {
       const ledgerEntries = await LedgerEntity.fetchLedgerEntries(partyId, startDate, endDate);
       const party = await this.partyService.getPartyById(partyId);
@@ -136,8 +142,7 @@ export class LedgerReportGenerator {
     }
   }
   
-  // الحصول على وصف المعاملة
-  private static getTransactionDescription(transaction_type: string): string {
+  private getTransactionDescription(transaction_type: string): string {
     const descriptions: { [key: string]: string } = {
       'sale_invoice': 'فاتورة مبيعات',
       'purchase_invoice': 'فاتورة مشتريات',
@@ -159,3 +164,5 @@ export class LedgerReportGenerator {
     return descriptions[transaction_type] || transaction_type;
   }
 }
+
+export default LedgerReportGenerator;

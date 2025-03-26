@@ -27,3 +27,17 @@ export interface FinishedProduct extends InventoryItem {
   semi_finished_id?: number;
   semi_finished_quantity?: number;
 }
+
+// Add the missing InventoryMovement interface
+export interface InventoryMovement {
+  id: string;
+  item_id: number | string;
+  item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
+  quantity: number;
+  movement_type: string;
+  reason: string;
+  balance_after: number;
+  created_at: string;
+  updated_at?: string;
+  user_id?: string;
+}
