@@ -1,7 +1,7 @@
 
 import { Return } from '@/services/CommercialTypes';
 import { ReturnEntity } from './ReturnEntity';
-import { ReturnProcessor } from './ReturnProcessor';
+import ReturnProcessor from './ReturnProcessor';
 import { toast } from '@/hooks/use-toast';
 
 // خدمة المرتجعات الرئيسية
