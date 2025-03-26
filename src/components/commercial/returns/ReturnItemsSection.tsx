@@ -5,17 +5,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
-import { cn } from "@/lib/utils"
 import { ReturnFormValues } from './ReturnFormTypes';
 
-interface ReturnItem {
+export interface ReturnItem {
   id: string;
   name: string;
   quantity: number;
   unitPrice: number;
 }
 
-interface ReturnItemsSectionProps {
+export interface ReturnItemsSectionProps {
   items: ReturnItem[];
   onQuantityChange: (itemId: string, quantity: number) => void;
   form?: UseFormReturn<ReturnFormValues>; // Add form prop

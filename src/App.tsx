@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import './App.css';
 import { Route, Routes } from 'react-router-dom';
@@ -44,13 +45,17 @@ import FinancialDashboard from './pages/financial/FinancialDashboard';
 import TransactionPage from './pages/financial/TransactionPage';
 import CategoriesPage from './pages/financial/CategoriesPage';
 import CategoryForm from './components/financial/CategoryForm';
+import FinancialReportsPage from './pages/financial/FinancialReportsPage';
+import ProfitAnalysisPage from './pages/financial/ProfitAnalysisPage';
 
 // Export the components for use in the main App.tsx
 export {
   FinancialDashboard,
   TransactionPage,
   CategoriesPage,
-  CategoryForm
+  CategoryForm,
+  FinancialReportsPage,
+  ProfitAnalysisPage
 };
 
 function App() {
@@ -97,6 +102,8 @@ function App() {
             <Route path="financial/categories" element={<CategoriesPage />} />
             <Route path="financial/categories/new" element={<CategoryForm />} />
             <Route path="financial/categories/edit/:id" element={<CategoryForm />} />
+            <Route path="financial/reports" element={<FinancialReportsPage />} />
+            <Route path="financial/profit" element={<ProfitAnalysisPage />} />
             
             {/* Settings */}
             <Route path="settings" element={<Settings />} />
