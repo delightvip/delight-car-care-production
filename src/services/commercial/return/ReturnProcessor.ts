@@ -1,35 +1,37 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Return } from '@/services/CommercialTypes';
-import { toast } from "sonner";
-import PartyService from '../../PartyService';
-import InventoryService from '../../InventoryService';
-import { ReturnEntity } from './ReturnEntity';
+import { Return } from "@/services/CommercialTypes";
+import InventoryService from "@/services/InventoryService";
+import PartyService from "@/services/PartyService";
+import { ReturnEntity } from "./ReturnEntity";
 
-// خدمة تُعنى بمعالجة المرتجعات
 export class ReturnProcessor {
-  private partyService = PartyService.getInstance();
-  private inventoryService = InventoryService.getInstance();
+  private inventoryService: InventoryService;
+  private partyService: PartyService;
 
-  // تأكيد مرتجع
+  constructor() {
+    this.inventoryService = new InventoryService();
+    this.partyService = PartyService.getInstance();
+  }
+
+  /**
+   * Confirm a return, update inventory and financial records
+   */
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
       const returnData = await ReturnEntity.fetchById(returnId);
       if (!returnData) {
-        toast.error('لم يتم العثور على المرتجع');
+        console.error('Return not found');
         return false;
       }
       
       if (returnData.payment_status === 'confirmed') {
-        toast.info('المرتجع مؤكد بالفعل');
+        console.log('Return already confirmed');
         return true;
       }
       
-      console.log('Confirming return:', returnData);
-      
       // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
-        console.log("نوع المرتجع: مرتجع مبيعات - تحديث المخزون");
         // Increase inventory for sales returns
         for (const item of returnData.items || []) {
           switch (item.item_type) {
@@ -50,7 +52,6 @@ export class ReturnProcessor {
         
         // Update financial records for sales returns
         if (returnData.party_id) {
-          console.log("تحديث رصيد العميل:", returnData.party_id);
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
@@ -61,7 +62,6 @@ export class ReturnProcessor {
           );
         }
       } else if (returnData.return_type === 'purchase_return') {
-        console.log("نوع المرتجع: مرتجع مشتريات - تحديث المخزون");
         // Decrease inventory for purchase returns
         for (const item of returnData.items || []) {
           switch (item.item_type) {
@@ -82,7 +82,6 @@ export class ReturnProcessor {
         
         // Update financial records for purchase returns
         if (returnData.party_id) {
-          console.log("تحديث رصيد المورد:", returnData.party_id);
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
@@ -102,27 +101,26 @@ export class ReturnProcessor {
       
       if (error) throw error;
       
-      console.log('Return confirmed successfully');
-      toast.success('تم تأكيد المرتجع بنجاح');
       return true;
     } catch (error) {
       console.error('Error confirming return:', error);
-      toast.error('حدث خطأ أثناء تأكيد المرتجع');
       return false;
     }
   }
   
-  // إلغاء مرتجع
+  /**
+   * Cancel a return, reverse inventory and financial changes
+   */
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
       const returnData = await ReturnEntity.fetchById(returnId);
       if (!returnData) {
-        toast.error('لم يتم العثور على المرتجع');
+        console.error('Return not found');
         return false;
       }
       
       if (returnData.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء المرتجعات المؤكدة فقط');
+        console.error('Can only cancel confirmed returns');
         return false;
       }
       
@@ -197,11 +195,9 @@ export class ReturnProcessor {
       
       if (error) throw error;
       
-      toast.success('تم إلغاء المرتجع بنجاح');
       return true;
     } catch (error) {
       console.error('Error cancelling return:', error);
-      toast.error('حدث خطأ أثناء إلغاء المرتجع');
       return false;
     }
   }

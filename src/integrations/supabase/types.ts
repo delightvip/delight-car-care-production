@@ -189,6 +189,7 @@ export type Database = {
           invoice_type: string
           notes: string | null
           party_id: string | null
+          payment_status: string
           status: string
           total_amount: number | null
         }
@@ -199,6 +200,7 @@ export type Database = {
           invoice_type: string
           notes?: string | null
           party_id?: string | null
+          payment_status?: string
           status: string
           total_amount?: number | null
         }
@@ -209,6 +211,7 @@ export type Database = {
           invoice_type?: string
           notes?: string | null
           party_id?: string | null
+          payment_status?: string
           status?: string
           total_amount?: number | null
         }
@@ -465,6 +468,7 @@ export type Database = {
           method: string
           notes: string | null
           party_id: string | null
+          payment_status: string
           payment_type: string
           related_invoice_id: string | null
         }
@@ -476,6 +480,7 @@ export type Database = {
           method?: string
           notes?: string | null
           party_id?: string | null
+          payment_status?: string
           payment_type: string
           related_invoice_id?: string | null
         }
@@ -487,6 +492,7 @@ export type Database = {
           method?: string
           notes?: string | null
           party_id?: string | null
+          payment_status?: string
           payment_type?: string
           related_invoice_id?: string | null
         }
@@ -623,6 +629,50 @@ export type Database = {
         }
         Relationships: []
       }
+      return_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          item_id: number
+          item_name: string
+          item_type: string
+          quantity: number
+          return_id: string
+          total: number | null
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          item_id: number
+          item_name: string
+          item_type: string
+          quantity: number
+          return_id: string
+          total?: number | null
+          unit_price: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          item_id?: number
+          item_name?: string
+          item_type?: string
+          quantity?: number
+          return_id?: string
+          total?: number | null
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "return_items_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "returns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       returns: {
         Row: {
           amount: number
@@ -631,6 +681,8 @@ export type Database = {
           id: string
           invoice_id: string | null
           notes: string | null
+          party_id: string | null
+          payment_status: string
           return_type: string
         }
         Insert: {
@@ -640,6 +692,8 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           notes?: string | null
+          party_id?: string | null
+          payment_status?: string
           return_type: string
         }
         Update: {
@@ -649,6 +703,8 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           notes?: string | null
+          party_id?: string | null
+          payment_status?: string
           return_type?: string
         }
         Relationships: [
@@ -657,6 +713,13 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "returns_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
             referencedColumns: ["id"]
           },
         ]

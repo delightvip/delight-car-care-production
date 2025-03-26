@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -86,7 +85,7 @@ const Returns = () => {
       // تعيين حالة المرتجع للتأكيد تلقائياً
       const returnWithStatus = {
         ...returnData,
-        payment_status: 'confirmed' // تعديل: تغيير حالة المرتجع للتأكيد عند الإنشاء
+        payment_status: 'confirmed' as "draft" | "confirmed" | "cancelled"
       };
       
       const result = await commercialService.createReturn(returnWithStatus);

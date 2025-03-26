@@ -188,26 +188,27 @@ const Invoices = () => {
   
   const handleCreateInvoice = async (invoiceData: Omit<Invoice, 'id' | 'created_at'>) => {
     try {
-      console.log('Creating invoice with data:', invoiceData);
-      
-      const invoiceWithStatus = {
+      const formattedData = {
         ...invoiceData,
-        payment_status: 'confirmed'
+        payment_status: 'draft' as "draft" | "confirmed" | "cancelled",
+        status: invoiceData.status as "paid" | "partial" | "unpaid",
+        date: invoiceData.date,
+        invoice_type: invoiceData.invoice_type as "sale" | "purchase",
+        notes: invoiceData.notes,
+        party_id: invoiceData.party_id,
+        total_amount: invoiceData.total_amount,
+        party_name: invoiceData.party_name,
+        items: invoiceData.items
       };
-      
-      const result = await commercialService.createInvoice(invoiceWithStatus);
-      console.log('Invoice creation result:', result);
+
+      const result = await commercialService.createInvoice(formattedData);
       
       if (result) {
-        await commercialService.confirmInvoice(result.id);
-        console.log('Invoice confirmed automatically');
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['parties'] });
+        setIsAddDialogOpen(false);
+        toast.success('تم إنشاء الفاتورة بنجاح');
       }
-      
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['parties'] });
-      
-      setIsAddDialogOpen(false);
-      toast.success('تم إنشاء الفاتورة بنجاح');
     } catch (error) {
       console.error('Error creating invoice:', error);
       toast.error('حدث خطأ أثناء إنشاء الفاتورة');
@@ -585,4 +586,3 @@ const Invoices = () => {
 };
 
 export default Invoices;
-

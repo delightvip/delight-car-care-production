@@ -1,15 +1,13 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Return, ReturnItem } from '@/services/CommercialTypes';
-import { toast } from "sonner";
-import { format } from 'date-fns';
+import { Return, ReturnItem } from "@/services/CommercialTypes";
 
-// خدمة تُعنى بعمليات جلب وإنشاء المرتجعات
 export class ReturnEntity {
-  // جلب كافة المرتجعات
-  public static async fetchAll(): Promise<Return[]> {
+  /**
+   * Fetch all returns with their related data
+   */
+  static async fetchAll(): Promise<Return[]> {
     try {
-      // Get all returns with party details
       let { data, error } = await supabase
         .from('returns')
         .select(`
@@ -27,9 +25,9 @@ export class ReturnEntity {
         party_id: returnData.party_id,
         party_name: returnData.parties?.name,
         date: returnData.date,
-        return_type: returnData.return_type,
+        return_type: returnData.return_type as "sales_return" | "purchase_return",
         amount: returnData.amount,
-        payment_status: returnData.payment_status || 'draft',
+        payment_status: returnData.payment_status as "draft" | "confirmed" | "cancelled",
         notes: returnData.notes,
         created_at: returnData.created_at,
         items: [] // Initialize with empty items array
@@ -48,9 +46,21 @@ export class ReturnEntity {
             return returnData;
           }
           
+          // Map return items to the correct type
+          const typedItems = items ? items.map(item => ({
+            id: item.id,
+            return_id: item.return_id,
+            item_id: item.item_id,
+            item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total
+          })) : [];
+          
           return {
             ...returnData,
-            items: items || []
+            items: typedItems
           };
         })
       );
@@ -58,13 +68,14 @@ export class ReturnEntity {
       return returnsWithItems;
     } catch (error) {
       console.error('Error fetching returns:', error);
-      toast.error('حدث خطأ أثناء جلب المرتجعات');
       return [];
     }
   }
   
-  // جلب مرتجع بالمعرف
-  public static async fetchById(id: string): Promise<Return | null> {
+  /**
+   * Fetch a specific return by ID with its related data
+   */
+  static async fetchById(id: string): Promise<Return | null> {
     try {
       const { data: returnData, error: returnError } = await supabase
         .from('returns')
@@ -84,43 +95,49 @@ export class ReturnEntity {
       
       if (itemsError) throw itemsError;
       
+      // Map return items to the correct type
+      const typedItems = items ? items.map(item => ({
+        id: item.id,
+        return_id: item.return_id,
+        item_id: item.item_id,
+        item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+        item_name: item.item_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total: item.total
+      })) : [];
+      
       return {
         id: returnData.id,
         invoice_id: returnData.invoice_id,
         party_id: returnData.party_id,
         party_name: returnData.parties?.name,
         date: returnData.date,
-        return_type: returnData.return_type,
+        return_type: returnData.return_type as "sales_return" | "purchase_return",
         amount: returnData.amount,
-        payment_status: returnData.payment_status || 'draft',
+        payment_status: returnData.payment_status as "draft" | "confirmed" | "cancelled",
         notes: returnData.notes,
         created_at: returnData.created_at,
-        items: items || []
+        items: typedItems
       };
     } catch (error) {
       console.error(`Error fetching return with id ${id}:`, error);
-      toast.error('حدث خطأ أثناء جلب بيانات المرتجع');
       return null;
     }
   }
   
-  // إنشاء مرتجع جديد
-  public static async create(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
+  /**
+   * Create a new return with its items
+   */
+  static async create(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      console.log('Creating return with data:', returnData);
-      
-      // Format date if it's a Date object
-      const formattedDate = typeof returnData.date === 'object' ? 
-        format(returnData.date, 'yyyy-MM-dd') : 
-        returnData.date;
-      
       // Create the return record
       const { data: returnRecord, error } = await supabase
         .from('returns')
         .insert({
           invoice_id: returnData.invoice_id,
           party_id: returnData.party_id,
-          date: formattedDate,
+          date: returnData.date,
           return_type: returnData.return_type,
           amount: returnData.amount,
           payment_status: returnData.payment_status || 'draft',
@@ -139,8 +156,7 @@ export class ReturnEntity {
           item_type: item.item_type,
           item_name: item.item_name,
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
+          unit_price: item.unit_price
         }));
         
         const { error: itemsError } = await supabase
@@ -150,37 +166,23 @@ export class ReturnEntity {
         if (itemsError) throw itemsError;
       }
       
-      // Get party details for response
-      const { data: party } = await supabase
-        .from('parties')
-        .select('name')
-        .eq('id', returnData.party_id)
-        .single();
-      
-      console.log('Return created successfully:', returnRecord);
-      
       return {
-        id: returnRecord.id,
-        invoice_id: returnData.invoice_id,
-        party_id: returnData.party_id,
-        party_name: party?.name,
-        date: formattedDate,
-        return_type: returnData.return_type,
-        amount: returnData.amount,
-        payment_status: returnRecord.payment_status,
-        notes: returnData.notes,
-        created_at: returnRecord.created_at,
-        items: returnData.items
+        ...returnRecord,
+        party_name: returnData.party_name,
+        items: returnData.items,
+        payment_status: returnRecord.payment_status as "draft" | "confirmed" | "cancelled",
+        return_type: returnRecord.return_type as "sales_return" | "purchase_return"
       };
     } catch (error) {
       console.error('Error creating return:', error);
-      toast.error('حدث خطأ أثناء إنشاء المرتجع');
       return null;
     }
   }
   
-  // تحديث مرتجع
-  public static async update(id: string, returnData: Partial<Return>): Promise<boolean> {
+  /**
+   * Update an existing return
+   */
+  static async update(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
       const { error } = await supabase
         .from('returns')
@@ -197,33 +199,19 @@ export class ReturnEntity {
       
       if (error) throw error;
       
-      toast.success('تم تحديث المرتجع بنجاح');
       return true;
     } catch (error) {
       console.error('Error updating return:', error);
-      toast.error('حدث خطأ أثناء تحديث المرتجع');
       return false;
     }
   }
   
-  // حذف مرتجع
-  public static async delete(id: string): Promise<boolean> {
+  /**
+   * Delete a return and its items
+   */
+  static async delete(id: string): Promise<boolean> {
     try {
-      // Check if the return is in draft state
-      const { data, error: fetchError } = await supabase
-        .from('returns')
-        .select('payment_status')
-        .eq('id', id)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      if (data.payment_status !== 'draft') {
-        toast.error('يمكن حذف المرتجعات في حالة المسودة فقط');
-        return false;
-      }
-      
-      // Delete return items first
+      // Delete return items first (cascade should handle this, but just to be safe)
       const { error: itemsError } = await supabase
         .from('return_items')
         .delete()
@@ -239,11 +227,9 @@ export class ReturnEntity {
       
       if (error) throw error;
       
-      toast.success('تم حذف المرتجع بنجاح');
       return true;
     } catch (error) {
       console.error('Error deleting return:', error);
-      toast.error('حدث خطأ أثناء حذف المرتجع');
       return false;
     }
   }

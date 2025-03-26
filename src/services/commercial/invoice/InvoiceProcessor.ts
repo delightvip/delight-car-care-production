@@ -1,35 +1,37 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Invoice } from '@/services/CommercialTypes';
-import { toast } from "sonner";
-import PartyService from '../../PartyService';
-import InventoryService from '../../InventoryService';
-import { InvoiceEntity } from './InvoiceEntity';
+import { Invoice } from "@/services/CommercialTypes";
+import InventoryService from "@/services/InventoryService";
+import PartyService from "@/services/PartyService";
+import { InvoiceEntity } from "./InvoiceEntity";
 
-// خدمة تُعنى بمعالجة الفواتير
 export class InvoiceProcessor {
-  private partyService = PartyService.getInstance();
-  private inventoryService = InventoryService.getInstance();
+  private inventoryService: InventoryService;
+  private partyService: PartyService;
 
-  // تأكيد فاتورة
+  constructor() {
+    this.inventoryService = new InventoryService();
+    this.partyService = PartyService.getInstance();
+  }
+
+  /**
+   * Confirm an invoice, update inventory and financial records
+   */
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
-      console.log('Confirming invoice:', invoiceId);
-      
       const invoiceData = await InvoiceEntity.fetchById(invoiceId);
       if (!invoiceData) {
-        toast.error('لم يتم العثور على الفاتورة');
+        console.error('Invoice not found');
         return false;
       }
       
       if (invoiceData.payment_status === 'confirmed') {
-        toast.info('الفاتورة مؤكدة بالفعل');
+        console.log('Invoice already confirmed');
         return true;
       }
       
       // Update inventory based on invoice type
       if (invoiceData.invoice_type === 'sale') {
-        console.log("نوع الفاتورة: بيع - تحديث المخزون");
         // Decrease inventory for sales invoices
         for (const item of invoiceData.items || []) {
           switch (item.item_type) {
@@ -50,7 +52,6 @@ export class InvoiceProcessor {
         
         // Update financial records for sales invoices
         if (invoiceData.party_id) {
-          console.log("تحديث رصيد العميل:", invoiceData.party_id);
           await this.partyService.updatePartyBalance(
             invoiceData.party_id,
             invoiceData.total_amount,
@@ -61,7 +62,6 @@ export class InvoiceProcessor {
           );
         }
       } else if (invoiceData.invoice_type === 'purchase') {
-        console.log("نوع الفاتورة: شراء - تحديث المخزون");
         // Increase inventory for purchase invoices
         for (const item of invoiceData.items || []) {
           switch (item.item_type) {
@@ -82,7 +82,6 @@ export class InvoiceProcessor {
         
         // Update financial records for purchase invoices
         if (invoiceData.party_id) {
-          console.log("تحديث رصيد المورد:", invoiceData.party_id);
           await this.partyService.updatePartyBalance(
             invoiceData.party_id,
             invoiceData.total_amount,
@@ -102,28 +101,26 @@ export class InvoiceProcessor {
       
       if (error) throw error;
       
-      console.log('Invoice confirmed successfully');
-      
-      toast.success('تم تأكيد الفاتورة بنجاح');
       return true;
     } catch (error) {
       console.error('Error confirming invoice:', error);
-      toast.error('حدث خطأ أثناء تأكيد الفاتورة');
       return false;
     }
   }
   
-  // إلغاء فاتورة
+  /**
+   * Cancel an invoice, reverse inventory and financial changes
+   */
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
       const invoiceData = await InvoiceEntity.fetchById(invoiceId);
       if (!invoiceData) {
-        toast.error('لم يتم العثور على الفاتورة');
+        console.error('Invoice not found');
         return false;
       }
       
       if (invoiceData.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء الفواتير المؤكدة فقط');
+        console.error('Can only cancel confirmed invoices');
         return false;
       }
       
@@ -198,22 +195,22 @@ export class InvoiceProcessor {
       
       if (error) throw error;
       
-      toast.success('تم إلغاء الفاتورة بنجاح');
       return true;
     } catch (error) {
       console.error('Error cancelling invoice:', error);
-      toast.error('حدث خطأ أثناء إلغاء الفاتورة');
       return false;
     }
   }
   
-  // تحديث حالة الفاتورة بعد الدفع
+  /**
+   * Update invoice status after payment
+   */
   public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
       const invoice = await InvoiceEntity.fetchById(invoiceId);
       
       if (!invoice) {
-        toast.error('لم يتم العثور على الفاتورة');
+        console.error('Invoice not found');
         return;
       }
       
@@ -226,50 +223,39 @@ export class InvoiceProcessor {
         newStatus = 'partial';
       }
       
-      const { error } = await supabase
-        .from('invoices')
-        .update({ status: newStatus })
-        .eq('id', invoiceId);
-      
-      if (error) {
-        console.error('Error updating invoice status:', error);
-        toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
-      } else {
-        console.log(`تم تحديث حالة الفاتورة ${invoiceId} إلى ${newStatus}`);
-        toast.success('تم تحديث حالة الفاتورة بنجاح');
-      }
+      await InvoiceEntity.update(invoiceId, { status: newStatus });
     } catch (error) {
       console.error('Error updating invoice status:', error);
-      toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
     }
   }
   
-  // عكس تحديث حالة الفاتورة بعد إلغاء الدفعة
+  /**
+   * Reverse invoice status after payment cancellation
+   */
   public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
       const invoice = await InvoiceEntity.fetchById(invoiceId);
       
       if (!invoice) {
-        toast.error('لم يتم العثور على الفاتورة');
+        console.error('Invoice not found');
         return;
       }
       
-      // Get all payments for this invoice
-      const { data: payments, error: paymentsError } = await supabase
+      // Get all confirmed payments for this invoice
+      const { data: payments, error } = await supabase
         .from('payments')
-        .select('amount, payment_status')
+        .select('amount')
         .eq('related_invoice_id', invoiceId)
         .eq('payment_status', 'confirmed');
-        
-      if (paymentsError) {
-        console.error('Error fetching payments for invoice:', paymentsError);
-        toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
-        return;
-      }
       
-      // Calculate total confirmed payments
-      const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      if (error) throw error;
       
+      // Calculate total paid amount excluding the cancelled payment
+      const totalPaid = payments
+        ? payments.reduce((sum, payment) => sum + Number(payment.amount), 0) - paymentAmount
+        : 0;
+      
+      // Determine new status
       let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
       
       if (totalPaid >= invoice.total_amount) {
@@ -278,21 +264,9 @@ export class InvoiceProcessor {
         newStatus = 'partial';
       }
       
-      const { error } = await supabase
-        .from('invoices')
-        .update({ status: newStatus })
-        .eq('id', invoiceId);
-      
-      if (error) {
-        console.error('Error updating invoice status:', error);
-        toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
-      } else {
-        console.log(`تم تحديث حالة الفاتورة ${invoiceId} إلى ${newStatus} بعد إلغاء الدفعة`);
-        toast.success('تم تحديث حالة الفاتورة بنجاح');
-      }
+      await InvoiceEntity.update(invoiceId, { status: newStatus });
     } catch (error) {
-      console.error('Error updating invoice status:', error);
-      toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
+      console.error('Error reversing invoice status:', error);
     }
   }
 }

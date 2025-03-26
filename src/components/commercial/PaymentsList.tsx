@@ -1,167 +1,146 @@
 
 import React from 'react';
+import { format } from 'date-fns';
 import { Payment } from '@/services/CommercialTypes';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
+  TableRow
 } from '@/components/ui/table';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, X, Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash, CheckCircle, XCircle } from 'lucide-react';
 
-interface PaymentsListProps {
+export interface PaymentsListProps {
   payments: Payment[];
-  onConfirm: (paymentId: string) => void;
-  onCancel: (paymentId: string) => void;
-  onEdit: (payment: Payment) => void;
-  onDelete: (paymentId: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  onEditClick: (payment: Payment) => void;
+  onDeleteClick: (payment: Payment) => void;
+  onConfirmClick: (payment: Payment) => void;
+  onCancelClick: (payment: Payment) => void;
+  activeTab: string;
 }
 
-const PaymentsList: React.FC<PaymentsListProps> = ({ 
-  payments, 
-  onConfirm, 
-  onCancel, 
-  onEdit, 
-  onDelete 
+const PaymentsList: React.FC<PaymentsListProps> = ({
+  payments,
+  onEditClick,
+  onDeleteClick,
+  onConfirmClick,
+  onCancelClick,
+  activeTab
 }) => {
-  // تحديد لون البادج حسب حالة الدفعة
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <Badge className="bg-green-500">تم التأكيد</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-red-500">ملغاة</Badge>;
-      case 'draft':
-        return <Badge variant="outline">مسودة</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  // تحديد لون البادج حسب نوع الدفعة
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case 'collection':
-        return <Badge variant="secondary">تحصيل</Badge>;
-      case 'disbursement':
-        return <Badge variant="destructive">دفع</Badge>;
-      default:
-        return <Badge variant="outline">{type}</Badge>;
-    }
-  };
-
-  // تنسيق طريقة الدفع
-  const formatMethod = (method: string) => {
-    switch (method) {
-      case 'cash':
-        return 'نقدي';
-      case 'check':
-        return 'شيك';
-      case 'bank_transfer':
-        return 'تحويل بنكي';
-      case 'other':
-        return 'طريقة أخرى';
-      default:
-        return method;
-    }
-  };
+  // Filter payments based on the active tab
+  const filteredPayments = payments.filter(payment => {
+    if (activeTab === 'all') return true;
+    return payment.payment_type === activeTab;
+  });
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-right font-bold">التاريخ</TableHead>
-            <TableHead className="text-right font-bold">نوع المعاملة</TableHead>
-            <TableHead className="text-right font-bold">الطرف</TableHead>
-            <TableHead className="text-right font-bold">المبلغ</TableHead>
-            <TableHead className="text-right font-bold">طريقة الدفع</TableHead>
-            <TableHead className="text-right font-bold">الحالة</TableHead>
-            <TableHead className="text-right font-bold">الإجراءات</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {payments.length > 0 ? (
-            payments.map((payment) => (
-              <TableRow key={payment.id}>
-                <TableCell className="text-right">
-                  {format(new Date(payment.date), 'yyyy-MM-dd')}
-                </TableCell>
-                <TableCell className="text-right">
-                  {getTypeBadge(payment.payment_type)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {payment.party_name || "غير محدد"}
-                </TableCell>
-                <TableCell className="text-right font-semibold">
-                  {payment.amount.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {formatMethod(payment.method)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {getStatusBadge(payment.payment_status)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex space-x-2 justify-end items-center">
-                    {payment.payment_status === 'draft' && (
-                      <>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => onConfirm(payment.id)}
-                          title="تأكيد"
-                        >
-                          <Check className="h-4 w-4 text-green-500" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => onEdit(payment)}
-                          title="تعديل"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => onDelete(payment.id)}
-                          title="حذف"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </>
-                    )}
-                    {payment.payment_status === 'confirmed' && (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-right w-32">التاريخ</TableHead>
+          <TableHead className="text-right">الطرف</TableHead>
+          <TableHead className="text-right">النوع</TableHead>
+          <TableHead className="text-right">الطريقة</TableHead>
+          <TableHead className="text-right">المبلغ</TableHead>
+          <TableHead className="text-right">الحالة</TableHead>
+          <TableHead className="text-right">الإجراءات</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {filteredPayments.length > 0 ? (
+          filteredPayments.map((payment) => (
+            <TableRow key={payment.id}>
+              <TableCell className="text-right">
+                {format(new Date(payment.date), 'yyyy-MM-dd')}
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {payment.party_name}
+              </TableCell>
+              <TableCell className="text-right">
+                <Badge 
+                  variant={payment.payment_type === 'collection' ? 'success' : 'default'}
+                >
+                  {payment.payment_type === 'collection' ? 'تحصيل' : 'صرف'}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                {payment.method === 'cash' && 'نقدي'}
+                {payment.method === 'check' && 'شيك'}
+                {payment.method === 'bank_transfer' && 'تحويل بنكي'}
+                {payment.method === 'other' && 'أخرى'}
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {payment.amount.toFixed(2)}
+              </TableCell>
+              <TableCell className="text-right">
+                {payment.payment_status === 'confirmed' ? (
+                  <Badge variant="success">مؤكد</Badge>
+                ) : payment.payment_status === 'cancelled' ? (
+                  <Badge variant="destructive">ملغي</Badge>
+                ) : (
+                  <Badge variant="outline">مسودة</Badge>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end space-x-2">
+                  {payment.payment_status === 'draft' && (
+                    <>
                       <Button
-                        size="icon"
+                        size="sm"
                         variant="outline"
-                        onClick={() => onCancel(payment.id)}
-                        title="إلغاء"
+                        onClick={() => onEditClick(payment)}
                       >
-                        <X className="h-4 w-4 text-red-500" />
+                        <Edit className="h-4 w-4 ml-1" />
+                        تعديل
                       </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center py-4">
-                لا توجد معاملات مالية مسجلة
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onDeleteClick(payment)}
+                      >
+                        <Trash className="h-4 w-4 ml-1" />
+                        حذف
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onConfirmClick(payment)}
+                      >
+                        <CheckCircle className="h-4 w-4 ml-1" />
+                        تأكيد
+                      </Button>
+                    </>
+                  )}
+                  
+                  {payment.payment_status === 'confirmed' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onCancelClick(payment)}
+                    >
+                      <XCircle className="h-4 w-4 ml-1" />
+                      إلغاء
+                    </Button>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
+          ))
+        ) : (
+          <TableRow>
+            <TableCell colSpan={7} className="text-center py-6">
+              لا توجد معاملات مالية مسجلة
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
   );
 };
 

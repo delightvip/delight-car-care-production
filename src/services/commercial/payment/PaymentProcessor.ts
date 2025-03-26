@@ -1,40 +1,42 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Payment } from '@/services/CommercialTypes';
-import { toast } from "sonner";
-import PartyService from '../../PartyService';
-import { InvoiceProcessor } from '../invoice/InvoiceProcessor';
+import { Payment } from "@/services/CommercialTypes";
+import InventoryService from "@/services/InventoryService";
+import PartyService from "@/services/PartyService";
+import InvoiceService from "../invoice/InvoiceService";
+import { PaymentEntity } from "./PaymentEntity";
 
-// خدمة تُعنى بمعالجة الدفعات المالية (تأكيد وإلغاء)
 export class PaymentProcessor {
-  private static partyService = PartyService.getInstance();
-  private static invoiceProcessor = new InvoiceProcessor();
+  private inventoryService: InventoryService;
+  private partyService: PartyService;
+  private invoiceService: InvoiceService;
 
-  // تأكيد دفعة مالية
-  public static async confirmPayment(paymentId: string): Promise<boolean> {
+  constructor() {
+    this.inventoryService = new InventoryService();
+    this.partyService = PartyService.getInstance();
+    this.invoiceService = InvoiceService.getInstance();
+  }
+
+  /**
+   * Confirm a payment, update party balance and related invoice
+   */
+  public async confirmPayment(paymentId: string): Promise<boolean> {
     try {
-      const { data: payment, error: fetchError } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          parties (name)
-        `)
-        .eq('id', paymentId)
-        .single();
+      const payment = await PaymentEntity.fetchById(paymentId);
       
-      if (fetchError) throw fetchError;
-      
-      if (payment.payment_status === 'confirmed') {
-        toast.info('المعاملة مؤكدة بالفعل');
-        return true;
+      if (!payment) {
+        console.error('Payment not found');
+        return false;
       }
       
-      console.log("تأكيد الدفعة:", payment);
+      if (payment.payment_status === 'confirmed') {
+        console.log('Payment already confirmed');
+        return true;
+      }
       
       // Update party balance based on payment type
       if (payment.payment_type === 'collection') {
         // Collection (customer paying us)
-        console.log("نوع الدفعة: تحصيل - تحديث رصيد العميل");
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
@@ -46,12 +48,10 @@ export class PaymentProcessor {
         
         // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
-          console.log("تحديث حالة الفاتورة المرتبطة بالدفعة:", payment.related_invoice_id);
-          await this.invoiceProcessor.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
+          await this.invoiceService.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
         }
       } else if (payment.payment_type === 'disbursement') {
         // Disbursement (we paying supplier)
-        console.log("نوع الدفعة: صرف - تحديث رصيد المورد");
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
@@ -63,8 +63,7 @@ export class PaymentProcessor {
         
         // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
-          console.log("تحديث حالة الفاتورة المرتبطة بالدفعة:", payment.related_invoice_id);
-          await this.invoiceProcessor.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
+          await this.invoiceService.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
         }
       }
       
@@ -76,32 +75,27 @@ export class PaymentProcessor {
       
       if (error) throw error;
       
-      console.log("تم تأكيد الدفعة بنجاح");
-      toast.success('تم تأكيد المعاملة بنجاح');
       return true;
     } catch (error) {
       console.error('Error confirming payment:', error);
-      toast.error('حدث خطأ أثناء تأكيد المعاملة');
       return false;
     }
   }
   
-  // إلغاء دفعة مالية
-  public static async cancelPayment(paymentId: string): Promise<boolean> {
+  /**
+   * Cancel a payment, reverse party balance and related invoice updates
+   */
+  public async cancelPayment(paymentId: string): Promise<boolean> {
     try {
-      const { data: payment, error: fetchError } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          parties (name)
-        `)
-        .eq('id', paymentId)
-        .single();
+      const payment = await PaymentEntity.fetchById(paymentId);
       
-      if (fetchError) throw fetchError;
+      if (!payment) {
+        console.error('Payment not found');
+        return false;
+      }
       
       if (payment.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء المعاملات المؤكدة فقط');
+        console.error('Can only cancel confirmed payments');
         return false;
       }
       
@@ -119,7 +113,7 @@ export class PaymentProcessor {
         
         // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
-          await this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
+          await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
         }
       } else if (payment.payment_type === 'disbursement') {
         // Reverse disbursement (we paying supplier)
@@ -134,7 +128,7 @@ export class PaymentProcessor {
         
         // If related to an invoice, update the invoice status
         if (payment.related_invoice_id) {
-          await this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
+          await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
         }
       }
       
@@ -146,11 +140,9 @@ export class PaymentProcessor {
       
       if (error) throw error;
       
-      toast.success('تم إلغاء المعاملة بنجاح');
       return true;
     } catch (error) {
       console.error('Error cancelling payment:', error);
-      toast.error('حدث خطأ أثناء إلغاء المعاملة');
       return false;
     }
   }

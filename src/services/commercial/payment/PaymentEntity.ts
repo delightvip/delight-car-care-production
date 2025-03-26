@@ -1,13 +1,12 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Payment } from '@/services/CommercialTypes';
-import { toast } from "sonner";
-import { format } from 'date-fns';
+import { Payment } from "@/services/CommercialTypes";
 
-// خدمة تُعنى بعمليات جلب وإنشاء الدفعات المالية
 export class PaymentEntity {
-  // جلب كافة المدفوعات
-  public static async fetchAll(): Promise<Payment[]> {
+  /**
+   * Fetch all payments with their related data
+   */
+  static async fetchAll(): Promise<Payment[]> {
     try {
       let { data, error } = await supabase
         .from('payments')
@@ -22,13 +21,13 @@ export class PaymentEntity {
       const paymentsWithParties = data.map(payment => ({
         id: payment.id,
         party_id: payment.party_id,
-        party_name: payment.parties?.name,
+        party_name: payment.parties?.name || "",
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
+        payment_type: payment.payment_type as "collection" | "disbursement",
         method: payment.method,
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status || 'draft',
+        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled",
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -36,13 +35,14 @@ export class PaymentEntity {
       return paymentsWithParties;
     } catch (error) {
       console.error('Error fetching payments:', error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
       return [];
     }
   }
   
-  // جلب المدفوعات حسب الطرف
-  public static async fetchByParty(partyId: string): Promise<Payment[]> {
+  /**
+   * Fetch payments by party
+   */
+  static async fetchByParty(partyId: string): Promise<Payment[]> {
     try {
       let { data, error } = await supabase
         .from('payments')
@@ -58,13 +58,13 @@ export class PaymentEntity {
       const paymentsWithParties = data.map(payment => ({
         id: payment.id,
         party_id: payment.party_id,
-        party_name: payment.parties?.name,
+        party_name: payment.parties?.name || "",
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
+        payment_type: payment.payment_type as "collection" | "disbursement",
         method: payment.method,
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status || 'draft',
+        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled",
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -72,32 +72,60 @@ export class PaymentEntity {
       return paymentsWithParties;
     } catch (error) {
       console.error(`Error fetching payments for party ${partyId}:`, error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
       return [];
     }
   }
   
-  // إنشاء دفعة جديدة
-  public static async create(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
+  /**
+   * Fetch a specific payment by ID
+   */
+  static async fetchById(id: string): Promise<Payment | null> {
     try {
-      // Format date if it's a Date object
-      const formattedDate = typeof paymentData.date === 'object' ? 
-        format(paymentData.date, 'yyyy-MM-dd') : 
-        paymentData.date;
-        
-      // Set default payment status to draft
-      const paymentStatus = paymentData.payment_status || 'draft';
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          parties (name)
+        `)
+        .eq('id', id)
+        .single();
       
-      const { data: payment, error } = await supabase
+      if (error) throw error;
+      
+      return {
+        id: data.id,
+        party_id: data.party_id,
+        party_name: data.parties?.name || "",
+        date: data.date,
+        amount: data.amount,
+        payment_type: data.payment_type as "collection" | "disbursement",
+        method: data.method,
+        related_invoice_id: data.related_invoice_id,
+        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled",
+        notes: data.notes,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error(`Error fetching payment with id ${id}:`, error);
+      return null;
+    }
+  }
+  
+  /**
+   * Create a new payment
+   */
+  static async create(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
+    try {
+      const { data, error } = await supabase
         .from('payments')
         .insert({
           party_id: paymentData.party_id,
-          date: formattedDate,
+          date: paymentData.date,
           amount: paymentData.amount,
           payment_type: paymentData.payment_type,
           method: paymentData.method,
           related_invoice_id: paymentData.related_invoice_id,
-          payment_status: paymentStatus,
+          payment_status: paymentData.payment_status || 'draft',
           notes: paymentData.notes
         })
         .select()
@@ -105,77 +133,51 @@ export class PaymentEntity {
       
       if (error) throw error;
       
-      console.log("تم إنشاء الدفعة بنجاح:", payment);
-      
-      return payment;
+      return {
+        ...data,
+        payment_type: data.payment_type as "collection" | "disbursement",
+        party_name: paymentData.party_name || "",
+        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled"
+      };
     } catch (error) {
-      console.error('Error recording payment:', error);
-      toast.error('حدث خطأ أثناء تسجيل المعاملة');
+      console.error('Error creating payment:', error);
       return null;
     }
   }
   
-  // تحديث دفعة موجودة
-  public static async update(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {
+  /**
+   * Update an existing payment
+   */
+  static async update(id: string, paymentData: Partial<Payment>): Promise<boolean> {
     try {
-      const { data: payment, error: fetchError } = await supabase
-        .from('payments')
-        .select('payment_status')
-        .eq('id', id)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      if (payment.payment_status !== 'draft') {
-        toast.error('يمكن تعديل المدفوعات في حالة المسودة فقط');
-        return false;
-      }
-      
-      // Format date if it's a Date object
-      const formattedDate = typeof paymentData.date === 'object' ? 
-        format(paymentData.date, 'yyyy-MM-dd') : 
-        paymentData.date;
-        
       const { error } = await supabase
         .from('payments')
         .update({
           party_id: paymentData.party_id,
-          date: formattedDate,
+          date: paymentData.date,
           amount: paymentData.amount,
           payment_type: paymentData.payment_type,
           method: paymentData.method,
           related_invoice_id: paymentData.related_invoice_id,
+          payment_status: paymentData.payment_status,
           notes: paymentData.notes
         })
         .eq('id', id);
       
       if (error) throw error;
       
-      toast.success('تم تحديث المعاملة بنجاح');
       return true;
     } catch (error) {
       console.error('Error updating payment:', error);
-      toast.error('حدث خطأ أثناء تحديث المعاملة');
       return false;
     }
   }
   
-  // حذف دفعة
-  public static async delete(id: string): Promise<boolean> {
+  /**
+   * Delete a payment
+   */
+  static async delete(id: string): Promise<boolean> {
     try {
-      const { data: payment, error: fetchError } = await supabase
-        .from('payments')
-        .select('payment_status')
-        .eq('id', id)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      if (payment.payment_status !== 'draft') {
-        toast.error('يمكن حذف المدفوعات في حالة المسودة فقط');
-        return false;
-      }
-      
       const { error } = await supabase
         .from('payments')
         .delete()
@@ -183,11 +185,9 @@ export class PaymentEntity {
       
       if (error) throw error;
       
-      toast.success('تم حذف المعاملة بنجاح');
       return true;
     } catch (error) {
       console.error('Error deleting payment:', error);
-      toast.error('حدث خطأ أثناء حذف المعاملة');
       return false;
     }
   }
