@@ -15,9 +15,9 @@ export interface ReturnItem {
 }
 
 export interface ReturnItemsSectionProps {
-  items: ReturnItem[];
-  onQuantityChange: (itemId: string, quantity: number) => void;
-  form?: UseFormReturn<ReturnFormValues>; // Add form prop
+  items?: ReturnItem[];
+  onQuantityChange?: (itemId: string, quantity: number) => void;
+  form?: UseFormReturn<ReturnFormValues>; 
   selectedInvoice?: string | null;
   selectedItemType?: string;
   loadingInvoiceItems?: boolean;
@@ -31,9 +31,8 @@ export interface ReturnItemsSectionProps {
 }
 
 const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
-  items,
-  onQuantityChange,
-  // New props (optional with defaults for backward compatibility)
+  items = [],
+  onQuantityChange = () => {},
   form,
   selectedInvoice,
   selectedItemType,

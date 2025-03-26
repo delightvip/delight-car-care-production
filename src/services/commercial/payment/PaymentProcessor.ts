@@ -5,16 +5,20 @@ import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import InvoiceService from "../invoice/InvoiceService";
 import { toast } from "@/hooks/use-toast";
+import FinancialService from "@/services/financial/FinancialService";
+import { format } from "date-fns";
 
 export class PaymentProcessor {
   private inventoryService: InventoryService;
   private partyService: PartyService;
   private invoiceService: InvoiceService;
+  private financialService: FinancialService;
 
   constructor() {
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
     this.invoiceService = InvoiceService.getInstance();
+    this.financialService = FinancialService.getInstance();
   }
 
   /**
@@ -51,6 +55,21 @@ export class PaymentProcessor {
           isCredit ? 'تحصيل دفعة' : 'تسديد دفعة',
           isCredit ? 'payment_collection' : 'payment_disbursement',
           paymentId
+        );
+        
+        // تسجيل المعاملة في النظام المالي
+        const transactionType = isCredit ? 'income' : 'expense';
+        const paymentMethod = payment.method === 'cash' ? 'cash' : 
+                            payment.method === 'bank_transfer' ? 'bank' : 'other';
+        
+        await this.financialService.recordCommercialTransaction(
+          transactionType,
+          payment.amount,
+          paymentMethod as 'cash' | 'bank' | 'other',
+          payment.id,
+          `payment_${payment.payment_type}`,
+          format(new Date(payment.date), 'yyyy-MM-dd'),
+          `${isCredit ? 'تحصيل دفعة من العميل' : 'تسديد دفعة للمورد'}`
         );
       }
       
@@ -125,6 +144,21 @@ export class PaymentProcessor {
           isCredit ? 'إلغاء تحصيل دفعة' : 'إلغاء تسديد دفعة',
           isCredit ? 'cancel_payment_collection' : 'cancel_payment_disbursement',
           paymentId
+        );
+        
+        // تسجيل عكس المعاملة في النظام المالي
+        const transactionType = isCredit ? 'expense' : 'income';  // عكس النوع السابق
+        const paymentMethod = payment.method === 'cash' ? 'cash' : 
+                            payment.method === 'bank_transfer' ? 'bank' : 'other';
+        
+        await this.financialService.recordCommercialTransaction(
+          transactionType,
+          payment.amount,
+          paymentMethod as 'cash' | 'bank' | 'other',
+          payment.id,
+          `cancel_payment_${payment.payment_type}`,
+          format(new Date(), 'yyyy-MM-dd'),
+          `إلغاء ${isCredit ? 'تحصيل دفعة من العميل' : 'تسديد دفعة للمورد'}`
         );
       }
       

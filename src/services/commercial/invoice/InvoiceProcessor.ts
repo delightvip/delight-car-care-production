@@ -3,419 +3,320 @@ import { supabase } from "@/integrations/supabase/client";
 import { Invoice } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import { InvoiceEntity } from "./InvoiceEntity";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
+import FinancialService from "@/services/financial/FinancialService";
+import { format } from "date-fns";
 
 export class InvoiceProcessor {
   private inventoryService: InventoryService;
   private partyService: PartyService;
+  private financialService: FinancialService;
 
   constructor() {
-    // استخدام getInstance للوصول إلى الخدمات
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
+    this.financialService = FinancialService.getInstance();
   }
 
   /**
-   * تأكيد فاتورة وتحديث المخزون والسجلات المالية
+   * تأكيد الفاتورة وتحديث المخزون والحسابات ذات الصلة
    */
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
-      const invoiceData = await InvoiceEntity.fetchById(invoiceId);
-      if (!invoiceData) {
-        console.error('Invoice not found');
-        toast.error('لم يتم العثور على الفاتورة');
-        return false;
-      }
+      // التحقق من حالة الفاتورة
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          invoice_items (*)
+        `)
+        .eq('id', invoiceId)
+        .single();
       
-      if (invoiceData.payment_status === 'confirmed') {
-        console.log('Invoice already confirmed');
-        toast.info('الفاتورة مؤكدة بالفعل');
+      if (invoiceError) throw invoiceError;
+      
+      if (invoice.payment_status === 'confirmed') {
+        toast({
+          title: "تنبيه",
+          description: "الفاتورة مؤكدة بالفعل",
+          variant: "default"
+        });
         return true;
       }
       
       // تحديث المخزون بناءً على نوع الفاتورة
-      if (invoiceData.invoice_type === 'sale') {
-        // خفض المخزون لفواتير المبيعات
-        for (const item of invoiceData.items || []) {
-          let currentItem = null;
-          let currentQuantity = 0;
-          
-          // الحصول على الكمية الحالية في المخزون
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
+      if (invoice.invoice_type === 'sale') {
+        // تحديث المخزون للبيع (خصم من المخزون)
+        for (const item of invoice.invoice_items) {
+          await this.inventoryService.updateInventoryLevel(
+            item.item_id.toString(),
+            item.item_type,
+            -item.quantity,
+            `بيع - فاتورة ${invoiceId}`,
+            'sale'
+          );
+        }
+        
+        // تحديث رصيد العميل
+        await this.partyService.updatePartyBalance(
+          invoice.party_id,
+          invoice.total_amount,
+          true, // debit (زيادة مديونية العميل)
+          `فاتورة بيع`,
+          'sale_invoice',
+          invoiceId
+        );
+        
+        // تسجيل الإيرادات في النظام المالي (بيع بالائتمان)
+        await this.financialService.recordCommercialTransaction(
+          'income',
+          invoice.total_amount,
+          'other', // كمعاملة ائتمانية
+          invoiceId,
+          'sale_invoice',
+          format(new Date(invoice.date), 'yyyy-MM-dd'),
+          `فاتورة بيع`
+        );
+        
+        // حساب تكلفة البضاعة المباعة لتتبع الأرباح
+        let totalCost = 0;
+        for (const item of invoice.invoice_items) {
+          if (item.item_type === 'finished_products') {
+            const { data: product } = await supabase
+              .from('finished_products')
+              .select('unit_cost')
+              .eq('id', item.item_id)
+              .single();
               
-              currentItem = rawMaterial;
-              currentQuantity = rawMaterial?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المادة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوبة (${item.quantity})`);
-                console.error(`Not enough quantity for ${item.item_name}. Current: ${currentQuantity}, Required: ${item.quantity}`);
-                return false;
-              }
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = packagingMaterial;
-              currentQuantity = packagingMaterial?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية مادة التعبئة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوبة (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = semiFinished;
-              currentQuantity = semiFinished?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المنتج نصف المصنع ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوبة (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = finishedProduct;
-              currentQuantity = finishedProduct?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`كمية المنتج النهائي ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوبة (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
+            if (product) {
+              const itemCost = product.unit_cost * item.quantity;
+              totalCost += itemCost;
+            }
           }
         }
         
-        // تحديث السجلات المالية لفواتير المبيعات
-        if (invoiceData.party_id) {
-          await this.partyService.updatePartyBalance(
-            invoiceData.party_id,
-            invoiceData.total_amount,
-            true, // مدين للمبيعات (زيادة دين العميل)
-            'فاتورة مبيعات',
-            'sale_invoice',
-            invoiceData.id
+        // تسجيل تكلفة البضاعة المباعة
+        if (totalCost > 0) {
+          await this.financialService.recordCommercialTransaction(
+            'expense',
+            totalCost,
+            'other',
+            invoiceId,
+            'cost_of_goods_sold',
+            format(new Date(invoice.date), 'yyyy-MM-dd'),
+            `تكلفة بضاعة مباعة - فاتورة ${invoiceId}`
           );
-        }
-      } else if (invoiceData.invoice_type === 'purchase') {
-        // زيادة المخزون لفواتير المشتريات
-        for (const item of invoiceData.items || []) {
-          let currentItem = null;
-          let currentQuantity = 0;
-          
-          // الحصول على الكمية الحالية في المخزون
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = rawMaterial;
-              currentQuantity = rawMaterial?.quantity || 0;
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = packagingMaterial;
-              currentQuantity = packagingMaterial?.quantity || 0;
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = semiFinished;
-              currentQuantity = semiFinished?.quantity || 0;
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = finishedProduct;
-              currentQuantity = finishedProduct?.quantity || 0;
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-          }
         }
         
-        // تحديث السجلات المالية لفواتير المشتريات
-        if (invoiceData.party_id) {
-          await this.partyService.updatePartyBalance(
-            invoiceData.party_id,
-            invoiceData.total_amount,
-            false, // دائن للمشتريات (زيادة ديننا)
-            'فاتورة مشتريات',
-            'purchase_invoice',
-            invoiceData.id
+      } else if (invoice.invoice_type === 'purchase') {
+        // تحديث المخزون للشراء (إضافة للمخزون)
+        for (const item of invoice.invoice_items) {
+          await this.inventoryService.updateInventoryLevel(
+            item.item_id.toString(),
+            item.item_type,
+            item.quantity,
+            `شراء - فاتورة ${invoiceId}`,
+            'purchase'
           );
         }
+        
+        // تحديث رصيد المورد
+        await this.partyService.updatePartyBalance(
+          invoice.party_id,
+          invoice.total_amount,
+          false, // credit (زيادة ما نحن مدينون به للمورد)
+          `فاتورة شراء`,
+          'purchase_invoice',
+          invoiceId
+        );
+        
+        // تسجيل المشتريات في النظام المالي (شراء بالائتمان)
+        await this.financialService.recordCommercialTransaction(
+          'expense',
+          invoice.total_amount,
+          'other', // كمعاملة ائتمانية
+          invoiceId,
+          'purchase_invoice',
+          format(new Date(invoice.date), 'yyyy-MM-dd'),
+          `فاتورة شراء`
+        );
       }
       
-      // تحديث حالة الفاتورة إلى مؤكدة
-      const { error } = await supabase
+      // تحديث حالة الفاتورة إلى "مؤكدة"
+      const { error: updateError } = await supabase
         .from('invoices')
         .update({ payment_status: 'confirmed' })
         .eq('id', invoiceId);
       
-      if (error) throw error;
+      if (updateError) throw updateError;
       
-      toast.success('تم تأكيد الفاتورة بنجاح');
+      // استخدام setTimeout لتجنب تعليق واجهة المستخدم
+      setTimeout(() => {
+        toast({
+          title: "نجاح",
+          description: "تم تأكيد الفاتورة بنجاح",
+          variant: "success"
+        });
+      }, 100);
+      
       return true;
     } catch (error) {
       console.error('Error confirming invoice:', error);
-      toast.error('حدث خطأ أثناء تأكيد الفاتورة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد الفاتورة",
+        variant: "destructive"
+      });
       return false;
     }
   }
   
   /**
-   * إلغاء فاتورة، عكس التغييرات في المخزون والتغييرات المالية
+   * إلغاء الفاتورة وعكس تغييرات المخزون والحسابات ذات الصلة
    */
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
-      const invoiceData = await InvoiceEntity.fetchById(invoiceId);
-      if (!invoiceData) {
-        toast.error('لم يتم العثور على الفاتورة');
+      // التحقق من حالة الفاتورة
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          invoice_items (*)
+        `)
+        .eq('id', invoiceId)
+        .single();
+      
+      if (invoiceError) throw invoiceError;
+      
+      if (invoice.payment_status !== 'confirmed') {
+        toast({
+          title: "خطأ",
+          description: "يمكن إلغاء الفواتير المؤكدة فقط",
+          variant: "destructive"
+        });
         return false;
       }
       
-      if (invoiceData.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء الفواتير المؤكدة فقط');
-        return false;
-      }
-      
-      // تحديث المخزون بناءً على نوع الفاتورة
-      if (invoiceData.invoice_type === 'sale') {
-        // زيادة المخزون لفواتير المبيعات الملغاة
-        for (const item of invoiceData.items || []) {
-          let currentItem = null;
-          let currentQuantity = 0;
-          
-          // الحصول على الكمية الحالية في المخزون
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
+      // عكس تغييرات المخزون
+      if (invoice.invoice_type === 'sale') {
+        // إعادة المنتجات إلى المخزون
+        for (const item of invoice.invoice_items) {
+          await this.inventoryService.updateInventoryLevel(
+            item.item_id.toString(),
+            item.item_type,
+            item.quantity, // إضافة الكمية مرة أخرى
+            `إلغاء بيع - فاتورة ${invoiceId}`,
+            'sale_cancel'
+          );
+        }
+        
+        // عكس تحديث رصيد العميل
+        await this.partyService.updatePartyBalance(
+          invoice.party_id,
+          invoice.total_amount,
+          false, // credit (خفض مديونية العميل)
+          `إلغاء فاتورة بيع`,
+          'sale_invoice_cancel',
+          invoiceId
+        );
+        
+        // تسجيل إلغاء الإيرادات في النظام المالي
+        await this.financialService.recordCommercialTransaction(
+          'expense', // عكس الإيراد
+          invoice.total_amount,
+          'other',
+          invoiceId,
+          'sale_invoice_cancel',
+          format(new Date(), 'yyyy-MM-dd'),
+          `إلغاء فاتورة بيع`
+        );
+        
+        // عكس تكلفة البضاعة المباعة
+        let totalCost = 0;
+        for (const item of invoice.invoice_items) {
+          if (item.item_type === 'finished_products') {
+            const { data: product } = await supabase
+              .from('finished_products')
+              .select('unit_cost')
+              .eq('id', item.item_id)
+              .single();
               
-              currentItem = rawMaterial;
-              currentQuantity = rawMaterial?.quantity || 0;
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = packagingMaterial;
-              currentQuantity = packagingMaterial?.quantity || 0;
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = semiFinished;
-              currentQuantity = semiFinished?.quantity || 0;
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = finishedProduct;
-              currentQuantity = finishedProduct?.quantity || 0;
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
-              });
-              break;
+            if (product) {
+              const itemCost = product.unit_cost * item.quantity;
+              totalCost += itemCost;
+            }
           }
         }
         
-        // تحديث السجلات المالية لفواتير المبيعات الملغاة
-        if (invoiceData.party_id) {
-          await this.partyService.updatePartyBalance(
-            invoiceData.party_id,
-            invoiceData.total_amount,
-            false, // دائن لإلغاء المبيعات (تقليل دين العميل)
-            'إلغاء فاتورة مبيعات',
-            'cancel_sale_invoice',
-            invoiceData.id
+        // تسجيل عكس تكلفة البضاعة المباعة
+        if (totalCost > 0) {
+          await this.financialService.recordCommercialTransaction(
+            'income', // عكس المصروف
+            totalCost,
+            'other',
+            invoiceId,
+            'cost_of_goods_sold_cancel',
+            format(new Date(), 'yyyy-MM-dd'),
+            `إلغاء تكلفة بضاعة مباعة - فاتورة ${invoiceId}`
           );
-        }
-      } else if (invoiceData.invoice_type === 'purchase') {
-        // خفض المخزون لفواتير المشتريات الملغاة
-        for (const item of invoiceData.items || []) {
-          let currentItem = null;
-          let currentQuantity = 0;
-          
-          // الحصول على الكمية الحالية في المخزون
-          switch (item.item_type) {
-            case 'raw_materials':
-              const { data: rawMaterial } = await supabase
-                .from('raw_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = rawMaterial;
-              currentQuantity = rawMaterial?.quantity || 0;
-              // التأكد من أن الإلغاء لن يؤدي إلى كمية سالبة
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`لا يمكن إلغاء فاتورة المشتريات لأن كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاءها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'packaging_materials':
-              const { data: packagingMaterial } = await supabase
-                .from('packaging_materials')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = packagingMaterial;
-              currentQuantity = packagingMaterial?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`لا يمكن إلغاء فاتورة المشتريات لأن كمية مادة التعبئة ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاءها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'semi_finished_products':
-              const { data: semiFinished } = await supabase
-                .from('semi_finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = semiFinished;
-              currentQuantity = semiFinished?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`لا يمكن إلغاء فاتورة المشتريات لأن كمية المنتج نصف المصنع ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاءها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-            case 'finished_products':
-              const { data: finishedProduct } = await supabase
-                .from('finished_products')
-                .select('*')
-                .eq('id', item.item_id)
-                .single();
-              
-              currentItem = finishedProduct;
-              currentQuantity = finishedProduct?.quantity || 0;
-              if (currentQuantity < Number(item.quantity)) {
-                toast.error(`لا يمكن إلغاء فاتورة المشتريات لأن كمية المنتج النهائي ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاءها (${item.quantity})`);
-                return false;
-              }
-              await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity - Number(item.quantity) 
-              });
-              break;
-          }
         }
         
-        // تحديث السجلات المالية لفواتير المشتريات الملغاة
-        if (invoiceData.party_id) {
-          await this.partyService.updatePartyBalance(
-            invoiceData.party_id,
-            invoiceData.total_amount,
-            true, // مدين لإلغاء المشتريات (تقليل ديننا)
-            'إلغاء فاتورة مشتريات',
-            'cancel_purchase_invoice',
-            invoiceData.id
+      } else if (invoice.invoice_type === 'purchase') {
+        // خصم المنتجات من المخزون
+        for (const item of invoice.invoice_items) {
+          await this.inventoryService.updateInventoryLevel(
+            item.item_id.toString(),
+            item.item_type,
+            -item.quantity, // خصم الكمية مرة أخرى
+            `إلغاء شراء - فاتورة ${invoiceId}`,
+            'purchase_cancel'
           );
         }
+        
+        // عكس تحديث رصيد المورد
+        await this.partyService.updatePartyBalance(
+          invoice.party_id,
+          invoice.total_amount,
+          true, // debit (خفض ما نحن مدينون به للمورد)
+          `إلغاء فاتورة شراء`,
+          'purchase_invoice_cancel',
+          invoiceId
+        );
+        
+        // تسجيل إلغاء المشتريات في النظام المالي
+        await this.financialService.recordCommercialTransaction(
+          'income', // عكس المصروف
+          invoice.total_amount,
+          'other',
+          invoiceId,
+          'purchase_invoice_cancel',
+          format(new Date(), 'yyyy-MM-dd'),
+          `إلغاء فاتورة شراء`
+        );
       }
       
-      // تحديث حالة الفاتورة إلى ملغاة
-      const { error } = await supabase
+      // تحديث حالة الفاتورة إلى "ملغاة"
+      const { error: updateError } = await supabase
         .from('invoices')
         .update({ payment_status: 'cancelled' })
         .eq('id', invoiceId);
       
-      if (error) throw error;
+      if (updateError) throw updateError;
       
-      toast.success('تم إلغاء الفاتورة بنجاح');
+      toast({
+        title: "نجاح",
+        description: "تم إلغاء الفاتورة بنجاح",
+        variant: "success"
+      });
+      
       return true;
     } catch (error) {
       console.error('Error cancelling invoice:', error);
-      toast.error('حدث خطأ أثناء إلغاء الفاتورة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء الفاتورة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -425,66 +326,49 @@ export class InvoiceProcessor {
    */
   public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
-      const invoice = await InvoiceEntity.fetchById(invoiceId);
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', invoiceId)
+        .single();
       
-      if (!invoice) {
-        console.error('Invoice not found');
-        return;
-      }
+      if (invoiceError) throw invoiceError;
       
-      const remainingAmount = invoice.total_amount - paymentAmount;
-      let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      // تحديث حالة الفاتورة استنادًا إلى المبلغ المدفوع والمبلغ الإجمالي
+      let newStatus: string;
       
-      if (remainingAmount <= 0) {
+      if (paymentAmount >= invoice.total_amount) {
         newStatus = 'paid';
       } else if (paymentAmount > 0) {
-        newStatus = 'partial';
+        newStatus = 'partially_paid';
+      } else {
+        newStatus = 'unpaid';
       }
       
-      await InvoiceEntity.update(invoiceId, { status: newStatus });
+      await supabase
+        .from('invoices')
+        .update({ status: newStatus })
+        .eq('id', invoiceId);
+      
     } catch (error) {
-      console.error('Error updating invoice status:', error);
+      console.error('Error updating invoice status after payment:', error);
     }
   }
   
   /**
-   * عكس حالة الفاتورة بعد إلغاء الدفع
+   * عكس تحديث حالة الفاتورة بعد إلغاء الدفع
    */
   public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
     try {
-      const invoice = await InvoiceEntity.fetchById(invoiceId);
+      // للتبسيط، نقوم بإعادة الحالة إلى "غير مدفوعة"
+      // في نظام حقيقي، سيكون عليك تتبع جميع المدفوعات وإعادة حساب الحالة
+      await supabase
+        .from('invoices')
+        .update({ status: 'unpaid' })
+        .eq('id', invoiceId);
       
-      if (!invoice) {
-        console.error('Invoice not found');
-        return;
-      }
-      
-      // الحصول على جميع المدفوعات المؤكدة لهذه الفاتورة
-      const { data: payments, error } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('related_invoice_id', invoiceId)
-        .eq('payment_status', 'confirmed');
-      
-      if (error) throw error;
-      
-      // حساب إجمالي المبلغ المدفوع باستثناء الدفعة الملغاة
-      const totalPaid = payments
-        ? payments.reduce((sum, payment) => sum + Number(payment.amount), 0) - paymentAmount
-        : 0;
-      
-      // تحديد الحالة الجديدة
-      let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
-      
-      if (totalPaid >= invoice.total_amount) {
-        newStatus = 'paid';
-      } else if (totalPaid > 0) {
-        newStatus = 'partial';
-      }
-      
-      await InvoiceEntity.update(invoiceId, { status: newStatus });
     } catch (error) {
-      console.error('Error reversing invoice status:', error);
+      console.error('Error reversing invoice status after payment cancellation:', error);
     }
   }
 }

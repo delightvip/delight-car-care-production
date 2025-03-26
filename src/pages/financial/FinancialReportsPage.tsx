@@ -1,591 +1,599 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { format, startOfMonth, endOfMonth, subMonths, eachMonthOfInterval } from 'date-fns';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Label } from '@/components/ui/label';
+import { format, subMonths } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { RefreshCw, Download } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import FinancialService from '@/services/financial/FinancialService';
+import { Download, ChevronRight, FileText } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  LineChart, 
+  BarChart, 
+  Line, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from 'recharts';
+import FinancialService, { Transaction } from '@/services/financial/FinancialService';
 
-const FinancialReportsPage = () => {
+interface CategorySummary {
+  id: string;
+  name: string;
+  total: number;
+  percentage: number;
+}
+
+interface MonthlyData {
+  month: string;
+  income: number;
+  expense: number;
+  balance: number;
+}
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A569BD', '#5DADE2', '#45B39D', '#F4D03F'];
+
+const FinancialReportsPage: React.FC = () => {
+  const [startDate, setStartDate] = useState<Date>(subMonths(new Date(), 3));
+  const [endDate, setEndDate] = useState<Date>(new Date());
+  const [reportType, setReportType] = useState<string>('all');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [incomeCategories, setIncomeCategories] = useState<CategorySummary[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<CategorySummary[]>([]);
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
+  const [totalIncome, setTotalIncome] = useState<number>(0);
+  const [totalExpense, setTotalExpense] = useState<number>(0);
+  const [netBalance, setNetBalance] = useState<number>(0);
+  
   const financialService = FinancialService.getInstance();
   
-  // States
-  const [dateRange, setDateRange] = useState({
-    from: startOfMonth(subMonths(new Date(), 11)),
-    to: endOfMonth(new Date())
-  });
-  const [loading, setLoading] = useState(true);
-  const [reportType, setReportType] = useState('monthly');
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [monthlySummary, setMonthlySummary] = useState<any[]>([]);
-  const [categorySummary, setCategorySummary] = useState<any[]>([]);
-  
-  // Colors for charts
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
-  
   useEffect(() => {
-    loadData();
-  }, [dateRange]);
+    loadFinancialData();
+  }, [startDate, endDate, reportType]);
   
-  const loadData = async () => {
+  const loadFinancialData = async () => {
     setLoading(true);
-    
-    // Format dates
-    const startDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined;
-    const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined;
-    
-    // Get transactions and categories
-    const allTransactions = await financialService.getTransactions(startDate, endDate);
-    const allCategories = await financialService.getCategories();
-    
-    setTransactions(allTransactions);
-    setCategories(allCategories);
-    
-    // Generate monthly summary data
-    const monthsInRange = eachMonthOfInterval({
-      start: dateRange.from,
-      end: dateRange.to
-    });
-    
-    const monthlyData = monthsInRange.map(month => {
-      const monthStart = startOfMonth(month);
-      const monthEnd = endOfMonth(month);
-      const monthFormat = format(month, 'yyyy-MM');
+    try {
+      const formattedStartDate = format(startDate, 'yyyy-MM-dd');
+      const formattedEndDate = format(endDate, 'yyyy-MM-dd');
       
-      const monthTransactions = allTransactions.filter(t => 
-        new Date(t.date) >= monthStart && 
-        new Date(t.date) <= monthEnd
-      );
+      // تحميل المعاملات المالية
+      let txns;
+      if (reportType === 'income') {
+        txns = await financialService.getTransactions(formattedStartDate, formattedEndDate, 'income');
+      } else if (reportType === 'expense') {
+        txns = await financialService.getTransactions(formattedStartDate, formattedEndDate, 'expense');
+      } else {
+        txns = await financialService.getTransactions(formattedStartDate, formattedEndDate);
+      }
       
-      const income = monthTransactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0);
+      setTransactions(txns);
       
-      const expense = monthTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
+      // حساب المجاميع
+      let totalInc = 0;
+      let totalExp = 0;
       
-      return {
-        month: format(month, 'MMM yyyy'),
-        monthKey: monthFormat,
-        income,
-        expense,
-        profit: income - expense
-      };
-    });
-    
-    setMonthlySummary(monthlyData);
-    
-    // Generate category summary data
-    const categoryData = allCategories.map(category => {
-      const categoryTransactions = allTransactions.filter(t => t.category_id === category.id);
-      const total = categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
+      txns.forEach(tx => {
+        if (tx.type === 'income') {
+          totalInc += tx.amount;
+        } else {
+          totalExp += tx.amount;
+        }
+      });
       
-      return {
-        id: category.id,
-        name: category.name,
-        type: category.type,
-        total,
-        count: categoryTransactions.length
-      };
-    }).filter(cat => cat.total > 0); // Only include categories with transactions
-    
-    // Sort by total amount
-    categoryData.sort((a, b) => b.total - a.total);
-    
-    setCategorySummary(categoryData);
-    setLoading(false);
-  };
-
-  const handleRefresh = () => {
-    loadData();
+      setTotalIncome(totalInc);
+      setTotalExpense(totalExp);
+      setNetBalance(totalInc - totalExp);
+      
+      // معالجة بيانات الفئات
+      const categoriesMap: Record<string, { name: string, total: number, type: 'income' | 'expense' }> = {};
+      
+      txns.forEach(tx => {
+        if (!categoriesMap[tx.category_id]) {
+          categoriesMap[tx.category_id] = {
+            name: tx.category_name,
+            total: 0,
+            type: tx.type
+          };
+        }
+        categoriesMap[tx.category_id].total += tx.amount;
+      });
+      
+      // فصل فئات الإيرادات والمصروفات
+      const incCategories: CategorySummary[] = [];
+      const expCategories: CategorySummary[] = [];
+      
+      Object.entries(categoriesMap).forEach(([id, data]) => {
+        const category = {
+          id,
+          name: data.name,
+          total: data.total,
+          percentage: data.type === 'income' 
+            ? (totalInc > 0 ? (data.total / totalInc * 100) : 0)
+            : (totalExp > 0 ? (data.total / totalExp * 100) : 0)
+        };
+        
+        if (data.type === 'income') {
+          incCategories.push(category);
+        } else {
+          expCategories.push(category);
+        }
+      });
+      
+      // ترتيب الفئات بناءً على المبلغ (تنازلياً)
+      incCategories.sort((a, b) => b.total - a.total);
+      expCategories.sort((a, b) => b.total - a.total);
+      
+      setIncomeCategories(incCategories);
+      setExpenseCategories(expCategories);
+      
+      // معالجة البيانات الشهرية
+      const monthlyDataMap: Record<string, MonthlyData> = {};
+      
+      txns.forEach(tx => {
+        const txDate = new Date(tx.date);
+        const monthKey = format(txDate, 'yyyy-MM');
+        const monthDisplay = format(txDate, 'MMM yyyy', { locale: ar });
+        
+        if (!monthlyDataMap[monthKey]) {
+          monthlyDataMap[monthKey] = {
+            month: monthDisplay,
+            income: 0,
+            expense: 0,
+            balance: 0
+          };
+        }
+        
+        if (tx.type === 'income') {
+          monthlyDataMap[monthKey].income += tx.amount;
+        } else {
+          monthlyDataMap[monthKey].expense += tx.amount;
+        }
+        
+        monthlyDataMap[monthKey].balance = 
+          monthlyDataMap[monthKey].income - monthlyDataMap[monthKey].expense;
+      });
+      
+      // تحويل إلى مصفوفة وترتيبها
+      const monthlyDataArray = Object.values(monthlyDataMap);
+      monthlyDataArray.sort((a, b) => {
+        return new Date(a.month).getTime() - new Date(b.month).getTime();
+      });
+      
+      setMonthlyData(monthlyDataArray);
+      
+    } catch (error) {
+      console.error('Error loading financial data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
   
-  const handleExport = () => {
-    // Generate CSV data
-    const startDate = format(dateRange.from, 'yyyy-MM-dd');
-    const endDate = format(dateRange.to, 'yyyy-MM-dd');
+  const exportToCSV = () => {
+    let reportTitle = '';
+    switch (reportType) {
+      case 'income': reportTitle = 'تقرير_الإيرادات'; break;
+      case 'expense': reportTitle = 'تقرير_المصروفات'; break;
+      default: reportTitle = 'التقرير_المالي_الشامل';
+    }
     
-    let csvContent = "التاريخ,النوع,الفئة,المبلغ,طريقة الدفع,الملاحظات\n";
+    let csvContent = "التاريخ,النوع,الفئة,طريقة الدفع,المبلغ,الملاحظات\n";
     
-    transactions.forEach(t => {
-      csvContent += `${t.date},"${t.type === 'income' ? 'إيراد' : 'مصروف'}","${t.category_name}",${t.amount},"${
-        t.payment_method === 'cash' ? 'نقدي' : 
-        t.payment_method === 'bank' ? 'حساب بنكي' : 'أخرى'
-      }","${t.notes || ''}"\n`;
+    transactions.forEach(tx => {
+      const txType = tx.type === 'income' ? 'إيراد' : 'مصروف';
+      const paymentMethod = 
+        tx.payment_method === 'cash' ? 'نقدي' : 
+        tx.payment_method === 'bank' ? 'بنك' : 'أخرى';
+      
+      csvContent += `${tx.date},${txType},${tx.category_name},${paymentMethod},${tx.amount.toFixed(2)},${tx.notes || ''}\n`;
     });
     
-    // Create download link
+    // إضافة ملخص
+    csvContent += "\nالملخص\n";
+    csvContent += `إجمالي الإيرادات,${totalIncome.toFixed(2)}\n`;
+    csvContent += `إجمالي المصروفات,${totalExpense.toFixed(2)}\n`;
+    csvContent += `صافي الرصيد,${netBalance.toFixed(2)}\n`;
+    
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `تقرير_مالي_${startDate}_${endDate}.csv`);
-    link.style.visibility = 'hidden';
+    link.href = url;
+    link.setAttribute('download', `${reportTitle}_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
-
+  
   return (
-    <div className="container mx-auto px-4 py-6 space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h1 className="text-3xl font-bold">التقارير المالية</h1>
-        
-        <div className="flex flex-wrap gap-2">
-          <Select value={reportType} onValueChange={setReportType}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="نوع التقرير" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="monthly">تقرير شهري</SelectItem>
-              <SelectItem value="category">تقرير حسب الفئة</SelectItem>
-              <SelectItem value="transactions">المعاملات</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <DateRangePicker
-            initialDateFrom={dateRange.from}
-            initialDateTo={dateRange.to}
-            onUpdate={({ range }) => {
-              if (range?.from && range?.to) {
-                setDateRange({ from: range.from, to: range.to });
-              }
-            }}
-          />
-          
-          <Button onClick={handleRefresh} variant="outline">
-            <RefreshCw className="h-4 w-4 ml-2" />
-            تحديث
-          </Button>
-          
-          <Button onClick={handleExport} variant="outline">
-            <Download className="h-4 w-4 ml-2" />
-            تصدير
+    <div className="container mx-auto p-6">
+      <div className="flex flex-col space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h1 className="text-2xl font-bold tracking-tight">التقارير المالية</h1>
+          <Button variant="outline" size="sm" onClick={exportToCSV}>
+            <Download className="ml-2 h-4 w-4" />
+            تصدير التقرير
           </Button>
         </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>إعدادات التقرير</CardTitle>
+            <CardDescription>حدد نطاق التقرير ونوعه</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <Label htmlFor="startDate">من تاريخ</Label>
+                <DatePicker
+                  id="startDate"
+                  selected={startDate}
+                  onSelect={setStartDate}
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">إلى تاريخ</Label>
+                <DatePicker
+                  id="endDate"
+                  selected={endDate}
+                  onSelect={setEndDate}
+                />
+              </div>
+              <div>
+                <Label htmlFor="reportType">نوع التقرير</Label>
+                <Select 
+                  value={reportType} 
+                  onValueChange={setReportType}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر نوع التقرير" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع المعاملات</SelectItem>
+                    <SelectItem value="income">الإيرادات فقط</SelectItem>
+                    <SelectItem value="expense">المصروفات فقط</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">إجمالي الإيرادات</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-28" /> : `${totalIncome.toLocaleString()} ر.س`}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">إجمالي المصروفات</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-28" /> : `${totalExpense.toLocaleString()} ر.س`}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">صافي الرصيد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {loading ? <Skeleton className="h-8 w-28" /> : `${netBalance.toLocaleString()} ر.س`}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <Tabs defaultValue="charts" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="charts">الرسوم البيانية</TabsTrigger>
+            <TabsTrigger value="transactions">المعاملات</TabsTrigger>
+            <TabsTrigger value="categories">الفئات</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="charts">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>الإيرادات والمصروفات الشهرية</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <Skeleton className="h-[350px] w-full" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart data={monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => `${Number(value).toLocaleString()} ر.س`} />
+                        <Legend />
+                        <Bar dataKey="income" name="الإيرادات" fill="#22c55e" />
+                        <Bar dataKey="expense" name="المصروفات" fill="#ef4444" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>صافي الرصيد الشهري</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <Skeleton className="h-[350px] w-full" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <LineChart data={monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => `${Number(value).toLocaleString()} ر.س`} />
+                        <Legend />
+                        <Line 
+                          type="monotone" 
+                          dataKey="balance" 
+                          name="صافي الرصيد" 
+                          stroke="#3b82f6" 
+                          activeDot={{ r: 8 }} 
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>توزيع الإيرادات حسب الفئات</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <Skeleton className="h-[350px] w-full" />
+                  ) : incomeCategories.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <PieChart>
+                        <Pie
+                          data={incomeCategories}
+                          dataKey="total"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          fill="#8884d8"
+                          label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {incomeCategories.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `${Number(value).toLocaleString()} ر.س`} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                      لا توجد بيانات إيرادات لعرضها
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>توزيع المصروفات حسب الفئات</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <Skeleton className="h-[350px] w-full" />
+                  ) : expenseCategories.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <PieChart>
+                        <Pie
+                          data={expenseCategories}
+                          dataKey="total"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          fill="#8884d8"
+                          label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {expenseCategories.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `${Number(value).toLocaleString()} ر.س`} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                      لا توجد بيانات مصروفات لعرضها
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="transactions">
+            <Card>
+              <CardHeader>
+                <CardTitle>قائمة المعاملات المالية</CardTitle>
+                <CardDescription>
+                  {transactions.length} معاملة في الفترة المحددة
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[500px]">
+                  <div className="grid grid-cols-5 font-semibold mb-2 text-muted-foreground">
+                    <div>التاريخ</div>
+                    <div>النوع</div>
+                    <div>الفئة</div>
+                    <div>المبلغ</div>
+                    <div>الملاحظات</div>
+                  </div>
+                  <Separator className="my-2" />
+                  {loading ? (
+                    Array(5).fill(0).map((_, i) => (
+                      <div key={i} className="mb-4">
+                        <Skeleton className="h-6 w-full" />
+                      </div>
+                    ))
+                  ) : transactions.length > 0 ? (
+                    transactions.map((tx, index) => (
+                      <React.Fragment key={index}>
+                        <div className="grid grid-cols-5 py-3">
+                          <div>{tx.date}</div>
+                          <div className={tx.type === 'income' ? 'text-green-600' : 'text-red-600'}>
+                            {tx.type === 'income' ? 'إيراد' : 'مصروف'}
+                          </div>
+                          <div>{tx.category_name}</div>
+                          <div className={tx.type === 'income' ? 'text-green-600' : 'text-red-600'}>
+                            {tx.amount.toLocaleString()} ر.س
+                          </div>
+                          <div className="truncate max-w-xs">{tx.notes || '-'}</div>
+                        </div>
+                        <Separator className="my-1" />
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <div className="py-8 text-center text-muted-foreground">
+                      لا توجد معاملات للعرض في النطاق المحدد
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="categories">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>فئات الإيرادات</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    Array(3).fill(0).map((_, i) => (
+                      <Skeleton key={i} className="h-10 w-full mb-4" />
+                    ))
+                  ) : incomeCategories.length > 0 ? (
+                    <Accordion type="single" collapsible className="w-full">
+                      {incomeCategories.map((cat, index) => (
+                        <AccordionItem key={cat.id} value={cat.id}>
+                          <AccordionTrigger>
+                            <div className="flex justify-between w-full text-right">
+                              <span>{cat.name}</span>
+                              <span className="text-green-600">{cat.total.toLocaleString()} ر.س</span>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="py-2">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">النسبة من إجمالي الإيرادات:</span>
+                                <span>{cat.percentage.toFixed(1)}%</span>
+                              </div>
+                              <div className="w-full h-2 mt-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-green-500" 
+                                  style={{ width: `${cat.percentage}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  ) : (
+                    <div className="py-8 text-center text-muted-foreground">
+                      لا توجد فئات إيرادات للعرض في النطاق المحدد
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>فئات المصروفات</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    Array(3).fill(0).map((_, i) => (
+                      <Skeleton key={i} className="h-10 w-full mb-4" />
+                    ))
+                  ) : expenseCategories.length > 0 ? (
+                    <Accordion type="single" collapsible className="w-full">
+                      {expenseCategories.map((cat, index) => (
+                        <AccordionItem key={cat.id} value={cat.id}>
+                          <AccordionTrigger>
+                            <div className="flex justify-between w-full text-right">
+                              <span>{cat.name}</span>
+                              <span className="text-red-600">{cat.total.toLocaleString()} ر.س</span>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="py-2">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">النسبة من إجمالي المصروفات:</span>
+                                <span>{cat.percentage.toFixed(1)}%</span>
+                              </div>
+                              <div className="w-full h-2 mt-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-red-500" 
+                                  style={{ width: `${cat.percentage}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  ) : (
+                    <div className="py-8 text-center text-muted-foreground">
+                      لا توجد فئات مصروفات للعرض في النطاق المحدد
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
-      
-      <Tabs defaultValue="income" className="w-full">
-        <TabsList className="grid w-full max-w-md mx-auto grid-cols-3">
-          <TabsTrigger value="income">الإيرادات</TabsTrigger>
-          <TabsTrigger value="expense">المصروفات</TabsTrigger>
-          <TabsTrigger value="profit">الربح/الخسارة</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="income" className="space-y-6">
-          {reportType === 'monthly' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>تقرير الإيرادات الشهري</CardTitle>
-                <CardDescription>إجمالي الإيرادات حسب الشهر</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[400px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={monthlySummary}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" angle={-45} textAnchor="end" height={60} />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`${value} ر.س`, 'الإيرادات']} />
-                      <Legend />
-                      <Bar dataKey="income" name="الإيرادات" fill="#82ca9d" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {reportType === 'category' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>تقرير الإيرادات حسب الفئة</CardTitle>
-                <CardDescription>توزيع الإيرادات على الفئات المختلفة</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col lg:flex-row items-center gap-4">
-                <div className="h-[300px] w-full lg:w-1/2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={categorySummary.filter(cat => cat.type === 'income')}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="total"
-                        nameKey="name"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {categorySummary.filter(cat => cat.type === 'income').map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => [`${value} ر.س`, '']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                
-                <div className="w-full lg:w-1/2">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الفئة</TableHead>
-                        <TableHead className="text-right">المبلغ</TableHead>
-                        <TableHead className="text-right">النسبة</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categorySummary
-                        .filter(cat => cat.type === 'income')
-                        .map((category, index) => {
-                          const totalIncome = categorySummary
-                            .filter(cat => cat.type === 'income')
-                            .reduce((sum, cat) => sum + cat.total, 0);
-                          const percentage = totalIncome > 0 ? (category.total / totalIncome) * 100 : 0;
-                          
-                          return (
-                            <TableRow key={category.id}>
-                              <TableCell>
-                                <div className="flex items-center">
-                                  <div 
-                                    className="w-3 h-3 rounded-full mr-2"
-                                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                                  />
-                                  {category.name}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">{category.total.toFixed(2)} ر.س</TableCell>
-                              <TableCell className="text-right">{percentage.toFixed(1)}%</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {reportType === 'transactions' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>معاملات الإيرادات</CardTitle>
-                <CardDescription>تفاصيل جميع معاملات الإيرادات</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>التاريخ</TableHead>
-                      <TableHead>الفئة</TableHead>
-                      <TableHead className="text-right">المبلغ</TableHead>
-                      <TableHead>طريقة الدفع</TableHead>
-                      <TableHead>الملاحظات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactions
-                      .filter(t => t.type === 'income')
-                      .map(transaction => (
-                        <TableRow key={transaction.id}>
-                          <TableCell>{transaction.date}</TableCell>
-                          <TableCell>{transaction.category_name}</TableCell>
-                          <TableCell className="text-right">{transaction.amount.toFixed(2)} ر.س</TableCell>
-                          <TableCell>
-                            {transaction.payment_method === 'cash' ? 'نقدي' : 
-                             transaction.payment_method === 'bank' ? 'حساب بنكي' : 'أخرى'}
-                          </TableCell>
-                          <TableCell>{transaction.notes || '-'}</TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="expense" className="space-y-6">
-          {/* Similar content as income tab but for expenses */}
-          {reportType === 'monthly' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>تقرير المصروفات الشهري</CardTitle>
-                <CardDescription>إجمالي المصروفات حسب الشهر</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[400px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={monthlySummary}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" angle={-45} textAnchor="end" height={60} />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`${value} ر.س`, 'المصروفات']} />
-                      <Legend />
-                      <Bar dataKey="expense" name="المصروفات" fill="#ff8042" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {reportType === 'category' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>تقرير المصروفات حسب الفئة</CardTitle>
-                <CardDescription>توزيع المصروفات على الفئات المختلفة</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col lg:flex-row items-center gap-4">
-                <div className="h-[300px] w-full lg:w-1/2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={categorySummary.filter(cat => cat.type === 'expense')}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="total"
-                        nameKey="name"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {categorySummary.filter(cat => cat.type === 'expense').map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => [`${value} ر.س`, '']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                
-                <div className="w-full lg:w-1/2">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الفئة</TableHead>
-                        <TableHead className="text-right">المبلغ</TableHead>
-                        <TableHead className="text-right">النسبة</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categorySummary
-                        .filter(cat => cat.type === 'expense')
-                        .map((category, index) => {
-                          const totalExpense = categorySummary
-                            .filter(cat => cat.type === 'expense')
-                            .reduce((sum, cat) => sum + cat.total, 0);
-                          const percentage = totalExpense > 0 ? (category.total / totalExpense) * 100 : 0;
-                          
-                          return (
-                            <TableRow key={category.id}>
-                              <TableCell>
-                                <div className="flex items-center">
-                                  <div 
-                                    className="w-3 h-3 rounded-full mr-2"
-                                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                                  />
-                                  {category.name}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">{category.total.toFixed(2)} ر.س</TableCell>
-                              <TableCell className="text-right">{percentage.toFixed(1)}%</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {reportType === 'transactions' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>معاملات المصروفات</CardTitle>
-                <CardDescription>تفاصيل جميع معاملات المصروفات</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>التاريخ</TableHead>
-                      <TableHead>الفئة</TableHead>
-                      <TableHead className="text-right">المبلغ</TableHead>
-                      <TableHead>طريقة الدفع</TableHead>
-                      <TableHead>الملاحظات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactions
-                      .filter(t => t.type === 'expense')
-                      .map(transaction => (
-                        <TableRow key={transaction.id}>
-                          <TableCell>{transaction.date}</TableCell>
-                          <TableCell>{transaction.category_name}</TableCell>
-                          <TableCell className="text-right">{transaction.amount.toFixed(2)} ر.س</TableCell>
-                          <TableCell>
-                            {transaction.payment_method === 'cash' ? 'نقدي' : 
-                             transaction.payment_method === 'bank' ? 'حساب بنكي' : 'أخرى'}
-                          </TableCell>
-                          <TableCell>{transaction.notes || '-'}</TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="profit" className="space-y-6">
-          {reportType === 'monthly' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>تقرير الربح/الخسارة الشهري</CardTitle>
-                <CardDescription>صافي الربح أو الخسارة حسب الشهر</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[400px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={monthlySummary}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" angle={-45} textAnchor="end" height={60} />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`${value} ر.س`, '']} />
-                      <Legend />
-                      <Bar dataKey="income" name="الإيرادات" fill="#82ca9d" />
-                      <Bar dataKey="expense" name="المصروفات" fill="#ff8042" />
-                      <Bar dataKey="profit" name="صافي الربح" fill="#8884d8" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                
-                <div className="mt-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الشهر</TableHead>
-                        <TableHead className="text-right">الإيرادات</TableHead>
-                        <TableHead className="text-right">المصروفات</TableHead>
-                        <TableHead className="text-right">صافي الربح</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {monthlySummary.map(summary => (
-                        <TableRow key={summary.monthKey}>
-                          <TableCell>{summary.month}</TableCell>
-                          <TableCell className="text-right">{summary.income.toFixed(2)} ر.س</TableCell>
-                          <TableCell className="text-right">{summary.expense.toFixed(2)} ر.س</TableCell>
-                          <TableCell className={`text-right font-semibold ${summary.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {summary.profit.toFixed(2)} ر.س
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {(reportType === 'category' || reportType === 'transactions') && (
-            <Card>
-              <CardHeader>
-                <CardTitle>تقرير الربح/الخسارة الإجمالي</CardTitle>
-                <CardDescription>ملخص الإيرادات والمصروفات خلال الفترة</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-green-600">إجمالي الإيرادات</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-2xl font-bold">
-                        {transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0).toFixed(2)} ر.س
-                      </p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-red-600">إجمالي المصروفات</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-2xl font-bold">
-                        {transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0).toFixed(2)} ر.س
-                      </p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle>صافي الربح</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {(() => {
-                        const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-                        const expense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-                        const profit = income - expense;
-                        return (
-                          <p className={`text-2xl font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {profit.toFixed(2)} ر.س
-                          </p>
-                        );
-                      })()}
-                    </CardContent>
-                  </Card>
-                </div>
-                
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'الإيرادات', value: transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) },
-                          { name: 'المصروفات', value: transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) }
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        <Cell fill="#82ca9d" />
-                        <Cell fill="#ff8042" />
-                      </Pie>
-                      <Tooltip formatter={(value) => [`${value} ر.س`, '']} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
     </div>
   );
 };
