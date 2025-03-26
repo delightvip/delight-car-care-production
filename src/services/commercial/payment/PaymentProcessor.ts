@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Payment } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import InvoiceService from "../invoice/InvoiceService";
 import { PaymentEntity } from "./PaymentEntity";
+import { toast } from "sonner";
+import InvoiceService from "../invoice/InvoiceService";
 
 export class PaymentProcessor {
   private inventoryService: InventoryService;
@@ -12,63 +13,64 @@ export class PaymentProcessor {
   private invoiceService: InvoiceService;
 
   constructor() {
-    // Use getInstance() instead of direct instantiation
+    // استخدام getInstance() بدلاً من الإنشاء المباشر
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
     this.invoiceService = InvoiceService.getInstance();
   }
 
   /**
-   * Confirm a payment, update party balance and related invoice
+   * تأكيد دفعة وتحديث سجلات العميل المالية
    */
   public async confirmPayment(paymentId: string): Promise<boolean> {
     try {
       const payment = await PaymentEntity.fetchById(paymentId);
-      
       if (!payment) {
         console.error('Payment not found');
+        toast.error('لم يتم العثور على المعاملة');
         return false;
       }
       
       if (payment.payment_status === 'confirmed') {
         console.log('Payment already confirmed');
+        toast.info('المعاملة مؤكدة بالفعل');
         return true;
       }
       
-      // Update party balance based on payment type
+      // تحديث رصيد الطرف بناءً على نوع الدفعة
       if (payment.payment_type === 'collection') {
-        // Collection (customer paying us)
+        // تحصيل (العميل يدفع لنا)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          false, // credit for collections (reduce customer's debt)
+          false, // دائن للتحصيلات (تقليل دين العميل)
           'دفعة مستلمة',
           'payment_received',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
+        // إذا كانت مرتبطة بفاتورة، تحديث حالة الفاتورة
         if (payment.related_invoice_id) {
           await this.invoiceService.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
         }
       } else if (payment.payment_type === 'disbursement') {
-        // Disbursement (we paying supplier)
+        // صرف (نحن ندفع للمورد)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          true, // debit for disbursements (reduce our debt)
+          true, // مدين للمدفوعات (تقليل ديننا)
           'دفعة مدفوعة',
           'payment_made',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
+        // إذا كانت مرتبطة بفاتورة، تحديث حالة الفاتورة
         if (payment.related_invoice_id) {
           await this.invoiceService.updateInvoiceStatusAfterPayment(payment.related_invoice_id, payment.amount);
         }
       }
       
-      // Update payment status to confirmed
+      // تحديث حالة الدفعة إلى مؤكدة
       const { error } = await supabase
         .from('payments')
         .update({ payment_status: 'confirmed' })
@@ -76,64 +78,67 @@ export class PaymentProcessor {
       
       if (error) throw error;
       
+      toast.success('تم تأكيد المعاملة بنجاح');
       return true;
     } catch (error) {
       console.error('Error confirming payment:', error);
+      toast.error('حدث خطأ أثناء تأكيد المعاملة');
       return false;
     }
   }
   
   /**
-   * Cancel a payment, reverse party balance and related invoice updates
+   * إلغاء دفعة وعكس التغييرات على سجلات العميل المالية
    */
   public async cancelPayment(paymentId: string): Promise<boolean> {
     try {
       const payment = await PaymentEntity.fetchById(paymentId);
-      
       if (!payment) {
         console.error('Payment not found');
+        toast.error('لم يتم العثور على المعاملة');
         return false;
       }
       
       if (payment.payment_status !== 'confirmed') {
         console.error('Can only cancel confirmed payments');
+        toast.error('يمكن إلغاء المعاملات المؤكدة فقط');
         return false;
       }
       
-      // Reverse party balance update based on payment type
+      // عكس تحديث رصيد الطرف بناءً على نوع الدفعة
       if (payment.payment_type === 'collection') {
-        // Reverse collection (customer paying us)
+        // عكس التحصيل (العميل يدفع لنا)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          true, // debit for cancelling collections (add back customer's debt)
+          true, // مدين لإلغاء التحصيلات (إعادة دين العميل)
           'إلغاء دفعة مستلمة',
           'cancel_payment_received',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
+        // إذا كانت مرتبطة بفاتورة، تحديث حالة الفاتورة
         if (payment.related_invoice_id) {
           await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
         }
       } else if (payment.payment_type === 'disbursement') {
-        // Reverse disbursement (we paying supplier)
+        // عكس الصرف (نحن ندفع للمورد)
         await this.partyService.updatePartyBalance(
           payment.party_id,
           payment.amount,
-          false, // credit for cancelling disbursements (add back our debt)
+          false, // دائن لإلغاء المدفوعات (إعادة ديننا)
           'إلغاء دفعة مدفوعة',
           'cancel_payment_made',
           payment.id
         );
         
-        // If related to an invoice, update the invoice status
+        // إذا كانت مرتبطة بفاتورة، تحديث حالة الفاتورة
         if (payment.related_invoice_id) {
           await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, payment.amount);
         }
       }
       
-      // Update payment status to cancelled
+      // تحديث حالة الدفعة إلى ملغاة
       const { error } = await supabase
         .from('payments')
         .update({ payment_status: 'cancelled' })
@@ -141,9 +146,11 @@ export class PaymentProcessor {
       
       if (error) throw error;
       
+      toast.success('تم إلغاء المعاملة بنجاح');
       return true;
     } catch (error) {
       console.error('Error cancelling payment:', error);
+      toast.error('حدث خطأ أثناء إلغاء المعاملة');
       return false;
     }
   }

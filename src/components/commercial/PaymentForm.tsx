@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -22,11 +22,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Payment } from '@/services/CommercialService';
+import { Payment } from '@/services/CommercialTypes';
 import { Party } from '@/services/PartyService';
 import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
-import { CheckCircle } from 'lucide-react';
 
 const paymentFormSchema = z.object({
   payment_type: z.enum(['collection', 'disbursement'], {
@@ -97,26 +96,28 @@ export function PaymentForm({
     },
   });
 
-  const handlePaymentTypeChange = (value: string) => {
+  const handlePaymentTypeChange = useCallback((value: string) => {
     setSelectedPaymentType(value);
     form.setValue('party_id', '');
     form.setValue('related_invoice_id', '');
-  };
+  }, [form]);
   
   const selectedPartyId = form.watch('party_id');
   
-  // تصفية الفواتير المرتبطة بالطرف المحدد
-  const relevantInvoices = invoices.filter(invoice => {
-    if (!selectedPartyId) return false;
+  // تصفية الفواتير المرتبطة بالطرف المحدد - تم تحسين الأداء هنا
+  const relevantInvoices = React.useMemo(() => {
+    if (!selectedPartyId) return [];
     
-    if (selectedPaymentType === 'collection') {
-      return invoice.party_id === selectedPartyId && invoice.invoice_type === 'sale';
-    } else {
-      return invoice.party_id === selectedPartyId && invoice.invoice_type === 'purchase';
-    }
-  });
+    return invoices.filter(invoice => {
+      if (selectedPaymentType === 'collection') {
+        return invoice.party_id === selectedPartyId && invoice.invoice_type === 'sale';
+      } else {
+        return invoice.party_id === selectedPartyId && invoice.invoice_type === 'purchase';
+      }
+    });
+  }, [selectedPartyId, invoices, selectedPaymentType]);
 
-  const handleSubmit = (data: PaymentFormValues) => {
+  const handleSubmit = useCallback((data: PaymentFormValues) => {
     const formattedDate = format(data.date, 'yyyy-MM-dd');
     
     onSubmit({
@@ -129,7 +130,7 @@ export function PaymentForm({
       payment_status: 'draft',
       notes: data.notes
     });
-  };
+  }, [onSubmit]);
 
   return (
     <Card className="w-full">
