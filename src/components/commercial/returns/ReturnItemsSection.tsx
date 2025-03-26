@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -90,13 +89,7 @@ export function ReturnItemsSection({
                     <Checkbox
                       checked={!!item.selected}
                       onCheckedChange={(checked) => {
-                        // Ensure we always pass a boolean to toggleItemSelection
-                        if (typeof checked === 'boolean') {
-                          toggleItemSelection(index, checked);
-                        } else {
-                          // If it's "indeterminate" or any other non-boolean value, treat it as false
-                          toggleItemSelection(index, false);
-                        }
+                        toggleItemSelection(index, checked === true);
                       }}
                     />
                   </div>
