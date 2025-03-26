@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -31,7 +32,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import PartyService from '@/services/PartyService';
 import CommercialService from '@/services/CommercialService';
-import InventoryService from '@/services/InventoryService';
+import { InventoryService } from '@/services/InventoryService';
+import { useQuery } from '@tanstack/react-query';
 
 interface ReturnsFormProps {
   onSubmit: (values: ReturnFormValues) => Promise<void>;
@@ -265,11 +267,11 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
                     </SelectItem>
                   ))}
                 </SelectContent>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}
