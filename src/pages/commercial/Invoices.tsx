@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import CommercialService, { Invoice } from '@/services/CommercialService';
 import PartyService from '@/services/PartyService';
 import InventoryService from '@/services/InventoryService';
@@ -16,7 +17,8 @@ import {
   Trash2,
   Edit,
   CheckCircle,
-  XCircle
+  XCircle,
+  Download
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -72,6 +74,7 @@ const Invoices = () => {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
   const commercialService = CommercialService.getInstance();
   const partyService = PartyService.getInstance();
@@ -79,40 +82,44 @@ const Invoices = () => {
   
   const { data: invoices, isLoading: isLoadingInvoices, error: invoicesError, refetch } = useQuery({
     queryKey: ['invoices'],
-    queryFn: () => commercialService.getInvoices(),
-    refetchInterval: 60000,
-    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      console.log('Fetching invoices...');
+      const result = await commercialService.getInvoices();
+      console.log('Invoices fetched:', result);
+      return result;
+    },
+    refetchInterval: 30000, // Reduce refetch interval to 30 seconds
   });
   
   const { data: parties, isLoading: isLoadingParties } = useQuery({
     queryKey: ['parties'],
     queryFn: () => partyService.getParties(),
-    refetchOnWindowFocus: false,
   });
   
   const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
     queryKey: ['rawMaterials'],
     queryFn: () => inventoryService.getRawMaterials(),
-    refetchOnWindowFocus: false,
   });
   
   const { data: packaging, isLoading: isLoadingPackaging } = useQuery({
     queryKey: ['packaging'],
     queryFn: () => inventoryService.getPackagingMaterials(),
-    refetchOnWindowFocus: false,
   });
   
   const { data: semiFinished, isLoading: isLoadingSemiFinished } = useQuery({
     queryKey: ['semiFinished'],
     queryFn: () => inventoryService.getSemiFinishedProducts(),
-    refetchOnWindowFocus: false,
   });
   
   const { data: finished, isLoading: isLoadingFinished } = useQuery({
     queryKey: ['finished'],
     queryFn: () => inventoryService.getFinishedProducts(),
-    refetchOnWindowFocus: false,
   });
+  
+  // Force refresh on mount to ensure data is up to date
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['invoices'] });
+  }, [queryClient]);
   
   const inventoryItems = React.useMemo(() => {
     const items = [];
@@ -183,8 +190,13 @@ const Invoices = () => {
   
   const handleCreateInvoice = async (invoiceData: Omit<Invoice, 'id' | 'created_at'>) => {
     try {
-      await commercialService.createInvoice(invoiceData);
-      refetch();
+      console.log('Creating invoice with data:', invoiceData);
+      const result = await commercialService.createInvoice(invoiceData);
+      console.log('Invoice creation result:', result);
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      
       setIsAddDialogOpen(false);
       toast.success('تم إنشاء الفاتورة بنجاح');
     } catch (error) {
@@ -204,7 +216,7 @@ const Invoices = () => {
     try {
       const success = await commercialService.deleteInvoice(invoiceToDelete.id);
       if (success) {
-        refetch();
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
         setIsDeleteDialogOpen(false);
         setInvoiceToDelete(null);
         toast.success('تم حذف الفاتورة بنجاح');
@@ -219,9 +231,11 @@ const Invoices = () => {
     if (!selectedInvoiceId) return;
     
     try {
+      console.log('Confirming invoice:', selectedInvoiceId);
       const success = await commercialService.confirmInvoice(selectedInvoiceId);
       if (success) {
-        refetch();
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['parties'] });
         setIsConfirmDialogOpen(false);
         setSelectedInvoiceId(null);
       }
@@ -237,13 +251,52 @@ const Invoices = () => {
     try {
       const success = await commercialService.cancelInvoice(selectedInvoiceId);
       if (success) {
-        refetch();
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['parties'] });
         setIsCancelDialogOpen(false);
         setSelectedInvoiceId(null);
       }
     } catch (error) {
       console.error('Error cancelling invoice:', error);
       toast.error('حدث خطأ أثناء إلغاء الفاتورة');
+    }
+  };
+  
+  const handleExportInvoices = () => {
+    try {
+      if (!filteredInvoices.length) {
+        toast.warning('لا توجد فواتير للتصدير');
+        return;
+      }
+      
+      // Create CSV content
+      let csvContent = 'رقم الفاتورة,النوع,الطرف,التاريخ,المبلغ,الحالة,حالة المعاملة\n';
+      
+      filteredInvoices.forEach(invoice => {
+        csvContent += `${invoice.id},`;
+        csvContent += `${invoice.invoice_type === 'sale' ? 'بيع' : 'شراء'},`;
+        csvContent += `"${invoice.party_name || ''}",`;
+        csvContent += `${format(new Date(invoice.date), 'yyyy-MM-dd')},`;
+        csvContent += `${invoice.total_amount.toFixed(2)},`;
+        csvContent += `${invoice.status},`;
+        csvContent += `${invoice.payment_status}\n`;
+      });
+      
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `invoices_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('تم تصدير الفواتير بنجاح');
+    } catch (error) {
+      console.error('Error exporting invoices:', error);
+      toast.error('حدث خطأ أثناء تصدير الفواتير');
     }
   };
   
@@ -295,6 +348,7 @@ const Invoices = () => {
             <p>حدث خطأ أثناء تحميل البيانات. الرجاء المحاولة مرة أخرى.</p>
             <p>{String(invoicesError)}</p>
           </div>
+          <Button onClick={() => refetch()}>إعادة المحاولة</Button>
         </div>
       </PageTransition>
     );
@@ -327,7 +381,7 @@ const Invoices = () => {
                   {activeTab === 'all' ? 'جميع الفواتير' :
                    activeTab === 'sale' ? 'فواتير المبيعات' : 'فواتير المشتريات'}
                 </CardTitle>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 space-x-reverse">
                   <div className="relative w-64">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -337,8 +391,8 @@ const Invoices = () => {
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline" size="icon">
-                    <FileDown className="h-4 w-4" />
+                  <Button variant="outline" size="icon" onClick={handleExportInvoices} title="تصدير إلى CSV">
+                    <Download className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
@@ -375,7 +429,7 @@ const Invoices = () => {
                           </TableCell>
                           <TableCell>{getStatusBadge(invoice.status)}</TableCell>
                           <TableCell>
-                            <InvoiceStatusBadge status={invoice.payment_status as any} />
+                            <InvoiceStatusBadge status={invoice.payment_status} />
                           </TableCell>
                           <TableCell>
                             <DropdownMenu>

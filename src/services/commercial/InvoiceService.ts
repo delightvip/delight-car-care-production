@@ -1,9 +1,8 @@
+
 import BaseCommercialService from './BaseCommercialService';
 import { Invoice, InvoiceItem } from '../CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
-// Remove the problematic imports and use a more generic approach
-// that doesn't depend on specific type imports
 
 class InvoiceService extends BaseCommercialService {
   private static instance: InvoiceService;
@@ -21,6 +20,7 @@ class InvoiceService extends BaseCommercialService {
   
   public async getInvoices(): Promise<Invoice[]> {
     try {
+      // First, get all invoices with basic information
       let { data, error } = await this.supabase
         .from('invoices')
         .select(`
@@ -31,6 +31,7 @@ class InvoiceService extends BaseCommercialService {
       
       if (error) throw error;
       
+      // Map the data to our Invoice type
       const invoicesWithParties = data.map(invoice => ({
         id: invoice.id,
         invoice_type: invoice.invoice_type,
@@ -39,13 +40,33 @@ class InvoiceService extends BaseCommercialService {
         date: invoice.date,
         total_amount: invoice.total_amount,
         status: invoice.status,
-        payment_status: invoice.status || 'draft',
+        payment_status: invoice.payment_status || 'draft',
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
       }));
       
-      return invoicesWithParties;
+      // For each invoice, get its items
+      const invoicesWithItems = await Promise.all(
+        invoicesWithParties.map(async (invoice) => {
+          const { data: items, error: itemsError } = await this.supabase
+            .from('invoice_items')
+            .select('*')
+            .eq('invoice_id', invoice.id);
+          
+          if (itemsError) {
+            console.error(`Error fetching items for invoice ${invoice.id}:`, itemsError);
+            return invoice;
+          }
+          
+          return {
+            ...invoice,
+            items: items || []
+          };
+        })
+      );
+      
+      return invoicesWithItems;
     } catch (error) {
       console.error('Error fetching invoices:', error);
       toast.error('حدث خطأ أثناء جلب الفواتير');
@@ -74,13 +95,33 @@ class InvoiceService extends BaseCommercialService {
         date: invoice.date,
         total_amount: invoice.total_amount,
         status: invoice.status,
-        payment_status: invoice.status || 'draft',
+        payment_status: invoice.payment_status || 'draft',
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
       }));
       
-      return invoicesWithParties;
+      // For each invoice, get its items
+      const invoicesWithItems = await Promise.all(
+        invoicesWithParties.map(async (invoice) => {
+          const { data: items, error: itemsError } = await this.supabase
+            .from('invoice_items')
+            .select('*')
+            .eq('invoice_id', invoice.id);
+          
+          if (itemsError) {
+            console.error(`Error fetching items for invoice ${invoice.id}:`, itemsError);
+            return invoice;
+          }
+          
+          return {
+            ...invoice,
+            items: items || []
+          };
+        })
+      );
+      
+      return invoicesWithItems;
     } catch (error) {
       console.error(`Error fetching invoices for party ${partyId}:`, error);
       toast.error('حدث خطأ أثناء جلب الفواتير');
@@ -116,7 +157,7 @@ class InvoiceService extends BaseCommercialService {
         date: invoiceData.date,
         total_amount: invoiceData.total_amount,
         status: invoiceData.status,
-        payment_status: invoiceData.status || 'draft',
+        payment_status: invoiceData.payment_status || 'draft',
         notes: invoiceData.notes,
         created_at: invoiceData.created_at,
         items: items
@@ -128,13 +169,16 @@ class InvoiceService extends BaseCommercialService {
     }
   }
   
-  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at' | 'status' | 'payment_status'>): Promise<Invoice | null> {
+  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
+      console.log('Creating invoice with data:', invoiceData);
+      
       // Format date if it's a Date object
       const formattedDate = typeof invoiceData.date === 'object' ? 
         format(invoiceData.date, 'yyyy-MM-dd') : 
         invoiceData.date;
       
+      // Create the invoice record
       const { data: invoiceRecord, error } = await this.supabase
         .from('invoices')
         .insert({
@@ -142,8 +186,8 @@ class InvoiceService extends BaseCommercialService {
           party_id: invoiceData.party_id,
           date: formattedDate,
           total_amount: invoiceData.total_amount,
-          status: 'unpaid', // Set initial status to unpaid
-          payment_status: 'draft', // Set initial payment_status to draft
+          status: invoiceData.status || 'unpaid', 
+          payment_status: invoiceData.payment_status || 'draft',
           notes: invoiceData.notes
         })
         .select()
@@ -151,8 +195,12 @@ class InvoiceService extends BaseCommercialService {
       
       if (error) throw error;
       
+      console.log('Invoice created successfully:', invoiceRecord);
+      
       // If there are items for this invoice, insert them
       if (invoiceData.items && invoiceData.items.length > 0) {
+        console.log('Adding invoice items:', invoiceData.items);
+        
         const invoiceItems = invoiceData.items.map(item => ({
           invoice_id: invoiceRecord.id,
           item_id: item.item_id,
@@ -167,11 +215,17 @@ class InvoiceService extends BaseCommercialService {
           .from('invoice_items')
           .insert(invoiceItems);
         
-        if (itemsError) throw itemsError;
+        if (itemsError) {
+          console.error('Error adding invoice items:', itemsError);
+          throw itemsError;
+        }
+        
+        console.log('Invoice items added successfully');
       }
       
       // Get party details for response
       const party = await this.partyService.getPartyById(invoiceData.party_id);
+      console.log('Party details:', party);
       
       toast.success('تم إنشاء الفاتورة بنجاح');
       
@@ -180,7 +234,7 @@ class InvoiceService extends BaseCommercialService {
         invoice_type: invoiceData.invoice_type,
         party_id: invoiceData.party_id,
         party_name: party?.name,
-        date: invoiceRecord.date,
+        date: formattedDate,
         total_amount: invoiceData.total_amount,
         status: invoiceRecord.status,
         payment_status: invoiceRecord.payment_status,
@@ -197,6 +251,8 @@ class InvoiceService extends BaseCommercialService {
   
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
+      console.log('Confirming invoice:', invoiceId);
+      
       const invoiceData = await this.getInvoiceById(invoiceId);
       if (!invoiceData) {
         toast.error('لم يتم العثور على الفاتورة');
@@ -230,6 +286,7 @@ class InvoiceService extends BaseCommercialService {
         
         // Update financial records for sales invoices
         if (invoiceData.party_id) {
+          console.log('Updating party balance for sale invoice');
           await this.partyService.updatePartyBalance(
             invoiceData.party_id,
             invoiceData.total_amount,
@@ -260,6 +317,7 @@ class InvoiceService extends BaseCommercialService {
         
         // Update financial records for purchase invoices
         if (invoiceData.party_id) {
+          console.log('Updating party balance for purchase invoice');
           await this.partyService.updatePartyBalance(
             invoiceData.party_id,
             invoiceData.total_amount,
@@ -278,6 +336,8 @@ class InvoiceService extends BaseCommercialService {
         .eq('id', invoiceId);
       
       if (error) throw error;
+      
+      console.log('Invoice confirmed successfully');
       
       toast.success('تم تأكيد الفاتورة بنجاح');
       return true;

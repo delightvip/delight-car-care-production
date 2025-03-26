@@ -1,39 +1,45 @@
 
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlarmClock, Ban } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface InvoiceStatusBadgeProps {
-  status: 'draft' | 'confirmed' | 'cancelled';
+  status: 'draft' | 'confirmed' | 'cancelled' | string;
   className?: string;
 }
 
 const InvoiceStatusBadge: React.FC<InvoiceStatusBadgeProps> = ({ status, className }) => {
-  switch (status) {
-    case 'confirmed':
-      return (
-        <Badge className="bg-green-500 flex items-center gap-1">
-          <CheckCircle className="h-3 w-3" />
-          مؤكدة
-        </Badge>
-      );
-    case 'draft':
-      return (
-        <Badge variant="outline" className="flex items-center gap-1">
-          <AlarmClock className="h-3 w-3" />
-          مسودة
-        </Badge>
-      );
-    case 'cancelled':
-      return (
-        <Badge variant="destructive" className="flex items-center gap-1">
-          <Ban className="h-3 w-3" />
-          ملغاة
-        </Badge>
-      );
-    default:
-      return <Badge>{status}</Badge>;
-  }
+  const getStatusStyles = () => {
+    switch (status) {
+      case 'draft':
+        return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'confirmed':
+        return 'bg-green-500 hover:bg-green-600';
+      case 'cancelled':
+        return 'bg-red-500 hover:bg-red-600';
+      default:
+        return 'bg-gray-500 hover:bg-gray-600';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (status) {
+      case 'draft':
+        return 'مسودة';
+      case 'confirmed':
+        return 'مؤكدة';
+      case 'cancelled':
+        return 'ملغاة';
+      default:
+        return status;
+    }
+  };
+
+  return (
+    <Badge className={cn(getStatusStyles(), className)}>
+      {getStatusText()}
+    </Badge>
+  );
 };
 
 export default InvoiceStatusBadge;
