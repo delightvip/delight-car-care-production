@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -89,6 +90,8 @@ export function ReturnItemsSection({
                     <Checkbox
                       checked={!!item.selected}
                       onCheckedChange={(checked) => {
+                        // Fix: Ensure we're passing a boolean value by using strict comparison
+                        // The checked value can be true, false, or "indeterminate"
                         toggleItemSelection(index, checked === true);
                       }}
                     />
