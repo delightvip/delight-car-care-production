@@ -102,7 +102,7 @@ export class InvoiceEntity {
         id: item.id,
         invoice_id: item.invoice_id,
         item_id: item.item_id,
-        item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+        item_type: item.item_type,
         item_name: item.item_name,
         quantity: item.quantity,
         unit_price: item.unit_price,
@@ -117,7 +117,7 @@ export class InvoiceEntity {
         party_name: invoiceData.parties?.name,
         date: invoiceData.date,
         total_amount: invoiceData.total_amount,
-        status: invoiceData.status as "paid" | "partial" | "unpaid",
+        status: this.mapStatusType(invoiceData.status),
         payment_status: invoiceData.payment_status as "draft" | "confirmed" | "cancelled",
         notes: invoiceData.notes,
         created_at: invoiceData.created_at,
@@ -142,7 +142,7 @@ export class InvoiceEntity {
           date: invoiceData.date,
           invoice_type: invoiceData.invoice_type,
           payment_status: invoiceData.payment_status || 'draft',
-          status: this.mapStatusType(invoiceData.status),
+          status: this.mapStatusTypeReverse(invoiceData.status),
           notes: invoiceData.notes,
           total_amount: invoiceData.total_amount || 0
         })
@@ -159,7 +159,8 @@ export class InvoiceEntity {
           item_type: item.item_type,
           item_name: item.item_name,
           quantity: item.quantity,
-          unit_price: item.unit_price
+          unit_price: item.unit_price,
+          total: item.total
         }));
         
         const { error: itemsError } = await supabase
@@ -172,7 +173,7 @@ export class InvoiceEntity {
       return {
         ...invoiceRecord,
         invoice_type: invoiceRecord.invoice_type as "sale" | "purchase",
-        status: invoiceRecord.status as "paid" | "partial" | "unpaid",
+        status: this.mapStatusType(invoiceRecord.status),
         payment_status: invoiceRecord.payment_status as "draft" | "confirmed" | "cancelled",
         party_name: invoiceData.party_name,
         items: invoiceData.items
@@ -238,13 +239,30 @@ export class InvoiceEntity {
     }
   }
   
-  // Helper method to map status types
+  // Helper methods to map status types
   private static mapStatusType(status: string): "draft" | "pending" | "paid" | "partially_paid" | "cancelled" | "overdue" {
     switch (status) {
       case 'unpaid':
         return 'pending';
       case 'partial':
         return 'partially_paid';
+      case 'paid':
+        return 'paid';
+      case 'cancelled':
+        return 'cancelled';
+      case 'overdue':
+        return 'overdue';
+      default:
+        return 'draft';
+    }
+  }
+  
+  private static mapStatusTypeReverse(status: "draft" | "pending" | "paid" | "partially_paid" | "cancelled" | "overdue"): string {
+    switch (status) {
+      case 'pending':
+        return 'unpaid';
+      case 'partially_paid':
+        return 'partial';
       case 'paid':
         return 'paid';
       case 'cancelled':
