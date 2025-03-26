@@ -427,7 +427,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                           <span>جاري التحميل...</span>
                         </div>
                       ) : (
-                        <SelectValue placeholder="اختر الفاتورة المرتبطة" />
+                        <SelectValue placeholder="اختر الفاتورة ��لمرتبطة" />
                       )}
                     </SelectTrigger>
                   </FormControl>
@@ -617,8 +617,8 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                     {selectedInvoice && (
                       <div className="col-span-1">
                         <Checkbox
-                          checked={item.selected}
-                          onCheckedChange={(checked) => toggleItemSelection(index, checked === true)}
+                          checked={!!item.selected}
+                          onCheckedChange={(checked) => toggleItemSelection(index, !!checked)}
                         />
                       </div>
                     )}
