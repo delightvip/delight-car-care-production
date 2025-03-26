@@ -548,8 +548,9 @@ export class ReturnProcessor {
           return { data: null, error: new Error('نوع المنتج غير معروف') };
       }
       
+      // Fix: Use the tableName directly rather than passing it as a string to the from() method
       const result = await supabase
-        .from(tableName)
+        .from(tableName as any) // Cast to any to fix TypeScript error
         .select('*')
         .eq('id', itemId)
         .single();
@@ -589,8 +590,9 @@ export class ReturnProcessor {
       
       console.log(`Updating ${tableName} item ${itemId} to quantity ${newQuantity}`);
       
+      // Fix: Use the tableName directly rather than passing it as a string to the from() method
       return await supabase
-        .from(tableName)
+        .from(tableName as any) // Cast to any to fix TypeScript error
         .update({ quantity: newQuantity })
         .eq('id', itemId);
     } catch (error) {

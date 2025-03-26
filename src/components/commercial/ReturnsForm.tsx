@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { Return, ReturnItem } from '@/services/CommercialTypes';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
+import PartyService from '@/services/PartyService';
 import { toast } from 'sonner';
 
 // Define the ReturnFormValues schema
@@ -65,6 +66,8 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const [selectedItemType, setSelectedItemType] = useState<string>('finished_products');
   const [loadingInvoiceItems, setLoadingInvoiceItems] = useState<boolean>(false);
   const queryClient = useQueryClient();
+  const commercialService = CommercialService.getInstance();
+  const partyService = PartyService.getInstance();
   
   // Prepare form default values
   const defaultValues = initialData 
@@ -93,13 +96,13 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   // Fetch invoices
   const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
     queryKey: ['invoices'],
-    queryFn: () => CommercialService.getInstance().getInvoices(),
+    queryFn: () => commercialService.getInvoices(),
   });
 
   // Fetch parties
   const { data: parties } = useQuery({
     queryKey: ['parties'],
-    queryFn: () => CommercialService.getInstance().getParties(),
+    queryFn: () => partyService.getParties(), // Changed to use PartyService instead of CommercialService
   });
 
   // Fetch inventory items based on selected type
@@ -132,7 +135,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       setLoadingInvoiceItems(true);
       try {
         // Fetch invoice details
-        const invoice = await CommercialService.getInstance().getInvoiceById(invoiceId);
+        const invoice = await commercialService.getInvoiceById(invoiceId);
         
         if (invoice) {
           // Update party_id from invoice
