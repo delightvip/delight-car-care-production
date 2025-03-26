@@ -1,23 +1,19 @@
 
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -25,238 +21,289 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
-import { Textarea } from '@/components/ui/textarea';
-import CommercialService from '@/services/CommercialService';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Payment } from '@/services/CommercialService';
+import { Party } from '@/services/PartyService';
+import { format } from 'date-fns';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const paymentFormSchema = z.object({
-  payment_type: z.enum(['collection', 'disbursement']),
-  amount: z.number().min(0.01, 'يجب أن يكون المبلغ أكبر من صفر'),
-  date: z.date(),
-  method: z.enum(['cash', 'check', 'bank_transfer', 'other']),
+  payment_type: z.enum(['collection', 'disbursement'], {
+    required_error: 'الرجاء اختيار نوع المعاملة',
+  }),
+  party_id: z.string({
+    required_error: 'الرجاء اختيار الطرف التجاري',
+  }),
+  date: z.date({
+    required_error: 'الرجاء تحديد تاريخ المعاملة',
+  }),
+  amount: z.coerce.number({
+    required_error: 'الرجاء إدخال المبلغ',
+    invalid_type_error: 'الرجاء إدخال مبلغ صحيح',
+  }).positive({
+    message: 'يجب أن يكون المبلغ أكبر من صفر',
+  }),
+  method: z.enum(['cash', 'check', 'bank_transfer', 'other'], {
+    required_error: 'الرجاء اختيار طريقة الدفع',
+  }),
   related_invoice_id: z.string().optional(),
   notes: z.string().optional(),
 });
 
-export type PaymentFormValues = z.infer<typeof paymentFormSchema>;
+type PaymentFormValues = z.infer<typeof paymentFormSchema>;
 
 interface PaymentFormProps {
-  partyId: string;
-  partyType: 'customer' | 'supplier' | 'other';
-  initialData?: Partial<PaymentFormValues>;
-  onSubmit: (data: PaymentFormValues & { party_id: string }) => void;
+  onSubmit: (data: Omit<Payment, 'id' | 'created_at'>) => void;
+  parties: Party[];
+  initialData?: Partial<Payment>;
   isEditing?: boolean;
+  invoices?: Array<{ id: string, invoice_type: string, party_id: string, party_name: string, total_amount: number, date: string }>;
 }
 
-export function PaymentForm({ partyId, partyType, initialData, onSubmit, isEditing }: PaymentFormProps) {
+export function PaymentForm({ 
+  onSubmit, 
+  parties, 
+  initialData,
+  isEditing = false,
+  invoices = []
+}: PaymentFormProps) {
+  const [selectedPaymentType, setSelectedPaymentType] = useState<string>(initialData?.payment_type || 'collection');
+  
+  const filteredParties = selectedPaymentType === 'collection' 
+    ? parties.filter(party => party.type === 'customer')
+    : parties.filter(party => party.type === 'supplier');
+  
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
-      payment_type: (initialData?.payment_type as any) || (partyType === 'customer' ? 'collection' : 'disbursement'),
-      amount: initialData?.amount || 0,
+      payment_type: (initialData?.payment_type as any) || 'collection',
+      party_id: initialData?.party_id || '',
       date: initialData?.date ? new Date(initialData.date) : new Date(),
-      method: initialData?.method || 'cash',
+      amount: initialData?.amount || 0,
+      method: (initialData?.method as any) || 'cash',
       related_invoice_id: initialData?.related_invoice_id || '',
       notes: initialData?.notes || '',
     },
   });
 
-  // Get invoices for this party
-  const { data: invoices } = useQuery({
-    queryKey: ['party-invoices', partyId],
-    queryFn: () => CommercialService.getInstance().getInvoicesByParty(partyId),
-    enabled: !!partyId,
+  const handlePaymentTypeChange = (value: string) => {
+    setSelectedPaymentType(value);
+    // Reset party selection when payment type changes
+    form.setValue('party_id', '');
+    form.setValue('related_invoice_id', '');
+  };
+  
+  const selectedPartyId = form.watch('party_id');
+  
+  const relevantInvoices = invoices.filter(invoice => {
+    if (!selectedPartyId) return false;
+    
+    if (selectedPaymentType === 'collection') {
+      return invoice.party_id === selectedPartyId && invoice.invoice_type === 'sale';
+    } else {
+      return invoice.party_id === selectedPartyId && invoice.invoice_type === 'purchase';
+    }
   });
 
-  // Filter unpaid/partially paid invoices only
-  const unpaidInvoices = invoices?.filter(
-    (invoice) => invoice.status === 'unpaid' || invoice.status === 'partial'
-  );
-
-  const handleSubmit = (values: PaymentFormValues) => {
-    // Include the party_id when submitting the form
-    onSubmit({ ...values, party_id: partyId });
+  const handleSubmit = (data: PaymentFormValues) => {
+    const formattedDate = format(data.date, 'yyyy-MM-dd');
+    
+    onSubmit({
+      payment_type: data.payment_type,
+      party_id: data.party_id,
+      date: formattedDate,
+      amount: data.amount,
+      method: data.method,
+      related_invoice_id: data.related_invoice_id || undefined,
+      payment_status: 'draft',
+      notes: data.notes
+    });
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Payment Type */}
-          <FormField
-            control={form.control}
-            name="payment_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>نوع الدفعة</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
-                  defaultValue={field.value}
-                  disabled={!!initialData?.payment_type}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر نوع الدفعة" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="collection">تحصيل</SelectItem>
-                    <SelectItem value="disbursement">سداد</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  {partyType === 'customer' ? 
-                    'التحصيل لاستلام دفعة من العميل، السداد لدفع مبلغ للعميل' : 
-                    'السداد لدفع مبلغ للمورد، التحصيل لاستلام دفعة من المورد'}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Payment Method */}
-          <FormField
-            control={form.control}
-            name="method"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>طريقة الدفع</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر طريقة الدفع" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="cash">نقدي</SelectItem>
-                    <SelectItem value="check">شيك</SelectItem>
-                    <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
-                    <SelectItem value="other">طريقة أخرى</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Amount */}
-          <FormField
-            control={form.control}
-            name="amount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>المبلغ</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="أدخل المبلغ" 
-                    {...field}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Date */}
-          <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>تاريخ الدفعة</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP", { locale: ar })
-                        ) : (
-                          <span>اختر التاريخ</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="text-xl font-bold">
+          {isEditing ? 'تعديل بيانات المعاملة' : 'تسجيل معاملة جديدة'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="payment_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>نوع المعاملة</FormLabel>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        handlePaymentTypeChange(value);
+                      }} 
+                      defaultValue={field.value}
+                      disabled={isEditing}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر نوع المعاملة" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="collection">تحصيل (استلام دفعة)</SelectItem>
+                        <SelectItem value="disbursement">دفع (تسديد دفعة)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="party_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {selectedPaymentType === 'collection' ? 'العميل' : 'المورد'}
+                    </FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={`اختر ${selectedPaymentType === 'collection' ? 'العميل' : 'المورد'}`} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {filteredParties.map(party => (
+                          <SelectItem key={party.id} value={party.id}>
+                            {party.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>التاريخ</FormLabel>
+                    <DatePicker
                       selected={field.value}
                       onSelect={field.onChange}
-                      initialFocus
+                      disabled={isEditing}
                     />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {/* Related Invoice */}
-        <FormField
-          control={form.control}
-          name="related_invoice_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>الفاتورة المرتبطة (اختياري)</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value || "no_invoice"}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر الفاتورة المرتبطة بالدفعة" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="no_invoice">بدون ربط بفاتورة</SelectItem>
-                  {unpaidInvoices?.map((invoice) => (
-                    <SelectItem key={invoice.id} value={invoice.id}>
-                      {`${invoice.id.substring(0, 8)}... - ${format(new Date(invoice.date), 'yyyy-MM-dd')} - ${invoice.total_amount}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>
-                يمكنك ربط الدفعة بفاتورة محددة أو تركها بدون ارتباط
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Notes */}
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>ملاحظات</FormLabel>
-              <FormControl>
-                <Textarea 
-                  placeholder="أدخل أي ملاحظات إضافية" 
-                  className="resize-none" 
-                  {...field} 
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>المبلغ</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" placeholder="أدخل المبلغ" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="method"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>طريقة الدفع</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر طريقة الدفع" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="cash">نقدي</SelectItem>
+                        <SelectItem value="check">شيك</SelectItem>
+                        <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
+                        <SelectItem value="other">طريقة أخرى</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {selectedPartyId && relevantInvoices.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="related_invoice_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>الفاتورة المرتبطة (اختياري)</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر الفاتورة المرتبطة (اختياري)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">بدون فاتورة</SelectItem>
+                          {relevantInvoices.map(invoice => (
+                            <SelectItem key={invoice.id} value={invoice.id}>
+                              {format(new Date(invoice.date), 'yyyy-MM-dd')} - {invoice.total_amount.toFixed(2)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="flex justify-end">
-          <Button type="submit">حفظ الدفعة</Button>
-        </div>
-      </form>
-    </Form>
+              )}
+            </div>
+            
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ملاحظات (اختياري)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="ملاحظات إضافية..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <CardFooter className="px-0 pt-6 flex justify-between">
+              <Button variant="outline" type="button" onClick={() => form.reset()}>
+                إعادة تعيين
+              </Button>
+              <Button type="submit">
+                {isEditing ? 'تحديث المعاملة' : 'تسجيل المعاملة'}
+              </Button>
+            </CardFooter>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   );
 }

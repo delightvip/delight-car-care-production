@@ -1,3 +1,4 @@
+
 import BaseCommercialService from './BaseCommercialService';
 import { Return, ReturnItem } from '../CommercialTypes';
 import { toast } from "sonner";
@@ -19,30 +20,53 @@ class ReturnService extends BaseCommercialService {
   
   public async getReturns(): Promise<Return[]> {
     try {
+      // Get all returns with party details
       let { data, error } = await this.supabase
         .from('returns')
         .select(`
           *,
-          parties (name)
+          parties:party_id (name)
         `)
         .order('date', { ascending: false });
       
       if (error) throw error;
       
-      const returnsWithParties = data.map(returnItem => ({
-        id: returnItem.id,
-        invoice_id: returnItem.invoice_id,
-        party_id: returnItem.party_id,
-        party_name: returnItem.parties?.name,
-        date: returnItem.date,
-        return_type: returnItem.return_type,
-        amount: returnItem.amount,
-        payment_status: returnItem.payment_status || 'draft',
-        notes: returnItem.notes,
-        created_at: returnItem.created_at
+      // Map the data to our Return type with party name
+      const returnsWithParties = data.map(returnData => ({
+        id: returnData.id,
+        invoice_id: returnData.invoice_id,
+        party_id: returnData.party_id,
+        party_name: returnData.parties?.name,
+        date: returnData.date,
+        return_type: returnData.return_type,
+        amount: returnData.amount,
+        payment_status: returnData.payment_status || 'draft',
+        notes: returnData.notes,
+        created_at: returnData.created_at,
+        items: [] // Initialize with empty items array
       }));
       
-      return returnsWithParties;
+      // For each return, get its items
+      const returnsWithItems = await Promise.all(
+        returnsWithParties.map(async (returnData) => {
+          const { data: items, error: itemsError } = await this.supabase
+            .from('return_items')
+            .select('*')
+            .eq('return_id', returnData.id);
+          
+          if (itemsError) {
+            console.error(`Error fetching items for return ${returnData.id}:`, itemsError);
+            return returnData;
+          }
+          
+          return {
+            ...returnData,
+            items: items || []
+          };
+        })
+      );
+      
+      return returnsWithItems;
     } catch (error) {
       console.error('Error fetching returns:', error);
       toast.error('حدث خطأ أثناء جلب المرتجعات');
@@ -56,7 +80,7 @@ class ReturnService extends BaseCommercialService {
         .from('returns')
         .select(`
           *,
-          parties (name)
+          parties:party_id (name)
         `)
         .eq('id', id)
         .single();
@@ -81,7 +105,7 @@ class ReturnService extends BaseCommercialService {
         payment_status: returnData.payment_status || 'draft',
         notes: returnData.notes,
         created_at: returnData.created_at,
-        items: items
+        items: items || []
       };
     } catch (error) {
       console.error(`Error fetching return with id ${id}:`, error);
@@ -92,12 +116,12 @@ class ReturnService extends BaseCommercialService {
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
+      // Format date if it's a Date object
       const formattedDate = typeof returnData.date === 'object' ? 
         format(returnData.date, 'yyyy-MM-dd') : 
         returnData.date;
       
-      const paymentStatus = returnData.payment_status || 'draft';
-      
+      // Create the return record
       const { data: returnRecord, error } = await this.supabase
         .from('returns')
         .insert({
@@ -106,7 +130,7 @@ class ReturnService extends BaseCommercialService {
           date: formattedDate,
           return_type: returnData.return_type,
           amount: returnData.amount,
-          payment_status: paymentStatus,
+          payment_status: returnData.payment_status || 'draft',
           notes: returnData.notes
         })
         .select()
@@ -114,6 +138,7 @@ class ReturnService extends BaseCommercialService {
       
       if (error) throw error;
       
+      // If there are items for this return, insert them
       if (returnData.items && returnData.items.length > 0) {
         const returnItems = returnData.items.map(item => ({
           return_id: returnRecord.id,
@@ -132,54 +157,44 @@ class ReturnService extends BaseCommercialService {
         if (itemsError) throw itemsError;
       }
       
-      const party = await this.partyService.getPartyById(returnData.party_id || '');
+      // Get party details for response
+      const party = returnData.party_id ? 
+        await this.partyService.getPartyById(returnData.party_id) : null;
       
-      toast.success('تم تسجيل المرتجع بنجاح');
+      toast.success('تم إنشاء المرتجع بنجاح');
       
       return {
         id: returnRecord.id,
         invoice_id: returnData.invoice_id,
         party_id: returnData.party_id,
         party_name: party?.name,
-        date: returnRecord.date,
+        date: formattedDate,
         return_type: returnData.return_type,
         amount: returnData.amount,
-        payment_status: paymentStatus,
+        payment_status: returnRecord.payment_status,
         notes: returnData.notes,
         created_at: returnRecord.created_at,
         items: returnData.items
       };
     } catch (error) {
       console.error('Error creating return:', error);
-      toast.error('حدث خطأ أثناء تسجيل المرتجع');
+      toast.error('حدث خطأ أثناء إنشاء المرتجع');
       return null;
     }
   }
   
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
-      const { data: returnRecord, error: fetchError } = await this.supabase
-        .from('returns')
-        .select('payment_status')
-        .eq('id', id)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      if (returnRecord.payment_status !== 'draft') {
-        toast.error('يمكن تعديل المرتجعات في حالة المسودة فقط');
-        return false;
-      }
-      
-      const formattedDate = returnData.date && typeof returnData.date === 'object' ? 
-        format(returnData.date, 'yyyy-MM-dd') : 
-        returnData.date;
-        
       const { error } = await this.supabase
         .from('returns')
         .update({
-          ...returnData,
-          date: formattedDate
+          invoice_id: returnData.invoice_id,
+          party_id: returnData.party_id,
+          date: returnData.date,
+          return_type: returnData.return_type,
+          amount: returnData.amount,
+          payment_status: returnData.payment_status,
+          notes: returnData.notes
         })
         .eq('id', id);
       
@@ -207,7 +222,9 @@ class ReturnService extends BaseCommercialService {
         return true;
       }
       
+      // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
+        // Increase inventory for sales returns
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -225,17 +242,19 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
+        // Update financial records for sales returns
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            false,
+            false, // credit for sales returns (reduce customer's debt)
             'مرتجع مبيعات',
             'sales_return',
             returnData.id
           );
         }
       } else if (returnData.return_type === 'purchase_return') {
+        // Decrease inventory for purchase returns
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -253,11 +272,12 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
+        // Update financial records for purchase returns
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            true,
+            true, // debit for purchase returns (increase supplier's debt)
             'مرتجع مشتريات',
             'purchase_return',
             returnData.id
@@ -265,6 +285,7 @@ class ReturnService extends BaseCommercialService {
         }
       }
       
+      // Update return status to confirmed
       const { error } = await this.supabase
         .from('returns')
         .update({ payment_status: 'confirmed' })
@@ -294,7 +315,9 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
+      // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
+        // Decrease inventory for cancelled sales returns
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -312,17 +335,19 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
+        // Update financial records for cancelled sales returns
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            true,
+            true, // debit for cancelled sales returns (restore customer's debt)
             'إلغاء مرتجع مبيعات',
             'cancel_sales_return',
             returnData.id
           );
         }
       } else if (returnData.return_type === 'purchase_return') {
+        // Increase inventory for cancelled purchase returns
         for (const item of returnData.items || []) {
           switch (item.item_type) {
             case 'raw_materials':
@@ -340,11 +365,12 @@ class ReturnService extends BaseCommercialService {
           }
         }
         
+        // Update financial records for cancelled purchase returns
         if (returnData.party_id) {
           await this.partyService.updatePartyBalance(
             returnData.party_id,
             returnData.amount,
-            false,
+            false, // credit for cancelled purchase returns (restore supplier's debt)
             'إلغاء مرتجع مشتريات',
             'cancel_purchase_return',
             returnData.id
@@ -352,6 +378,7 @@ class ReturnService extends BaseCommercialService {
         }
       }
       
+      // Update return status to cancelled
       const { error } = await this.supabase
         .from('returns')
         .update({ payment_status: 'cancelled' })
@@ -370,17 +397,21 @@ class ReturnService extends BaseCommercialService {
   
   public async deleteReturn(id: string): Promise<boolean> {
     try {
-      const returnData = await this.getReturnById(id);
-      if (!returnData) {
-        toast.error('لم يتم العثور على المرتجع');
-        return false;
-      }
+      // Check if the return is in draft state
+      const { data, error: fetchError } = await this.supabase
+        .from('returns')
+        .select('payment_status')
+        .eq('id', id)
+        .single();
       
-      if (returnData.payment_status !== 'draft') {
+      if (fetchError) throw fetchError;
+      
+      if (data.payment_status !== 'draft') {
         toast.error('يمكن حذف المرتجعات في حالة المسودة فقط');
         return false;
       }
       
+      // Delete return items first
       const { error: itemsError } = await this.supabase
         .from('return_items')
         .delete()
@@ -388,6 +419,7 @@ class ReturnService extends BaseCommercialService {
       
       if (itemsError) throw itemsError;
       
+      // Delete the return
       const { error } = await this.supabase
         .from('returns')
         .delete()

@@ -17,7 +17,9 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -80,10 +82,11 @@ export function InvoiceForm({
   );
   const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
   const [selectedItemType, setSelectedItemType] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('finished_products');
   const [itemQuantity, setItemQuantity] = useState<number>(1);
   const [itemPrice, setItemPrice] = useState<number>(0);
   const [total, setTotal] = useState<number>(0);
-
+  
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
@@ -95,6 +98,13 @@ export function InvoiceForm({
     },
   });
 
+  const invoiceType = form.watch('invoice_type');
+  
+  // Filter parties based on invoice type
+  const filteredParties = invoiceType === 'sale' 
+    ? parties.filter(party => party.type === 'customer') 
+    : parties.filter(party => party.type === 'supplier');
+
   useEffect(() => {
     const calculatedTotal = invoiceItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
     setTotal(calculatedTotal);
@@ -102,17 +112,27 @@ export function InvoiceForm({
 
   useEffect(() => {
     if (selectedItemId) {
-      const selectedItem = items.find(item => item.id === Number(selectedItemId));
+      const selectedItem = items.find(item => item.id === Number(selectedItemId) && item.type === selectedCategory);
       if (selectedItem) {
         setItemPrice(selectedItem.unit_cost);
         setSelectedItemType(selectedItem.type);
       }
     }
-  }, [selectedItemId, items]);
+  }, [selectedItemId, selectedCategory, items]);
+  
+  // Categorized items
+  const categorizedItems = React.useMemo(() => {
+    return {
+      raw_materials: items.filter(item => item.type === 'raw_materials'),
+      packaging_materials: items.filter(item => item.type === 'packaging_materials'),
+      semi_finished_products: items.filter(item => item.type === 'semi_finished_products'),
+      finished_products: items.filter(item => item.type === 'finished_products')
+    };
+  }, [items]);
 
   const addItemToInvoice = () => {
     if (selectedItemId && itemQuantity > 0 && itemPrice > 0) {
-      const selectedItem = items.find(item => item.id === Number(selectedItemId));
+      const selectedItem = items.find(item => item.id === Number(selectedItemId) && item.type === selectedCategory);
       
       if (!selectedItem) return;
       
@@ -153,9 +173,24 @@ export function InvoiceForm({
       total_amount: total,
       items: invoiceItems,
       status: data.status,
-      payment_status: 'draft', // Add the payment_status field with default value
+      payment_status: 'confirmed', // Set default payment_status to confirmed
       notes: data.notes || ''
     });
+  };
+
+  const getCategoryTranslation = (category: string) => {
+    switch (category) {
+      case 'raw_materials':
+        return 'المواد الخام';
+      case 'packaging_materials':
+        return 'مواد التعبئة';
+      case 'semi_finished_products':
+        return 'المنتجات نصف المصنعة';
+      case 'finished_products':
+        return 'المنتجات النهائية';
+      default:
+        return '';
+    }
   };
 
   return (
@@ -200,18 +235,20 @@ export function InvoiceForm({
                 name="party_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>الطرف التجاري</FormLabel>
+                    <FormLabel>
+                      {invoiceType === 'sale' ? 'العميل' : 'المورد'}
+                    </FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       defaultValue={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="اختر الطرف التجاري" />
+                          <SelectValue placeholder={`اختر ${invoiceType === 'sale' ? 'العميل' : 'المورد'}`} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {parties.map(party => (
+                        {filteredParties.map(party => (
                           <SelectItem key={party.id} value={party.id}>
                             {party.name}
                           </SelectItem>
@@ -283,7 +320,25 @@ export function InvoiceForm({
             <div className="border rounded-md p-4">
               <h3 className="text-lg font-semibold mb-4">عناصر الفاتورة</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                <div>
+                  <label className="text-sm font-medium">فئة المنتج</label>
+                  <Select 
+                    value={selectedCategory}
+                    onValueChange={setSelectedCategory}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر فئة المنتج" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="finished_products">المنتجات النهائية</SelectItem>
+                      <SelectItem value="semi_finished_products">المنتجات نصف المصنعة</SelectItem>
+                      <SelectItem value="raw_materials">المواد الخام</SelectItem>
+                      <SelectItem value="packaging_materials">مواد التعبئة</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
                 <div>
                   <label className="text-sm font-medium">المنتج</label>
                   <Select 
@@ -294,7 +349,7 @@ export function InvoiceForm({
                       <SelectValue placeholder="اختر المنتج" />
                     </SelectTrigger>
                     <SelectContent>
-                      {items.map(item => (
+                      {categorizedItems[selectedCategory as keyof typeof categorizedItems].map(item => (
                         <SelectItem key={item.id} value={item.id.toString()}>
                           {item.name}
                         </SelectItem>
@@ -342,6 +397,7 @@ export function InvoiceForm({
                     <TableRow>
                       <TableHead className="w-[50px]">#</TableHead>
                       <TableHead>المنتج</TableHead>
+                      <TableHead>الفئة</TableHead>
                       <TableHead className="text-center">الكمية</TableHead>
                       <TableHead className="text-center">السعر</TableHead>
                       <TableHead className="text-right">المجموع</TableHead>
@@ -354,6 +410,7 @@ export function InvoiceForm({
                         <TableRow key={index}>
                           <TableCell>{index + 1}</TableCell>
                           <TableCell>{item.item_name}</TableCell>
+                          <TableCell>{getCategoryTranslation(item.item_type)}</TableCell>
                           <TableCell className="text-center">{item.quantity}</TableCell>
                           <TableCell className="text-center">{item.unit_price.toFixed(2)}</TableCell>
                           <TableCell className="text-right font-medium">
@@ -372,7 +429,7 @@ export function InvoiceForm({
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
                           لم يتم إضافة عناصر بعد
                         </TableCell>
                       </TableRow>
@@ -380,7 +437,7 @@ export function InvoiceForm({
                     
                     {invoiceItems.length > 0 && (
                       <TableRow className="bg-muted/50">
-                        <TableCell colSpan={4} className="text-right font-bold">
+                        <TableCell colSpan={5} className="text-right font-bold">
                           المجموع الكلي
                         </TableCell>
                         <TableCell className="text-right font-bold">

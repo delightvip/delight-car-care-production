@@ -193,7 +193,10 @@ class InvoiceService extends BaseCommercialService {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating invoice record:', error);
+        throw error;
+      }
       
       console.log('Invoice created successfully:', invoiceRecord);
       
@@ -226,6 +229,11 @@ class InvoiceService extends BaseCommercialService {
       // Get party details for response
       const party = await this.partyService.getPartyById(invoiceData.party_id);
       console.log('Party details:', party);
+      
+      // If invoice status is not "draft", automatically confirm it
+      if (invoiceData.payment_status === 'confirmed') {
+        await this.confirmInvoice(invoiceRecord.id);
+      }
       
       toast.success('تم إنشاء الفاتورة بنجاح');
       

@@ -1,11 +1,19 @@
 
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import CommercialService, { Payment } from '@/services/CommercialService';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import CommercialService, { Payment } from '@/services/CommercialService';
+import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Search, FileDown } from 'lucide-react';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -16,38 +24,50 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import PageTransition from '@/components/ui/PageTransition';
-import { PaymentForm, PaymentFormValues } from '@/components/commercial/PaymentForm';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { PaymentForm } from '@/components/commercial/PaymentForm';
+import { PaymentsList } from '@/components/commercial/PaymentsList';
 import { toast } from 'sonner';
-import PaymentsList from '@/components/commercial/PaymentsList';
 import { format } from 'date-fns';
 
 const Payments = () => {
   const [activeTab, setActiveTab] = useState('all');
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
-  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
-  const [paymentToConfirm, setPaymentToConfirm] = useState<Payment | null>(null);
-  const [paymentToCancel, setPaymentToCancel] = useState<Payment | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  
+  const queryClient = useQueryClient();
   
   const commercialService = CommercialService.getInstance();
+  const partyService = PartyService.getInstance();
   
-  const { data: payments, isLoading, refetch } = useQuery({
+  const { data: payments, isLoading: isLoadingPayments, error: paymentsError, refetch } = useQuery({
     queryKey: ['payments'],
-    queryFn: () => commercialService.getPayments(),
+    queryFn: async () => {
+      const result = await commercialService.getPayments();
+      return result;
+    },
   });
+  
+  const { data: parties, isLoading: isLoadingParties } = useQuery({
+    queryKey: ['parties'],
+    queryFn: () => partyService.getParties(),
+  });
+  
+  const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: () => commercialService.getInvoices(),
+  });
+  
+  // Force refresh on mount
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['payments'] });
+  }, [queryClient]);
   
   const filteredPayments = React.useMemo(() => {
     if (!payments) return [];
@@ -55,186 +75,214 @@ const Payments = () => {
     let filtered = payments;
     
     if (activeTab !== 'all') {
-      filtered = payments.filter(p => p.payment_type === activeTab);
+      filtered = payments.filter(payment => payment.payment_type === activeTab);
     }
     
-    if (searchQuery) {
+    if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.party_name?.toLowerCase().includes(query) ||
-        p.amount.toString().includes(query) ||
-        (p.notes && p.notes.toLowerCase().includes(query))
+      filtered = filtered.filter(payment => 
+        payment.party_name?.toLowerCase().includes(query) ||
+        payment.id.toLowerCase().includes(query) ||
+        payment.amount.toString().includes(query)
       );
     }
     
     return filtered;
   }, [payments, activeTab, searchQuery]);
-
-  const handleAddPayment = async (paymentData: PaymentFormValues & { party_id: string }) => {
+  
+  const handleCreatePayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
     try {
-      const payment = {
-        party_id: paymentData.party_id,
-        date: format(paymentData.date, 'yyyy-MM-dd'),
-        amount: paymentData.amount,
-        payment_type: paymentData.payment_type,
-        method: paymentData.method,
-        related_invoice_id: paymentData.related_invoice_id || "",
-        notes: paymentData.notes || "",
-        payment_status: "draft" as const
-      };
+      const result = await commercialService.recordPayment(paymentData);
       
-      await commercialService.recordPayment(payment);
-      refetch();
-      setIsFormOpen(false);
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      queryClient.invalidateQueries({ queryKey: ['parties'] });
+      
+      setIsAddDialogOpen(false);
       toast.success('تم تسجيل المعاملة بنجاح');
     } catch (error) {
-      console.error('Error recording payment:', error);
+      console.error('Error creating payment:', error);
       toast.error('حدث خطأ أثناء تسجيل المعاملة');
     }
   };
-
-  const handleEditPayment = async (paymentData: PaymentFormValues & { party_id: string }) => {
-    if (!selectedPayment || !selectedPayment.id) return;
+  
+  const handleUpdatePayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
+    if (!selectedPayment) return;
     
     try {
-      const payment = {
-        party_id: paymentData.party_id,
-        date: format(paymentData.date, 'yyyy-MM-dd'),
-        amount: paymentData.amount,
-        payment_type: paymentData.payment_type,
-        method: paymentData.method,
-        related_invoice_id: paymentData.related_invoice_id || "",
-        notes: paymentData.notes || "",
-        payment_status: "draft" as const
-      };
-      
-      await commercialService.updatePayment(selectedPayment.id, payment);
-      refetch();
-      setIsFormOpen(false);
-      setSelectedPayment(null);
-      setIsEditMode(false);
-      toast.success('تم تعديل المعاملة بنجاح');
+      const success = await commercialService.updatePayment(selectedPayment.id, paymentData);
+      if (success) {
+        queryClient.invalidateQueries({ queryKey: ['payments'] });
+        setIsEditDialogOpen(false);
+        setSelectedPayment(null);
+      }
     } catch (error) {
       console.error('Error updating payment:', error);
-      toast.error('حدث خطأ أثناء تعديل المعاملة');
+      toast.error('حدث خطأ أثناء تحديث المعاملة');
     }
   };
   
   const handleEditClick = (payment: Payment) => {
-    const formData = {
-      payment_type: payment.payment_type as "collection" | "disbursement",
-      amount: payment.amount,
-      date: new Date(payment.date),
-      method: payment.method as "cash" | "check" | "bank_transfer" | "other",
-      related_invoice_id: payment.related_invoice_id,
-      notes: payment.notes
-    };
-    
     setSelectedPayment(payment);
-    setIsEditMode(true);
-    setIsFormOpen(true);
+    setIsEditDialogOpen(true);
   };
   
   const handleDeleteClick = (payment: Payment) => {
-    setPaymentToDelete(payment);
+    setSelectedPayment(payment);
     setIsDeleteDialogOpen(true);
   };
   
-  const handleConfirmClick = (payment: Payment) => {
-    setPaymentToConfirm(payment);
-    setIsConfirmDialogOpen(true);
-  };
-  
-  const handleCancelClick = (payment: Payment) => {
-    setPaymentToCancel(payment);
-    setIsCancelDialogOpen(true);
-  };
-  
   const confirmDeletePayment = async () => {
-    if (!paymentToDelete || !paymentToDelete.id) return;
+    if (!selectedPayment) return;
     
     try {
-      await commercialService.deletePayment(paymentToDelete.id);
-      refetch();
-      setIsDeleteDialogOpen(false);
-      setPaymentToDelete(null);
-      toast.success('تم حذف المعاملة بنجاح');
+      const success = await commercialService.deletePayment(selectedPayment.id);
+      if (success) {
+        queryClient.invalidateQueries({ queryKey: ['payments'] });
+        setIsDeleteDialogOpen(false);
+        setSelectedPayment(null);
+      }
     } catch (error) {
       console.error('Error deleting payment:', error);
       toast.error('حدث خطأ أثناء حذف المعاملة');
     }
   };
   
+  const handleConfirmClick = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setIsConfirmDialogOpen(true);
+  };
+  
   const confirmPayment = async () => {
-    if (!paymentToConfirm || !paymentToConfirm.id) return;
+    if (!selectedPayment) return;
     
     try {
-      await commercialService.confirmPayment(paymentToConfirm.id);
-      refetch();
-      setIsConfirmDialogOpen(false);
-      setPaymentToConfirm(null);
-      toast.success('تم تأكيد المعاملة بنجاح');
+      const success = await commercialService.confirmPayment(selectedPayment.id);
+      if (success) {
+        queryClient.invalidateQueries({ queryKey: ['payments'] });
+        queryClient.invalidateQueries({ queryKey: ['parties'] });
+        setIsConfirmDialogOpen(false);
+        setSelectedPayment(null);
+      }
     } catch (error) {
       console.error('Error confirming payment:', error);
       toast.error('حدث خطأ أثناء تأكيد المعاملة');
     }
   };
   
+  const handleCancelClick = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setIsCancelDialogOpen(true);
+  };
+  
   const cancelPayment = async () => {
-    if (!paymentToCancel || !paymentToCancel.id) return;
+    if (!selectedPayment) return;
     
     try {
-      await commercialService.cancelPayment(paymentToCancel.id);
-      refetch();
-      setIsCancelDialogOpen(false);
-      setPaymentToCancel(null);
-      toast.success('تم إلغاء المعاملة بنجاح');
+      const success = await commercialService.cancelPayment(selectedPayment.id);
+      if (success) {
+        queryClient.invalidateQueries({ queryKey: ['payments'] });
+        queryClient.invalidateQueries({ queryKey: ['parties'] });
+        setIsCancelDialogOpen(false);
+        setSelectedPayment(null);
+      }
     } catch (error) {
       console.error('Error cancelling payment:', error);
       toast.error('حدث خطأ أثناء إلغاء المعاملة');
     }
   };
-
-  const resetForm = () => {
-    setSelectedPayment(null);
-    setIsEditMode(false);
+  
+  const handleExportPayments = () => {
+    try {
+      if (!filteredPayments.length) {
+        toast.warning('لا توجد معاملات للتصدير');
+        return;
+      }
+      
+      // Create CSV content
+      let csvContent = 'رقم المعاملة,النوع,الطرف,التاريخ,المبلغ,الطريقة,الحالة\n';
+      
+      filteredPayments.forEach(payment => {
+        csvContent += `${payment.id},`;
+        csvContent += `${payment.payment_type === 'collection' ? 'تحصيل' : 'دفع'},`;
+        csvContent += `"${payment.party_name || ''}",`;
+        csvContent += `${format(new Date(payment.date), 'yyyy-MM-dd')},`;
+        csvContent += `${payment.amount.toFixed(2)},`;
+        csvContent += `${payment.method},`;
+        csvContent += `${payment.payment_status}\n`;
+      });
+      
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `payments_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('تم تصدير المعاملات بنجاح');
+    } catch (error) {
+      console.error('Error exporting payments:', error);
+      toast.error('حدث خطأ أثناء تصدير المعاملات');
+    }
   };
-
+  
+  const isLoading = isLoadingPayments || isLoadingParties || isLoadingInvoices;
+  
   if (isLoading) {
     return (
       <PageTransition>
         <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">المدفوعات والتحصيلات</h1>
-            <p className="text-muted-foreground">إدارة المدفوعات والتحصيلات النقدية</p>
+          <div className="flex flex-row items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">المعاملات المالية</h1>
+              <p className="text-muted-foreground">إدارة معاملات الدفع والتحصيل</p>
+            </div>
+            <Skeleton className="h-10 w-24" />
           </div>
+          <Skeleton className="h-10 w-full max-w-md" />
+          <Skeleton className="h-[500px] w-full" />
         </div>
       </PageTransition>
     );
   }
-
+  
+  if (paymentsError) {
+    return (
+      <PageTransition>
+        <div className="space-y-6">
+          <h1 className="text-3xl font-bold tracking-tight">المعاملات المالية</h1>
+          <div className="bg-destructive/10 p-4 rounded-md text-destructive">
+            <p>حدث خطأ أثناء تحميل البيانات. الرجاء المحاولة مرة أخرى.</p>
+            <p>{String(paymentsError)}</p>
+          </div>
+          <Button onClick={() => refetch()}>إعادة المحاولة</Button>
+        </div>
+      </PageTransition>
+    );
+  }
+  
   return (
     <PageTransition>
       <div className="space-y-6">
         <div className="flex flex-row items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">المدفوعات والتحصيلات</h1>
-            <p className="text-muted-foreground">إدارة المدفوعات والتحصيلات النقدية</p>
+            <h1 className="text-3xl font-bold tracking-tight">المعاملات المالية</h1>
+            <p className="text-muted-foreground">إدارة معاملات الدفع والتحصيل</p>
           </div>
-          <Button onClick={() => {
-            resetForm();
-            setIsFormOpen(true);
-          }}>
-            <PlusCircle className="ml-2 h-4 w-4" />
-            تسجيل معاملة جديدة
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <PlusCircle className="mr-2 h-4 w-4" /> تسجيل معاملة جديدة
           </Button>
         </div>
-
+        
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
             <TabsTrigger value="all">الكل</TabsTrigger>
-            <TabsTrigger value="collection">تحصيلات</TabsTrigger>
-            <TabsTrigger value="disbursement">مدفوعات</TabsTrigger>
+            <TabsTrigger value="collection">معاملات التحصيل</TabsTrigger>
+            <TabsTrigger value="disbursement">معاملات الدفع</TabsTrigger>
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
@@ -251,37 +299,42 @@ const Payments = () => {
           </TabsContent>
         </Tabs>
       </div>
-
-      <Dialog open={isFormOpen} onOpenChange={(open) => {
-        setIsFormOpen(open);
-        if (!open) resetForm();
-      }}>
+      
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>
-              {isEditMode ? 'تعديل معاملة' : 'تسجيل معاملة جديدة'}
-            </DialogTitle>
+            <DialogTitle>تسجيل معاملة جديدة</DialogTitle>
             <DialogDescription>
-              {isEditMode 
-                ? 'قم بتعديل بيانات المعاملة حسب الحاجة'
-                : 'قم بإدخال بيانات المعاملة المالية لتسجيلها في النظام'
-              }
+              قم بإدخال بيانات المعاملة المالية.
             </DialogDescription>
           </DialogHeader>
-          <PaymentForm 
-            onSubmit={isEditMode ? handleEditPayment : handleAddPayment} 
-            initialData={selectedPayment && {
-              payment_type: selectedPayment.payment_type as "collection" | "disbursement",
-              amount: selectedPayment.amount,
-              date: new Date(selectedPayment.date),
-              method: selectedPayment.method as "cash" | "check" | "bank_transfer" | "other",
-              related_invoice_id: selectedPayment.related_invoice_id,
-              notes: selectedPayment.notes
-            }} 
-            isEditing={isEditMode}
-            partyId={selectedPayment?.party_id || ""}
-            partyType="customer"
-          />
+          {parties && (
+            <PaymentForm 
+              onSubmit={handleCreatePayment} 
+              parties={parties}
+              invoices={invoices || []}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>تعديل المعاملة</DialogTitle>
+            <DialogDescription>
+              قم بتعديل بيانات المعاملة المالية.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPayment && parties && (
+            <PaymentForm 
+              onSubmit={handleUpdatePayment} 
+              parties={parties} 
+              initialData={selectedPayment}
+              isEditing={true}
+              invoices={invoices || []}
+            />
+          )}
         </DialogContent>
       </Dialog>
       
@@ -307,7 +360,7 @@ const Payments = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد المعاملة</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من تأكيد هذه المعاملة؟ سيتم تحديث حساب الطرف المرتبط بها.
+              هل أنت متأكد من تأكيد هذه المعاملة؟ سيتم تحديث رصيد الطرف المرتبط.
               <br />
               لا يمكن تعديل المعاملة بعد تأكيدها.
             </AlertDialogDescription>
@@ -326,7 +379,7 @@ const Payments = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>إلغاء المعاملة</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من إلغاء هذه المعاملة؟ سيتم إلغاء تأثيرها على حسابات الأطراف المرتبطة بها.
+              هل أنت متأكد من إلغاء هذه المعاملة؟ سيتم إلغاء تأثيرها على رصيد الطرف المرتبط.
               <br />
               هذا الإجراء لا يمكن التراجع عنه.
             </AlertDialogDescription>
