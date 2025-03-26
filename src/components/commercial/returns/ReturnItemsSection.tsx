@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -90,9 +89,7 @@ export function ReturnItemsSection({
                     <Checkbox
                       checked={!!item.selected}
                       onCheckedChange={(checked) => {
-                        // Fix: Ensure we're passing a boolean value to toggleItemSelection
-                        const isChecked = checked === true;
-                        toggleItemSelection(index, isChecked);
+                        toggleItemSelection(index, checked === true);
                       }}
                     />
                   </div>
@@ -194,7 +191,6 @@ export function ReturnItemsSection({
                             onChange={(e) => {
                               const value = parseFloat(e.target.value) || 0;
                               field.onChange(value);
-                              // هنا نحتاج إلى استدعاء دالة حساب الإجمالي
                               form.trigger("items");
                             }}
                             disabled={!!selectedInvoice || !item.selected}
