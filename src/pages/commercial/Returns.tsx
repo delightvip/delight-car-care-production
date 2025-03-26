@@ -1,9 +1,9 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import CommercialService from '@/services/CommercialService';
-import { Return } from '@/services/CommercialTypes';
+import CommercialService, { Return } from '@/services/CommercialService';
 import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Search, FileDown, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 
 const Returns = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -31,17 +31,17 @@ const Returns = () => {
   
   const commercialService = CommercialService.getInstance();
   
-  const { data: returns = [], isLoading, error, refetch } = useQuery({
+  const { data: returns, isLoading, error, refetch } = useQuery({
     queryKey: ['returns'],
     queryFn: async () => {
       console.log('Fetching returns...');
       try {
         const result = await commercialService.getReturns();
         console.log('Returns fetched:', result);
-        return result || [];
+        return result;
       } catch (err) {
         console.error('Error fetching returns:', err);
-        return [];
+        throw err;
       }
     },
   });
@@ -52,10 +52,7 @@ const Returns = () => {
   });
 
   const filteredReturns = React.useMemo(() => {
-    if (!Array.isArray(returns)) {
-      console.warn('Returns is not an array:', returns);
-      return [];
-    }
+    if (!returns) return [];
     
     let filtered = returns;
     
@@ -79,15 +76,19 @@ const Returns = () => {
       setIsProcessing(true);
       console.log('Creating return with data:', returnData);
       
+      // تأكد من وجود party_id للمرتجع إذا كان مرتبط بفاتورة
       if (!returnData.party_id && returnData.invoice_id) {
+        // استخراج الطرف من الفاتورة المرتبطة
         const invoice = await commercialService.getInvoiceById(returnData.invoice_id);
         if (invoice) {
           returnData.party_id = invoice.party_id;
         }
       }
       
+      // Use setTimeout to prevent UI freezing
       const createReturnPromise = new Promise<Return | null>(async (resolve) => {
         try {
+          // تعيين حالة المرتجع للتأكيد تلقائياً كمسودة أولاً
           const result = await commercialService.createReturn({
             ...returnData,
             payment_status: 'draft'
@@ -104,13 +105,16 @@ const Returns = () => {
       const result = await createReturnPromise;
       
       if (result) {
+        // تأكيد المرتجع تلقائياً بعد إنشائه
         console.log('Auto confirming return:', result.id);
         
+        // Use setTimeout for async operation
         setTimeout(async () => {
           try {
             const confirmed = await commercialService.confirmReturn(result.id);
             console.log('Return confirm result:', confirmed);
             
+            // تحديث البيانات
             queryClient.invalidateQueries({ queryKey: ['returns'] });
             queryClient.invalidateQueries({ queryKey: ['parties'] });
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -156,6 +160,7 @@ const Returns = () => {
       setIsProcessing(true);
       console.log('Confirming return:', selectedReturnId);
       
+      // Use setTimeout to prevent UI freezing
       const confirmPromise = new Promise<boolean>(async (resolve) => {
         try {
           const success = await commercialService.confirmReturn(selectedReturnId);
@@ -169,6 +174,7 @@ const Returns = () => {
       const success = await confirmPromise;
       
       if (success) {
+        // تحديث البيانات
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -210,6 +216,7 @@ const Returns = () => {
       setIsProcessing(true);
       console.log('Cancelling return:', selectedReturnId);
       
+      // Use setTimeout to prevent UI freezing
       const cancelPromise = new Promise<boolean>(async (resolve) => {
         try {
           const success = await commercialService.cancelReturn(selectedReturnId);
@@ -223,6 +230,7 @@ const Returns = () => {
       const success = await cancelPromise;
       
       if (success) {
+        // تحديث البيانات
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -246,7 +254,7 @@ const Returns = () => {
     } catch (error) {
       console.error('Error cancelling return:', error);
       toast({
-        title: "خطأ",
+        title: "خطأ", 
         description: "حدث خطأ أثناء إلغاء المرتجع",
         variant: "destructive"
       });
@@ -268,8 +276,12 @@ const Returns = () => {
   };
 
   const exportToCsv = () => {
-    if (!Array.isArray(filteredReturns) || filteredReturns.length === 0) {
-      toast.error('لا توجد بيانات للتصدير');
+    if (!filteredReturns.length) {
+      toast({
+        title: "خطأ",
+        description: "لا توجد بيانات للتصدير",
+        variant: "destructive"
+      });
       return;
     }
     
@@ -286,6 +298,7 @@ const Returns = () => {
     document.body.removeChild(link);
   };
 
+  // وظيفة إعادة تحميل البيانات
   const handleRefresh = async () => {
     try {
       await refetch();
@@ -348,17 +361,11 @@ const Returns = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h1 className="text-2xl font-bold">المرتجعات</h1>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => refetch()}>
+            <Button variant="outline" onClick={handleRefresh}>
               <RefreshCw className="w-4 h-4 ml-2" />
               تحديث
             </Button>
-            <Button variant="outline" onClick={() => {
-              if (!Array.isArray(filteredReturns) || filteredReturns.length === 0) {
-                toast.error('لا توجد بيانات للتصدير');
-                return;
-              }
-              exportToCsv();
-            }}>
+            <Button variant="outline" onClick={exportToCsv}>
               <FileDown className="w-4 h-4 ml-2" />
               تصدير
             </Button>
@@ -440,10 +447,7 @@ const Returns = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                setSelectedReturnId(returnItem.id);
-                                setIsConfirmDialogOpen(true);
-                              }}
+                              onClick={() => handleConfirmClick(returnItem.id)}
                               disabled={isProcessing}
                             >
                               <CheckCircle className="h-4 w-4 ml-1" />
@@ -454,10 +458,7 @@ const Returns = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                setSelectedReturnId(returnItem.id);
-                                setIsCancelDialogOpen(true);
-                              }}
+                              onClick={() => handleCancelClick(returnItem.id)}
                               disabled={isProcessing}
                             >
                               <XCircle className="h-4 w-4 ml-1" />
@@ -481,6 +482,7 @@ const Returns = () => {
         </Card>
       </div>
 
+      {/* Dialog for adding new return */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => !isProcessing && setIsAddDialogOpen(open)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -490,6 +492,7 @@ const Returns = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog for confirming return */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={(open) => !isProcessing && setIsConfirmDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -514,6 +517,7 @@ const Returns = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Dialog for cancelling return */}
       <AlertDialog open={isCancelDialogOpen} onOpenChange={(open) => !isProcessing && setIsCancelDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
