@@ -21,7 +21,9 @@ import {
   Edit,
   Trash2,
   RefreshCw,
-  Info
+  Info,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import {
   HoverCard,
@@ -111,6 +113,7 @@ const ProductDetails = () => {
     }
   });
   
+  // Fix: Use string literal for the table name, not a variable
   const { data: movements } = useQuery<InventoryMovement[]>({
     queryKey: ['product-movements', tableName, id],
     queryFn: async () => {
@@ -144,6 +147,7 @@ const ProductDetails = () => {
   
   const handleDelete = async () => {
     try {
+      // Fix: Use string literal for the table name, not a variable
       const { error } = await supabase
         .from(tableName)
         .delete()

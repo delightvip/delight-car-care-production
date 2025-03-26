@@ -25,6 +25,7 @@ const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId,
   const { data: movements, isLoading, error, refetch } = useQuery({
     queryKey: ['movements', itemType, itemId],
     queryFn: async () => {
+      // Fix: Cast the table name as a string literal with 'inventory_movements'
       const { data, error } = await supabase
         .from('inventory_movements')
         .select(`
