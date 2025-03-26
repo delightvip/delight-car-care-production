@@ -4,7 +4,7 @@ import { Payment } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import InvoiceService from "../invoice/InvoiceService";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 export class PaymentProcessor {
   private inventoryService: InventoryService;
@@ -32,7 +32,11 @@ export class PaymentProcessor {
       if (paymentError) throw paymentError;
       
       if (payment.payment_status === 'confirmed') {
-        toast.info('الدفعة مؤكدة بالفعل');
+        toast({
+          title: "تنبيه",
+          description: "الدفعة مؤكدة بالفعل",
+          variant: "default"
+        });
         return true;
       }
       
@@ -68,13 +72,21 @@ export class PaymentProcessor {
       
       // استخدام setTimeout لتجنب تعليق واجهة المستخدم
       setTimeout(() => {
-        toast.success('تم تأكيد الدفعة بنجاح');
+        toast({
+          title: "نجاح",
+          description: "تم تأكيد الدفعة بنجاح",
+          variant: "success"
+        });
       }, 100);
       
       return true;
     } catch (error) {
       console.error('Error confirming payment:', error);
-      toast.error('حدث خطأ أثناء تأكيد الدفعة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد الدفعة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -94,7 +106,11 @@ export class PaymentProcessor {
       if (paymentError) throw paymentError;
       
       if (payment.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء الدفعات المؤكدة فقط');
+        toast({
+          title: "خطأ",
+          description: "يمكن إلغاء الدفعات المؤكدة فقط",
+          variant: "destructive"
+        });
         return false;
       }
       
@@ -130,13 +146,21 @@ export class PaymentProcessor {
       
       // استخدام setTimeout لتجنب تعليق واجهة المستخدم
       setTimeout(() => {
-        toast.success('تم إلغاء الدفعة بنجاح');
+        toast({
+          title: "نجاح",
+          description: "تم إلغاء الدفعة بنجاح",
+          variant: "success"
+        });
       }, 100);
       
       return true;
     } catch (error) {
       console.error('Error cancelling payment:', error);
-      toast.error('حدث خطأ أثناء إلغاء الدفعة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء الدفعة",
+        variant: "destructive"
+      });
       return false;
     }
   }

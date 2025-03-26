@@ -1,11 +1,12 @@
+
 import { Payment } from '@/services/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
 import { PaymentProcessor } from './PaymentProcessor';
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 // الخدمة الرئيسية للدفعات
 export class PaymentService {
-  private static instance: PaymentService;
+  private static instance: PaymentService | null = null;
   private paymentProcessor: PaymentProcessor;
   
   private constructor() {
@@ -32,14 +33,22 @@ export class PaymentService {
       const payment = await PaymentEntity.create(paymentData);
       
       if (payment) {
-        toast.success('تم تسجيل المعاملة بنجاح');
+        toast({
+          title: "نجاح",
+          description: "تم تسجيل المعاملة بنجاح",
+          variant: "success"
+        });
         return payment;
       }
       
       return null;
     } catch (error) {
       console.error('Error recording payment:', error);
-      toast.error('حدث خطأ أثناء تسجيل المعاملة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تسجيل المعاملة",
+        variant: "destructive"
+      });
       return null;
     }
   }
