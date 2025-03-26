@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -250,7 +249,6 @@ const FinancialReportsPage: React.FC = () => {
               <div>
                 <Label htmlFor="startDate">من تاريخ</Label>
                 <DatePicker
-                  id="startDate"
                   selected={startDate}
                   onSelect={setStartDate}
                 />
@@ -258,7 +256,6 @@ const FinancialReportsPage: React.FC = () => {
               <div>
                 <Label htmlFor="endDate">إلى تاريخ</Label>
                 <DatePicker
-                  id="endDate"
                   selected={endDate}
                   onSelect={setEndDate}
                 />

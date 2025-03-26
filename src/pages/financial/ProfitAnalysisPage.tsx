@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -149,7 +148,6 @@ const ProfitAnalysisPage: React.FC = () => {
               <div>
                 <Label htmlFor="startDate">من تاريخ</Label>
                 <DatePicker
-                  id="startDate"
                   selected={startDate}
                   onSelect={setStartDate}
                 />
@@ -157,7 +155,6 @@ const ProfitAnalysisPage: React.FC = () => {
               <div>
                 <Label htmlFor="endDate">إلى تاريخ</Label>
                 <DatePicker
-                  id="endDate"
                   selected={endDate}
                   onSelect={setEndDate}
                 />
@@ -183,7 +180,7 @@ const ProfitAnalysisPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {loading ? <Skeleton className="h-8 w-28" /> : `${totalCosts.toLocaleString()} ر.س`}
+                {loading ? <Skeleton className="h-8 w-28" /> : `${totalCosts.toLocaleString()} ��.س`}
               </div>
             </CardContent>
           </Card>

@@ -24,6 +24,7 @@ export interface Invoice {
   total_amount: number;
   notes?: string;
   created_at: string;
+  items: InvoiceItem[]; // Added items array
 }
 
 export interface InvoiceItem {
@@ -64,6 +65,7 @@ export interface Return {
   payment_status: 'draft' | 'confirmed' | 'cancelled';
   notes?: string;
   created_at: string;
+  items: ReturnItem[]; // Added items array
 }
 
 export interface ReturnItem {

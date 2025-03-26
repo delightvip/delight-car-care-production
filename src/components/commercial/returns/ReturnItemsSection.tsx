@@ -49,7 +49,9 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
 
   useEffect(() => {
     // Initialize selectedItems with all item IDs when the component mounts
-    setSelectedItems(items.map(item => item.id));
+    if (items && items.length > 0) {
+      setSelectedItems(items.map(item => item.id));
+    }
   }, [items]);
 
   const isItemSelected = (itemId: string) => selectedItems.includes(itemId);
@@ -76,25 +78,31 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
       <Label htmlFor="items">Return Items</Label>
       <ScrollArea className="h-[200px] w-full rounded-md border">
         <div className="p-4">
-          {items.map((item) => (
-            <div key={item.id} className="mb-4 flex items-center space-x-4">
-              <Checkbox 
-                checked={isItemSelected(item.id)} 
-                onCheckedChange={(checked) => toggleItemSelectionInternal(item.id, Boolean(checked))}
-                aria-label="Select row"
-              />
-              <div className="grid gap-1.5">
-                <Label htmlFor={`item-${item.id}`}>{item.name}</Label>
-                <Input
-                  type="number"
-                  id={`item-${item.id}`}
-                  defaultValue={item.quantity}
-                  className="w-24"
-                  onChange={(e) => handleQuantityChangeInternal(item.id, e)}
+          {items && items.length > 0 ? (
+            items.map((item) => (
+              <div key={item.id} className="mb-4 flex items-center space-x-4">
+                <Checkbox 
+                  checked={isItemSelected(item.id)} 
+                  onCheckedChange={(checked) => toggleItemSelectionInternal(item.id, Boolean(checked))}
+                  aria-label="Select row"
                 />
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`item-${item.id}`}>{item.name}</Label>
+                  <Input
+                    type="number"
+                    id={`item-${item.id}`}
+                    defaultValue={item.quantity}
+                    className="w-24"
+                    onChange={(e) => handleQuantityChangeInternal(item.id, e)}
+                  />
+                </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center py-4 text-muted-foreground">
+              No items available
             </div>
-          ))}
+          )}
         </div>
       </ScrollArea>
     </div>

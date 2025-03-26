@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice, InvoiceItem } from "@/services/CommercialTypes";
 
@@ -19,55 +18,20 @@ export class InvoiceEntity {
       
       if (error) throw error;
       
-      // Map the data to our Invoice type
-      const invoicesWithParties = data.map(invoice => ({
+      // Correctly map the status type
+      return data.map(invoice => ({
         id: invoice.id,
         invoice_type: invoice.invoice_type as "sale" | "purchase",
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status as "paid" | "partial" | "unpaid",
+        status: this.mapStatusType(invoice.status),
         payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
         notes: invoice.notes,
         created_at: invoice.created_at,
-        items: [] // Initialize with empty items array
+        items: []  // Initialize with empty items
       }));
-      
-      // For each invoice, get its items
-      const invoicesWithItems = await Promise.all(
-        invoicesWithParties.map(async (invoice) => {
-          const { data: items, error: itemsError } = await supabase
-            .from('invoice_items')
-            .select('*')
-            .eq('invoice_id', invoice.id);
-          
-          if (itemsError) {
-            console.error(`Error fetching items for invoice ${invoice.id}:`, itemsError);
-            return invoice;
-          }
-          
-          // Map invoice items to the correct type
-          const typedItems = items ? items.map(item => ({
-            id: item.id,
-            invoice_id: item.invoice_id,
-            item_id: item.item_id,
-            item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-            item_name: item.item_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total: item.total,
-            created_at: item.created_at
-          })) : [];
-          
-          return {
-            ...invoice,
-            items: typedItems
-          };
-        })
-      );
-      
-      return invoicesWithItems;
     } catch (error) {
       console.error('Error fetching invoices:', error);
       return [];
@@ -90,54 +54,20 @@ export class InvoiceEntity {
       
       if (error) throw error;
       
-      const invoicesWithParties = data.map(invoice => ({
+      // Correctly map the status type
+      return data.map(invoice => ({
         id: invoice.id,
         invoice_type: invoice.invoice_type as "sale" | "purchase",
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status as "paid" | "partial" | "unpaid",
+        status: this.mapStatusType(invoice.status),
         payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
         notes: invoice.notes,
         created_at: invoice.created_at,
-        items: [] // Initialize with empty items array
+        items: []  // Initialize with empty items
       }));
-      
-      // For each invoice, get its items
-      const invoicesWithItems = await Promise.all(
-        invoicesWithParties.map(async (invoice) => {
-          const { data: items, error: itemsError } = await supabase
-            .from('invoice_items')
-            .select('*')
-            .eq('invoice_id', invoice.id);
-          
-          if (itemsError) {
-            console.error(`Error fetching items for invoice ${invoice.id}:`, itemsError);
-            return invoice;
-          }
-          
-          // Map invoice items to the correct type
-          const typedItems = items ? items.map(item => ({
-            id: item.id,
-            invoice_id: item.invoice_id,
-            item_id: item.item_id,
-            item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-            item_name: item.item_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total: item.total,
-            created_at: item.created_at
-          })) : [];
-          
-          return {
-            ...invoice,
-            items: typedItems
-          };
-        })
-      );
-      
-      return invoicesWithItems;
     } catch (error) {
       console.error(`Error fetching invoices for party ${partyId}:`, error);
       return [];
@@ -208,13 +138,13 @@ export class InvoiceEntity {
       const { data: invoiceRecord, error } = await supabase
         .from('invoices')
         .insert({
-          invoice_type: invoiceData.invoice_type,
           party_id: invoiceData.party_id,
           date: invoiceData.date,
-          total_amount: invoiceData.total_amount,
-          status: invoiceData.status || 'unpaid',
+          invoice_type: invoiceData.invoice_type,
           payment_status: invoiceData.payment_status || 'draft',
-          notes: invoiceData.notes
+          status: this.mapStatusType(invoiceData.status),
+          notes: invoiceData.notes,
+          total_amount: invoiceData.total_amount || 0
         })
         .select()
         .single();
@@ -305,6 +235,24 @@ export class InvoiceEntity {
     } catch (error) {
       console.error('Error deleting invoice:', error);
       return false;
+    }
+  }
+  
+  // Helper method to map status types
+  private static mapStatusType(status: string): "draft" | "pending" | "paid" | "partially_paid" | "cancelled" | "overdue" {
+    switch (status) {
+      case 'unpaid':
+        return 'pending';
+      case 'partial':
+        return 'partially_paid';
+      case 'paid':
+        return 'paid';
+      case 'cancelled':
+        return 'cancelled';
+      case 'overdue':
+        return 'overdue';
+      default:
+        return 'draft';
     }
   }
 }
