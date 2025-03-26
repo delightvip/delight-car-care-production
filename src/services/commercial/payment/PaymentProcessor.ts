@@ -11,7 +11,8 @@ class PaymentProcessor {
 
   constructor() {
     this.supabase = supabase;
-    this.inventoryService = InventoryService.getInstance();
+    // Fix InventoryService and InvoiceService instantiation
+    this.inventoryService = InventoryService;
     this.invoiceService = InvoiceService.getInstance();
   }
 

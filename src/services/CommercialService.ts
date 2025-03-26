@@ -1,19 +1,19 @@
-import PartyService from './PartyService';
-import PaymentService from './commercial/payment/PaymentService';
+import BaseCommercialService from './commercial/BaseCommercialService';
 import InvoiceService from './commercial/invoice/InvoiceService';
 import ReturnService from './commercial/return/ReturnService';
-import { Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry } from './CommercialTypes';
+import PaymentService from './commercial/payment/PaymentService';
 
-class CommercialService {
+class CommercialService extends BaseCommercialService {
   private static instance: CommercialService;
-  private returnService;
-  private paymentService;
-  private invoiceService;
+  private invoiceService: InvoiceService;
+  private returnService: ReturnService;
+  private paymentService: PaymentService;
   
   private constructor() {
+    super();
+    this.invoiceService = InvoiceService.getInstance();
     this.returnService = ReturnService.getInstance();
     this.paymentService = PaymentService.getInstance();
-    this.invoiceService = InvoiceService.getInstance();
   }
   
   public static getInstance(): CommercialService {

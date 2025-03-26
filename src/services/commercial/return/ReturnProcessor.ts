@@ -8,8 +8,8 @@ class ReturnProcessor {
 
   constructor() {
     this.supabase = supabase;
-    // Fix getInstance access by using the static method correctly
-    this.inventoryService = new InventoryService();
+    // Fix the InventoryService instantiation by using getInstance()
+    this.inventoryService = InventoryService;
   }
 
   async processReturn(returnId: string) {

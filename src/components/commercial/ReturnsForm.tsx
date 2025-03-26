@@ -32,7 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import PartyService from '@/services/PartyService';
 import CommercialService from '@/services/CommercialService';
-import { InventoryService } from '@/services/InventoryService';
+import InventoryService from '@/services/InventoryService';
 import { useQuery } from '@tanstack/react-query';
 
 interface ReturnsFormProps {
@@ -46,7 +46,8 @@ const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
   const [isInvoiceRequired, setIsInvoiceRequired] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   
-  const inventoryService = new InventoryService();
+  // Use the imported InventoryService directly (it's a singleton instance)
+  const inventoryService = InventoryService;
   const partyService = PartyService.getInstance();
   const commercialService = CommercialService.getInstance();
   

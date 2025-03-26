@@ -174,7 +174,7 @@ export class ReturnEntity {
         party_id: returnData.party_id,
         party_name: returnData.party_name,
         date: returnData.date,
-        return_type: returnData.return_type,
+        return_type: returnData.return_type as "sales_return" | "purchase_return",
         amount: returnData.amount,
         payment_status: returnRecord.payment_status as "draft" | "confirmed" | "cancelled",
         notes: returnData.notes,
