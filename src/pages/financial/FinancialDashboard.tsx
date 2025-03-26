@@ -3,14 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { addDays, format, startOfMonth, endOfMonth } from 'date-fns';
 import FinancialService, { FinancialSummary } from '@/services/financial/FinancialService';
 import FinancialSummaryCards from '@/components/financial/FinancialSummaryCards';
-import FinancialTransactionsList from '@/components/financial/FinancialTransactionsList';
+import TransactionList from '@/components/financial/TransactionList';
 import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { CalendarIcon } from 'lucide-react';
+import { ar } from 'date-fns/locale';
 
 const FinancialDashboard = () => {
   const navigate = useNavigate();
@@ -50,14 +54,49 @@ const FinancialDashboard = () => {
   
   return (
     <div className="container mx-auto px-4 py-6 space-y-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h1 className="text-3xl font-bold">لوحة التحكم المالية</h1>
-        <div className="flex space-x-2">
-          <DatePickerWithRange 
-            date={dateRange}
-            onDateChange={setDateRange}
-          />
-          <Button onClick={handleRefresh}>تحديث</Button>
+        <div className="flex flex-wrap gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[300px] justify-start text-right">
+                <CalendarIcon className="ml-2 h-4 w-4" />
+                {dateRange.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "PPP", { locale: ar })} -{" "}
+                      {format(dateRange.to, "PPP", { locale: ar })}
+                    </>
+                  ) : (
+                    format(dateRange.from, "PPP", { locale: ar })
+                  )
+                ) : (
+                  "اختر الفترة"
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={dateRange.from}
+                selected={dateRange}
+                onSelect={(range) => {
+                  if (range?.from && range?.to) {
+                    setDateRange({ from: range.from, to: range.to });
+                  }
+                }}
+                locale={ar}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <Button onClick={handleRefresh} variant="outline">
+            <RefreshCw className="h-4 w-4 ml-2" />
+            تحديث
+          </Button>
+          
           <Button onClick={() => navigate('/financial/transactions/new')}>
             <PlusCircle className="h-4 w-4 ml-2" />
             معاملة جديدة
@@ -81,10 +120,10 @@ const FinancialDashboard = () => {
               <CardDescription>آخر المعاملات المالية في النظام</CardDescription>
             </CardHeader>
             <CardContent>
-              <FinancialTransactionsList 
-                startDate={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined}
-                endDate={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined}
-                limit={5}
+              <TransactionList 
+                transactions={summary?.recentTransactions || []}
+                loading={loading}
+                onDelete={handleRefresh}
               />
             </CardContent>
           </Card>
@@ -97,10 +136,10 @@ const FinancialDashboard = () => {
               <CardDescription>جميع معاملات الإيرادات في الفترة المحددة</CardDescription>
             </CardHeader>
             <CardContent>
-              <FinancialTransactionsList 
-                startDate={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined}
-                endDate={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined}
-                type="income"
+              <TransactionList 
+                transactions={(summary?.recentTransactions || []).filter(t => t.type === 'income')}
+                loading={loading}
+                onDelete={handleRefresh}
               />
             </CardContent>
           </Card>
@@ -113,10 +152,10 @@ const FinancialDashboard = () => {
               <CardDescription>جميع معاملات المصروفات في الفترة المحددة</CardDescription>
             </CardHeader>
             <CardContent>
-              <FinancialTransactionsList 
-                startDate={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined}
-                endDate={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined}
-                type="expense"
+              <TransactionList 
+                transactions={(summary?.recentTransactions || []).filter(t => t.type === 'expense')}
+                loading={loading}
+                onDelete={handleRefresh}
               />
             </CardContent>
           </Card>

@@ -1,12 +1,12 @@
 
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Transaction {
   id: string;
   date: string;
   type: 'income' | 'expense';
   category_id: string;
+  category_name: string;
   amount: number;
   payment_method: 'cash' | 'bank' | 'other';
   notes?: string;
@@ -20,524 +20,407 @@ export interface Category {
   name: string;
   type: 'income' | 'expense';
   description?: string;
-  created_at: string;
+  created_at?: string;
+}
+
+export interface FinancialBalance {
+  cash_balance: number;
+  bank_balance: number;
+  total_balance: number;
 }
 
 export interface FinancialSummary {
-  total_income: number;
-  total_expenses: number;
-  net_profit: number;
-  cash_balance: number;
-  bank_balance: number;
-  sales_profit: number;
+  totalIncome: number;
+  totalExpenses: number;
+  netProfit: number;
+  balance: FinancialBalance;
+  recentTransactions: Transaction[];
 }
 
-class FinancialService {
+export default class FinancialService {
   private static instance: FinancialService;
-  
+
   private constructor() {}
-  
+
   public static getInstance(): FinancialService {
     if (!FinancialService.instance) {
       FinancialService.instance = new FinancialService();
     }
     return FinancialService.instance;
   }
-  
+
+  // Transactions methods
   public async getTransactions(
-    startDate?: string, 
+    startDate?: string,
     endDate?: string,
     type?: 'income' | 'expense',
-    categoryId?: string
+    categoryId?: string,
+    limit?: number
   ): Promise<Transaction[]> {
-    try {
-      let query = supabase
-        .from('financial_transactions')
-        .select(`
-          *,
-          financial_categories (name, type)
-        `)
-        .order('date', { ascending: false });
-      
-      if (startDate) {
-        query = query.gte('date', startDate);
-      }
-      
-      if (endDate) {
-        query = query.lte('date', endDate);
-      }
-      
-      if (type) {
-        query = query.eq('type', type);
-      }
-      
-      if (categoryId) {
-        query = query.eq('category_id', categoryId);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      return data.map(transaction => ({
-        id: transaction.id,
-        date: transaction.date,
-        type: transaction.type,
-        category_id: transaction.category_id,
-        category_name: transaction.financial_categories?.name,
-        amount: transaction.amount,
-        payment_method: transaction.payment_method,
-        notes: transaction.notes,
-        reference_id: transaction.reference_id,
-        reference_type: transaction.reference_type,
-        created_at: transaction.created_at
-      }));
-    } catch (error) {
+    let query = supabase
+      .from('financial_transactions')
+      .select(`
+        id,
+        date,
+        type,
+        category_id,
+        amount,
+        payment_method,
+        notes,
+        reference_id,
+        reference_type,
+        created_at,
+        financial_categories:category_id(name)
+      `)
+      .order('date', { ascending: false });
+
+    if (startDate) {
+      query = query.gte('date', startDate);
+    }
+
+    if (endDate) {
+      query = query.lte('date', endDate);
+    }
+
+    if (type) {
+      query = query.eq('type', type);
+    }
+
+    if (categoryId) {
+      query = query.eq('category_id', categoryId);
+    }
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
       console.error('Error fetching transactions:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب المعاملات المالية",
-        variant: "destructive"
-      });
       return [];
     }
+
+    return (data || []).map(item => ({
+      id: item.id,
+      date: item.date,
+      type: item.type,
+      category_id: item.category_id,
+      category_name: item.financial_categories?.name || '',
+      amount: item.amount,
+      payment_method: item.payment_method,
+      notes: item.notes,
+      reference_id: item.reference_id,
+      reference_type: item.reference_type,
+      created_at: item.created_at
+    }));
   }
-  
-  public async getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
-    try {
-      let query = supabase
-        .from('financial_categories')
-        .select('*')
-        .order('name');
-      
-      if (type) {
-        query = query.eq('type', type);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      return data;
-    } catch (error) {
+
+  // Categories methods
+  public async getCategories(): Promise<Category[]> {
+    const { data, error } = await supabase
+      .from('financial_categories')
+      .select('*')
+      .order('name');
+
+    if (error) {
       console.error('Error fetching categories:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب فئات المعاملات",
-        variant: "destructive"
-      });
       return [];
     }
+
+    return data || [];
   }
-  
+
+  public async getCategory(id: string): Promise<Category | null> {
+    const { data, error } = await supabase
+      .from('financial_categories')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching category:', error);
+      return null;
+    }
+
+    return data;
+  }
+
   public async createCategory(category: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
-    try {
-      const { data, error } = await supabase
-        .from('financial_categories')
-        .insert(category)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      toast({
-        title: "تم بنجاح",
-        description: "تم إنشاء فئة جديدة بنجاح",
-        variant: "default"
-      });
-      
-      return data;
-    } catch (error) {
+    const { data, error } = await supabase
+      .from('financial_categories')
+      .insert(category)
+      .select()
+      .single();
+
+    if (error) {
       console.error('Error creating category:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إنشاء فئة جديدة",
-        variant: "destructive"
-      });
       return null;
     }
+
+    return data;
   }
-  
-  public async updateCategory(id: string, category: Partial<Omit<Category, 'id' | 'created_at'>>): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('financial_categories')
-        .update(category)
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "تم بنجاح",
-        description: "تم تحديث الفئة بنجاح",
-        variant: "default"
-      });
-      
-      return true;
-    } catch (error) {
+
+  public async updateCategory(id: string, category: Partial<Category>): Promise<Category | null> {
+    const { data, error } = await supabase
+      .from('financial_categories')
+      .update(category)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
       console.error('Error updating category:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تحديث الفئة",
-        variant: "destructive"
-      });
-      return false;
-    }
-  }
-  
-  public async deleteCategory(id: string): Promise<boolean> {
-    try {
-      // Check if category is used in any transactions
-      const { count, error: countError } = await supabase
-        .from('financial_transactions')
-        .select('*', { count: 'exact', head: true })
-        .eq('category_id', id);
-      
-      if (countError) throw countError;
-      
-      if (count && count > 0) {
-        toast({
-          title: "غير مسموح",
-          description: "لا يمكن حذف هذه الفئة لأنها مستخدمة في معاملات موجودة",
-          variant: "destructive"
-        });
-        return false;
-      }
-      
-      const { error } = await supabase
-        .from('financial_categories')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "تم بنجاح",
-        description: "تم حذف الفئة بنجاح",
-        variant: "default"
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error deleting category:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء حذف الفئة",
-        variant: "destructive"
-      });
-      return false;
-    }
-  }
-  
-  public async recordTransaction(transaction: Omit<Transaction, 'id' | 'created_at'>): Promise<Transaction | null> {
-    try {
-      const { data, error } = await supabase
-        .from('financial_transactions')
-        .insert(transaction)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Update cash or bank balance
-      if (transaction.payment_method === 'cash') {
-        await this.updateCashBalance(
-          transaction.type === 'income' ? transaction.amount : -transaction.amount
-        );
-      } else if (transaction.payment_method === 'bank') {
-        await this.updateBankBalance(
-          transaction.type === 'income' ? transaction.amount : -transaction.amount
-        );
-      }
-      
-      toast({
-        title: "تم بنجاح",
-        description: "تم تسجيل المعاملة بنجاح",
-        variant: "default"
-      });
-      
-      return data;
-    } catch (error) {
-      console.error('Error recording transaction:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تسجيل المعاملة",
-        variant: "destructive"
-      });
       return null;
     }
+
+    return data;
   }
-  
-  public async updateTransaction(id: string, transaction: Partial<Omit<Transaction, 'id' | 'created_at'>>): Promise<boolean> {
-    try {
-      // Get original transaction to calculate balance adjustments
-      const { data: originalTransaction, error: fetchError } = await supabase
-        .from('financial_transactions')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      const { error } = await supabase
-        .from('financial_transactions')
-        .update(transaction)
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // Handle balance updates if payment method or amount changed
-      if (
-        transaction.payment_method !== undefined ||
-        transaction.amount !== undefined ||
-        transaction.type !== undefined
-      ) {
-        // Reverse original transaction effect
-        if (originalTransaction.payment_method === 'cash') {
-          await this.updateCashBalance(
-            originalTransaction.type === 'income' ? -originalTransaction.amount : originalTransaction.amount
-          );
-        } else if (originalTransaction.payment_method === 'bank') {
-          await this.updateBankBalance(
-            originalTransaction.type === 'income' ? -originalTransaction.amount : originalTransaction.amount
-          );
-        }
-        
-        // Apply new transaction effect
-        const newAmount = transaction.amount ?? originalTransaction.amount;
-        const newType = transaction.type ?? originalTransaction.type;
-        const newMethod = transaction.payment_method ?? originalTransaction.payment_method;
-        
-        if (newMethod === 'cash') {
-          await this.updateCashBalance(
-            newType === 'income' ? newAmount : -newAmount
-          );
-        } else if (newMethod === 'bank') {
-          await this.updateBankBalance(
-            newType === 'income' ? newAmount : -newAmount
-          );
-        }
+
+  public async deleteCategory(id: string): Promise<boolean> {
+    // First check if the category is being used in any transactions
+    const { data: transactions, error: checkError } = await supabase
+      .from('financial_transactions')
+      .select('id')
+      .eq('category_id', id)
+      .limit(1);
+
+    if (checkError) {
+      console.error('Error checking for category usage:', checkError);
+      return false;
+    }
+
+    // If category is in use, don't delete it
+    if (transactions && transactions.length > 0) {
+      console.error('Cannot delete category that is being used in transactions');
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('financial_categories')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting category:', error);
+      return false;
+    }
+
+    return true;
+  }
+
+  // Transaction CRUD methods
+  public async createTransaction(transaction: Omit<Transaction, 'id' | 'created_at' | 'category_name'>): Promise<Transaction | null> {
+    // Update financial balance based on transaction type and payment method
+    if (transaction.payment_method !== 'other') {
+      await this.updateBalance(
+        transaction.type === 'income' ? transaction.amount : -transaction.amount,
+        transaction.payment_method
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('financial_transactions')
+      .insert(transaction)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating transaction:', error);
+      return null;
+    }
+
+    // Fetch the category name
+    const { data: category } = await supabase
+      .from('financial_categories')
+      .select('name')
+      .eq('id', transaction.category_id)
+      .single();
+
+    return {
+      ...data,
+      category_name: category?.name || ''
+    };
+  }
+
+  public async updateTransaction(
+    id: string, 
+    transaction: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name'>>
+  ): Promise<Transaction | null> {
+    // Get the original transaction to calculate balance adjustments
+    const { data: original, error: getError } = await supabase
+      .from('financial_transactions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (getError || !original) {
+      console.error('Error fetching original transaction:', getError);
+      return null;
+    }
+
+    // Update financial balance based on changes in amount, type, or payment method
+    if (
+      (transaction.amount !== undefined && transaction.amount !== original.amount) ||
+      (transaction.type !== undefined && transaction.type !== original.type) ||
+      (transaction.payment_method !== undefined && transaction.payment_method !== original.payment_method)
+    ) {
+      // Reverse the original transaction impact on balance
+      if (original.payment_method !== 'other') {
+        await this.updateBalance(
+          original.type === 'income' ? -original.amount : original.amount,
+          original.payment_method
+        );
       }
-      
-      toast({
-        title: "تم بنجاح",
-        description: "تم تحديث المعاملة بنجاح",
-        variant: "default"
-      });
-      
-      return true;
-    } catch (error) {
+
+      // Apply the new transaction impact on balance
+      if ((transaction.payment_method || original.payment_method) !== 'other') {
+        await this.updateBalance(
+          (transaction.type || original.type) === 'income' 
+            ? (transaction.amount || original.amount) 
+            : -(transaction.amount || original.amount),
+          (transaction.payment_method || original.payment_method) as 'cash' | 'bank'
+        );
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('financial_transactions')
+      .update(transaction)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
       console.error('Error updating transaction:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تحديث المعاملة",
-        variant: "destructive"
-      });
-      return false;
+      return null;
     }
+
+    // Fetch the category name
+    const { data: category } = await supabase
+      .from('financial_categories')
+      .select('name')
+      .eq('id', data.category_id)
+      .single();
+
+    return {
+      ...data,
+      category_name: category?.name || ''
+    };
   }
-  
+
   public async deleteTransaction(id: string): Promise<boolean> {
-    try {
-      // Get transaction details before deleting
-      const { data: transaction, error: fetchError } = await supabase
-        .from('financial_transactions')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      const { error } = await supabase
-        .from('financial_transactions')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // Reverse effect on balances
-      if (transaction.payment_method === 'cash') {
-        await this.updateCashBalance(
-          transaction.type === 'income' ? -transaction.amount : transaction.amount
-        );
-      } else if (transaction.payment_method === 'bank') {
-        await this.updateBankBalance(
-          transaction.type === 'income' ? -transaction.amount : transaction.amount
-        );
-      }
-      
-      toast({
-        title: "تم بنجاح",
-        description: "تم حذف المعاملة بنجاح",
-        variant: "default"
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error deleting transaction:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء حذف المعاملة",
-        variant: "destructive"
-      });
+    // Get the transaction to calculate balance adjustments
+    const { data: transaction, error: getError } = await supabase
+      .from('financial_transactions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (getError || !transaction) {
+      console.error('Error fetching transaction for deletion:', getError);
       return false;
     }
-  }
-  
-  private async updateCashBalance(amount: number): Promise<void> {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('financial_balance')
-        .select('cash_balance')
-        .eq('id', '1')
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      const newBalance = (data?.cash_balance || 0) + amount;
-      
-      const { error } = await supabase
-        .from('financial_balance')
-        .update({ cash_balance: newBalance })
-        .eq('id', '1');
-      
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating cash balance:', error);
+
+    // Reverse the transaction impact on balance
+    if (transaction.payment_method !== 'other') {
+      await this.updateBalance(
+        transaction.type === 'income' ? -transaction.amount : transaction.amount,
+        transaction.payment_method
+      );
     }
-  }
-  
-  private async updateBankBalance(amount: number): Promise<void> {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('financial_balance')
-        .select('bank_balance')
-        .eq('id', '1')
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      const newBalance = (data?.bank_balance || 0) + amount;
-      
-      const { error } = await supabase
-        .from('financial_balance')
-        .update({ bank_balance: newBalance })
-        .eq('id', '1');
-      
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating bank balance:', error);
+
+    const { error } = await supabase
+      .from('financial_transactions')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting transaction:', error);
+      return false;
     }
+
+    return true;
   }
-  
+
+  // Balance management
+  private async updateBalance(amount: number, method: 'cash' | 'bank'): Promise<boolean> {
+    // Get current balance
+    const { data: currentBalance, error: getError } = await supabase
+      .from('financial_balance')
+      .select('*')
+      .eq('id', '1')
+      .single();
+
+    if (getError) {
+      console.error('Error getting current balance:', getError);
+      return false;
+    }
+
+    // Update based on payment method
+    const updates = method === 'cash'
+      ? { cash_balance: currentBalance.cash_balance + amount }
+      : { bank_balance: currentBalance.bank_balance + amount };
+
+    const { error: updateError } = await supabase
+      .from('financial_balance')
+      .update(updates)
+      .eq('id', '1');
+
+    if (updateError) {
+      console.error('Error updating balance:', updateError);
+      return false;
+    }
+
+    return true;
+  }
+
+  // Get current balance
+  public async getBalance(): Promise<FinancialBalance> {
+    const { data, error } = await supabase
+      .from('financial_balance')
+      .select('*')
+      .eq('id', '1')
+      .single();
+
+    if (error) {
+      console.error('Error getting balance:', error);
+      return { cash_balance: 0, bank_balance: 0, total_balance: 0 };
+    }
+
+    return {
+      cash_balance: data.cash_balance || 0,
+      bank_balance: data.bank_balance || 0,
+      total_balance: (data.cash_balance || 0) + (data.bank_balance || 0)
+    };
+  }
+
+  // Get financial summary for dashboard
   public async getFinancialSummary(startDate?: string, endDate?: string): Promise<FinancialSummary> {
-    try {
-      // Get balances
-      const { data: balanceData, error: balanceError } = await supabase
-        .from('financial_balance')
-        .select('*')
-        .eq('id', '1')
-        .single();
-      
-      if (balanceError) throw balanceError;
-      
-      // Build filter for transactions
-      let query = supabase
-        .from('financial_transactions')
-        .select('*');
-      
-      if (startDate) {
-        query = query.gte('date', startDate);
-      }
-      
-      if (endDate) {
-        query = query.lte('date', endDate);
-      }
-      
-      const { data: transactions, error: transactionsError } = await query;
-      
-      if (transactionsError) throw transactionsError;
-      
-      // Calculate totals
-      let totalIncome = 0;
-      let totalExpenses = 0;
-      let salesProfit = 0;
-      
-      transactions.forEach(transaction => {
-        if (transaction.type === 'income') {
-          totalIncome += transaction.amount;
-          
-          // If reference type is sales, add to sales profit
-          if (transaction.reference_type === 'sales') {
-            salesProfit += transaction.amount;
-          }
-        } else {
-          totalExpenses += transaction.amount;
-        }
-      });
-      
-      // For the selected period, get the sales cost from invoices
-      const { data: invoiceItems, error: invoiceItemsError } = await supabase
-        .from('invoice_items')
-        .select(`
-          *,
-          invoices!inner(*)
-        `)
-        .eq('invoices.invoice_type', 'sales')
-        .gte('invoices.date', startDate || '1900-01-01')
-        .lte('invoices.date', endDate || '2100-12-31');
-      
-      if (invoiceItemsError) throw invoiceItemsError;
-      
-      // Calculate cost of sold products
-      let salesCost = 0;
-      
-      if (invoiceItems && invoiceItems.length > 0) {
-        for (const item of invoiceItems) {
-          if (item.item_type === 'finished_products') {
-            // Get unit cost for the finished product
-            const { data: product, error: productError } = await supabase
-              .from('finished_products')
-              .select('unit_cost')
-              .eq('id', item.item_id)
-              .single();
-            
-            if (!productError && product) {
-              salesCost += (product.unit_cost * item.quantity);
-            }
-          }
-        }
-        
-        // Subtract cost from sales revenue to get real sales profit
-        salesProfit -= salesCost;
-      }
-      
-      return {
-        total_income: totalIncome,
-        total_expenses: totalExpenses,
-        net_profit: totalIncome - totalExpenses,
-        cash_balance: balanceData?.cash_balance || 0,
-        bank_balance: balanceData?.bank_balance || 0,
-        sales_profit: salesProfit
-      };
-    } catch (error) {
-      console.error('Error getting financial summary:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب ملخص الحالة المالية",
-        variant: "destructive"
-      });
-      
-      return {
-        total_income: 0,
-        total_expenses: 0,
-        net_profit: 0,
-        cash_balance: 0,
-        bank_balance: 0,
-        sales_profit: 0
-      };
-    }
+    // Get all transactions for the period
+    const transactions = await this.getTransactions(startDate, endDate);
+    
+    // Calculate totals
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const totalExpenses = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Get current balance
+    const balance = await this.getBalance();
+    
+    // Get recent transactions for the dashboard
+    const recentTransactions = await this.getTransactions(undefined, undefined, undefined, undefined, 5);
+    
+    return {
+      totalIncome,
+      totalExpenses,
+      netProfit: totalIncome - totalExpenses,
+      balance,
+      recentTransactions
+    };
   }
 }
-
-export default FinancialService;

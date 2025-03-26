@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,7 +19,10 @@ import {
   Settings,
   Users,
   TrendingUp,
-  Wallet
+  Wallet,
+  DollarSign,
+  PieChart,
+  Tags
 } from 'lucide-react';
 import { useSidebar } from './SidebarContext';
 
@@ -109,7 +113,7 @@ const Sidebar: React.FC = () => {
             <NavItem 
               to="/inventory/semi-finished" 
               icon={<Beaker size={20} />} 
-              label="المنتجات النصف م��نعة" 
+              label="المنتجات النصف مصنعة" 
               active={pathname === '/inventory/semi-finished'}
             />
             <NavItem 
@@ -159,6 +163,27 @@ const Sidebar: React.FC = () => {
             />
           </NavGroup>
           
+          <NavGroup title="المالية" icon={<Wallet size={16} />} defaultOpen={pathname.startsWith('/financial')}>
+            <NavItem 
+              to="/financial" 
+              icon={<DollarSign size={20} />} 
+              label="لوحة التحكم المالية" 
+              active={pathname === '/financial'}
+            />
+            <NavItem 
+              to="/financial/transactions/new" 
+              icon={<Wallet size={20} />} 
+              label="معاملة جديدة" 
+              active={pathname === '/financial/transactions/new'}
+            />
+            <NavItem 
+              to="/financial/categories" 
+              icon={<Tags size={20} />} 
+              label="فئات المعاملات" 
+              active={pathname === '/financial/categories'}
+            />
+          </NavGroup>
+          
           <NavGroup title="الإدارة" icon={<Settings size={16} />} defaultOpen={false}>
             <NavItem 
               to="/settings/users" 
@@ -171,15 +196,6 @@ const Sidebar: React.FC = () => {
               icon={<Settings size={20} />} 
               label="إعدادات النظام" 
               active={pathname === '/settings/system'}
-            />
-          </NavGroup>
-          
-          <NavGroup title="المالية" icon={<Wallet size={16} />}>
-            <NavItem 
-              to="/financial" 
-              icon={<Wallet size={20} />} 
-              label="لوحة التحكم" 
-              active={pathname === '/financial'}
             />
           </NavGroup>
         </div>

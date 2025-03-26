@@ -9,6 +9,98 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      financial_balance: {
+        Row: {
+          bank_balance: number
+          cash_balance: number
+          id: string
+          last_updated: string | null
+        }
+        Insert: {
+          bank_balance?: number
+          cash_balance?: number
+          id?: string
+          last_updated?: string | null
+        }
+        Update: {
+          bank_balance?: number
+          cash_balance?: number
+          id?: string
+          last_updated?: string | null
+        }
+        Relationships: []
+      }
+      financial_categories: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          type: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      financial_transactions: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string | null
+          date: string
+          id: string
+          notes: string | null
+          payment_method: string
+          reference_id: string | null
+          reference_type: string | null
+          type: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          notes?: string | null
+          payment_method: string
+          reference_id?: string | null
+          reference_type?: string | null
+          type: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "financial_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finished_product_packaging: {
         Row: {
           created_at: string | null
