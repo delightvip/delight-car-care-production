@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -81,9 +80,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const defaultValues = initialData 
     ? {
         ...initialData,
-        // Convert string date to Date object
         date: initialData.date ? new Date(initialData.date) : new Date(),
-        // Ensure items are properly formatted
         items: initialData.items || []
       }
     : {
