@@ -19,7 +19,8 @@ import {
   FileBox,
   BoxIcon,
   ArrowLeftRight,
-  Truck
+  Truck,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarContext';

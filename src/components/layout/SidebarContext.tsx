@@ -8,6 +8,7 @@ interface SidebarContextType {
   isOpen: boolean;
   isMobile: boolean;
   openMobile: boolean;
+  isExpanded: boolean; // Added isExpanded property
   setOpenMobile: (open: boolean) => void;
   toggleSidebar: () => void;
 }
@@ -30,11 +31,15 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) =>
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(true);
   const [openMobile, setOpenMobile] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true); // Added state for isExpanded
 
   const toggleSidebar = useCallback(() => {
-    return isMobile
-      ? setOpenMobile((open) => !open)
-      : setIsOpen((open) => !open);
+    if (isMobile) {
+      setOpenMobile((open) => !open);
+    } else {
+      setIsOpen((open) => !open);
+      setIsExpanded((expanded) => !expanded); // Toggle isExpanded when sidebar is toggled
+    }
   }, [isMobile]);
 
   useEffect(() => {
@@ -55,6 +60,7 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) =>
         isOpen,
         isMobile,
         openMobile,
+        isExpanded, // Provide isExpanded to the context
         setOpenMobile,
         toggleSidebar,
       }}
