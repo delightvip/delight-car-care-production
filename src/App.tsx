@@ -5,7 +5,6 @@ import { Route, Routes } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { ThemeProvider } from './components/theme-provider';
 import NotificationProvider from './components/notifications/NotificationProvider';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 
 // Pages
@@ -41,63 +40,52 @@ import CommercialDashboard from './pages/commercial/CommercialDashboard';
 import Analytics from './pages/Analytics';
 import InventoryDistributionPage from './pages/analytics/InventoryDistributionPage';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
-
 function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-      <QueryClientProvider client={queryClient}>
-        <NotificationProvider>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              {/* Dashboard */}
-              <Route index element={<Index />} />
-              
-              {/* Inventory Routes */}
-              <Route path="inventory/raw-materials" element={<InventoryRawMaterials />} />
-              <Route path="inventory/packaging" element={<InventoryPackaging />} />
-              <Route path="inventory/semi-finished" element={<InventorySemiFinished />} />
-              <Route path="inventory/finished-products" element={<InventoryFinishedProducts />} />
-              <Route path="inventory/low-stock" element={<LowStockItems />} />
-              <Route path="inventory/tracking" element={<InventoryTracking />} />
-              <Route path="inventory/:type/:id" element={<ProductDetails />} />
-              
-              {/* Production Routes */}
-              <Route path="production/orders" element={<ProductionOrders />} />
-              <Route path="production/packaging" element={<ProductionPackaging />} />
-              <Route path="production/planning" element={<ProductionPlanning />} />
-              
-              {/* Commercial Routes */}
-              <Route path="commercial" element={<CommercialDashboard />} />
-              <Route path="commercial/parties" element={<Parties />} />
-              <Route path="commercial/parties/:id" element={<PartyDetails />} />
-              <Route path="commercial/invoices" element={<Invoices />} />
-              <Route path="commercial/invoices/:id" element={<InvoiceDetails />} />
-              <Route path="commercial/payments" element={<Payments />} />
-              <Route path="commercial/returns" element={<Returns />} />
-              <Route path="commercial/statements" element={<AccountStatements />} />
-              
-              {/* Analytics Routes */}
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
-              
-              {/* Settings */}
-              <Route path="settings" element={<Settings />} />
-              
-              {/* 404 - Not Found */}
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
-          <Toaster position="top-left" dir="rtl" />
-        </NotificationProvider>
-      </QueryClientProvider>
+      <NotificationProvider>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            {/* Dashboard */}
+            <Route index element={<Index />} />
+            
+            {/* Inventory Routes */}
+            <Route path="inventory/raw-materials" element={<InventoryRawMaterials />} />
+            <Route path="inventory/packaging" element={<InventoryPackaging />} />
+            <Route path="inventory/semi-finished" element={<InventorySemiFinished />} />
+            <Route path="inventory/finished-products" element={<InventoryFinishedProducts />} />
+            <Route path="inventory/low-stock" element={<LowStockItems />} />
+            <Route path="inventory/tracking" element={<InventoryTracking />} />
+            <Route path="inventory/:type/:id" element={<ProductDetails />} />
+            
+            {/* Production Routes */}
+            <Route path="production/orders" element={<ProductionOrders />} />
+            <Route path="production/packaging" element={<ProductionPackaging />} />
+            <Route path="production/planning" element={<ProductionPlanning />} />
+            
+            {/* Commercial Routes */}
+            <Route path="commercial" element={<CommercialDashboard />} />
+            <Route path="commercial/parties" element={<Parties />} />
+            <Route path="commercial/parties/:id" element={<PartyDetails />} />
+            <Route path="commercial/invoices" element={<Invoices />} />
+            <Route path="commercial/invoices/:id" element={<InvoiceDetails />} />
+            <Route path="commercial/payments" element={<Payments />} />
+            <Route path="commercial/returns" element={<Returns />} />
+            <Route path="commercial/statements" element={<AccountStatements />} />
+            
+            {/* Analytics Routes */}
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
+            
+            {/* Settings */}
+            <Route path="settings" element={<Settings />} />
+            
+            {/* 404 - Not Found */}
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+        <Toaster position="top-left" dir="rtl" />
+      </NotificationProvider>
     </ThemeProvider>
   );
 }
