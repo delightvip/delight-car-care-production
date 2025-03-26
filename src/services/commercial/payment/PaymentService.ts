@@ -1,7 +1,8 @@
+
 import { Payment } from '@/services/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
 import { PaymentProcessor } from './PaymentProcessor';
-import { toast } from "@/hooks/use-toast";
+import { toast } from '@/hooks/use-toast';
 
 // الخدمة الرئيسية للدفعات
 export class PaymentService {
@@ -35,7 +36,7 @@ export class PaymentService {
         toast({
           title: "نجاح",
           description: "تم تسجيل المعاملة بنجاح",
-          variant: "success"
+          variant: "default"
         });
         return payment;
       }

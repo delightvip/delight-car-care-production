@@ -1,7 +1,8 @@
+
 import { Return } from '@/services/CommercialTypes';
 import { ReturnEntity } from './ReturnEntity';
 import { ReturnProcessor } from './ReturnProcessor';
-import { toast } from "@/hooks/use-toast";
+import { toast } from '@/hooks/use-toast';
 
 // خدمة المرتجعات الرئيسية
 export class ReturnService {
@@ -68,24 +69,22 @@ export class ReturnService {
       
       console.log('Return created successfully:', returnRecord.id);
       
-      // إذا كانت حالة المرتجع هي "confirmed"، قم بتأكيده تلقائياً
+      // إذا كانت حالة المرتجع هي "confirmed"، قم بتأكيده تلقائياً (بشكل غير متزامن)
       if (returnRecord && returnData.payment_status === 'confirmed') {
-        // استخدام setTimeout لتجنب تجمد الواجهة
-        setTimeout(async () => {
-          try {
-            console.log('Auto-confirming return:', returnRecord.id);
-            await this.confirmReturn(returnRecord.id);
-          } catch (err) {
-            console.error('Error auto-confirming return:', err);
-          }
-        }, 100);
+        // تجنب تجمد الواجهة باستخدام وعد
+        this.confirmReturn(returnRecord.id).then(success => {
+          console.log('Auto-confirmation result:', success);
+        }).catch(err => {
+          console.error('Error in auto-confirmation:', err);
+        });
       }
       
       toast({
         title: "نجاح",
         description: "تم إنشاء المرتجع بنجاح",
-        variant: "success"
+        variant: "default"
       });
+      
       return returnRecord;
     } catch (error) {
       console.error('Error creating return:', error);
@@ -106,7 +105,7 @@ export class ReturnService {
         toast({
           title: "نجاح", 
           description: "تم تحديث المرتجع بنجاح",
-          variant: "success"
+          variant: "default"
         });
       } else {
         toast({
@@ -129,24 +128,29 @@ export class ReturnService {
   }
   
   public async confirmReturn(returnId: string): Promise<boolean> {
+    console.log('Starting return confirmation for:', returnId);
+    
     try {
-      // استخدام وعد يتم حله بعد تأكيد المرتجع
-      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
-      const confirmPromise = new Promise<boolean>((resolve) => {
-        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
-        // وتجنب تجمد واجهة المستخدم
-        setTimeout(async () => {
-          try {
-            const result = await this.returnProcessor.confirmReturn(returnId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in confirmReturn timeout(${returnId}):`, error);
-            resolve(false);
-          }
-        }, 100);
-      });
+      // قم بتنفيذ تأكيد المرتجع
+      const result = await this.returnProcessor.confirmReturn(returnId);
       
-      return confirmPromise;
+      if (result) {
+        console.log('Return confirmation succeeded for:', returnId);
+        toast({
+          title: "نجاح",
+          description: "تم تأكيد المرتجع بنجاح",
+          variant: "default"
+        });
+      } else {
+        console.log('Return confirmation failed for:', returnId);
+        toast({
+          title: "خطأ",
+          description: "فشل تأكيد المرتجع",
+          variant: "destructive"
+        });
+      }
+      
+      return result;
     } catch (error) {
       console.error(`Error in confirmReturn(${returnId}):`, error);
       toast({
@@ -159,24 +163,29 @@ export class ReturnService {
   }
   
   public async cancelReturn(returnId: string): Promise<boolean> {
+    console.log('Starting return cancellation for:', returnId);
+    
     try {
-      // استخدام وعد يتم حله بعد إلغاء المرتجع
-      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
-      const cancelPromise = new Promise<boolean>((resolve) => {
-        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
-        // وتجنب تجمد واجهة المستخدم
-        setTimeout(async () => {
-          try {
-            const result = await this.returnProcessor.cancelReturn(returnId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in cancelReturn timeout(${returnId}):`, error);
-            resolve(false);
-          }
-        }, 100);
-      });
+      // قم بتنفيذ إلغاء المرتجع
+      const result = await this.returnProcessor.cancelReturn(returnId);
       
-      return cancelPromise;
+      if (result) {
+        console.log('Return cancellation succeeded for:', returnId);
+        toast({
+          title: "نجاح",
+          description: "تم إلغاء المرتجع بنجاح",
+          variant: "default"
+        });
+      } else {
+        console.log('Return cancellation failed for:', returnId);
+        toast({
+          title: "خطأ",
+          description: "فشل إلغاء المرتجع",
+          variant: "destructive"
+        });
+      }
+      
+      return result;
     } catch (error) {
       console.error(`Error in cancelReturn(${returnId}):`, error);
       toast({
@@ -196,7 +205,7 @@ export class ReturnService {
         toast({
           title: "نجاح",
           description: "تم حذف المرتجع بنجاح",
-          variant: "success" 
+          variant: "default" 
         });
       } else {
         toast({
@@ -213,7 +222,7 @@ export class ReturnService {
         title: "خطأ",
         description: "حدث خطأ أثناء حذف المرتجع",
         variant: "destructive"
-      });
+        });
       return false;
     }
   }

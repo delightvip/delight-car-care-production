@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Loader2, PlusCircle, Trash } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle, Trash, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -33,7 +33,8 @@ import { Return, ReturnItem } from '@/services/CommercialTypes';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
 import PartyService from '@/services/PartyService';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Define the ReturnFormValues schema
 const returnFormSchema = z.object({
@@ -49,9 +50,15 @@ const returnFormSchema = z.object({
       item_type: z.enum(['raw_materials', 'packaging_materials', 'semi_finished_products', 'finished_products']),
       item_name: z.string(),
       quantity: z.number().min(0.1, 'يجب أن تكون الكمية أكبر من صفر'),
-      unit_price: z.number().min(0, 'يجب أن يكون السعر أكبر من أو يساوي صفر')
+      unit_price: z.number().min(0, 'يجب أن يكون السعر أكبر من أو يساوي صفر'),
+      selected: z.boolean().optional(),
+      max_quantity: z.number().optional(),
+      invoice_quantity: z.number().optional()
     })
-  ).min(1, 'يجب إضافة عنصر واحد على الأقل')
+  ).refine(items => items.some(item => item.selected === true && item.quantity > 0), {
+    message: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
+    path: ["items"]
+  })
 });
 
 type ReturnFormValues = z.infer<typeof returnFormSchema>;
@@ -65,7 +72,8 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<string>('finished_products');
   const [loadingInvoiceItems, setLoadingInvoiceItems] = useState<boolean>(false);
-  const queryClient = useQueryClient();
+  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
+  
   const commercialService = CommercialService.getInstance();
   const partyService = PartyService.getInstance();
   
@@ -92,6 +100,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   });
 
   const returnType = form.watch('return_type');
+  const selectedItems = form.watch('items');
 
   // Fetch invoices
   const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
@@ -102,7 +111,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   // Fetch parties
   const { data: parties } = useQuery({
     queryKey: ['parties'],
-    queryFn: () => partyService.getParties(), // Changed to use PartyService instead of CommercialService
+    queryFn: () => partyService.getParties(),
   });
 
   // Fetch inventory items based on selected type
@@ -151,20 +160,36 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
               item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
               item_name: item.item_name,
               quantity: 0, // Start with 0 quantity for user to adjust
-              unit_price: item.unit_price
+              unit_price: item.unit_price,
+              selected: false, // Default unselected
+              max_quantity: item.quantity, // Set max return quantity to the original quantity
+              invoice_quantity: item.quantity // Keep track of original quantity
             }));
             
             form.setValue('items', returnItems);
+            setInvoiceItems(invoice.items);
             calculateTotal();
             
-            toast.success('تم جلب أصناف الفاتورة بنجاح');
+            toast({
+              title: "نجاح",
+              description: "تم جلب أصناف الفاتورة بنجاح",
+              variant: "default"
+            });
           } else {
-            toast.info('لا توجد أصناف في الفاتورة المحددة');
+            toast({
+              title: "معلومات",
+              description: "لا توجد أصناف في الفاتورة المحددة",
+              variant: "default"
+            });
           }
         }
       } catch (error) {
         console.error('Error fetching invoice details:', error);
-        toast.error('حدث خطأ أثناء جلب تفاصيل الفاتورة');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء جلب تفاصيل الفاتورة",
+          variant: "destructive"
+        });
       } finally {
         setLoadingInvoiceItems(false);
       }
@@ -172,6 +197,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       // Clear party and items if no invoice selected
       form.setValue('party_id', undefined);
       form.setValue('items', []);
+      setInvoiceItems([]);
     }
   };
 
@@ -180,12 +206,13 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     form.setValue('party_id', partyId === 'no_party' ? undefined : partyId);
   };
 
-  // Calculate total amount from items
+  // Calculate total amount from selected items only
   const calculateTotal = () => {
     const items = form.getValues('items');
     if (items && items.length > 0) {
       const total = items.reduce((sum, item) => {
-        return sum + (item.quantity * item.unit_price);
+        // Only include selected items in the total
+        return sum + (item.selected ? (item.quantity * item.unit_price) : 0);
       }, 0);
       form.setValue('amount', total);
       console.log('Calculated total amount:', total);
@@ -215,7 +242,8 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
         item_type: selectedItemType as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products', 
         item_name: '', 
         quantity: 1, 
-        unit_price: 0 
+        unit_price: 0,
+        selected: true
       }
     ]);
     calculateTotal();
@@ -228,29 +256,95 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     calculateTotal();
   };
 
-  // Handle form submission
-  const handleSubmitForm = (values: ReturnFormValues) => {
-    // Create a return object from form values
-    const returnData: Omit<Return, 'id' | 'created_at'> = {
-      return_type: values.return_type,
-      invoice_id: values.invoice_id,
-      party_id: values.party_id,
-      date: format(values.date, 'yyyy-MM-dd'),
-      amount: values.amount,
-      notes: values.notes,
-      payment_status: 'draft', // Add the payment_status field with default value
-      items: values.items.map(item => ({
-        item_id: item.item_id,
-        item_type: item.item_type,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.quantity * item.unit_price
-      }))
+  // Toggle item selection
+  const toggleItemSelection = (index: number, selected: boolean) => {
+    const items = form.getValues('items');
+    const updatedItems = [...items];
+    
+    // Update the selected state
+    updatedItems[index] = {
+      ...updatedItems[index],
+      selected
     };
+    
+    // Reset quantity to 0 if deselected
+    if (!selected) {
+      updatedItems[index].quantity = 0;
+    }
+    
+    form.setValue('items', updatedItems);
+    calculateTotal();
+  };
 
-    console.log('Submitting return data:', returnData);
-    onSubmit(returnData);
+  // Handle quantity change with validation against max quantity
+  const handleQuantityChange = (index: number, value: string) => {
+    const parsedValue = parseFloat(value) || 0;
+    const items = form.getValues('items');
+    const item = items[index];
+    
+    // Ensure quantity doesn't exceed max quantity (original invoice quantity)
+    const maxQty = item.max_quantity || Number.MAX_VALUE;
+    const validatedQuantity = Math.min(parsedValue, maxQty);
+    
+    // Update the quantity
+    form.setValue(`items.${index}.quantity`, validatedQuantity);
+    
+    // If quantity is greater than 0, ensure the item is selected
+    if (validatedQuantity > 0 && !item.selected) {
+      toggleItemSelection(index, true);
+    }
+    
+    calculateTotal();
+  };
+
+  // Handle form submission
+  const handleSubmitForm = async (values: ReturnFormValues) => {
+    try {
+      console.log('Form values before submission:', values);
+      
+      // Filter only selected items
+      const selectedItems = values.items.filter(item => item.selected && item.quantity > 0);
+      
+      if (selectedItems.length === 0) {
+        toast({
+          title: "خطأ",
+          description: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Create a return object from form values
+      const returnData: Omit<Return, 'id' | 'created_at'> = {
+        return_type: values.return_type,
+        invoice_id: values.invoice_id,
+        party_id: values.party_id,
+        date: format(values.date, 'yyyy-MM-dd'),
+        amount: values.amount,
+        notes: values.notes,
+        payment_status: 'draft', // Add the payment_status field with default value
+        items: selectedItems.map(item => ({
+          item_id: item.item_id,
+          item_type: item.item_type,
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total: item.quantity * item.unit_price
+        }))
+      };
+
+      console.log('Submitting return data:', returnData);
+      
+      // Pass the data to the parent component
+      onSubmit(returnData);
+    } catch (error) {
+      console.error('Error submitting return form:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء معالجة النموذج",
+        variant: "destructive"
+      });
+    }
   };
 
   // Filter invoices based on selected return type
@@ -294,6 +388,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                     form.setValue('party_id', undefined);
                     form.setValue('items', []);
                     setSelectedInvoice(null);
+                    setInvoiceItems([]);
                   }} 
                   defaultValue={field.value}
                 >
@@ -450,7 +545,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  يتم حساب هذا المبلغ تلقائيًا من الأصناف المضافة
+                  يتم حساب هذا المبلغ تلقائيًا من الأصناف المختارة
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -477,28 +572,30 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">الأصناف</h3>
-            <div className="flex space-x-2">
-              <Select value={selectedItemType} onValueChange={setSelectedItemType}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="نوع الصنف" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="raw_materials">مواد خام</SelectItem>
-                  <SelectItem value="packaging_materials">مواد تعبئة</SelectItem>
-                  <SelectItem value="semi_finished_products">منتجات نصف مصنعة</SelectItem>
-                  <SelectItem value="finished_products">منتجات تامة</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={addItem}
-                disabled={loadingInvoiceItems}
-              >
-                <PlusCircle className="h-4 w-4 mr-2" />
-                إضافة صنف
-              </Button>
-            </div>
+            {!selectedInvoice && (
+              <div className="flex space-x-2">
+                <Select value={selectedItemType} onValueChange={setSelectedItemType}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="نوع الصنف" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="raw_materials">مواد خام</SelectItem>
+                    <SelectItem value="packaging_materials">مواد تعبئة</SelectItem>
+                    <SelectItem value="semi_finished_products">منتجات نصف مصنعة</SelectItem>
+                    <SelectItem value="finished_products">منتجات تامة</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={addItem}
+                  disabled={loadingInvoiceItems || !!selectedInvoice}
+                >
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  إضافة صنف
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="border rounded-md p-4">
@@ -510,57 +607,74 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             ) : form.watch('items')?.length > 0 ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-12 gap-4 border-b pb-2 font-semibold">
-                  <div className="col-span-5">الصنف</div>
+                  {selectedInvoice && <div className="col-span-1">اختيار</div>}
+                  <div className={selectedInvoice ? "col-span-4" : "col-span-5"}>الصنف</div>
                   <div className="col-span-2">الكمية</div>
-                  <div className="col-span-3">سعر الوحدة</div>
+                  {selectedInvoice && <div className="col-span-1">الكمية الأصلية</div>}
+                  <div className="col-span-2">سعر الوحدة</div>
                   <div className="col-span-1">الإجراءات</div>
-                  <div className="col-span-1">الإجمالي</div>
+                  <div className="col-span-2">الإجمالي</div>
                 </div>
                 {form.watch('items').map((item, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-4 items-end">
-                    <div className="col-span-5">
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.item_id`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="sr-only">الصنف</FormLabel>
-                            <Select 
-                              onValueChange={(value) => {
-                                field.onChange(parseInt(value));
-                                // Find the selected item and set its name
-                                const item = inventoryItems?.find(i => i.id === parseInt(value));
-                                if (item) {
-                                  form.setValue(`items.${index}.item_name`, item.name);
-                                  form.setValue(`items.${index}.item_type`, selectedItemType as any);
-                                }
-                              }}
-                              value={field.value?.toString() || "0"}
-                              disabled={!!selectedInvoice} // Disable if invoice is selected
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="اختر الصنف" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingInventoryItems ? (
-                                  <SelectItem value="loading" disabled>جاري التحميل...</SelectItem>
-                                ) : inventoryItems?.length ? (
-                                  inventoryItems.map((item) => (
-                                    <SelectItem key={item.id} value={item.id.toString()}>
-                                      {item.name}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <SelectItem value="none" disabled>لا توجد أصناف</SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  <div key={index} className={`grid grid-cols-12 gap-4 items-center ${!item.selected ? 'opacity-60' : ''}`}>
+                    {selectedInvoice && (
+                      <div className="col-span-1">
+                        <Checkbox
+                          checked={item.selected}
+                          onCheckedChange={(checked) => toggleItemSelection(index, checked === true)}
+                        />
+                      </div>
+                    )}
+                    <div className={selectedInvoice ? "col-span-4" : "col-span-5"}>
+                      {selectedInvoice ? (
+                        // For invoice-based returns, display item name directly
+                        <div className="p-2 border rounded bg-muted">
+                          {item.item_name} <span className="text-xs text-muted-foreground">({item.item_type})</span>
+                        </div>
+                      ) : (
+                        // For manual returns, allow item selection
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.item_id`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="sr-only">الصنف</FormLabel>
+                              <Select 
+                                onValueChange={(value) => {
+                                  field.onChange(parseInt(value));
+                                  // Find the selected item and set its name
+                                  const item = inventoryItems?.find(i => i.id === parseInt(value));
+                                  if (item) {
+                                    form.setValue(`items.${index}.item_name`, item.name);
+                                    form.setValue(`items.${index}.item_type`, selectedItemType as any);
+                                  }
+                                }}
+                                value={field.value?.toString() || "0"}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="اختر الصنف" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingInventoryItems ? (
+                                    <SelectItem value="loading" disabled>جاري التحميل...</SelectItem>
+                                  ) : inventoryItems?.length ? (
+                                    inventoryItems.map((item) => (
+                                      <SelectItem key={item.id} value={item.id.toString()}>
+                                        {item.name}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <SelectItem value="none" disabled>لا توجد أصناف</SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                     </div>
                     <div className="col-span-2">
                       <FormField
@@ -573,20 +687,29 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                               <Input 
                                 type="number" 
                                 step="0.01"
-                                min="0.01"
+                                min="0"
+                                max={item.max_quantity}
                                 {...field}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value) || 0;
-                                  field.onChange(value);
-                                }}
+                                disabled={!item.selected && selectedInvoice}
+                                onChange={(e) => handleQuantityChange(index, e.target.value)}
                               />
                             </FormControl>
+                            {selectedInvoice && item.max_quantity && item.quantity > 0 && (
+                              <FormDescription className="text-xs">
+                                {`${((item.quantity / item.max_quantity!) * 100).toFixed(0)}% من الكمية الأصلية`}
+                              </FormDescription>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
-                    <div className="col-span-3">
+                    {selectedInvoice && (
+                      <div className="col-span-1 text-sm text-center">
+                        {item.invoice_quantity}
+                      </div>
+                    )}
+                    <div className="col-span-2">
                       <FormField
                         control={form.control}
                         name={`items.${index}.unit_price`}
@@ -602,8 +725,10 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                                 onChange={(e) => {
                                   const value = parseFloat(e.target.value) || 0;
                                   field.onChange(value);
+                                  calculateTotal();
                                 }}
-                                disabled={!!selectedInvoice} // Disable if invoice is selected
+                                disabled={!!selectedInvoice || !item.selected} // Disable if invoice is selected
+                                className={selectedInvoice ? "bg-muted" : ""}
                               />
                             </FormControl>
                             <FormMessage />
@@ -612,19 +737,23 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                       />
                     </div>
                     <div className="col-span-1">
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => removeItem(index)}
-                        className="text-destructive"
-                        disabled={!!selectedInvoice} // Disable if invoice is selected
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
+                      {!selectedInvoice && (
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => removeItem(index)}
+                          className="text-destructive"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {selectedInvoice && item.selected && item.quantity > 0 && (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      )}
                     </div>
-                    <div className="col-span-1 text-left font-medium">
-                      {(item.quantity * item.unit_price).toFixed(2)}
+                    <div className="col-span-2 text-left font-medium">
+                      {item.selected ? (item.quantity * item.unit_price).toFixed(2) : "0.00"}
                     </div>
                   </div>
                 ))}
@@ -637,7 +766,10 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                لا توجد أصناف. انقر على "إضافة صنف" لإضافة أصناف للمرتجع.
+                {selectedInvoice ? 
+                  "لا توجد أصناف في الفاتورة المختارة." : 
+                  "لا توجد أصناف. انقر على \"إضافة صنف\" لإضافة أصناف للمرتجع."
+                }
               </div>
             )}
           </div>
