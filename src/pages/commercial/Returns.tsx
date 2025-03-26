@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -5,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import CommercialService, { Return } from '@/services/CommercialService';
 import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, FileDown, CheckCircle, XCircle } from 'lucide-react';
+import { PlusCircle, Search, FileDown, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,6 +25,7 @@ const Returns = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [selectedReturnId, setSelectedReturnId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const queryClient = useQueryClient();
   
@@ -71,9 +73,10 @@ const Returns = () => {
 
   const handleCreateReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
     try {
+      setIsProcessing(true);
       console.log('Creating return with data:', returnData);
       
-      // تأكد من وجود party_id للمرتجع إذا كان نوع المرتجع مرتجع مبيعات أو مرتجع مشتريات
+      // تأكد من وجود party_id للمرتجع إذا كان مرتبط بفاتورة
       if (!returnData.party_id && returnData.invoice_id) {
         // استخراج الطرف من الفاتورة المرتبطة
         const invoice = await commercialService.getInvoiceById(returnData.invoice_id);
@@ -92,20 +95,29 @@ const Returns = () => {
       console.log('Return creation result:', result);
       
       if (result) {
-        // تأكيد المرتجع تلقائياً
+        // تأكيد المرتجع تلقائياً (حتى لو تم تعيين الحالة مسبقاً)
         await commercialService.confirmReturn(result.id);
         console.log('Return confirmed automatically');
+        
+        // تحديث البيانات
+        await queryClient.invalidateQueries({ queryKey: ['returns'] });
+        await queryClient.invalidateQueries({ queryKey: ['parties'] });
+        
+        // تحديث بيانات المخزون
+        await queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        await queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
+        await queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
+        await queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
+        await queryClient.invalidateQueries({ queryKey: ['finished_products'] });
+        
+        setIsAddDialogOpen(false);
+        toast.success('تم إنشاء المرتجع وتأكيده بنجاح');
       }
-      
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: ['returns'] });
-      queryClient.invalidateQueries({ queryKey: ['parties'] });
-      
-      setIsAddDialogOpen(false);
-      toast.success('تم إنشاء المرتجع بنجاح');
     } catch (error) {
       console.error('Error creating return:', error);
       toast.error('حدث خطأ أثناء إنشاء المرتجع');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -113,10 +125,23 @@ const Returns = () => {
     if (!selectedReturnId) return;
     
     try {
+      setIsProcessing(true);
+      console.log('Confirming return:', selectedReturnId);
+      
       const success = await commercialService.confirmReturn(selectedReturnId);
+      
       if (success) {
-        queryClient.invalidateQueries({ queryKey: ['returns'] });
-        queryClient.invalidateQueries({ queryKey: ['parties'] });
+        // تحديث البيانات
+        await queryClient.invalidateQueries({ queryKey: ['returns'] });
+        await queryClient.invalidateQueries({ queryKey: ['parties'] });
+        
+        // تحديث بيانات المخزون
+        await queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        await queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
+        await queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
+        await queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
+        await queryClient.invalidateQueries({ queryKey: ['finished_products'] });
+        
         toast.success('تم تأكيد المرتجع بنجاح');
       }
     } catch (error) {
@@ -125,6 +150,7 @@ const Returns = () => {
     } finally {
       setIsConfirmDialogOpen(false);
       setSelectedReturnId(null);
+      setIsProcessing(false);
     }
   };
 
@@ -132,10 +158,23 @@ const Returns = () => {
     if (!selectedReturnId) return;
     
     try {
+      setIsProcessing(true);
+      console.log('Cancelling return:', selectedReturnId);
+      
       const success = await commercialService.cancelReturn(selectedReturnId);
+      
       if (success) {
-        queryClient.invalidateQueries({ queryKey: ['returns'] });
-        queryClient.invalidateQueries({ queryKey: ['parties'] });
+        // تحديث البيانات
+        await queryClient.invalidateQueries({ queryKey: ['returns'] });
+        await queryClient.invalidateQueries({ queryKey: ['parties'] });
+        
+        // تحديث بيانات المخزون
+        await queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        await queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
+        await queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
+        await queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
+        await queryClient.invalidateQueries({ queryKey: ['finished_products'] });
+        
         toast.success('تم إلغاء المرتجع بنجاح');
       }
     } catch (error) {
@@ -144,6 +183,7 @@ const Returns = () => {
     } finally {
       setIsCancelDialogOpen(false);
       setSelectedReturnId(null);
+      setIsProcessing(false);
     }
   };
 
@@ -174,6 +214,17 @@ const Returns = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // وظيفة إعادة تحميل البيانات
+  const handleRefresh = async () => {
+    try {
+      await refetch();
+      toast.success('تم تحديث البيانات بنجاح');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast.error('حدث خطأ أثناء تحديث البيانات');
+    }
   };
 
   if (isLoading) {
@@ -220,6 +271,10 @@ const Returns = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h1 className="text-2xl font-bold">المرتجعات</h1>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={handleRefresh}>
+              <RefreshCw className="w-4 h-4 ml-2" />
+              تحديث
+            </Button>
             <Button variant="outline" onClick={exportToCsv}>
               <FileDown className="w-4 h-4 ml-2" />
               تصدير
@@ -303,6 +358,7 @@ const Returns = () => {
                               size="sm"
                               variant="outline"
                               onClick={() => handleConfirmClick(returnItem.id)}
+                              disabled={isProcessing}
                             >
                               <CheckCircle className="h-4 w-4 ml-1" />
                               تأكيد
@@ -313,6 +369,7 @@ const Returns = () => {
                               size="sm"
                               variant="outline"
                               onClick={() => handleCancelClick(returnItem.id)}
+                              disabled={isProcessing}
                             >
                               <XCircle className="h-4 w-4 ml-1" />
                               إلغاء
@@ -336,7 +393,7 @@ const Returns = () => {
       </div>
 
       {/* Dialog for adding new return */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      <Dialog open={isAddDialogOpen} onOpenChange={(open) => !isProcessing && setIsAddDialogOpen(open)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>إضافة مرتجع جديد</DialogTitle>
@@ -346,7 +403,7 @@ const Returns = () => {
       </Dialog>
 
       {/* Dialog for confirming return */}
-      <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+      <AlertDialog open={isConfirmDialogOpen} onOpenChange={(open) => !isProcessing && setIsConfirmDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد المرتجع</AlertDialogTitle>
@@ -355,14 +412,23 @@ const Returns = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmReturn}>تأكيد</AlertDialogAction>
+            <AlertDialogCancel disabled={isProcessing}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmReturn} disabled={isProcessing}>
+              {isProcessing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  جاري التأكيد...
+                </>
+              ) : (
+                <>تأكيد</>
+              )}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Dialog for cancelling return */}
-      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={(open) => !isProcessing && setIsCancelDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>إلغاء المرتجع</AlertDialogTitle>
@@ -371,12 +437,20 @@ const Returns = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel disabled={isProcessing}>تراجع</AlertDialogCancel>
             <AlertDialogAction 
               className="bg-red-500 hover:bg-red-600"
               onClick={handleCancelReturn}
+              disabled={isProcessing}
             >
-              تأكيد الإلغاء
+              {isProcessing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  جاري الإلغاء...
+                </>
+              ) : (
+                <>تأكيد الإلغاء</>
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

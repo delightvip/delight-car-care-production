@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -24,18 +25,20 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, PlusCircle, Trash } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle, Trash } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Return, ReturnItem } from '@/services/CommercialTypes';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
+import { toast } from 'sonner';
 
 // Define the ReturnFormValues schema
 const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
   invoice_id: z.string().optional(),
+  party_id: z.string().optional(),
   date: z.date(),
   amount: z.number().min(0, 'يجب أن يكون المبلغ أكبر من صفر'),
   notes: z.string().optional(),
@@ -60,8 +63,10 @@ interface ReturnsFormProps {
 export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<string>('finished_products');
+  const [loadingInvoiceItems, setLoadingInvoiceItems] = useState<boolean>(false);
+  const queryClient = useQueryClient();
   
-  // Prepare form default values, converting string date to Date object if initialData is provided
+  // Prepare form default values
   const defaultValues = initialData 
     ? {
         ...initialData,
@@ -83,12 +88,22 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     defaultValues
   });
 
-  const { data: invoices } = useQuery({
+  const returnType = form.watch('return_type');
+
+  // Fetch invoices
+  const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
     queryKey: ['invoices'],
     queryFn: () => CommercialService.getInstance().getInvoices(),
   });
 
-  const { data: inventoryItems } = useQuery({
+  // Fetch parties
+  const { data: parties } = useQuery({
+    queryKey: ['parties'],
+    queryFn: () => CommercialService.getInstance().getParties(),
+  });
+
+  // Fetch inventory items based on selected type
+  const { data: inventoryItems, isLoading: isLoadingInventoryItems } = useQuery({
     queryKey: ['inventory', selectedItemType],
     queryFn: () => {
       const inventoryService = InventoryService.getInstance();
@@ -108,32 +123,106 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     enabled: !!selectedItemType,
   });
 
-  // Recalculate total amount when items change
-  useEffect(() => {
-    const items = form.watch('items');
+  // Handle invoice selection
+  const handleInvoiceChange = async (invoiceId: string) => {
+    form.setValue('invoice_id', invoiceId === 'no_invoice' ? undefined : invoiceId);
+    setSelectedInvoice(invoiceId === 'no_invoice' ? null : invoiceId);
+    
+    if (invoiceId !== 'no_invoice') {
+      setLoadingInvoiceItems(true);
+      try {
+        // Fetch invoice details
+        const invoice = await CommercialService.getInstance().getInvoiceById(invoiceId);
+        
+        if (invoice) {
+          // Update party_id from invoice
+          form.setValue('party_id', invoice.party_id || undefined);
+          
+          // Clear existing items
+          form.setValue('items', []);
+          
+          // Add invoice items to return form
+          if (invoice.items && invoice.items.length > 0) {
+            const returnItems = invoice.items.map(item => ({
+              item_id: Number(item.item_id),
+              item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
+              item_name: item.item_name,
+              quantity: 0, // Start with 0 quantity for user to adjust
+              unit_price: item.unit_price
+            }));
+            
+            form.setValue('items', returnItems);
+            calculateTotal();
+            
+            toast.success('تم جلب أصناف الفاتورة بنجاح');
+          } else {
+            toast.info('لا توجد أصناف في الفاتورة المحددة');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching invoice details:', error);
+        toast.error('حدث خطأ أثناء جلب تفاصيل الفاتورة');
+      } finally {
+        setLoadingInvoiceItems(false);
+      }
+    } else {
+      // Clear party and items if no invoice selected
+      form.setValue('party_id', undefined);
+      form.setValue('items', []);
+    }
+  };
+
+  // Handle party selection
+  const handlePartyChange = (partyId: string) => {
+    form.setValue('party_id', partyId === 'no_party' ? undefined : partyId);
+  };
+
+  // Calculate total amount from items
+  const calculateTotal = () => {
+    const items = form.getValues('items');
     if (items && items.length > 0) {
       const total = items.reduce((sum, item) => {
         return sum + (item.quantity * item.unit_price);
       }, 0);
       form.setValue('amount', total);
+      console.log('Calculated total amount:', total);
     } else {
       form.setValue('amount', 0);
     }
-  }, [form.watch('items')]);
+  };
+
+  // Recalculate total when items change
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name?.startsWith('items.') || name === 'items') {
+        calculateTotal();
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [form.watch]);
 
   // Add a new empty item to the form
   const addItem = () => {
     const currentItems = form.getValues('items') || [];
     form.setValue('items', [
       ...currentItems, 
-      { item_id: 0, item_type: 'finished_products' as const, item_name: '', quantity: 1, unit_price: 0 }
+      { 
+        item_id: 0, 
+        item_type: selectedItemType as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products', 
+        item_name: '', 
+        quantity: 1, 
+        unit_price: 0 
+      }
     ]);
+    calculateTotal();
   };
 
   // Remove an item from the form
   const removeItem = (index: number) => {
     const currentItems = form.getValues('items');
     form.setValue('items', currentItems.filter((_, i) => i !== index));
+    calculateTotal();
   };
 
   // Handle form submission
@@ -141,12 +230,12 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     // Create a return object from form values
     const returnData: Omit<Return, 'id' | 'created_at'> = {
       return_type: values.return_type,
-      invoice_id: values.invoice_id === 'no_invoice' ? undefined : values.invoice_id,
+      invoice_id: values.invoice_id,
+      party_id: values.party_id,
       date: format(values.date, 'yyyy-MM-dd'),
       amount: values.amount,
       notes: values.notes,
       payment_status: 'draft', // Add the payment_status field with default value
-      party_id: undefined, // Add this field to match the Return type
       items: values.items.map(item => ({
         item_id: item.item_id,
         item_type: item.item_type,
@@ -157,8 +246,31 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       }))
     };
 
+    console.log('Submitting return data:', returnData);
     onSubmit(returnData);
   };
+
+  // Filter invoices based on selected return type
+  const filteredInvoices = React.useMemo(() => {
+    if (!invoices) return [];
+    
+    return invoices.filter(inv => 
+      returnType === 'sales_return' 
+        ? inv.invoice_type === 'sale' 
+        : inv.invoice_type === 'purchase'
+    );
+  }, [invoices, returnType]);
+
+  // Get filtered parties based on return type
+  const filteredParties = React.useMemo(() => {
+    if (!parties) return [];
+    
+    return parties.filter(party => 
+      returnType === 'sales_return' 
+        ? party.type === 'customer' 
+        : party.type === 'supplier'
+    );
+  }, [parties, returnType]);
 
   return (
     <Form {...form}>
@@ -171,7 +283,17 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>نوع المرتجع</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select 
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    // Reset invoice, party and items when changing return type
+                    form.setValue('invoice_id', undefined);
+                    form.setValue('party_id', undefined);
+                    form.setValue('items', []);
+                    setSelectedInvoice(null);
+                  }} 
+                  defaultValue={field.value}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="اختر نوع المرتجع" />
@@ -182,6 +304,9 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                     <SelectItem value="purchase_return">مرتجع مشتريات</SelectItem>
                   </SelectContent>
                 </Select>
+                <FormDescription>
+                  حدد نوع المرتجع سواء كان مرتجع مبيعات (من العميل) أو مرتجع مشتريات (للمورد)
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -194,33 +319,76 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>رقم الفاتورة (اختياري)</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || "no_invoice"}>
+                <Select 
+                  onValueChange={handleInvoiceChange} 
+                  value={field.value || "no_invoice"}
+                  disabled={isLoadingInvoices || loadingInvoiceItems}
+                >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="اختر الفاتورة المرتبطة" />
+                      {isLoadingInvoices || loadingInvoiceItems ? (
+                        <div className="flex items-center justify-center w-full">
+                          <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                          <span>جاري التحميل...</span>
+                        </div>
+                      ) : (
+                        <SelectValue placeholder="اختر الفاتورة المرتبطة" />
+                      )}
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {/* Fix: Changed empty string to "no_invoice" */}
                     <SelectItem value="no_invoice">بدون فاتورة</SelectItem>
-                    {invoices?.filter(inv => 
-                      form.getValues('return_type') === 'sales_return' 
-                        ? inv.invoice_type === 'sale' 
-                        : inv.invoice_type === 'purchase'
-                    ).map((invoice) => (
+                    {filteredInvoices.map((invoice) => (
                       <SelectItem key={invoice.id} value={invoice.id}>
-                        {`${invoice.id.substring(0, 8)}... - ${invoice.party_name} - ${invoice.total_amount}`}
+                        {`${invoice.id.substring(0, 8)}... - ${invoice.party_name || 'غير محدد'} - ${invoice.total_amount}`}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  يمكنك ربط المرتجع بفاتورة محددة أو تركه بدون ارتباط
+                  يمكنك ربط المرتجع بفاتورة محددة لتسهيل عملية إرجاع الأصناف
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          {/* Party Selection (if no invoice selected) */}
+          {!selectedInvoice && (
+            <FormField
+              control={form.control}
+              name="party_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{returnType === 'sales_return' ? 'العميل' : 'المورد'}</FormLabel>
+                  <Select 
+                    onValueChange={handlePartyChange} 
+                    value={field.value || "no_party"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={`اختر ${returnType === 'sales_return' ? 'العميل' : 'المورد'}`} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="no_party">غير محدد</SelectItem>
+                      {filteredParties.map((party) => (
+                        <SelectItem key={party.id} value={party.id}>
+                          {party.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {returnType === 'sales_return' 
+                      ? 'حدد العميل الذي أرجع البضاعة' 
+                      : 'حدد المورد الذي سيتم إرجاع البضاعة إليه'}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           {/* Date */}
           <FormField
@@ -235,7 +403,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                       <Button
                         variant={"outline"}
                         className={cn(
-                          "w-full pl-3 text-left font-normal",
+                          "w-full pl-3 text-right font-normal",
                           !field.value && "text-muted-foreground"
                         )}
                       >
@@ -273,13 +441,13 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                   <Input
                     type="number"
                     {...field}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                     disabled
                     className="bg-muted"
                   />
                 </FormControl>
                 <FormDescription>
-                  يتم حساب هذا المبلغ تلقائيًا من الأصناف
+                  يتم حساب هذا المبلغ تلقائيًا من الأصناف المضافة
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -295,7 +463,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             <FormItem>
               <FormLabel>ملاحظات</FormLabel>
               <FormControl>
-                <Textarea rows={3} {...field} />
+                <Textarea rows={3} {...field} value={field.value || ''} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -318,7 +486,12 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                   <SelectItem value="finished_products">منتجات تامة</SelectItem>
                 </SelectContent>
               </Select>
-              <Button type="button" variant="outline" onClick={addItem}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={addItem}
+                disabled={loadingInvoiceItems}
+              >
                 <PlusCircle className="h-4 w-4 mr-2" />
                 إضافة صنف
               </Button>
@@ -326,9 +499,21 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           </div>
 
           <div className="border rounded-md p-4">
-            {form.watch('items')?.length > 0 ? (
+            {loadingInvoiceItems ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin ml-2" />
+                <span>جاري جلب أصناف الفاتورة...</span>
+              </div>
+            ) : form.watch('items')?.length > 0 ? (
               <div className="space-y-4">
-                {form.watch('items').map((_, index) => (
+                <div className="grid grid-cols-12 gap-4 border-b pb-2 font-semibold">
+                  <div className="col-span-5">الصنف</div>
+                  <div className="col-span-2">الكمية</div>
+                  <div className="col-span-3">سعر الوحدة</div>
+                  <div className="col-span-1">الإجراءات</div>
+                  <div className="col-span-1">الإجمالي</div>
+                </div>
+                {form.watch('items').map((item, index) => (
                   <div key={index} className="grid grid-cols-12 gap-4 items-end">
                     <div className="col-span-5">
                       <FormField
@@ -336,7 +521,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                         name={`items.${index}.item_id`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>الصنف</FormLabel>
+                            <FormLabel className="sr-only">الصنف</FormLabel>
                             <Select 
                               onValueChange={(value) => {
                                 field.onChange(parseInt(value));
@@ -348,6 +533,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                                 }
                               }}
                               value={field.value?.toString() || "0"}
+                              disabled={!!selectedInvoice} // Disable if invoice is selected
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -355,11 +541,17 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {inventoryItems?.map((item) => (
-                                  <SelectItem key={item.id} value={item.id.toString()}>
-                                    {item.name}
-                                  </SelectItem>
-                                ))}
+                                {isLoadingInventoryItems ? (
+                                  <SelectItem value="loading" disabled>جاري التحميل...</SelectItem>
+                                ) : inventoryItems?.length ? (
+                                  inventoryItems.map((item) => (
+                                    <SelectItem key={item.id} value={item.id.toString()}>
+                                      {item.name}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <SelectItem value="none" disabled>لا توجد أصناف</SelectItem>
+                                )}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -373,13 +565,17 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                         name={`items.${index}.quantity`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>الكمية</FormLabel>
+                            <FormLabel className="sr-only">الكمية</FormLabel>
                             <FormControl>
                               <Input 
                                 type="number" 
                                 step="0.01"
+                                min="0.01"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value) || 0;
+                                  field.onChange(value);
+                                }}
                               />
                             </FormControl>
                             <FormMessage />
@@ -393,13 +589,18 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                         name={`items.${index}.unit_price`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>سعر الوحدة</FormLabel>
+                            <FormLabel className="sr-only">سعر الوحدة</FormLabel>
                             <FormControl>
                               <Input 
                                 type="number" 
                                 step="0.01"
+                                min="0"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value) || 0;
+                                  field.onChange(value);
+                                }}
+                                disabled={!!selectedInvoice} // Disable if invoice is selected
                               />
                             </FormControl>
                             <FormMessage />
@@ -414,23 +615,39 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                         size="icon"
                         onClick={() => removeItem(index)}
                         className="text-destructive"
+                        disabled={!!selectedInvoice} // Disable if invoice is selected
                       >
                         <Trash className="h-4 w-4" />
                       </Button>
                     </div>
+                    <div className="col-span-1 text-left font-medium">
+                      {(item.quantity * item.unit_price).toFixed(2)}
+                    </div>
                   </div>
                 ))}
+                <div className="grid grid-cols-12 gap-4 pt-2 border-t items-center">
+                  <div className="col-span-10 text-left font-bold">الإجمالي</div>
+                  <div className="col-span-2 text-left font-bold text-lg">
+                    {form.watch('amount').toFixed(2)}
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="text-center py-4 text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground">
                 لا توجد أصناف. انقر على "إضافة صنف" لإضافة أصناف للمرتجع.
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <Button type="submit">حفظ المرتجع</Button>
+        <div className="flex justify-end space-x-2">
+          <Button 
+            type="submit" 
+            disabled={loadingInvoiceItems || form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            حفظ المرتجع
+          </Button>
         </div>
       </form>
     </Form>
