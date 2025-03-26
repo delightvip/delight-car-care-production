@@ -83,6 +83,9 @@ const ProductDetails = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
+  // Convert string id to number
+  const numericId = id ? parseInt(id, 10) : 0;
+  
   const productTitle: Record<string, string> = {
     'raw-materials': 'المواد الخام',
     'packaging': 'مواد التغليف',
@@ -107,7 +110,7 @@ const ProductDetails = () => {
         const { data, error } = await supabase
           .from('raw_materials')
           .select('*')
-          .eq('id', id)
+          .eq('id', numericId)
           .single();
         
         if (error) throw error;
@@ -116,7 +119,7 @@ const ProductDetails = () => {
         const { data, error } = await supabase
           .from('packaging_materials')
           .select('*')
-          .eq('id', id)
+          .eq('id', numericId)
           .single();
         
         if (error) throw error;
@@ -125,7 +128,7 @@ const ProductDetails = () => {
         const { data, error } = await supabase
           .from('semi_finished_products')
           .select('*')
-          .eq('id', id)
+          .eq('id', numericId)
           .single();
         
         if (error) throw error;
@@ -134,7 +137,7 @@ const ProductDetails = () => {
         const { data, error } = await supabase
           .from('finished_products')
           .select('*')
-          .eq('id', id)
+          .eq('id', numericId)
           .single();
         
         if (error) throw error;
@@ -183,28 +186,28 @@ const ProductDetails = () => {
         const { error } = await supabase
           .from('raw_materials')
           .delete()
-          .eq('id', id);
+          .eq('id', numericId);
           
         if (error) throw error;
       } else if (tableName === 'packaging_materials') {
         const { error } = await supabase
           .from('packaging_materials')
           .delete()
-          .eq('id', id);
+          .eq('id', numericId);
           
         if (error) throw error;
       } else if (tableName === 'semi_finished_products') {
         const { error } = await supabase
           .from('semi_finished_products')
           .delete()
-          .eq('id', id);
+          .eq('id', numericId);
           
         if (error) throw error;
       } else if (tableName === 'finished_products') {
         const { error } = await supabase
           .from('finished_products')
           .delete()
-          .eq('id', id);
+          .eq('id', numericId);
           
         if (error) throw error;
       } else {
