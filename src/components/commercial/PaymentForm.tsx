@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -25,6 +26,7 @@ import { Payment } from '@/services/CommercialService';
 import { Party } from '@/services/PartyService';
 import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
+import { CheckCircle } from 'lucide-react';
 
 const paymentFormSchema = z.object({
   payment_type: z.enum(['collection', 'disbursement'], {
@@ -77,6 +79,7 @@ export function PaymentForm({
 }: PaymentFormProps) {
   const [selectedPaymentType, setSelectedPaymentType] = useState<string>(initialData?.payment_type || 'collection');
   
+  // تصفية الأطراف حسب نوع المعاملة (تحصيل من العملاء، صرف للموردين)
   const filteredParties = selectedPaymentType === 'collection' 
     ? parties.filter(party => party.type === 'customer')
     : parties.filter(party => party.type === 'supplier');
@@ -102,6 +105,7 @@ export function PaymentForm({
   
   const selectedPartyId = form.watch('party_id');
   
+  // تصفية الفواتير المرتبطة بالطرف المحدد
   const relevantInvoices = invoices.filter(invoice => {
     if (!selectedPartyId) return false;
     

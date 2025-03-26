@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
@@ -8,10 +9,12 @@ import {
   ReturnItem, 
   LedgerEntry 
 } from "./CommercialTypes";
-import InvoiceService from './commercial/InvoiceService';
-import PaymentService from './commercial/PaymentService';
-import ReturnService from './commercial/ReturnService';
-import LedgerService from './commercial/LedgerService';
+
+// استيراد الخدمات المعاد هيكلتها
+import InvoiceService from './commercial/invoice/InvoiceService';
+import PaymentService from './commercial/payment/PaymentService';
+import ReturnService from './commercial/return/ReturnService';
+import LedgerService from './commercial/ledger/LedgerService';
 import { format } from "date-fns";
 
 class CommercialService {

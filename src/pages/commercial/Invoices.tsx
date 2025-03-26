@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -88,7 +87,7 @@ const Invoices = () => {
       console.log('Invoices fetched:', result);
       return result;
     },
-    refetchInterval: 30000, // Reduce refetch interval to 30 seconds
+    refetchInterval: 30000,
   });
   
   const { data: parties, isLoading: isLoadingParties } = useQuery({
@@ -116,7 +115,6 @@ const Invoices = () => {
     queryFn: () => inventoryService.getFinishedProducts(),
   });
   
-  // Force refresh on mount to ensure data is up to date
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['invoices'] });
   }, [queryClient]);
@@ -191,11 +189,22 @@ const Invoices = () => {
   const handleCreateInvoice = async (invoiceData: Omit<Invoice, 'id' | 'created_at'>) => {
     try {
       console.log('Creating invoice with data:', invoiceData);
-      const result = await commercialService.createInvoice(invoiceData);
+      
+      const invoiceWithStatus = {
+        ...invoiceData,
+        payment_status: 'confirmed'
+      };
+      
+      const result = await commercialService.createInvoice(invoiceWithStatus);
       console.log('Invoice creation result:', result);
       
-      // Invalidate queries to refresh data
+      if (result) {
+        await commercialService.confirmInvoice(result.id);
+        console.log('Invoice confirmed automatically');
+      }
+      
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['parties'] });
       
       setIsAddDialogOpen(false);
       toast.success('تم إنشاء الفاتورة بنجاح');
@@ -269,7 +278,6 @@ const Invoices = () => {
         return;
       }
       
-      // Create CSV content
       let csvContent = 'رقم الفاتورة,النوع,الطرف,التاريخ,المبلغ,الحالة,حالة المعاملة\n';
       
       filteredInvoices.forEach(invoice => {
@@ -282,7 +290,6 @@ const Invoices = () => {
         csvContent += `${invoice.payment_status}\n`;
       });
       
-      // Create download link
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -578,3 +585,4 @@ const Invoices = () => {
 };
 
 export default Invoices;
+
