@@ -94,8 +94,11 @@ export function ReturnItemsSection({
                         // We need to ensure we're passing a boolean to toggleItemSelection
                         if (typeof checked === 'boolean') {
                           toggleItemSelection(index, checked);
-                        } else {
+                        } else if (checked === 'indeterminate') {
                           // If it's "indeterminate", we'll treat it as false
+                          toggleItemSelection(index, false);
+                        } else {
+                          // Handle any other case as false
                           toggleItemSelection(index, false);
                         }
                       }}
