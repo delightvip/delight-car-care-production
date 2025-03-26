@@ -16,8 +16,6 @@ import { Edit, Trash, CheckCircle, XCircle } from 'lucide-react';
 
 export interface PaymentsListProps {
   payments: Payment[];
-  searchQuery?: string;
-  onSearchChange?: (query: string) => void;
   onEditClick: (payment: Payment) => void;
   onDeleteClick: (payment: Payment) => void;
   onConfirmClick: (payment: Payment) => void;

@@ -273,6 +273,15 @@ const Payments = () => {
           </Button>
         </div>
         
+        <div className="flex mb-4">
+          <Input
+            placeholder="البحث عن معاملة..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+        
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
             <TabsTrigger value="all">الكل</TabsTrigger>
@@ -283,8 +292,6 @@ const Payments = () => {
           <TabsContent value={activeTab} className="mt-0">
             <PaymentsList 
               payments={filteredPayments}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
               onEditClick={handleEditClick}
               onDeleteClick={handleDeleteClick}
               onConfirmClick={handleConfirmClick}

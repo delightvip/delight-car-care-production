@@ -7,8 +7,11 @@ import { toast } from "sonner";
 // الخدمة الرئيسية للدفعات
 export class PaymentService {
   private static instance: PaymentService;
+  private paymentProcessor: PaymentProcessor;
   
-  private constructor() {}
+  private constructor() {
+    this.paymentProcessor = new PaymentProcessor();
+  }
   
   public static getInstance(): PaymentService {
     if (!PaymentService.instance) {
@@ -54,11 +57,13 @@ export class PaymentService {
   }
   
   public async confirmPayment(paymentId: string): Promise<boolean> {
-    return PaymentProcessor.confirmPayment(paymentId);
+    // Call instance method instead of static method
+    return this.paymentProcessor.confirmPayment(paymentId);
   }
   
   public async cancelPayment(paymentId: string): Promise<boolean> {
-    return PaymentProcessor.cancelPayment(paymentId);
+    // Call instance method instead of static method
+    return this.paymentProcessor.cancelPayment(paymentId);
   }
   
   public async updatePayment(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {

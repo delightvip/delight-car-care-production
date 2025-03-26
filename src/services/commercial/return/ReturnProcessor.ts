@@ -10,7 +10,8 @@ export class ReturnProcessor {
   private partyService: PartyService;
 
   constructor() {
-    this.inventoryService = new InventoryService();
+    // Use getInstance() instead of direct instantiation
+    this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
   }
 

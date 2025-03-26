@@ -12,7 +12,8 @@ export class PaymentProcessor {
   private invoiceService: InvoiceService;
 
   constructor() {
-    this.inventoryService = new InventoryService();
+    // Use getInstance() instead of direct instantiation
+    this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
     this.invoiceService = InvoiceService.getInstance();
   }
