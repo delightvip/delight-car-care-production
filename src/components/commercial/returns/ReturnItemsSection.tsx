@@ -90,10 +90,9 @@ export function ReturnItemsSection({
                     <Checkbox
                       checked={!!item.selected}
                       onCheckedChange={(checked) => {
-                        // This value can be true, false, or "indeterminate" (string)
-                        // Convert any value to a proper boolean
-                        const isSelected = Boolean(checked === true);
-                        toggleItemSelection(index, isSelected);
+                        // The checked value can be true, false, or "indeterminate" (string)
+                        // We need to explicitly cast it to boolean to avoid type errors
+                        toggleItemSelection(index, checked === true);
                       }}
                     />
                   </div>

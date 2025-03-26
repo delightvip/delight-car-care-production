@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import './App.css';
 import { Route, Routes } from 'react-router-dom';
@@ -40,6 +39,20 @@ import CommercialDashboard from './pages/commercial/CommercialDashboard';
 import Analytics from './pages/Analytics';
 import InventoryDistributionPage from './pages/analytics/InventoryDistributionPage';
 
+// Financial Pages
+import FinancialDashboard from './pages/financial/FinancialDashboard';
+import TransactionPage from './pages/financial/TransactionPage';
+import CategoriesPage from './pages/financial/CategoriesPage';
+import CategoryForm from './components/financial/CategoryForm';
+
+// Export the components for use in the main App.tsx
+export {
+  FinancialDashboard,
+  TransactionPage,
+  CategoriesPage,
+  CategoryForm
+};
+
 function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
@@ -76,6 +89,14 @@ function App() {
             {/* Analytics Routes */}
             <Route path="analytics" element={<Analytics />} />
             <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
+            
+            {/* Financial Routes */}
+            <Route path="financial" element={<FinancialDashboard />} />
+            <Route path="financial/transactions/new" element={<TransactionPage />} />
+            <Route path="financial/transactions/edit/:id" element={<TransactionPage />} />
+            <Route path="financial/categories" element={<CategoriesPage />} />
+            <Route path="financial/categories/new" element={<CategoryForm />} />
+            <Route path="financial/categories/edit/:id" element={<CategoryForm />} />
             
             {/* Settings */}
             <Route path="settings" element={<Settings />} />

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,7 +17,8 @@ import {
   ListChecks,
   Settings,
   Users,
-  TrendingUp
+  TrendingUp,
+  Wallet
 } from 'lucide-react';
 import { useSidebar } from './SidebarContext';
 
@@ -109,7 +109,7 @@ const Sidebar: React.FC = () => {
             <NavItem 
               to="/inventory/semi-finished" 
               icon={<Beaker size={20} />} 
-              label="المنتجات النصف مصنعة" 
+              label="المنتجات النصف م��نعة" 
               active={pathname === '/inventory/semi-finished'}
             />
             <NavItem 
@@ -171,6 +171,15 @@ const Sidebar: React.FC = () => {
               icon={<Settings size={20} />} 
               label="إعدادات النظام" 
               active={pathname === '/settings/system'}
+            />
+          </NavGroup>
+          
+          <NavGroup title="المالية" icon={<Wallet size={16} />}>
+            <NavItem 
+              to="/financial" 
+              icon={<Wallet size={20} />} 
+              label="لوحة التحكم" 
+              active={pathname === '/financial'}
             />
           </NavGroup>
         </div>
