@@ -136,8 +136,9 @@ export class PaymentEntity {
       return {
         ...data,
         payment_type: data.payment_type as "collection" | "disbursement",
-        party_name: paymentData.party_name || "",
-        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled"
+        method: data.method as "cash" | "check" | "bank_transfer" | "other",
+        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled",
+        party_name: paymentData.party_name || ""
       };
     } catch (error) {
       console.error('Error creating payment:', error);

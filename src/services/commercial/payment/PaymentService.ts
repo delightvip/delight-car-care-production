@@ -57,12 +57,12 @@ export class PaymentService {
   }
   
   public async confirmPayment(paymentId: string): Promise<boolean> {
-    // Call instance method instead of static method
+    // Use the instance method of PaymentProcessor
     return this.paymentProcessor.confirmPayment(paymentId);
   }
   
   public async cancelPayment(paymentId: string): Promise<boolean> {
-    // Call instance method instead of static method
+    // Use the instance method of PaymentProcessor
     return this.paymentProcessor.cancelPayment(paymentId);
   }
   
