@@ -1,468 +1,470 @@
+
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Label } from '@/components/ui/label';
-import { useForm, Controller } from 'react-hook-form';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Loader2, PlusCircle, Trash, CheckCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Invoice, InvoiceItem, Party } from '@/services/CommercialTypes';
-import CommercialService from '@/services/CommercialService';
-import PartyService from '@/services/PartyService';
-import { toast } from '@/hooks/use-toast';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Invoice, InvoiceItem } from '@/services/CommercialService';
+import { Party } from '@/services/PartyService';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Trash2, Plus } from 'lucide-react';
+import { format } from 'date-fns';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const invoiceFormSchema = z.object({
-  invoice_type: z.enum(['sale', 'purchase']),
-  party_id: z.string(),
-  date: z.date(),
-  status: z.enum(['draft', 'pending', 'paid', 'partially_paid', 'cancelled', 'overdue']),
-  payment_status: z.enum(['draft', 'confirmed', 'cancelled']).optional(),
-  total_amount: z.number(),
+  invoice_type: z.enum(['sale', 'purchase'], {
+    required_error: 'الرجاء اختيار نوع الفاتورة',
+  }),
+  party_id: z.string({
+    required_error: 'الرجاء اختيار الطرف التجاري',
+  }),
+  date: z.date({
+    required_error: 'الرجاء تحديد تاريخ الفاتورة',
+  }),
+  status: z.enum(['paid', 'partial', 'unpaid'], {
+    required_error: 'الرجاء اختيار حالة الفاتورة',
+  }),
   notes: z.string().optional(),
-  items: z.array(
-    z.object({
-      item_id: z.number(),
-      item_type: z.enum(['raw_materials', 'packaging_materials', 'semi_finished_products', 'finished_products']),
-      item_name: z.string(),
-      quantity: z.number().min(0.1, 'يجب أن تكون الكمية أكبر من صفر'),
-      unit_price: z.number().min(0, 'يجب أن يكون السعر أكبر من أو يساوي صفر'),
-      selected: z.boolean().optional()
-    })
-  )
 });
 
 type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;
 
 interface InvoiceFormProps {
   onSubmit: (data: Omit<Invoice, 'id' | 'created_at'>) => void;
-  initialData?: Invoice;
+  parties: Party[];
+  items: Array<{
+    id: number;
+    name: string;
+    type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
+    quantity: number;
+    unit_cost: number;
+  }>;
+  initialData?: Partial<Invoice>;
+  isEditing?: boolean;
 }
 
-export function InvoiceForm({ onSubmit, initialData }: InvoiceFormProps) {
-  const [selectedParty, setSelectedParty] = useState<string | null>(null);
-  const [selectedItems, setSelectedItems] = useState<InvoiceItem[]>([]);
-  
-  const commercialService = CommercialService.getInstance();
-  const partyService = PartyService.getInstance();
-  
-  const defaultValues: InvoiceFormValues = initialData
-    ? {
-        invoice_type: initialData.invoice_type,
-        party_id: initialData.party_id,
-        date: new Date(initialData.date),
-        status: initialData.status,
-        payment_status: initialData.payment_status,
-        total_amount: initialData.total_amount,
-        notes: initialData.notes || '',
-        items: initialData.items.map(item => ({
-          item_id: item.item_id,
-          item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          selected: true
-        }))
-      }
-    : {
-        invoice_type: 'sale',
-        party_id: '',
-        date: new Date(),
-        status: 'draft',
-        payment_status: 'draft',
-        total_amount: 0,
-        notes: '',
-        items: []
-      };
+export function InvoiceForm({ 
+  onSubmit, 
+  parties, 
+  items, 
+  initialData, 
+  isEditing = false 
+}: InvoiceFormProps) {
+  const [invoiceItems, setInvoiceItems] = useState<Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>[]>(
+    initialData?.items ? initialData.items.map(item => ({
+      item_id: item.item_id,
+      item_type: item.item_type,
+      item_name: item.item_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total: item.quantity * item.unit_price
+    })) : []
+  );
+  const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
+  const [selectedItemType, setSelectedItemType] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('finished_products');
+  const [itemQuantity, setItemQuantity] = useState<number>(1);
+  const [itemPrice, setItemPrice] = useState<number>(0);
+  const [total, setTotal] = useState<number>(0);
   
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
-    defaultValues,
-    mode: "onChange"
+    defaultValues: {
+      invoice_type: (initialData?.invoice_type as any) || 'sale',
+      party_id: initialData?.party_id || '',
+      date: initialData?.date ? new Date(initialData.date) : new Date(),
+      status: (initialData?.status as any) || 'unpaid',
+      notes: initialData?.notes || '',
+    },
   });
 
-  const { data: parties, isLoading: isLoadingParties } = useQuery({
-    queryKey: ['parties'],
-    queryFn: () => partyService.getParties(),
-  });
-
-  const handlePartyChange = (partyId: string) => {
-    form.setValue('party_id', partyId);
-    setSelectedParty(partyId);
-  };
-
-  const calculateTotal = () => {
-    const items = form.getValues('items');
-    if (items && items.length > 0) {
-      const total = items.reduce((sum, item) => {
-        return sum + (item.selected ? (item.quantity * item.unit_price) : 0);
-      }, 0);
-      form.setValue('total_amount', total);
-    } else {
-      form.setValue('total_amount', 0);
-    }
-  };
+  const invoiceType = form.watch('invoice_type');
+  
+  // Filter parties based on invoice type
+  const filteredParties = invoiceType === 'sale' 
+    ? parties.filter(party => party.type === 'customer') 
+    : parties.filter(party => party.type === 'supplier');
 
   useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name?.startsWith('items.') || name === 'items') {
-        calculateTotal();
+    const calculatedTotal = invoiceItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+    setTotal(calculatedTotal);
+  }, [invoiceItems]);
+
+  useEffect(() => {
+    if (selectedItemId) {
+      const selectedItem = items.find(item => item.id === Number(selectedItemId) && item.type === selectedCategory);
+      if (selectedItem) {
+        setItemPrice(selectedItem.unit_cost);
+        setSelectedItemType(selectedItem.type);
       }
-    });
-    
-    return () => subscription.unsubscribe();
-  }, [form.watch]);
-
-  const addItem = () => {
-    const currentItems = form.getValues('items') || [];
-    form.setValue('items', [
-      ...currentItems, 
-      { 
-        item_id: 0, 
-        item_type: 'finished_products', 
-        item_name: '', 
-        quantity: 1, 
-        unit_price: 0,
-        selected: true
-      }
-    ]);
-    calculateTotal();
-  };
-
-  const removeItem = (index: number) => {
-    const currentItems = form.getValues('items');
-    form.setValue('items', currentItems.filter((_, i) => i !== index));
-    calculateTotal();
-  };
-
-  const toggleItemSelection = (index: number, selected: boolean) => {
-    const items = form.getValues('items');
-    const updatedItems = [...items];
-    
-    updatedItems[index] = {
-      ...updatedItems[index],
-      selected
+    }
+  }, [selectedItemId, selectedCategory, items]);
+  
+  // Categorized items
+  const categorizedItems = React.useMemo(() => {
+    return {
+      raw_materials: items.filter(item => item.type === 'raw_materials'),
+      packaging_materials: items.filter(item => item.type === 'packaging_materials'),
+      semi_finished_products: items.filter(item => item.type === 'semi_finished_products'),
+      finished_products: items.filter(item => item.type === 'finished_products')
     };
-    
-    form.setValue('items', updatedItems);
-    calculateTotal();
+  }, [items]);
+
+  const addItemToInvoice = () => {
+    if (selectedItemId && itemQuantity > 0 && itemPrice > 0) {
+      const selectedItem = items.find(item => item.id === Number(selectedItemId) && item.type === selectedCategory);
+      
+      if (!selectedItem) return;
+      
+      const newItem: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'> = {
+        item_id: Number(selectedItemId),
+        item_type: selectedItem.type,
+        item_name: selectedItem.name,
+        quantity: itemQuantity,
+        unit_price: itemPrice,
+        total: itemQuantity * itemPrice
+      };
+      
+      setInvoiceItems([...invoiceItems, newItem]);
+      
+      setSelectedItemId('');
+      setItemQuantity(1);
+      setItemPrice(0);
+    }
   };
 
-  const handleQuantityChange = (index: number, value: string) => {
-    const parsedValue = parseFloat(value) || 0;
-    form.setValue(`items.${index}.quantity`, parsedValue);
-    calculateTotal();
+  const removeItemFromInvoice = (index: number) => {
+    const updatedItems = [...invoiceItems];
+    updatedItems.splice(index, 1);
+    setInvoiceItems(updatedItems);
   };
 
-const handleSubmitForm = async (values: any) => {
-  try {
-    console.log('Form values before submission:', values);
-    
-    const formattedDate = format(values.date, 'yyyy-MM-dd');
-    const selectedItems = values.items.filter((item: any) => item.selected && item.quantity > 0);
-    const total = values.total_amount;
-    
-    if (selectedItems.length === 0) {
-      toast({
-        title: "خطأ",
-        description: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
-        variant: "destructive"
-      });
-      return;
+  const handleSubmit = (data: InvoiceFormValues) => {
+    if (invoiceItems.length === 0) {
+      return; // يمكن إضافة رسالة خطأ هنا
     }
     
-    const invoiceData: Omit<Invoice, 'id' | 'created_at'> = {
-      date: formattedDate,
-      invoice_type: values.invoice_type,
-      notes: values.notes,
-      party_id: values.party_id,
-      total_amount: total,
-      status: values.status,
-      payment_status: values.payment_status || 'draft',
-      party_name: values.party_name,
-      items: selectedItems.map((item: any) => ({
-        item_id: item.item_id,
-        item_type: item.item_type,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.quantity * item.unit_price
-      }))
-    };
-
-    console.log('Submitting invoice data:', invoiceData);
+    const formattedDate = format(data.date, 'yyyy-MM-dd');
     
-    onSubmit(invoiceData);
-  } catch (error) {
-    console.error('Error submitting invoice form:', error);
-    toast({
-      title: "خطأ",
-      description: "حدث خطأ أثناء معالجة النموذج",
-      variant: "destructive"
+    onSubmit({
+      invoice_type: data.invoice_type,
+      party_id: data.party_id,
+      date: formattedDate,
+      total_amount: total,
+      items: invoiceItems,
+      status: data.status,
+      payment_status: 'confirmed', // Set default payment_status to confirmed
+      notes: data.notes || ''
     });
-  }
-};
+  };
+
+  const getCategoryTranslation = (category: string) => {
+    switch (category) {
+      case 'raw_materials':
+        return 'المواد الخام';
+      case 'packaging_materials':
+        return 'مواد التعبئة';
+      case 'semi_finished_products':
+        return 'المنتجات نصف المصنعة';
+      case 'finished_products':
+        return 'المنتجات النهائية';
+      default:
+        return '';
+    }
+  };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="invoice_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>نوع الفاتورة</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر نوع الفاتورة" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="sale">فاتورة مبيعات</SelectItem>
-                    <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  حدد نوع الفاتورة سواء كانت فاتورة مبيعات أو فاتورة مشتريات
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="party_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>الطرف</FormLabel>
-                <Select 
-                  onValueChange={handlePartyChange} 
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر الطرف" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {parties?.map((party) => (
-                      <SelectItem key={party.id} value={party.id}>
-                        {party.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  حدد الطرف المرتبط بهذه الفاتورة (عميل أو مورد)
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>التاريخ</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full pl-3 text-right font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP", { locale: ar })
-                        ) : (
-                          <span>اختر التاريخ</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="text-xl font-bold">
+          {isEditing ? 'تعديل الفاتورة' : 'إنشاء فاتورة جديدة'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="invoice_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>نوع الفاتورة</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                      disabled={isEditing}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر نوع الفاتورة" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="sale">فاتورة مبيعات</SelectItem>
+                        <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="party_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {invoiceType === 'sale' ? 'العميل' : 'المورد'}
+                    </FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={`اختر ${invoiceType === 'sale' ? 'العميل' : 'المورد'}`} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {filteredParties.map(party => (
+                          <SelectItem key={party.id} value={party.id}>
+                            {party.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>التاريخ</FormLabel>
+                    <DatePicker
                       selected={field.value}
                       onSelect={field.onChange}
-                      initialFocus
+                      disabled={isEditing}
                     />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>الحالة</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>حالة الفاتورة</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر حالة الفاتورة" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="paid">مدفوعة</SelectItem>
+                        <SelectItem value="partial">مدفوعة جزئياً</SelectItem>
+                        <SelectItem value="unpaid">غير مدفوعة</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ملاحظات</FormLabel>
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر الحالة" />
-                    </SelectTrigger>
+                    <Textarea placeholder="ملاحظات إضافية..." {...field} />
                   </FormControl>
-                  <SelectContent>
-                    <SelectItem value="draft">مسودة</SelectItem>
-                    <SelectItem value="pending">معلقة</SelectItem>
-                    <SelectItem value="paid">مدفوعة</SelectItem>
-                    <SelectItem value="partially_paid">مدفوعة جزئياً</SelectItem>
-                    <SelectItem value="cancelled">ملغاة</SelectItem>
-                    <SelectItem value="overdue">متأخرة</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  حدد حالة الفاتورة
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="payment_status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>حالة الدفع</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="border rounded-md p-4">
+              <h3 className="text-lg font-semibold mb-4">عناصر الفاتورة</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                <div>
+                  <label className="text-sm font-medium">فئة المنتج</label>
+                  <Select 
+                    value={selectedCategory}
+                    onValueChange={setSelectedCategory}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="اختر حالة الدفع" />
+                      <SelectValue placeholder="اختر فئة المنتج" />
                     </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="draft">مسودة</SelectItem>
-                    <SelectItem value="confirmed">مؤكدة</SelectItem>
-                    <SelectItem value="cancelled">ملغاة</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  حدد حالة الدفع للفاتورة
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="total_amount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>إجمالي المبلغ</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                </FormControl>
-                <FormDescription>
-                  أدخل إجمالي المبلغ للفاتورة
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>ملاحظات</FormLabel>
-              <FormControl>
-                <Textarea rows={3} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid gap-4">
-          <Label htmlFor="items">أصناف الفاتورة</Label>
-          <Button type="button" variant="secondary" size="sm" onClick={addItem}>
-            <PlusCircle className="h-4 w-4 ml-2" />
-            إضافة صنف
-          </Button>
-          <div className="grid gap-2">
-            {form.watch('items')?.map((item, index) => (
-              <div key={index} className="flex items-center space-x-4">
-                <Checkbox 
-                  checked={item.selected} 
-                  onCheckedChange={(checked) => toggleItemSelection(index, Boolean(checked))}
-                  aria-label="Select row"
-                />
-                <div className="grid gap-1.5">
-                  <Label htmlFor={`item-${index}`}>الصنف {index + 1}</Label>
-                  <Input
-                    type="text"
-                    id={`item-${index}`}
-                    defaultValue={item.item_name}
-                    className="w-24"
-                    onChange={(e) => form.setValue(`items.${index}.item_name`, e.target.value)}
-                  />
-                  <Input
-                    type="number"
-                    id={`quantity-${index}`}
-                    defaultValue={item.quantity}
-                    className="w-24"
-                    onChange={(e) => handleQuantityChange(index, e.target.value)}
-                  />
-                  <Input
-                    type="number"
-                    id={`unit_price-${index}`}
-                    defaultValue={item.unit_price}
-                    className="w-24"
-                    onChange={(e) => form.setValue(`items.${index}.unit_price`, parseFloat(e.target.value) || 0)}
+                    <SelectContent>
+                      <SelectItem value="finished_products">المنتجات النهائية</SelectItem>
+                      <SelectItem value="semi_finished_products">المنتجات نصف المصنعة</SelectItem>
+                      <SelectItem value="raw_materials">المواد الخام</SelectItem>
+                      <SelectItem value="packaging_materials">مواد التعبئة</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">المنتج</label>
+                  <Select 
+                    value={selectedItemId.toString() || undefined}
+                    onValueChange={(value) => setSelectedItemId(Number(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر المنتج" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categorizedItems[selectedCategory as keyof typeof categorizedItems].map(item => (
+                        <SelectItem key={item.id} value={item.id.toString()}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">الكمية</label>
+                  <Input 
+                    type="number" 
+                    min="1"
+                    value={itemQuantity} 
+                    onChange={(e) => setItemQuantity(Number(e.target.value))} 
                   />
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(index)}>
-                  <Trash className="h-4 w-4" />
-                </Button>
+                
+                <div>
+                  <label className="text-sm font-medium">السعر</label>
+                  <Input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={itemPrice} 
+                    onChange={(e) => setItemPrice(Number(e.target.value))} 
+                  />
+                </div>
+                
+                <div className="flex items-end">
+                  <Button 
+                    type="button" 
+                    onClick={addItemToInvoice}
+                    disabled={!selectedItemId || itemQuantity <= 0 || itemPrice <= 0}
+                    className="w-full"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> إضافة
+                  </Button>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <Button type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          حفظ الفاتورة
-        </Button>
-      </form>
-    </Form>
+              
+              <div className="border rounded-md overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">#</TableHead>
+                      <TableHead>المنتج</TableHead>
+                      <TableHead>الفئة</TableHead>
+                      <TableHead className="text-center">الكمية</TableHead>
+                      <TableHead className="text-center">السعر</TableHead>
+                      <TableHead className="text-right">المجموع</TableHead>
+                      <TableHead className="text-center w-[80px]">إجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoiceItems.length > 0 ? (
+                      invoiceItems.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell>{item.item_name}</TableCell>
+                          <TableCell>{getCategoryTranslation(item.item_type)}</TableCell>
+                          <TableCell className="text-center">{item.quantity}</TableCell>
+                          <TableCell className="text-center">{item.unit_price.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {(item.quantity * item.unit_price).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => removeItemFromInvoice(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
+                          لم يتم إضافة عناصر بعد
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    
+                    {invoiceItems.length > 0 && (
+                      <TableRow className="bg-muted/50">
+                        <TableCell colSpan={5} className="text-right font-bold">
+                          المجموع الكلي
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          {total.toFixed(2)}
+                        </TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            
+            <CardFooter className="px-0 pt-6 flex justify-between">
+              <Button variant="outline" type="button" onClick={() => form.reset()}>
+                إعادة تعيين
+              </Button>
+              <Button 
+                type="submit"
+                disabled={invoiceItems.length === 0}
+              >
+                {isEditing ? 'تحديث الفاتورة' : 'إنشاء الفاتورة'}
+              </Button>
+            </CardFooter>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   );
 }

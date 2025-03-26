@@ -1,126 +1,77 @@
 
-import { supabase } from "@/integrations/supabase/client";
-import { Invoice, InvoiceItem } from "@/services/CommercialTypes";
+import { Invoice } from '@/services/CommercialTypes';
+import { InvoiceEntity } from './InvoiceEntity';
+import { InvoiceProcessor } from './InvoiceProcessor';
+import { toast } from "sonner";
 
-class InvoiceService {
+// خدمة الفواتير الرئيسية
+export class InvoiceService {
   private static instance: InvoiceService;
-
-  private constructor() {}
-
+  private invoiceProcessor: InvoiceProcessor;
+  
+  private constructor() {
+    this.invoiceProcessor = new InvoiceProcessor();
+  }
+  
   public static getInstance(): InvoiceService {
     if (!InvoiceService.instance) {
       InvoiceService.instance = new InvoiceService();
     }
     return InvoiceService.instance;
   }
-
-  /**
-   * Get all invoice items for a specific invoice
-   */
-  public async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
-    try {
-      const { data, error } = await supabase
-        .from('invoice_items')
-        .select('*')
-        .eq('invoice_id', invoiceId);
-      
-      if (error) throw error;
-      
-      // Process each item to get the cost price
-      const itemsWithCostPrice = await Promise.all(data.map(async item => {
-        const costPrice = await this.getItemCostPrice(item.item_id, item.item_type);
-        return {
-          id: item.id,
-          invoice_id: item.invoice_id,
-          item_id: item.item_id,
-          item_name: item.item_name,
-          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.total,
-          cost_price: costPrice,
-          created_at: item.created_at
-        };
-      }));
-      
-      return itemsWithCostPrice;
-    } catch (error) {
-      console.error('Error fetching invoice items:', error);
-      return [];
-    }
+  
+  public async getInvoices(): Promise<Invoice[]> {
+    return InvoiceEntity.fetchAll();
   }
-
-  /**
-   * Get the cost price for a specific item
-   */
-  private async getItemCostPrice(itemId: number, itemType: string): Promise<number> {
+  
+  public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
+    return InvoiceEntity.fetchByParty(partyId);
+  }
+  
+  public async getInvoiceById(id: string): Promise<Invoice | null> {
+    return InvoiceEntity.fetchById(id);
+  }
+  
+  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
-      // Get the table name based on item type
-      let table;
-      switch (itemType) {
-        case 'raw_materials':
-          table = 'raw_materials';
-          break;
-        case 'packaging_materials':
-          table = 'packaging_materials';
-          break;
-        case 'semi_finished_products':
-          table = 'semi_finished_products';
-          break;
-        case 'finished_products':
-          table = 'finished_products';
-          break;
-        default:
-          return 0;
+      const invoice = await InvoiceEntity.create(invoiceData);
+      
+      // If invoice status is not "draft", automatically confirm it
+      if (invoice && invoiceData.payment_status === 'confirmed') {
+        await this.confirmInvoice(invoice.id);
+        
+        // Refresh the invoice data after confirmation
+        return this.getInvoiceById(invoice.id);
       }
       
-      const { data: rawData, error } = await supabase
-        .from(table)
-        .select('unit_cost')
-        .eq('id', itemId)
-        .single();
-      
-      if (error || !rawData) return 0;
-      
-      return rawData?.unit_cost || 0;
+      toast.success('تم إنشاء الفاتورة بنجاح');
+      return invoice;
     } catch (error) {
-      console.error(`Error getting cost price for item ${itemId} of type ${itemType}:`, error);
-      return 0;
+      console.error('Error creating invoice:', error);
+      toast.error('حدث خطأ أثناء إنشاء الفاتورة');
+      return null;
     }
   }
-
-  // Add additional methods needed for invoices
-
-  async getInvoices(): Promise<Invoice[]> {
-    // Implement this method
-    return [];
+  
+  public async confirmInvoice(invoiceId: string): Promise<boolean> {
+    return this.invoiceProcessor.confirmInvoice(invoiceId);
   }
-
-  getInvoiceById(id: string): Promise<Invoice | null> {
-    // Implement this method
-    return Promise.resolve(null);
+  
+  public async cancelInvoice(invoiceId: string): Promise<boolean> {
+    return this.invoiceProcessor.cancelInvoice(invoiceId);
   }
-
-  deleteInvoice(id: string): Promise<boolean> {
-    // Implement this method
-    return Promise.resolve(true);
+  
+  public async deleteInvoice(id: string): Promise<boolean> {
+    return InvoiceEntity.delete(id);
   }
-
-  confirmInvoice(id: string): Promise<boolean> {
-    // Implement this method
-    return Promise.resolve(true);
+  
+  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
+    return this.invoiceProcessor.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
   }
-
-  cancelInvoice(id: string): Promise<boolean> {
-    // Implement this method
-    return Promise.resolve(true);
-  }
-
-  getInvoicesByParty(partyId: string): Promise<Invoice[]> {
-    // Implement this method
-    return Promise.resolve([]);
+  
+  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
+    return this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
   }
 }
 
-// Export a default instance for convenience
 export default InvoiceService;

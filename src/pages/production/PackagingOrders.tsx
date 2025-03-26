@@ -26,20 +26,8 @@ import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 import { PackagingOrder } from '@/services/ProductionService';
-
-interface FinishedProduct {
-  id: number;
-  name: string;
-  code: string;
-  unit: string;
-  min_stock: number;
-  quantity: number;
-  unit_cost: number;
-  semi_finished_id: number;
-  semi_finished_quantity: number;
-  created_at: string;
-  updated_at: string;
-}
+import { FinishedProduct } from '@/services/InventoryService';
+import { useQuery } from '@tanstack/react-query';
 
 const statusTranslations = {
   pending: 'قيد الانتظار',
@@ -81,8 +69,8 @@ const PackagingOrders = () => {
     unit: ''
   });
   
-  const productionService = ProductionService;
-  const inventoryService = InventoryService;
+  const productionService = ProductionService.getInstance();
+  const inventoryService = InventoryService.getInstance();
   
   const { 
     data: orders = [], 
@@ -106,8 +94,18 @@ const PackagingOrders = () => {
     isLoading: isProductsLoading,
     refetch: refetchProducts
   } = useQuery({
-    queryKey: ['finished_products'],
-    queryFn: () => InventoryService.getInstance().getFinishedProducts(),
+    queryKey: ['finishedProducts'],
+    queryFn: async () => {
+      try {
+        const products = await inventoryService.getFinishedProducts();
+        console.log("Fetched finished products:", products);
+        return products;
+      } catch (error) {
+        console.error("Error loading finished products:", error);
+        toast.error("حدث خطأ أثناء تحميل المنتجات النهائية");
+        return [];
+      }
+    }
   });
   
   const isLoading = isOrdersLoading || isProductsLoading;
@@ -123,7 +121,7 @@ const PackagingOrders = () => {
     { key: 'productName', title: 'المنتج' },
     { 
       key: 'quantity', 
-      title: 'ا��كمية',
+      title: 'الكمية',
       render: (value: number, record: any) => `${value} ${record.unit}`
     },
     { 
@@ -363,7 +361,7 @@ const PackagingOrders = () => {
                 <DialogHeader>
                   <DialogTitle>إضافة أمر تعبئة جديد</DialogTitle>
                   <DialogDescription>
-                    اختر المنتج النهائي وحدد الكمية ا��مطلوب تعبئتها.
+                    اختر المنتج النهائي وحدد الكمية المطلوب تعبئتها.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -564,7 +562,7 @@ const PackagingOrders = () => {
                   <div className="bg-yellow-50 p-4 rounded-md text-yellow-800">
                     <h4 className="font-medium mb-1">تنبيه</h4>
                     <p className="text-sm">
-                      عند تحديث الحالة إلى "مكتمل"، سيتم خصم المكونات من المخزون وإضافة الم��تج النهائي.
+                      عند تحديث الحالة إلى "مكتمل"، سيتم خصم المكونات من المخزون وإضافة المنتج النهائي.
                     </p>
                   </div>
                 )}

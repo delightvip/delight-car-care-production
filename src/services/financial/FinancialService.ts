@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface Transaction {
@@ -340,7 +339,7 @@ export default class FinancialService {
     if (transaction.payment_method !== 'other') {
       await this.updateBalance(
         transaction.type === 'income' ? -transaction.amount : transaction.amount,
-        transaction.payment_method as 'cash' | 'bank'
+        transaction.payment_method
       );
     }
 
@@ -427,73 +426,5 @@ export default class FinancialService {
       balance,
       recentTransactions
     };
-  }
-  
-  // إضافة دالة جديدة لربط المعاملات التجارية بالنظام المالي
-  public async recordCommercialTransaction(
-    transactionType: 'income' | 'expense',
-    amount: number,
-    paymentMethod: 'cash' | 'bank' | 'other',
-    referenceId: string,
-    referenceType: string,
-    date: string,
-    notes?: string
-  ): Promise<Transaction | null> {
-    try {
-      // البحث عن الفئة المناسبة للمعاملة التجارية
-      const categoryType = transactionType === 'income' ? 'income' : 'expense';
-      const categoryName = transactionType === 'income' ? 'مبيعات' : 'مشتريات';
-      
-      // البحث عن الفئة أو إنشاء فئة جديدة إذا لم تكن موجودة
-      const { data: existingCategories, error: catError } = await supabase
-        .from('financial_categories')
-        .select('*')
-        .eq('name', categoryName)
-        .eq('type', categoryType);
-      
-      if (catError) {
-        console.error('Error finding commercial category:', catError);
-        return null;
-      }
-      
-      let categoryId: string;
-      
-      if (!existingCategories || existingCategories.length === 0) {
-        // إنشاء فئة جديدة
-        const newCategory = {
-          name: categoryName,
-          type: categoryType as 'income' | 'expense',
-          description: `فئة تلقائية للمعاملات التجارية (${categoryName})`
-        };
-        
-        const category = await this.createCategory(newCategory);
-        if (!category) {
-          console.error('Failed to create commercial category');
-          return null;
-        }
-        
-        categoryId = category.id;
-      } else {
-        categoryId = existingCategories[0].id;
-      }
-      
-      // إنشاء المعاملة المالية
-      const transaction = {
-        type: transactionType,
-        category_id: categoryId,
-        amount,
-        payment_method: paymentMethod,
-        date,
-        reference_id: referenceId,
-        reference_type: referenceType,
-        notes: notes || `معاملة تجارية: ${referenceType} (${referenceId})`
-      };
-      
-      return await this.createTransaction(transaction);
-      
-    } catch (error) {
-      console.error('Error recording commercial transaction:', error);
-      return null;
-    }
   }
 }

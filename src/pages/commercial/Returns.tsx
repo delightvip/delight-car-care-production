@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,7 +17,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-import { ReturnFormValues } from '@/components/commercial/ReturnFormTypes';
 
 const Returns = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -71,43 +71,29 @@ const Returns = () => {
     return filtered;
   }, [returns, activeTab, searchQuery]);
 
-  const handleCreateReturn = async (returnData: ReturnFormValues) => {
+  const handleCreateReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
     try {
       setIsProcessing(true);
       console.log('Creating return with data:', returnData);
       
+      // تأكد من وجود party_id للمرتجع إذا كان مرتبط بفاتورة
       if (!returnData.party_id && returnData.invoice_id) {
+        // استخراج الطرف من الفاتورة المرتبطة
         const invoice = await commercialService.getInvoiceById(returnData.invoice_id);
         if (invoice) {
           returnData.party_id = invoice.party_id;
         }
       }
       
-      const returnToCreate: Omit<Return, 'id' | 'created_at'> = {
-        party_id: returnData.party_id || '',
-        party_name: undefined,
-        date: returnData.date ? format(returnData.date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-        invoice_id: returnData.invoice_id,
-        return_type: returnData.return_type || 'sales_return',
-        amount: returnData.amount || 0,
-        payment_status: 'draft',
-        notes: returnData.notes,
-        items: (returnData.items || []).filter(item => item.selected).map(item => ({
-          id: '',
-          return_id: '',
-          item_id: item.item_id,
-          item_name: item.item_name,
-          item_type: item.item_type,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price,
-          created_at: ''
-        }))
-      };
-      
+      // Use setTimeout to prevent UI freezing
       const createReturnPromise = new Promise<Return | null>(async (resolve) => {
         try {
-          const result = await commercialService.createReturn(returnToCreate);
+          // تعيين حالة المرتجع للتأكيد تلقائياً كمسودة أولاً
+          const result = await commercialService.createReturn({
+            ...returnData,
+            payment_status: 'draft'
+          });
+          
           console.log('Return creation result:', result);
           resolve(result);
         } catch (error) {
@@ -119,13 +105,16 @@ const Returns = () => {
       const result = await createReturnPromise;
       
       if (result) {
+        // تأكيد المرتجع تلقائياً بعد إنشائه
         console.log('Auto confirming return:', result.id);
         
+        // Use setTimeout for async operation
         setTimeout(async () => {
           try {
             const confirmed = await commercialService.confirmReturn(result.id);
             console.log('Return confirm result:', confirmed);
             
+            // تحديث البيانات
             queryClient.invalidateQueries({ queryKey: ['returns'] });
             queryClient.invalidateQueries({ queryKey: ['parties'] });
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -171,6 +160,7 @@ const Returns = () => {
       setIsProcessing(true);
       console.log('Confirming return:', selectedReturnId);
       
+      // Use setTimeout to prevent UI freezing
       const confirmPromise = new Promise<boolean>(async (resolve) => {
         try {
           const success = await commercialService.confirmReturn(selectedReturnId);
@@ -184,6 +174,7 @@ const Returns = () => {
       const success = await confirmPromise;
       
       if (success) {
+        // تحديث البيانات
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -225,6 +216,7 @@ const Returns = () => {
       setIsProcessing(true);
       console.log('Cancelling return:', selectedReturnId);
       
+      // Use setTimeout to prevent UI freezing
       const cancelPromise = new Promise<boolean>(async (resolve) => {
         try {
           const success = await commercialService.cancelReturn(selectedReturnId);
@@ -238,6 +230,7 @@ const Returns = () => {
       const success = await cancelPromise;
       
       if (success) {
+        // تحديث البيانات
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -305,6 +298,7 @@ const Returns = () => {
     document.body.removeChild(link);
   };
 
+  // وظيفة إعادة تحميل البيانات
   const handleRefresh = async () => {
     try {
       await refetch();
@@ -488,6 +482,7 @@ const Returns = () => {
         </Card>
       </div>
 
+      {/* Dialog for adding new return */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => !isProcessing && setIsAddDialogOpen(open)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -497,6 +492,7 @@ const Returns = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog for confirming return */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={(open) => !isProcessing && setIsConfirmDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -521,6 +517,7 @@ const Returns = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Dialog for cancelling return */}
       <AlertDialog open={isCancelDialogOpen} onOpenChange={(open) => !isProcessing && setIsCancelDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
