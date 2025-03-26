@@ -10,28 +10,28 @@ export async function fetchLowStockItems() {
     const rawMaterialsResponse = await supabase
       .from('raw_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lte('quantity', 'min_stock')
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
     // فحص المنتجات نصف المصنعة ذات المخزون المنخفض
     const semiFinishedResponse = await supabase
       .from('semi_finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lte('quantity', 'min_stock')
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
     // فحص مستلزمات التعبئة ذات المخزون المنخفض
     const packagingResponse = await supabase
       .from('packaging_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lte('quantity', 'min_stock')
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
     // فحص المنتجات النهائية ذات المخزون المنخفض
     const finishedResponse = await supabase
       .from('finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lte('quantity', 'min_stock')
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
     // تحقق من الأخطاء
@@ -89,7 +89,17 @@ export async function fetchLowStockItems() {
     };
   } catch (error) {
     console.error("خطأ في جلب عناصر المخزون المنخفض:", error);
-    throw error;
+    // Return empty data instead of throwing to prevent application crash
+    return {
+      totalCount: 0,
+      items: [],
+      counts: {
+        rawMaterials: 0,
+        semiFinished: 0,
+        packaging: 0,
+        finished: 0
+      }
+    };
   }
 }
 

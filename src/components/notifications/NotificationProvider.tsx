@@ -61,11 +61,15 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     totalCount: 0
   });
   
-  const { data: lowStockItems, refetch: refetchLowStock } = useQuery({
+  const { data: lowStockItems, refetch: refetchLowStock, isError } = useQuery({
     queryKey: ['lowStockItems'],
     queryFn: fetchLowStockItems,
     refetchInterval: 30000, // كل 30 ثانية
     staleTime: 20000, // تعتبر البيانات قديمة بعد 20 ثانية
+    // Handle errors gracefully to prevent application crash
+    onError: (error) => {
+      console.error("Error fetching low stock items:", error);
+    }
   });
 
   // إضافة إشعار جديد
@@ -156,34 +160,38 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // إضافة مستمع للتغييرات في قاعدة البيانات
   useEffect(() => {
     const setupRealtimeSubscriptions = async () => {
-      // إعداد قناة Supabase الحقيقية للاستماع للتغييرات
-      const channel = supabase
-        .channel('db-changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'raw_materials',
-        }, () => refreshLowStockData())
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'semi_finished_products',
-        }, () => refreshLowStockData())
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'packaging_materials',
-        }, () => refreshLowStockData())
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'finished_products',
-        }, () => refreshLowStockData())
-        .subscribe();
+      try {
+        // إعداد قناة Supabase الحقيقية للاستماع للتغييرات
+        const channel = supabase
+          .channel('db-changes')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'raw_materials',
+          }, () => refreshLowStockData())
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'semi_finished_products',
+          }, () => refreshLowStockData())
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'packaging_materials',
+          }, () => refreshLowStockData())
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'finished_products',
+          }, () => refreshLowStockData())
+          .subscribe();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      } catch (error) {
+        console.error("Error setting up realtime subscriptions:", error);
+      }
     };
 
     setupRealtimeSubscriptions();
