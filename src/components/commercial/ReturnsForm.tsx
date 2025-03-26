@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -24,18 +25,21 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, PlusCircle, Trash } from 'lucide-react';
+import { AlertCircle, CalendarIcon, PlusCircle, Trash, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Return, ReturnItem } from '@/services/CommercialTypes';
 import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
+import { supabase } from '@/integrations/supabase/client';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Define the ReturnFormValues schema
 const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
   invoice_id: z.string().optional(),
+  party_id: z.string().optional(),
   date: z.date(),
   amount: z.number().min(0, 'يجب أن يكون المبلغ أكبر من صفر'),
   notes: z.string().optional(),
@@ -60,6 +64,8 @@ interface ReturnsFormProps {
 export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<string>('finished_products');
+  const [isLoadingInvoiceItems, setIsLoadingInvoiceItems] = useState<boolean>(false);
+  const [invoiceDetails, setInvoiceDetails] = useState<any>(null);
   
   // Prepare form default values, converting string date to Date object if initialData is provided
   const defaultValues = initialData 
@@ -83,12 +89,31 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     defaultValues
   });
 
-  const { data: invoices } = useQuery({
-    queryKey: ['invoices'],
-    queryFn: () => CommercialService.getInstance().getInvoices(),
+  // Fetch invoices based on the selected return type
+  const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
+    queryKey: ['invoices', form.watch('return_type')],
+    queryFn: async () => {
+      const invoiceType = form.watch('return_type') === 'sales_return' ? 'sale' : 'purchase';
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*, parties(name)')
+        .eq('invoice_type', invoiceType)
+        .eq('status', 'completed')
+        .order('date', { ascending: false });
+        
+      if (error) throw error;
+      return data || [];
+    },
   });
 
-  const { data: inventoryItems } = useQuery({
+  // Fetch parties
+  const { data: parties } = useQuery({
+    queryKey: ['parties'],
+    queryFn: () => CommercialService.getInstance().getParties(),
+  });
+
+  // Fetch inventory items based on the selected type
+  const { data: inventoryItems, isLoading: isLoadingItems } = useQuery({
     queryKey: ['inventory', selectedItemType],
     queryFn: () => {
       const inventoryService = InventoryService.getInstance();
@@ -108,6 +133,48 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     enabled: !!selectedItemType,
   });
 
+  // When invoice is selected, fetch its items
+  useEffect(() => {
+    async function fetchInvoiceDetails() {
+      if (selectedInvoice && selectedInvoice !== 'no_invoice') {
+        setIsLoadingInvoiceItems(true);
+        try {
+          // Fetch invoice details including items
+          const { data, error } = await supabase
+            .from('invoices')
+            .select(`
+              *,
+              invoice_items(*),
+              parties(*)
+            `)
+            .eq('id', selectedInvoice)
+            .single();
+          
+          if (error) throw error;
+          
+          setInvoiceDetails(data);
+          
+          // Update party ID in the form
+          if (data.party_id) {
+            form.setValue('party_id', data.party_id);
+          }
+          
+          // Clear existing items
+          form.setValue('items', []);
+          
+        } catch (error) {
+          console.error('Error fetching invoice details:', error);
+        } finally {
+          setIsLoadingInvoiceItems(false);
+        }
+      } else {
+        setInvoiceDetails(null);
+      }
+    }
+    
+    fetchInvoiceDetails();
+  }, [selectedInvoice, form]);
+
   // Recalculate total amount when items change
   useEffect(() => {
     const items = form.watch('items');
@@ -115,18 +182,53 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       const total = items.reduce((sum, item) => {
         return sum + (item.quantity * item.unit_price);
       }, 0);
-      form.setValue('amount', total);
+      form.setValue('amount', Number(total.toFixed(2)));
     } else {
       form.setValue('amount', 0);
     }
   }, [form.watch('items')]);
+
+  // Add item from invoice to the return
+  const addItemFromInvoice = (invoiceItem: any) => {
+    const currentItems = form.getValues('items') || [];
+    
+    // Check if item already exists in the form
+    const existingItemIndex = currentItems.findIndex(
+      item => item.item_id === invoiceItem.item_id && item.item_type === invoiceItem.item_type
+    );
+    
+    if (existingItemIndex >= 0) {
+      // Update quantity if item already exists
+      const updatedItems = [...currentItems];
+      updatedItems[existingItemIndex].quantity += 1;
+      form.setValue('items', updatedItems);
+    } else {
+      // Add new item
+      form.setValue('items', [
+        ...currentItems,
+        {
+          item_id: parseInt(invoiceItem.item_id),
+          item_type: invoiceItem.item_type,
+          item_name: invoiceItem.item_name,
+          quantity: 1,
+          unit_price: invoiceItem.unit_price
+        }
+      ]);
+    }
+  };
 
   // Add a new empty item to the form
   const addItem = () => {
     const currentItems = form.getValues('items') || [];
     form.setValue('items', [
       ...currentItems, 
-      { item_id: 0, item_type: 'finished_products' as const, item_name: '', quantity: 1, unit_price: 0 }
+      { 
+        item_id: 0, 
+        item_type: selectedItemType as any, 
+        item_name: '', 
+        quantity: 1, 
+        unit_price: 0 
+      }
     ]);
   };
 
@@ -136,17 +238,26 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     form.setValue('items', currentItems.filter((_, i) => i !== index));
   };
 
+  // Handle change in return type
+  const handleReturnTypeChange = (type: string) => {
+    // Reset invoice and items when return type changes
+    form.setValue('invoice_id', undefined);
+    form.setValue('items', []);
+    setSelectedInvoice(null);
+    setInvoiceDetails(null);
+  };
+
   // Handle form submission
   const handleSubmitForm = (values: ReturnFormValues) => {
     // Create a return object from form values
     const returnData: Omit<Return, 'id' | 'created_at'> = {
       return_type: values.return_type,
       invoice_id: values.invoice_id === 'no_invoice' ? undefined : values.invoice_id,
+      party_id: values.party_id,
       date: format(values.date, 'yyyy-MM-dd'),
       amount: values.amount,
       notes: values.notes,
-      payment_status: 'draft', // Add the payment_status field with default value
-      party_id: undefined, // Add this field to match the Return type
+      payment_status: 'draft',
       items: values.items.map(item => ({
         item_id: item.item_id,
         item_type: item.item_type,
@@ -171,7 +282,13 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>نوع المرتجع</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select 
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    handleReturnTypeChange(value);
+                  }} 
+                  defaultValue={field.value}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="اختر نوع المرتجع" />
@@ -193,34 +310,80 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             name="invoice_id"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>رقم الفاتورة (اختياري)</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || "no_invoice"}>
+                <FormLabel>رقم الفاتورة</FormLabel>
+                <Select 
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    setSelectedInvoice(value);
+                  }} 
+                  value={field.value || "no_invoice"}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="اختر الفاتورة المرتبطة" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {/* Fix: Changed empty string to "no_invoice" */}
                     <SelectItem value="no_invoice">بدون فاتورة</SelectItem>
-                    {invoices?.filter(inv => 
-                      form.getValues('return_type') === 'sales_return' 
-                        ? inv.invoice_type === 'sale' 
-                        : inv.invoice_type === 'purchase'
-                    ).map((invoice) => (
-                      <SelectItem key={invoice.id} value={invoice.id}>
-                        {`${invoice.id.substring(0, 8)}... - ${invoice.party_name} - ${invoice.total_amount}`}
-                      </SelectItem>
-                    ))}
+                    {isLoadingInvoices ? (
+                      <div className="flex items-center justify-center p-2">
+                        <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                        جاري التحميل...
+                      </div>
+                    ) : (
+                      invoices?.map((invoice) => (
+                        <SelectItem key={invoice.id} value={invoice.id}>
+                          {`${invoice.id.substring(0, 8)}... - ${invoice.parties?.name || 'غير محدد'} - ${invoice.total_amount}`}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  يمكنك ربط المرتجع بفاتورة محددة أو تركه بدون ارتباط
+                  يُفضل اختيار فاتورة مرتبطة لضمان دقة المعلومات
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          {/* Party Selection (if no invoice selected) */}
+          {(!selectedInvoice || selectedInvoice === 'no_invoice') && (
+            <FormField
+              control={form.control}
+              name="party_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>الطرف</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر الطرف" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {parties?.filter(party => 
+                        form.getValues('return_type') === 'sales_return' 
+                          ? party.type === 'customer' 
+                          : party.type === 'supplier'
+                      ).map((party) => (
+                        <SelectItem key={party.id} value={party.id}>
+                          {party.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    اختر العميل أو المورد المرتبط بالمرتجع
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           {/* Date */}
           <FormField
@@ -302,10 +465,53 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           )}
         />
 
+        {/* Display invoice items if an invoice is selected */}
+        {selectedInvoice && selectedInvoice !== 'no_invoice' && (
+          <div className="space-y-4 border rounded-md p-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold">أصناف الفاتورة</h3>
+              {isLoadingInvoiceItems && (
+                <div className="flex items-center">
+                  <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                  جاري التحميل...
+                </div>
+              )}
+            </div>
+            
+            {invoiceDetails?.invoice_items?.length > 0 ? (
+              <div className="space-y-2">
+                {invoiceDetails.invoice_items.map((item: any) => (
+                  <div key={item.id} className="flex justify-between items-center bg-muted p-2 rounded-md">
+                    <div>
+                      <span className="font-medium">{item.item_name}</span>
+                      <div className="text-sm text-muted-foreground">
+                        الكمية: {item.quantity} | السعر: {item.unit_price}
+                      </div>
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => addItemFromInvoice(item)}
+                    >
+                      <PlusCircle className="h-4 w-4 mr-2" />
+                      إضافة للمرتجع
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center py-4 text-muted-foreground">
+                لا توجد أصناف في هذه الفاتورة
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Items */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">الأصناف</h3>
+            <h3 className="text-lg font-semibold">الأصناف المرتجعة</h3>
             <div className="flex space-x-2">
               <Select value={selectedItemType} onValueChange={setSelectedItemType}>
                 <SelectTrigger className="w-[200px]">
@@ -355,11 +561,18 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {inventoryItems?.map((item) => (
-                                  <SelectItem key={item.id} value={item.id.toString()}>
-                                    {item.name}
-                                  </SelectItem>
-                                ))}
+                                {isLoadingItems ? (
+                                  <div className="flex items-center justify-center p-2">
+                                    <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                                    جاري التحميل...
+                                  </div>
+                                ) : (
+                                  inventoryItems?.map((item) => (
+                                    <SelectItem key={item.id} value={item.id.toString()}>
+                                      {item.name}
+                                    </SelectItem>
+                                  ))
+                                )}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -428,6 +641,17 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             )}
           </div>
         </div>
+
+        {/* Warning when no invoice is selected */}
+        {(!selectedInvoice || selectedInvoice === 'no_invoice') && (
+          <Alert variant="warning">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>تنبيه</AlertTitle>
+            <AlertDescription>
+              يُفضل ربط المرتجع بفاتورة محددة لضمان دقة البيانات والإجراءات المالية والمخزنية.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex justify-end">
           <Button type="submit">حفظ المرتجع</Button>

@@ -1,11 +1,10 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import CommercialService, { Return } from '@/services/CommercialService';
-import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, FileDown, CheckCircle, XCircle } from 'lucide-react';
+import { PlusCircle, Search, FileDown, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,6 +15,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { Return } from '@/services/CommercialTypes';
+import ReturnDetailsDialog from '@/components/commercial/ReturnDetailsDialog';
+import ReturnsService from '@/services/commercial/return/ReturnsService';
 
 const Returns = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -24,17 +26,18 @@ const Returns = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [selectedReturnId, setSelectedReturnId] = useState<string | null>(null);
+  const [viewReturn, setViewReturn] = useState<Return | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
-  
-  const commercialService = CommercialService.getInstance();
+  const returnsService = ReturnsService.getInstance();
   
   const { data: returns, isLoading, error, refetch } = useQuery({
     queryKey: ['returns'],
     queryFn: async () => {
       console.log('Fetching returns...');
       try {
-        const result = await commercialService.getReturns();
+        const result = await returnsService.getReturns();
         console.log('Returns fetched:', result);
         return result;
       } catch (err) {
@@ -42,11 +45,6 @@ const Returns = () => {
         throw err;
       }
     },
-  });
-  
-  const { data: parties } = useQuery({
-    queryKey: ['parties'],
-    queryFn: () => PartyService.getInstance().getParties(),
   });
 
   const filteredReturns = React.useMemo(() => {
@@ -73,36 +71,19 @@ const Returns = () => {
     try {
       console.log('Creating return with data:', returnData);
       
-      // تأكد من وجود party_id للمرتجع إذا كان نوع المرتجع مرتجع مبيعات أو مرتجع مشتريات
-      if (!returnData.party_id && returnData.invoice_id) {
-        // استخراج الطرف من الفاتورة المرتبطة
-        const invoice = await commercialService.getInvoiceById(returnData.invoice_id);
-        if (invoice) {
-          returnData.party_id = invoice.party_id;
-        }
-      }
-      
-      // تعيين حالة المرتجع للتأكيد تلقائياً
-      const returnWithStatus = {
-        ...returnData,
-        payment_status: 'confirmed' as "draft" | "confirmed" | "cancelled"
-      };
-      
-      const result = await commercialService.createReturn(returnWithStatus);
-      console.log('Return creation result:', result);
+      // Create and auto-confirm the return
+      const result = await returnsService.createReturn(returnData, true);
       
       if (result) {
-        // تأكيد المرتجع تلقائياً
-        await commercialService.confirmReturn(result.id);
-        console.log('Return confirmed automatically');
+        console.log('Return created and confirmed:', result);
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ['returns'] });
+        queryClient.invalidateQueries({ queryKey: ['parties'] });
+        
+        setIsAddDialogOpen(false);
+        toast.success('تم إنشاء المرتجع وتأكيده بنجاح');
       }
-      
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: ['returns'] });
-      queryClient.invalidateQueries({ queryKey: ['parties'] });
-      
-      setIsAddDialogOpen(false);
-      toast.success('تم إنشاء المرتجع بنجاح');
     } catch (error) {
       console.error('Error creating return:', error);
       toast.error('حدث خطأ أثناء إنشاء المرتجع');
@@ -113,10 +94,11 @@ const Returns = () => {
     if (!selectedReturnId) return;
     
     try {
-      const success = await commercialService.confirmReturn(selectedReturnId);
+      const success = await returnsService.confirmReturn(selectedReturnId);
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
         toast.success('تم تأكيد المرتجع بنجاح');
       }
     } catch (error) {
@@ -132,10 +114,11 @@ const Returns = () => {
     if (!selectedReturnId) return;
     
     try {
-      const success = await commercialService.cancelReturn(selectedReturnId);
+      const success = await returnsService.cancelReturn(selectedReturnId);
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
         toast.success('تم إلغاء المرتجع بنجاح');
       }
     } catch (error) {
@@ -144,6 +127,21 @@ const Returns = () => {
     } finally {
       setIsCancelDialogOpen(false);
       setSelectedReturnId(null);
+    }
+  };
+
+  const handleViewReturn = async (returnId: string) => {
+    try {
+      const returnData = await returnsService.getReturnById(returnId);
+      if (returnData) {
+        setViewReturn(returnData);
+        setIsViewDialogOpen(true);
+      } else {
+        toast.error('لم يتم العثور على بيانات المرتجع');
+      }
+    } catch (error) {
+      console.error('Error viewing return:', error);
+      toast.error('حدث خطأ أثناء عرض بيانات المرتجع');
     }
   };
 
@@ -298,6 +296,14 @@ const Returns = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleViewReturn(returnItem.id)}
+                          >
+                            <Eye className="h-4 w-4 ml-1" />
+                            عرض
+                          </Button>
                           {returnItem.payment_status === 'draft' && (
                             <Button
                               size="sm"
@@ -344,6 +350,18 @@ const Returns = () => {
           <ReturnsForm onSubmit={handleCreateReturn} />
         </DialogContent>
       </Dialog>
+
+      {/* Dialog for viewing return details */}
+      {viewReturn && (
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>تفاصيل المرتجع</DialogTitle>
+            </DialogHeader>
+            <ReturnDetailsDialog return={viewReturn} />
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Dialog for confirming return */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
