@@ -42,7 +42,11 @@ class PartyService {
       
       return (data || []).map(party => ({
         ...party,
-        balance: party.party_balances?.[0]?.balance || 0
+        balance: party.party_balances?.[0]?.balance || 0,
+        type: party.type as 'customer' | 'supplier' | 'other',
+        balance_type: party.balance_type as 'debit' | 'credit',
+        code: party.code || '',
+        notes: party.notes || ''
       }));
     } catch (error) {
       console.error('Error fetching parties:', error);
@@ -63,7 +67,11 @@ class PartyService {
       
       return (data || []).map(party => ({
         ...party,
-        balance: party.party_balances?.[0]?.balance || 0
+        balance: party.party_balances?.[0]?.balance || 0,
+        type: party.type as 'customer' | 'supplier' | 'other',
+        balance_type: party.balance_type as 'debit' | 'credit',
+        code: party.code || '',
+        notes: party.notes || ''
       }));
     } catch (error) {
       console.error(`Error fetching parties of type ${type}:`, error);
@@ -86,7 +94,11 @@ class PartyService {
       
       return {
         ...data,
-        balance: data.party_balances?.[0]?.balance || 0
+        balance: data.party_balances?.[0]?.balance || 0,
+        type: data.type as 'customer' | 'supplier' | 'other',
+        balance_type: data.balance_type as 'debit' | 'credit',
+        code: data.code || '',
+        notes: data.notes || ''
       };
     } catch (error) {
       console.error('Error adding party:', error);
@@ -131,7 +143,7 @@ class PartyService {
     }
   }
 
-  async getPartyById(id: string) {
+  async getPartyById(id: string): Promise<Party | null> {
     try {
       const { data, error } = await supabase
         .from('parties')
@@ -143,7 +155,11 @@ class PartyService {
       
       return {
         ...data,
-        balance: data.party_balances?.[0]?.balance || 0
+        balance: data.party_balances?.[0]?.balance || 0,
+        type: data.type as 'customer' | 'supplier' | 'other',
+        balance_type: data.balance_type as 'debit' | 'credit',
+        code: data.code || '',
+        notes: data.notes || ''
       };
     } catch (error) {
       console.error(`Error fetching party with id ${id}:`, error);

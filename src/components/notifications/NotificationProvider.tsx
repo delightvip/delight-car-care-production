@@ -61,14 +61,15 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     totalCount: 0
   });
   
-  const { data: lowStockItems, refetch: refetchLowStock, isError } = useQuery({
+  const { data: lowStockItems, refetch: refetchLowStock } = useQuery({
     queryKey: ['lowStockItems'],
     queryFn: fetchLowStockItems,
     refetchInterval: 30000, // كل 30 ثانية
     staleTime: 20000, // تعتبر البيانات قديمة بعد 20 ثانية
-    // Handle errors gracefully to prevent application crash
-    onError: (error) => {
-      console.error("Error fetching low stock items:", error);
+    meta: {
+      errorHandler: (error: any) => {
+        console.error("Error fetching low stock items:", error);
+      }
     }
   });
 
