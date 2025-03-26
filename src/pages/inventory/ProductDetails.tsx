@@ -102,18 +102,49 @@ const ProductDetails = () => {
   const { data: product, isLoading, error, refetch } = useQuery({
     queryKey: ['product', tableName, id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (error) throw error;
-      return data as ProductData;
+      // Use different approach based on the tableName value
+      if (tableName === 'raw_materials') {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (error) throw error;
+        return data as ProductData;
+      } else if (tableName === 'packaging_materials') {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (error) throw error;
+        return data as ProductData;
+      } else if (tableName === 'semi_finished_products') {
+        const { data, error } = await supabase
+          .from('semi_finished_products')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (error) throw error;
+        return data as ProductData;
+      } else if (tableName === 'finished_products') {
+        const { data, error } = await supabase
+          .from('finished_products')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (error) throw error;
+        return data as ProductData;
+      } else {
+        throw new Error('Invalid product type');
+      }
     }
   });
   
-  // Fix: Use string literal for the table name, not a variable
   const { data: movements } = useQuery<InventoryMovement[]>({
     queryKey: ['product-movements', tableName, id],
     queryFn: async () => {
@@ -147,13 +178,38 @@ const ProductDetails = () => {
   
   const handleDelete = async () => {
     try {
-      // Fix: Use string literal for the table name, not a variable
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', id);
-        
-      if (error) throw error;
+      // Use different approach based on the tableName value
+      if (tableName === 'raw_materials') {
+        const { error } = await supabase
+          .from('raw_materials')
+          .delete()
+          .eq('id', id);
+          
+        if (error) throw error;
+      } else if (tableName === 'packaging_materials') {
+        const { error } = await supabase
+          .from('packaging_materials')
+          .delete()
+          .eq('id', id);
+          
+        if (error) throw error;
+      } else if (tableName === 'semi_finished_products') {
+        const { error } = await supabase
+          .from('semi_finished_products')
+          .delete()
+          .eq('id', id);
+          
+        if (error) throw error;
+      } else if (tableName === 'finished_products') {
+        const { error } = await supabase
+          .from('finished_products')
+          .delete()
+          .eq('id', id);
+          
+        if (error) throw error;
+      } else {
+        throw new Error('Invalid product type');
+      }
       
       toast.success('تم حذف العنصر بنجاح');
       navigate(`/inventory/${type}`);
