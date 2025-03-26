@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -35,7 +34,6 @@ import InventoryService from '@/services/InventoryService';
 import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// Define the ReturnFormValues schema
 const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
   invoice_id: z.string().optional(),
@@ -67,13 +65,10 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const [isLoadingInvoiceItems, setIsLoadingInvoiceItems] = useState<boolean>(false);
   const [invoiceDetails, setInvoiceDetails] = useState<any>(null);
   
-  // Prepare form default values, converting string date to Date object if initialData is provided
   const defaultValues = initialData 
     ? {
         ...initialData,
-        // Convert string date to Date object
         date: initialData.date ? new Date(initialData.date) : new Date(),
-        // Ensure items are properly formatted
         items: initialData.items || []
       }
     : {
@@ -89,7 +84,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     defaultValues
   });
 
-  // Fetch invoices based on the selected return type
   const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
     queryKey: ['invoices', form.watch('return_type')],
     queryFn: async () => {
@@ -106,13 +100,11 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     },
   });
 
-  // Fetch parties
   const { data: parties } = useQuery({
     queryKey: ['parties'],
     queryFn: () => CommercialService.getInstance().getParties(),
   });
 
-  // Fetch inventory items based on the selected type
   const { data: inventoryItems, isLoading: isLoadingItems } = useQuery({
     queryKey: ['inventory', selectedItemType],
     queryFn: () => {
@@ -133,13 +125,11 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     enabled: !!selectedItemType,
   });
 
-  // When invoice is selected, fetch its items
   useEffect(() => {
     async function fetchInvoiceDetails() {
       if (selectedInvoice && selectedInvoice !== 'no_invoice') {
         setIsLoadingInvoiceItems(true);
         try {
-          // Fetch invoice details including items
           const { data, error } = await supabase
             .from('invoices')
             .select(`
@@ -154,12 +144,10 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           
           setInvoiceDetails(data);
           
-          // Update party ID in the form
           if (data.party_id) {
             form.setValue('party_id', data.party_id);
           }
           
-          // Clear existing items
           form.setValue('items', []);
           
         } catch (error) {
@@ -175,7 +163,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     fetchInvoiceDetails();
   }, [selectedInvoice, form]);
 
-  // Recalculate total amount when items change
   useEffect(() => {
     const items = form.watch('items');
     if (items && items.length > 0) {
@@ -188,22 +175,18 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     }
   }, [form.watch('items')]);
 
-  // Add item from invoice to the return
   const addItemFromInvoice = (invoiceItem: any) => {
     const currentItems = form.getValues('items') || [];
     
-    // Check if item already exists in the form
     const existingItemIndex = currentItems.findIndex(
       item => item.item_id === invoiceItem.item_id && item.item_type === invoiceItem.item_type
     );
     
     if (existingItemIndex >= 0) {
-      // Update quantity if item already exists
       const updatedItems = [...currentItems];
       updatedItems[existingItemIndex].quantity += 1;
       form.setValue('items', updatedItems);
     } else {
-      // Add new item
       form.setValue('items', [
         ...currentItems,
         {
@@ -217,7 +200,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     }
   };
 
-  // Add a new empty item to the form
   const addItem = () => {
     const currentItems = form.getValues('items') || [];
     form.setValue('items', [
@@ -232,24 +214,19 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     ]);
   };
 
-  // Remove an item from the form
   const removeItem = (index: number) => {
     const currentItems = form.getValues('items');
     form.setValue('items', currentItems.filter((_, i) => i !== index));
   };
 
-  // Handle change in return type
   const handleReturnTypeChange = (type: string) => {
-    // Reset invoice and items when return type changes
     form.setValue('invoice_id', undefined);
     form.setValue('items', []);
     setSelectedInvoice(null);
     setInvoiceDetails(null);
   };
 
-  // Handle form submission
   const handleSubmitForm = (values: ReturnFormValues) => {
-    // Create a return object from form values
     const returnData: Omit<Return, 'id' | 'created_at'> = {
       return_type: values.return_type,
       invoice_id: values.invoice_id === 'no_invoice' ? undefined : values.invoice_id,
@@ -275,7 +252,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Return Type */}
           <FormField
             control={form.control}
             name="return_type"
@@ -304,7 +280,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             )}
           />
 
-          {/* Invoice Reference (Optional) */}
           <FormField
             control={form.control}
             name="invoice_id"
@@ -347,7 +322,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             )}
           />
 
-          {/* Party Selection (if no invoice selected) */}
           {(!selectedInvoice || selectedInvoice === 'no_invoice') && (
             <FormField
               control={form.control}
@@ -385,7 +359,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             />
           )}
 
-          {/* Date */}
           <FormField
             control={form.control}
             name="date"
@@ -425,7 +398,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             )}
           />
 
-          {/* Amount (calculated from items) */}
           <FormField
             control={form.control}
             name="amount"
@@ -450,7 +422,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           />
         </div>
 
-        {/* Notes */}
         <FormField
           control={form.control}
           name="notes"
@@ -465,7 +436,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           )}
         />
 
-        {/* Display invoice items if an invoice is selected */}
         {selectedInvoice && selectedInvoice !== 'no_invoice' && (
           <div className="space-y-4 border rounded-md p-4">
             <div className="flex justify-between items-center">
@@ -508,7 +478,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           </div>
         )}
 
-        {/* Items */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">الأصناف المرتجعة</h3>
@@ -546,7 +515,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                             <Select 
                               onValueChange={(value) => {
                                 field.onChange(parseInt(value));
-                                // Find the selected item and set its name
                                 const item = inventoryItems?.find(i => i.id === parseInt(value));
                                 if (item) {
                                   form.setValue(`items.${index}.item_name`, item.name);
@@ -642,9 +610,8 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           </div>
         </div>
 
-        {/* Warning when no invoice is selected */}
         {(!selectedInvoice || selectedInvoice === 'no_invoice') && (
-          <Alert variant="warning">
+          <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>تنبيه</AlertTitle>
             <AlertDescription>

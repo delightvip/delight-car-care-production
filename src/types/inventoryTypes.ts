@@ -1,16 +1,29 @@
 
-export interface InventoryMovement {
-  id: string;
-  item_id: string;
-  item_type: string;
-  movement_type: 'in' | 'out' | 'adjustment';
+export interface InventoryItem {
+  id: number;
+  code: string;
+  name: string;
   quantity: number;
-  balance_after: number;
-  reason?: string;
-  created_at: string;
-  updated_at: string;
-  user_id?: string;
-  users?: {
-    name?: string;
-  };
+  unit: string;
+  min_stock: number;
+  unit_cost?: number;
+  updated_at?: string;
+  created_at?: string;
+}
+
+export interface RawMaterial extends InventoryItem {
+  importance?: number;
+}
+
+export interface PackagingMaterial extends InventoryItem {
+  importance?: number;
+}
+
+export interface SemiFinishedProduct extends InventoryItem {
+  // Additional properties specific to semi-finished products
+}
+
+export interface FinishedProduct extends InventoryItem {
+  semi_finished_id?: number;
+  semi_finished_quantity?: number;
 }
