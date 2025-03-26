@@ -1,4 +1,3 @@
-
 import { Payment } from '@/services/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
 import { PaymentProcessor } from './PaymentProcessor';
@@ -25,7 +24,7 @@ export class PaymentService {
   }
   
   public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
-    return PaymentEntity.fetchByParty(partyId);
+    return PaymentEntity.fetchByPartyId(partyId);
   }
   
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {

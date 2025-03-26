@@ -47,7 +47,7 @@ const ProductDetailsContainer = () => {
   const { data: product, isLoading, error, refetch } = useQuery({
     queryKey: ['product', tableName, id],
     queryFn: async () => {
-      // Use type assertion to handle dynamic table selection
+      // Use type assertion with "as any" for dynamic table selection
       const { data, error } = await supabase
         .from(tableName as any)
         .select('*')
@@ -262,7 +262,8 @@ const ProductDetailsContainer = () => {
   }
   
   // Type assertion to ensure the product has the properties we need
-  const typedProduct = product as {
+  // Here we safely cast to the interface we need
+  interface ProductType {
     id: number;
     name: string;
     code: string;
@@ -271,7 +272,36 @@ const ProductDetailsContainer = () => {
     unit_cost?: number;
     cost_price?: number;
     unit: string;
+  }
+  
+  // Use safe type assertion with a runtime check for required properties
+  const hasRequiredProperties = (obj: any): obj is ProductType => {
+    return obj && 
+      typeof obj.id === 'number' && 
+      typeof obj.name === 'string' && 
+      typeof obj.code === 'string' && 
+      'quantity' in obj && 
+      'min_stock' in obj && 
+      typeof obj.unit === 'string';
   };
+  
+  if (!hasRequiredProperties(product)) {
+    return (
+      <PageTransition>
+        <div className="text-center py-12">
+          <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
+          <h3 className="text-lg font-medium">حدث خطأ في بيانات المنتج</h3>
+          <p className="text-muted-foreground mt-2 mb-4">بيانات المنتج غير صالحة</p>
+          <Button variant="outline" onClick={() => navigate(-1)} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            العودة
+          </Button>
+        </div>
+      </PageTransition>
+    );
+  }
+  
+  const typedProduct = product as ProductType;
   
   const isLowStock = typedProduct.quantity && typedProduct.min_stock ? 
     typedProduct.quantity <= typedProduct.min_stock : false;
