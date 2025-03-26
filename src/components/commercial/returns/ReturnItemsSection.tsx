@@ -89,7 +89,11 @@ export function ReturnItemsSection({
                   <div className="col-span-1">
                     <Checkbox
                       checked={!!item.selected}
-                      onCheckedChange={(checked) => toggleItemSelection(index, checked === true)}
+                      onCheckedChange={(checked) => {
+                        // Fix: Ensure we're passing a boolean value to toggleItemSelection
+                        const isChecked = checked === true;
+                        toggleItemSelection(index, isChecked);
+                      }}
                     />
                   </div>
                 )}
