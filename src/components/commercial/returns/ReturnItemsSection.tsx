@@ -90,9 +90,10 @@ export function ReturnItemsSection({
                     <Checkbox
                       checked={!!item.selected}
                       onCheckedChange={(checked) => {
-                        // The checked value can be true, false, or "indeterminate" (string)
-                        // We need to explicitly convert it to boolean to satisfy the toggleItemSelection parameter type
-                        toggleItemSelection(index, checked === true);
+                        // The Radix UI Checkbox can return true, false, or "indeterminate" (string)
+                        // We need to explicitly convert it to boolean using strict equality check
+                        const isChecked = checked === true;
+                        toggleItemSelection(index, isChecked);
                       }}
                     />
                   </div>
