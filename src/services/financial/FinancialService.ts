@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface Transaction {
@@ -104,11 +103,11 @@ export default class FinancialService {
     return (data || []).map(item => ({
       id: item.id,
       date: item.date,
-      type: item.type,
+      type: item.type as 'income' | 'expense',
       category_id: item.category_id,
       category_name: item.financial_categories?.name || '',
       amount: item.amount,
-      payment_method: item.payment_method,
+      payment_method: item.payment_method as 'cash' | 'bank' | 'other',
       notes: item.notes,
       reference_id: item.reference_id,
       reference_type: item.reference_type,
@@ -128,7 +127,13 @@ export default class FinancialService {
       return [];
     }
 
-    return data || [];
+    return (data || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      type: item.type as 'income' | 'expense',
+      description: item.description,
+      created_at: item.created_at
+    }));
   }
 
   public async getCategory(id: string): Promise<Category | null> {
@@ -143,7 +148,13 @@ export default class FinancialService {
       return null;
     }
 
-    return data;
+    return {
+      id: data.id,
+      name: data.name,
+      type: data.type as 'income' | 'expense',
+      description: data.description,
+      created_at: data.created_at
+    };
   }
 
   public async createCategory(category: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
@@ -158,7 +169,13 @@ export default class FinancialService {
       return null;
     }
 
-    return data;
+    return {
+      id: data.id,
+      name: data.name,
+      type: data.type as 'income' | 'expense',
+      description: data.description,
+      created_at: data.created_at
+    };
   }
 
   public async updateCategory(id: string, category: Partial<Category>): Promise<Category | null> {
@@ -174,7 +191,13 @@ export default class FinancialService {
       return null;
     }
 
-    return data;
+    return {
+      id: data.id,
+      name: data.name,
+      type: data.type as 'income' | 'expense',
+      description: data.description,
+      created_at: data.created_at
+    };
   }
 
   public async deleteCategory(id: string): Promise<boolean> {
@@ -239,6 +262,8 @@ export default class FinancialService {
 
     return {
       ...data,
+      type: data.type as 'income' | 'expense',
+      payment_method: data.payment_method as 'cash' | 'bank' | 'other',
       category_name: category?.name || ''
     };
   }
@@ -269,7 +294,7 @@ export default class FinancialService {
       if (original.payment_method !== 'other') {
         await this.updateBalance(
           original.type === 'income' ? -original.amount : original.amount,
-          original.payment_method
+          original.payment_method as 'cash' | 'bank'
         );
       }
 
@@ -305,6 +330,8 @@ export default class FinancialService {
 
     return {
       ...data,
+      type: data.type as 'income' | 'expense',
+      payment_method: data.payment_method as 'cash' | 'bank' | 'other',
       category_name: category?.name || ''
     };
   }

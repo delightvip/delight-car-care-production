@@ -90,19 +90,33 @@ const CategoryForm: React.FC = () => {
   const onSubmit = async (data: CategoryFormValues) => {
     setSubmitting(true);
     
-    let success = false;
-    
-    if (isEditing && id) {
-      success = await financialService.updateCategory(id, data);
-    } else {
-      const result = await financialService.createCategory(data);
-      success = !!result;
-    }
-    
-    setSubmitting(false);
-    
-    if (success) {
-      navigate('/financial/categories');
+    try {
+      let success = false;
+      
+      if (isEditing && id) {
+        const result = await financialService.updateCategory(id, {
+          name: data.name,
+          type: data.type,
+          description: data.description
+        });
+        success = !!result;
+      } else {
+        const result = await financialService.createCategory({
+          name: data.name,
+          type: data.type,
+          description: data.description
+        });
+        success = !!result;
+      }
+      
+      setSubmitting(false);
+      
+      if (success) {
+        navigate('/financial/categories');
+      }
+    } catch (error) {
+      setSubmitting(false);
+      console.error('Error saving category:', error);
     }
   };
   

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -39,7 +38,7 @@ import { ReturnFormHeader } from './returns/ReturnFormHeader';
 import { ReturnFormInvoice } from './returns/ReturnFormInvoice';
 import { ReturnFormParty } from './returns/ReturnFormParty';
 import { ReturnFormDetails } from './returns/ReturnFormDetails';
-import { ReturnItemsSection } from './returns/ReturnItemsSection';
+import ReturnItemsSection from './returns/ReturnItemsSection';
 
 const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
@@ -512,7 +511,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  يتم حساب هذا المبلغ تلقائيًا من الأصناف المختارة
+                  يتم حساب هذا المبلغ تلقائيًا من الأصنا�� المختارة
                 </FormDescription>
                 <FormMessage />
               </FormItem>
