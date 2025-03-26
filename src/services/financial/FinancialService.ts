@@ -48,7 +48,6 @@ export default class FinancialService {
     return FinancialService.instance;
   }
 
-  // Transactions methods
   public async getTransactions(
     startDate?: string,
     endDate?: string,
@@ -115,7 +114,6 @@ export default class FinancialService {
     }));
   }
 
-  // Categories methods
   public async getCategories(): Promise<Category[]> {
     const { data, error } = await supabase
       .from('financial_categories')
@@ -201,7 +199,6 @@ export default class FinancialService {
   }
 
   public async deleteCategory(id: string): Promise<boolean> {
-    // First check if the category is being used in any transactions
     const { data: transactions, error: checkError } = await supabase
       .from('financial_transactions')
       .select('id')
@@ -213,7 +210,6 @@ export default class FinancialService {
       return false;
     }
 
-    // If category is in use, don't delete it
     if (transactions && transactions.length > 0) {
       console.error('Cannot delete category that is being used in transactions');
       return false;
@@ -232,9 +228,7 @@ export default class FinancialService {
     return true;
   }
 
-  // Transaction CRUD methods
   public async createTransaction(transaction: Omit<Transaction, 'id' | 'created_at' | 'category_name'>): Promise<Transaction | null> {
-    // Update financial balance based on transaction type and payment method
     if (transaction.payment_method !== 'other') {
       await this.updateBalance(
         transaction.type === 'income' ? transaction.amount : -transaction.amount,
@@ -253,7 +247,6 @@ export default class FinancialService {
       return null;
     }
 
-    // Fetch the category name
     const { data: category } = await supabase
       .from('financial_categories')
       .select('name')
@@ -272,7 +265,6 @@ export default class FinancialService {
     id: string, 
     transaction: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name'>>
   ): Promise<Transaction | null> {
-    // Get the original transaction to calculate balance adjustments
     const { data: original, error: getError } = await supabase
       .from('financial_transactions')
       .select('*')
@@ -284,13 +276,11 @@ export default class FinancialService {
       return null;
     }
 
-    // Update financial balance based on changes in amount, type, or payment method
     if (
       (transaction.amount !== undefined && transaction.amount !== original.amount) ||
       (transaction.type !== undefined && transaction.type !== original.type) ||
       (transaction.payment_method !== undefined && transaction.payment_method !== original.payment_method)
     ) {
-      // Reverse the original transaction impact on balance
       if (original.payment_method !== 'other') {
         await this.updateBalance(
           original.type === 'income' ? -original.amount : original.amount,
@@ -298,7 +288,6 @@ export default class FinancialService {
         );
       }
 
-      // Apply the new transaction impact on balance
       if ((transaction.payment_method || original.payment_method) !== 'other') {
         await this.updateBalance(
           (transaction.type || original.type) === 'income' 
@@ -321,7 +310,6 @@ export default class FinancialService {
       return null;
     }
 
-    // Fetch the category name
     const { data: category } = await supabase
       .from('financial_categories')
       .select('name')
@@ -337,7 +325,6 @@ export default class FinancialService {
   }
 
   public async deleteTransaction(id: string): Promise<boolean> {
-    // Get the transaction to calculate balance adjustments
     const { data: transaction, error: getError } = await supabase
       .from('financial_transactions')
       .select('*')
@@ -349,7 +336,6 @@ export default class FinancialService {
       return false;
     }
 
-    // Reverse the transaction impact on balance
     if (transaction.payment_method !== 'other') {
       await this.updateBalance(
         transaction.type === 'income' ? -transaction.amount : transaction.amount,
@@ -370,9 +356,7 @@ export default class FinancialService {
     return true;
   }
 
-  // Balance management
   private async updateBalance(amount: number, method: 'cash' | 'bank'): Promise<boolean> {
-    // Get current balance
     const { data: currentBalance, error: getError } = await supabase
       .from('financial_balance')
       .select('*')
@@ -384,7 +368,6 @@ export default class FinancialService {
       return false;
     }
 
-    // Update based on payment method
     const updates = method === 'cash'
       ? { cash_balance: currentBalance.cash_balance + amount }
       : { bank_balance: currentBalance.bank_balance + amount };
@@ -402,7 +385,6 @@ export default class FinancialService {
     return true;
   }
 
-  // Get current balance
   public async getBalance(): Promise<FinancialBalance> {
     const { data, error } = await supabase
       .from('financial_balance')
@@ -422,12 +404,9 @@ export default class FinancialService {
     };
   }
 
-  // Get financial summary for dashboard
   public async getFinancialSummary(startDate?: string, endDate?: string): Promise<FinancialSummary> {
-    // Get all transactions for the period
     const transactions = await this.getTransactions(startDate, endDate);
     
-    // Calculate totals
     const totalIncome = transactions
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
@@ -436,10 +415,8 @@ export default class FinancialService {
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
     
-    // Get current balance
     const balance = await this.getBalance();
     
-    // Get recent transactions for the dashboard
     const recentTransactions = await this.getTransactions(undefined, undefined, undefined, undefined, 5);
     
     return {

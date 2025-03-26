@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
+import { UseFormReturn } from 'react-hook-form';
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
+import { ReturnFormValues } from './ReturnFormTypes';
 
 interface ReturnItem {
   id: string;
@@ -16,9 +18,35 @@ interface ReturnItem {
 interface ReturnItemsSectionProps {
   items: ReturnItem[];
   onQuantityChange: (itemId: string, quantity: number) => void;
+  form?: UseFormReturn<ReturnFormValues>; // Add form prop
+  selectedInvoice?: string | null;
+  selectedItemType?: string;
+  loadingInvoiceItems?: boolean;
+  isLoadingInventoryItems?: boolean;
+  inventoryItems?: any[];
+  setSelectedItemType?: (type: string) => void;
+  addItem?: () => void;
+  removeItem?: (index: number) => void;
+  toggleItemSelection?: (index: number, checked: boolean) => void;
+  handleQuantityChange?: (index: number, value: string) => void;
 }
 
-const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({ items, onQuantityChange }) => {
+const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
+  items,
+  onQuantityChange,
+  // New props (optional with defaults for backward compatibility)
+  form,
+  selectedInvoice,
+  selectedItemType,
+  loadingInvoiceItems,
+  isLoadingInventoryItems,
+  inventoryItems,
+  setSelectedItemType,
+  addItem,
+  removeItem,
+  toggleItemSelection,
+  handleQuantityChange
+}) => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
   useEffect(() => {
@@ -28,7 +56,7 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({ items, onQuanti
 
   const isItemSelected = (itemId: string) => selectedItems.includes(itemId);
 
-  const toggleItemSelection = (itemId: string, checked: boolean) => {
+  const toggleItemSelectionInternal = (itemId: string, checked: boolean) => {
     setSelectedItems(prevSelectedItems => {
       if (checked) {
         return [...prevSelectedItems, itemId];
@@ -38,7 +66,7 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({ items, onQuanti
     });
   };
 
-  const handleQuantityChange = (itemId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQuantityChangeInternal = (itemId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const newQuantity = parseInt(event.target.value, 10);
     if (!isNaN(newQuantity)) {
       onQuantityChange(itemId, newQuantity);
@@ -54,7 +82,7 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({ items, onQuanti
             <div key={item.id} className="mb-4 flex items-center space-x-4">
               <Checkbox 
                 checked={isItemSelected(item.id)} 
-                onCheckedChange={(checked) => toggleItemSelection(item.id, Boolean(checked))}
+                onCheckedChange={(checked) => toggleItemSelectionInternal(item.id, Boolean(checked))}
                 aria-label="Select row"
               />
               <div className="grid gap-1.5">
@@ -64,7 +92,7 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({ items, onQuanti
                   id={`item-${item.id}`}
                   defaultValue={item.quantity}
                   className="w-24"
-                  onChange={(e) => handleQuantityChange(item.id, e)}
+                  onChange={(e) => handleQuantityChangeInternal(item.id, e)}
                 />
               </div>
             </div>
