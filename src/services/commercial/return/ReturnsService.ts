@@ -1,65 +1,75 @@
-import BaseCommercialService from '../BaseCommercialService';
-import { Return, ReturnItem } from '../CommercialTypes';
-import { toast } from "sonner";
-import { format } from 'date-fns';
 
-class ReturnService extends BaseCommercialService {
-  private static instance: ReturnService;
+import { supabase } from '@/integrations/supabase/client';
+import { Return, ReturnItem } from '@/services/CommercialTypes';
+import { ReturnProcessor } from './ReturnProcessor';
+import { ReturnEntity } from './ReturnEntity';
+import { toast } from 'sonner';
+
+export class ReturnsService {
+  private static instance: ReturnsService;
+  private returnProcessor: ReturnProcessor;
   
   private constructor() {
-    super();
+    this.returnProcessor = new ReturnProcessor();
   }
   
-  public static getInstance(): ReturnService {
-    if (!ReturnService.instance) {
-      ReturnService.instance = new ReturnService();
+  public static getInstance(): ReturnsService {
+    if (!ReturnsService.instance) {
+      ReturnsService.instance = new ReturnsService();
     }
-    return ReturnService.instance;
+    return ReturnsService.instance;
   }
   
+  /**
+   * Fetch all returns with related data
+   */
   public async getReturns(): Promise<Return[]> {
+    return ReturnEntity.fetchAll();
+  }
+  
+  /**
+   * Fetch a specific return by ID
+   */
+  public async getReturnById(id: string): Promise<Return | null> {
+    return ReturnEntity.fetchById(id);
+  }
+  
+  /**
+   * Fetch returns associated with a specific party
+   */
+  public async getReturnsByParty(partyId: string): Promise<Return[]> {
     try {
-      // Get all returns with party details
-      let { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('returns')
         .select(`
           *,
           parties:party_id (name)
         `)
+        .eq('party_id', partyId)
         .order('date', { ascending: false });
       
       if (error) throw error;
       
-      // Map the data to our Return type with party name
-      const returnsWithParties = data.map(returnData => ({
-        id: returnData.id,
-        invoice_id: returnData.invoice_id,
-        party_id: returnData.party_id,
-        party_name: returnData.parties?.name,
-        date: returnData.date,
-        return_type: returnData.return_type,
-        amount: returnData.amount,
-        payment_status: returnData.payment_status || 'draft',
-        notes: returnData.notes,
-        created_at: returnData.created_at,
-        items: [] // Initialize with empty items array
-      }));
-      
-      // For each return, get its items
+      // Get return items for each return
       const returnsWithItems = await Promise.all(
-        returnsWithParties.map(async (returnData) => {
-          const { data: items, error: itemsError } = await this.supabase
+        (data || []).map(async (returnData) => {
+          const { data: items, error: itemsError } = await supabase
             .from('return_items')
             .select('*')
             .eq('return_id', returnData.id);
           
           if (itemsError) {
             console.error(`Error fetching items for return ${returnData.id}:`, itemsError);
-            return returnData;
+            return {
+              ...returnData,
+              party_name: returnData.parties?.name,
+              items: []
+            };
           }
           
           return {
             ...returnData,
+            party_name: returnData.parties?.name,
             items: items || []
           };
         })
@@ -67,114 +77,62 @@ class ReturnService extends BaseCommercialService {
       
       return returnsWithItems;
     } catch (error) {
-      console.error('Error fetching returns:', error);
+      console.error('Error fetching returns by party:', error);
       toast.error('حدث خطأ أثناء جلب المرتجعات');
       return [];
     }
   }
   
-  public async getReturnById(id: string): Promise<Return | null> {
+  /**
+   * Create a new return and optionally confirm it
+   */
+  public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>, autoConfirm: boolean = false): Promise<Return | null> {
     try {
-      const { data: returnData, error: returnError } = await this.supabase
-        .from('returns')
-        .select(`
-          *,
-          parties:party_id (name)
-        `)
-        .eq('id', id)
-        .single();
+      console.log('Creating new return with data:', returnData);
       
-      if (returnError) throw returnError;
-      
-      const { data: items, error: itemsError } = await this.supabase
-        .from('return_items')
-        .select('*')
-        .eq('return_id', id);
-      
-      if (itemsError) throw itemsError;
-      
-      return {
-        id: returnData.id,
-        invoice_id: returnData.invoice_id,
-        party_id: returnData.party_id,
-        party_name: returnData.parties?.name,
-        date: returnData.date,
-        return_type: returnData.return_type,
-        amount: returnData.amount,
-        payment_status: returnData.payment_status || 'draft',
-        notes: returnData.notes,
-        created_at: returnData.created_at,
-        items: items || []
-      };
-    } catch (error) {
-      console.error(`Error fetching return with id ${id}:`, error);
-      toast.error('حدث خطأ أثناء جلب بيانات المرتجع');
-      return null;
-    }
-  }
-  
-  public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
-    try {
-      // Format date if it's a Date object
-      const formattedDate = typeof returnData.date === 'object' ? 
-        format(returnData.date, 'yyyy-MM-dd') : 
-        returnData.date;
-      
-      // Create the return record
-      const { data: returnRecord, error } = await this.supabase
-        .from('returns')
-        .insert({
-          invoice_id: returnData.invoice_id,
-          party_id: returnData.party_id,
-          date: formattedDate,
-          return_type: returnData.return_type,
-          amount: returnData.amount,
-          payment_status: returnData.payment_status || 'draft',
-          notes: returnData.notes
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // If there are items for this return, insert them
-      if (returnData.items && returnData.items.length > 0) {
-        const returnItems = returnData.items.map(item => ({
-          return_id: returnRecord.id,
-          item_id: item.item_id,
-          item_type: item.item_type,
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
-        }));
+      // If party_id is missing but invoice_id is provided, get party from invoice
+      if (!returnData.party_id && returnData.invoice_id) {
+        const { data: invoice, error } = await supabase
+          .from('invoices')
+          .select('party_id')
+          .eq('id', returnData.invoice_id)
+          .single();
         
-        const { error: itemsError } = await this.supabase
-          .from('return_items')
-          .insert(returnItems);
-        
-        if (itemsError) throw itemsError;
+        if (!error && invoice) {
+          returnData.party_id = invoice.party_id;
+          console.log(`Setting party_id from invoice: ${returnData.party_id}`);
+        }
       }
       
-      // Get party details for response
-      const party = returnData.party_id ? 
-        await this.partyService.getPartyById(returnData.party_id) : null;
+      // Create the return record
+      const returnRecord = await ReturnEntity.create(returnData);
+      
+      if (!returnRecord) {
+        toast.error('فشل إنشاء المرتجع');
+        return null;
+      }
+      
+      console.log('Return record created:', returnRecord);
+      
+      // If auto-confirm is requested, confirm the return
+      if (autoConfirm || returnData.payment_status === 'confirmed') {
+        console.log('Auto-confirming return');
+        const confirmed = await this.confirmReturn(returnRecord.id);
+        
+        if (!confirmed) {
+          toast.warning('تم إنشاء المرتجع ولكن فشل التأكيد التلقائي');
+          return returnRecord;
+        }
+        
+        // Refresh the return data after confirmation
+        const confirmedReturn = await this.getReturnById(returnRecord.id);
+        if (confirmedReturn) {
+          return confirmedReturn;
+        }
+      }
       
       toast.success('تم إنشاء المرتجع بنجاح');
-      
-      return {
-        id: returnRecord.id,
-        invoice_id: returnData.invoice_id,
-        party_id: returnData.party_id,
-        party_name: party?.name,
-        date: formattedDate,
-        return_type: returnData.return_type,
-        amount: returnData.amount,
-        payment_status: returnRecord.payment_status,
-        notes: returnData.notes,
-        created_at: returnRecord.created_at,
-        items: returnData.items
-      };
+      return returnRecord;
     } catch (error) {
       console.error('Error creating return:', error);
       toast.error('حدث خطأ أثناء إنشاء المرتجع');
@@ -182,25 +140,20 @@ class ReturnService extends BaseCommercialService {
     }
   }
   
+  /**
+   * Update an existing return
+   */
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
-      const { error } = await this.supabase
-        .from('returns')
-        .update({
-          invoice_id: returnData.invoice_id,
-          party_id: returnData.party_id,
-          date: returnData.date,
-          return_type: returnData.return_type,
-          amount: returnData.amount,
-          payment_status: returnData.payment_status,
-          notes: returnData.notes
-        })
-        .eq('id', id);
+      const success = await ReturnEntity.update(id, returnData);
       
-      if (error) throw error;
+      if (success) {
+        toast.success('تم تحديث المرتجع بنجاح');
+      } else {
+        toast.error('فشل تحديث المرتجع');
+      }
       
-      toast.success('تم تحديث المرتجع بنجاح');
-      return true;
+      return success;
     } catch (error) {
       console.error('Error updating return:', error);
       toast.error('حدث خطأ أثناء تحديث المرتجع');
@@ -208,92 +161,13 @@ class ReturnService extends BaseCommercialService {
     }
   }
   
+  /**
+   * Confirm a return, updating inventory and financial records
+   */
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      const returnData = await this.getReturnById(returnId);
-      if (!returnData) {
-        toast.error('لم يتم العثور على المرتجع');
-        return false;
-      }
-      
-      if (returnData.payment_status === 'confirmed') {
-        toast.info('المرتجع مؤكد بالفعل');
-        return true;
-      }
-      
-      // Update inventory based on return type
-      if (returnData.return_type === 'sales_return') {
-        // Increase inventory for sales returns
-        for (const item of returnData.items || []) {
-          switch (item.item_type) {
-            case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
-              break;
-            case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
-              break;
-            case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
-              break;
-            case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
-              break;
-          }
-        }
-        
-        // Update financial records for sales returns
-        if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
-            returnData.party_id,
-            returnData.amount,
-            false, // credit for sales returns (reduce customer's debt)
-            'مرتجع مبيعات',
-            'sales_return',
-            returnData.id
-          );
-        }
-      } else if (returnData.return_type === 'purchase_return') {
-        // Decrease inventory for purchase returns
-        for (const item of returnData.items || []) {
-          switch (item.item_type) {
-            case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-            case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-            case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-            case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-          }
-        }
-        
-        // Update financial records for purchase returns
-        if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
-            returnData.party_id,
-            returnData.amount,
-            true, // debit for purchase returns (increase supplier's debt)
-            'مرتجع مشتريات',
-            'purchase_return',
-            returnData.id
-          );
-        }
-      }
-      
-      // Update return status to confirmed
-      const { error } = await this.supabase
-        .from('returns')
-        .update({ payment_status: 'confirmed' })
-        .eq('id', returnId);
-      
-      if (error) throw error;
-      
-      toast.success('تم تأكيد المرتجع بنجاح');
-      return true;
+      console.log(`Confirming return: ${returnId}`);
+      return await this.returnProcessor.confirmReturn(returnId);
     } catch (error) {
       console.error('Error confirming return:', error);
       toast.error('حدث خطأ أثناء تأكيد المرتجع');
@@ -301,92 +175,13 @@ class ReturnService extends BaseCommercialService {
     }
   }
   
+  /**
+   * Cancel a return, reversing inventory and financial changes
+   */
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      const returnData = await this.getReturnById(returnId);
-      if (!returnData) {
-        toast.error('لم يتم العثور على المرتجع');
-        return false;
-      }
-      
-      if (returnData.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء المرتجعات المؤكدة فقط');
-        return false;
-      }
-      
-      // Update inventory based on return type
-      if (returnData.return_type === 'sales_return') {
-        // Decrease inventory for cancelled sales returns
-        for (const item of returnData.items || []) {
-          switch (item.item_type) {
-            case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-            case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-            case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-            case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
-              break;
-          }
-        }
-        
-        // Update financial records for cancelled sales returns
-        if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
-            returnData.party_id,
-            returnData.amount,
-            true, // debit for cancelled sales returns (restore customer's debt)
-            'إلغاء مرتجع مبيعات',
-            'cancel_sales_return',
-            returnData.id
-          );
-        }
-      } else if (returnData.return_type === 'purchase_return') {
-        // Increase inventory for cancelled purchase returns
-        for (const item of returnData.items || []) {
-          switch (item.item_type) {
-            case 'raw_materials':
-              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
-              break;
-            case 'packaging_materials':
-              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
-              break;
-            case 'semi_finished_products':
-              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
-              break;
-            case 'finished_products':
-              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
-              break;
-          }
-        }
-        
-        // Update financial records for cancelled purchase returns
-        if (returnData.party_id) {
-          await this.partyService.updatePartyBalance(
-            returnData.party_id,
-            returnData.amount,
-            false, // credit for cancelled purchase returns (restore supplier's debt)
-            'إلغاء مرتجع مشتريات',
-            'cancel_purchase_return',
-            returnData.id
-          );
-        }
-      }
-      
-      // Update return status to cancelled
-      const { error } = await this.supabase
-        .from('returns')
-        .update({ payment_status: 'cancelled' })
-        .eq('id', returnId);
-      
-      if (error) throw error;
-      
-      toast.success('تم إلغاء المرتجع بنجاح');
-      return true;
+      console.log(`Cancelling return: ${returnId}`);
+      return await this.returnProcessor.cancelReturn(returnId);
     } catch (error) {
       console.error('Error cancelling return:', error);
       toast.error('حدث خطأ أثناء إلغاء المرتجع');
@@ -394,10 +189,13 @@ class ReturnService extends BaseCommercialService {
     }
   }
   
+  /**
+   * Delete a return and its items
+   */
   public async deleteReturn(id: string): Promise<boolean> {
     try {
       // Check if the return is in draft state
-      const { data, error: fetchError } = await this.supabase
+      const { data, error: fetchError } = await supabase
         .from('returns')
         .select('payment_status')
         .eq('id', id)
@@ -410,30 +208,66 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
-      // Delete return items first
-      const { error: itemsError } = await this.supabase
-        .from('return_items')
-        .delete()
-        .eq('return_id', id);
+      const success = await ReturnEntity.delete(id);
       
-      if (itemsError) throw itemsError;
+      if (success) {
+        toast.success('تم حذف المرتجع بنجاح');
+      } else {
+        toast.error('فشل حذف المرتجع');
+      }
       
-      // Delete the return
-      const { error } = await this.supabase
-        .from('returns')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      toast.success('تم حذف المرتجع بنجاح');
-      return true;
+      return success;
     } catch (error) {
       console.error('Error deleting return:', error);
       toast.error('حدث خطأ أثناء حذف المرتجع');
       return false;
     }
   }
+  
+  /**
+   * Get return statistics for reporting
+   */
+  public async getReturnStats(startDate?: string, endDate?: string): Promise<any> {
+    try {
+      let query = supabase
+        .from('returns')
+        .select('return_type, payment_status, amount');
+      
+      if (startDate) {
+        query = query.gte('date', startDate);
+      }
+      
+      if (endDate) {
+        query = query.lte('date', endDate);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      // Calculate statistics
+      const stats = {
+        totalReturns: data.length,
+        salesReturns: data.filter(r => r.return_type === 'sales_return').length,
+        purchaseReturns: data.filter(r => r.return_type === 'purchase_return').length,
+        confirmedReturns: data.filter(r => r.payment_status === 'confirmed').length,
+        pendingReturns: data.filter(r => r.payment_status === 'draft').length,
+        cancelledReturns: data.filter(r => r.payment_status === 'cancelled').length,
+        totalAmount: data.reduce((sum, r) => sum + Number(r.amount), 0),
+        salesReturnAmount: data
+          .filter(r => r.return_type === 'sales_return')
+          .reduce((sum, r) => sum + Number(r.amount), 0),
+        purchaseReturnAmount: data
+          .filter(r => r.return_type === 'purchase_return')
+          .reduce((sum, r) => sum + Number(r.amount), 0)
+      };
+      
+      return stats;
+    } catch (error) {
+      console.error('Error getting return stats:', error);
+      return null;
+    }
+  }
 }
 
-export default ReturnService;
+export default ReturnsService;

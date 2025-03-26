@@ -1,337 +1,156 @@
-import { supabase } from '@/integrations/supabase/client';
-import { Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry } from './CommercialTypes';
-import { toast } from 'sonner';
+
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { 
+  Invoice, 
+  InvoiceItem, 
+  Payment, 
+  Return, 
+  ReturnItem, 
+  LedgerEntry 
+} from "./CommercialTypes";
+
+// استيراد الخدمات المعاد هيكلتها
+import InvoiceService from './commercial/invoice/InvoiceService';
+import PaymentService from './commercial/payment/PaymentService';
+import ReturnService from './commercial/return/ReturnService';
+import LedgerService from './commercial/ledger/LedgerService';
+import { format } from "date-fns";
 
 class CommercialService {
   private static instance: CommercialService;
-
-  private constructor() {}
-
+  private invoiceService: InvoiceService;
+  private paymentService: PaymentService;
+  private returnService: ReturnService;
+  private ledgerService: LedgerService;
+  
+  private constructor() {
+    this.invoiceService = InvoiceService.getInstance();
+    this.paymentService = PaymentService.getInstance();
+    this.returnService = ReturnService.getInstance();
+    this.ledgerService = LedgerService.getInstance();
+  }
+  
   public static getInstance(): CommercialService {
     if (!CommercialService.instance) {
       CommercialService.instance = new CommercialService();
     }
     return CommercialService.instance;
   }
-
-  async getParties() {
-    return PartyService.getInstance().getParties();
+  
+  // Invoice methods
+  public async getInvoices(): Promise<Invoice[]> {
+    return this.invoiceService.getInvoices();
   }
-
-  async getInvoicesByParty(partyId: string) {
-    try {
-      const { data, error } = await this.supabase
-        .from('invoices')
-        .select('*')
-        .eq('party_id', partyId)
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching invoices by party:', error);
-      toast.error('حدث خطأ أثناء جلب الفواتير');
-      return [];
-    }
+  
+  public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
+    return this.invoiceService.getInvoicesByParty(partyId);
   }
-
-  async getPaymentsByParty(partyId: string) {
-    try {
-      const { data, error } = await this.supabase
-        .from('payments')
-        .select('*')
-        .eq('party_id', partyId)
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching payments by party:', error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
-      return [];
-    }
+  
+  public async getInvoiceById(id: string): Promise<Invoice | null> {
+    return this.invoiceService.getInvoiceById(id);
   }
-
-  async getLedgerEntries(partyId: string, startDate?: string, endDate?: string) {
+  
+  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
+    return this.invoiceService.createInvoice(invoiceData);
+  }
+  
+  public async confirmInvoice(invoiceId: string): Promise<boolean> {
+    return this.invoiceService.confirmInvoice(invoiceId);
+  }
+  
+  public async cancelInvoice(invoiceId: string): Promise<boolean> {
+    return this.invoiceService.cancelInvoice(invoiceId);
+  }
+  
+  public async deleteInvoice(id: string): Promise<boolean> {
+    return this.invoiceService.deleteInvoice(id);
+  }
+  
+  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
+    return this.invoiceService.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
+  }
+  
+  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
+    return this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
+  }
+  
+  // Payment methods
+  public async getPayments(): Promise<Payment[]> {
+    return this.paymentService.getPayments();
+  }
+  
+  public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
+    return this.paymentService.getPaymentsByParty(partyId);
+  }
+  
+  public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
+    return this.paymentService.recordPayment(paymentData);
+  }
+  
+  public async confirmPayment(paymentId: string): Promise<boolean> {
+    return this.paymentService.confirmPayment(paymentId);
+  }
+  
+  public async cancelPayment(paymentId: string): Promise<boolean> {
+    return this.paymentService.cancelPayment(paymentId);
+  }
+  
+  public async updatePayment(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {
+    return this.paymentService.updatePayment(id, paymentData);
+  }
+  
+  public async deletePayment(id: string): Promise<boolean> {
+    return this.paymentService.deletePayment(id);
+  }
+  
+  // Return methods
+  public async getReturns(): Promise<Return[]> {
+    return this.returnService.getReturns();
+  }
+  
+  public async getReturnById(id: string): Promise<Return | null> {
+    return this.returnService.getReturnById(id);
+  }
+  
+  public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
+    return this.returnService.createReturn(returnData);
+  }
+  
+  public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
+    return this.returnService.updateReturn(id, returnData);
+  }
+  
+  public async confirmReturn(returnId: string): Promise<boolean> {
+    return this.returnService.confirmReturn(returnId);
+  }
+  
+  public async cancelReturn(returnId: string): Promise<boolean> {
+    return this.returnService.cancelReturn(returnId);
+  }
+  
+  public async deleteReturn(id: string): Promise<boolean> {
+    return this.returnService.deleteReturn(id);
+  }
+  
+  // Ledger methods
+  public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
     return this.ledgerService.getLedgerEntries(partyId, startDate, endDate);
   }
-
-  async generateAccountStatement(startDate: string, endDate: string, partyType: string) {
-    try {
-      const ledgerService = LedgerService.getInstance();
-      const statements = await ledgerService.generateAccountStatement(startDate, endDate, partyType);
-      return {
-        statements
-      };
-    } catch (error) {
-      console.error('Error generating account statement:', error);
-      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
-      return {
-        statements: []
-      };
-    }
-  }
-
-  async getInvoices(): Promise<Invoice[]> {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*, invoice_items(*)')
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-      
-      // Transform data to match Invoice type
-      return (data || []).map(invoice => ({
-        id: invoice.id,
-        invoice_type: invoice.invoice_type as 'sale' | 'purchase',
-        party_id: invoice.party_id,
-        date: invoice.date,
-        total_amount: invoice.total_amount,
-        status: invoice.status as 'paid' | 'partial' | 'unpaid',
-        payment_status: invoice.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: invoice.notes,
-        created_at: invoice.created_at,
-        // Transform invoice_items to items
-        items: (invoice.invoice_items || []).map((item: any): InvoiceItem => ({
-          id: item.id,
-          invoice_id: item.invoice_id,
-          item_id: item.item_id,
-          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.total,
-          created_at: item.created_at
-        }))
-      }));
-    } catch (error) {
-      console.error('Error fetching invoices:', error);
-      toast.error('حدث خطأ أثناء جلب الفواتير');
-      return [];
-    }
-  }
-
-  async getPayments(): Promise<Payment[]> {
-    try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*')
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-      
-      // Transform data to match Payment type
-      return (data || []).map(payment => ({
-        id: payment.id,
-        party_id: payment.party_id,
-        date: payment.date,
-        amount: payment.amount,
-        payment_type: payment.payment_type as 'collection' | 'disbursement',
-        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: payment.notes,
-        created_at: payment.created_at
-      }));
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
-      return [];
-    }
-  }
-
-  async getReturns(): Promise<Return[]> {
-    try {
-      const { data, error } = await supabase
-        .from('returns')
-        .select('*, return_items(*)')
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-      
-      // Transform data to match Return type
-      return (data || []).map(returnData => ({
-        id: returnData.id,
-        invoice_id: returnData.invoice_id,
-        party_id: returnData.party_id,
-        date: returnData.date,
-        return_type: returnData.return_type as 'sales_return' | 'purchase_return',
-        amount: returnData.amount,
-        payment_status: returnData.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: returnData.notes,
-        created_at: returnData.created_at,
-        items: (returnData.return_items || []).map((item: any) => ({
-          id: item.id,
-          return_id: item.return_id,
-          item_id: item.item_id,
-          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.total,
-          created_at: item.created_at
-        }))
-      }));
-    } catch (error) {
-      console.error('Error fetching returns:', error);
-      toast.error('حدث خطأ أثناء جلب المرتجعات');
-      return [];
-    }
-  }
-
-  async getInvoiceById(id: string): Promise<Invoice | null> {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*, invoice_items(*)')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      
-      // Transform data to match Invoice type
-      return {
-        id: data.id,
-        invoice_type: data.invoice_type as 'sale' | 'purchase',
-        party_id: data.party_id,
-        date: data.date,
-        total_amount: data.total_amount,
-        status: data.status as 'paid' | 'partial' | 'unpaid',
-        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: data.notes,
-        created_at: data.created_at,
-        // Transform invoice_items to items
-        items: (data.invoice_items || []).map((item: any): InvoiceItem => ({
-          id: item.id,
-          invoice_id: item.invoice_id,
-          item_id: item.item_id,
-          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.total,
-          created_at: item.created_at
-        }))
-      };
-    } catch (error) {
-      console.error('Error fetching invoice:', error);
-      return null;
-    }
-  }
-
-  async addInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
-    try {
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert({
-          invoice_type: invoice.invoice_type,
-          party_id: invoice.party_id,
-          date: invoice.date,
-          total_amount: invoice.total_amount,
-          status: invoice.status,
-          payment_status: invoice.payment_status,
-          notes: invoice.notes
-        })
-        .select('*')
-        .single();
-
-      if (invoiceError) throw invoiceError;
-
-      // Add invoice items
-      const itemsToAdd = invoice.items.map(item => ({
-        invoice_id: invoiceData.id,
-        item_id: item.item_id,
-        item_type: item.item_type,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.quantity * item.unit_price
-      }));
-
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('invoice_items')
-        .insert(itemsToAdd)
-        .select('*');
-
-      if (itemsError) throw itemsError;
-
-      toast.success('تمت إضافة الفاتورة بنجاح');
-
-      return {
-        id: invoiceData.id,
-        invoice_type: invoiceData.invoice_type as 'sale' | 'purchase',
-        party_id: invoiceData.party_id,
-        date: invoiceData.date,
-        total_amount: invoiceData.total_amount,
-        status: invoiceData.status as 'paid' | 'partial' | 'unpaid',
-        payment_status: invoiceData.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: invoiceData.notes,
-        created_at: invoiceData.created_at,
-        items: itemsData.map(item => ({
-          id: item.id,
-          invoice_id: item.invoice_id,
-          item_id: item.item_id,
-          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.total,
-          created_at: item.created_at
-        }))
-      };
-    } catch (error) {
-      console.error('Error adding invoice:', error);
-      toast.error('حدث خطأ أثناء إضافة الفاتورة');
-      return null;
-    }
-  }
-
-  async updateInvoice(id: string, invoice: Partial<Invoice>): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .update({
-          invoice_type: invoice.invoice_type,
-          party_id: invoice.party_id,
-          date: invoice.date,
-          total_amount: invoice.total_amount,
-          status: invoice.status,
-          payment_status: invoice.payment_status,
-          notes: invoice.notes
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success('تم تحديث الفاتورة بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error updating invoice:', error);
-      toast.error('حدث خطأ أثناء تحديث الفاتورة');
-      return false;
-    }
-  }
-
-  async deleteInvoice(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success('تم حذف الفاتورة بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error deleting invoice:', error);
-      toast.error('حدث خطأ أثناء حذف الفاتورة');
-      return false;
-    }
+  
+  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
+    return this.ledgerService.generateAccountStatement(startDate, endDate, partyType);
   }
 }
+
+// Re-export the CommercialTypes so they can be imported from this module as well
+export type { 
+  Invoice, 
+  InvoiceItem, 
+  Payment, 
+  Return, 
+  ReturnItem, 
+  LedgerEntry 
+};
 
 export default CommercialService;

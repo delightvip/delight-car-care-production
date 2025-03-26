@@ -1,128 +1,161 @@
 
-import PartyService from '@/services/PartyService';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
 import { LedgerEntry } from '@/services/CommercialTypes';
+import { toast } from "sonner";
+import PartyService from '../../PartyService';
+import { LedgerEntity } from './LedgerEntity';
+import { format } from 'date-fns';
 
-class LedgerReportGenerator {
-  private partyService: PartyService;
-  
-  constructor() {
-    this.partyService = PartyService.getInstance();
+// خدمة تُعنى بإنشاء التقارير المالية
+export class LedgerReportGenerator {
+  private static partyService = PartyService.getInstance();
+
+  // إنشاء كشف حساب عام
+  public static async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
+    try {
+      // Get parties of the specified type or all if not specified
+      let parties;
+      if (partyType && partyType !== 'all') {
+        // Convert partyType to the correct type
+        const validPartyType = (partyType === 'customer' || partyType === 'supplier' || partyType === 'other') 
+          ? partyType as "customer" | "supplier" | "other"
+          : "customer"; // Default to customer if invalid value
+        
+        parties = await this.partyService.getPartiesByType(validPartyType);
+      } else {
+        parties = await this.partyService.getParties();
+      }
+      
+      // For each party, get their ledger entries in the date range and calculate balances
+      const statements = await Promise.all(
+        parties.map(async (party) => {
+          const entries = await LedgerEntity.fetchLedgerEntries(party.id, startDate, endDate);
+          const openingBalance = await LedgerEntity.fetchPreviousBalance(party.id, startDate);
+          
+          // Calculate totals
+          let totalDebit = 0;
+          let totalCredit = 0;
+          
+          entries.forEach(entry => {
+            totalDebit += entry.debit || 0;
+            totalCredit += entry.credit || 0;
+          });
+          
+          const closingBalance = openingBalance + totalDebit - totalCredit;
+          
+          return {
+            party_id: party.id,
+            party_name: party.name,
+            party_type: party.type,
+            opening_balance: openingBalance,
+            entries: entries,
+            total_debit: totalDebit,
+            total_credit: totalCredit,
+            closing_balance: closingBalance
+          };
+        })
+      );
+      
+      return statements;
+    } catch (error) {
+      console.error('Error generating account statement:', error);
+      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
+      return [];
+    }
   }
   
-  async getPartyLedger(partyId: string, startDate?: string, endDate?: string) {
+  // إنشاء كشف حساب لطرف محدد
+  public static async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
     try {
-      let query = supabase
-        .from('ledger')
-        .select('*')
-        .eq('party_id', partyId)
-        .order('date', { ascending: true })
-        .order('created_at', { ascending: true });
-        
-      if (startDate) {
-        query = query.gte('date', startDate);
+      const party = await this.partyService.getPartyById(partyId);
+      if (!party) {
+        throw new Error('لم يتم العثور على الطرف التجاري');
       }
       
-      if (endDate) {
-        query = query.lte('date', endDate);
-      }
+      const entries = await LedgerEntity.fetchLedgerEntries(partyId, startDate, endDate);
+      const openingBalance = await LedgerEntity.fetchPreviousBalance(partyId, startDate);
       
-      const { data, error } = await query;
+      // Calculate totals
+      let totalDebit = 0;
+      let totalCredit = 0;
       
-      if (error) throw error;
+      entries.forEach(entry => {
+        totalDebit += entry.debit || 0;
+        totalCredit += entry.credit || 0;
+      });
       
+      const closingBalance = openingBalance + totalDebit - totalCredit;
+      
+      return {
+        party_id: party.id,
+        party_name: party.name,
+        party_type: party.type,
+        opening_balance: openingBalance,
+        entries: entries,
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        closing_balance: closingBalance
+      };
+    } catch (error) {
+      console.error('Error generating single party statement:', error);
+      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
+      return null;
+    }
+  }
+  
+  // تصدير سجل الحساب إلى CSV
+  public static async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
+    try {
+      const ledgerEntries = await LedgerEntity.fetchLedgerEntries(partyId, startDate, endDate);
       const party = await this.partyService.getPartyById(partyId);
       
-      return {
-        party,
-        entries: data as LedgerEntry[],
-        summary: this.calculateSummary(data as LedgerEntry[]),
-      };
+      if (!ledgerEntries.length) {
+        return '';
+      }
+      
+      // Create CSV headers
+      let csvContent = 'التاريخ,نوع المعاملة,البيان,المرجع,مدين,دائن,الرصيد\n';
+      
+      // Add CSV rows
+      ledgerEntries.forEach(entry => {
+        const date = format(new Date(entry.date), 'yyyy-MM-dd');
+        const transactionType = this.getTransactionDescription(entry.transaction_type);
+        const reference = entry.transaction_id || '';
+        const debit = entry.debit || 0;
+        const credit = entry.credit || 0;
+        const balance = entry.balance_after;
+        
+        csvContent += `${date},"${transactionType}","${entry.notes}","${reference}",${debit},${credit},${balance}\n`;
+      });
+      
+      return csvContent;
     } catch (error) {
-      console.error('Error generating party ledger report:', error);
-      return {
-        party: null,
-        entries: [],
-        summary: {
-          totalDebit: 0,
-          totalCredit: 0,
-          balance: 0
-        }
-      };
+      console.error('Error exporting ledger to CSV:', error);
+      toast.error('حدث خطأ أثناء تصدير سجل الحساب');
+      return '';
     }
   }
   
-  async getGeneralLedger(startDate?: string, endDate?: string) {
-    try {
-      let query = supabase
-        .from('ledger')
-        .select('*')
-        .order('date', { ascending: true })
-        .order('created_at', { ascending: true });
-        
-      if (startDate) {
-        query = query.gte('date', startDate);
-      }
-      
-      if (endDate) {
-        query = query.lte('date', endDate);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      const parties = await this.partyService.getParties();
-      
-      // Group by party
-      const groupedData: Record<string, LedgerEntry[]> = {};
-      
-      data.forEach(entry => {
-        if (!groupedData[entry.party_id]) {
-          groupedData[entry.party_id] = [];
-        }
-        
-        groupedData[entry.party_id].push(entry as LedgerEntry);
-      });
-      
-      const result = Object.keys(groupedData).map(partyId => {
-        const party = parties.find(p => p.id === partyId);
-        
-        return {
-          party,
-          entries: groupedData[partyId],
-          summary: this.calculateSummary(groupedData[partyId])
-        };
-      });
-      
-      return {
-        reports: result,
-        summary: this.calculateSummary(data as LedgerEntry[])
-      };
-    } catch (error) {
-      console.error('Error generating general ledger report:', error);
-      return {
-        reports: [],
-        summary: {
-          totalDebit: 0,
-          totalCredit: 0,
-          balance: 0
-        }
-      };
-    }
-  }
-  
-  private calculateSummary(entries: LedgerEntry[]) {
-    const totalDebit = entries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
-    const totalCredit = entries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
-    const balance = totalDebit - totalCredit;
-    
-    return {
-      totalDebit,
-      totalCredit,
-      balance
+  // الحصول على وصف المعاملة
+  private static getTransactionDescription(transaction_type: string): string {
+    const descriptions: { [key: string]: string } = {
+      'sale_invoice': 'فاتورة مبيعات',
+      'purchase_invoice': 'فاتورة مشتريات',
+      'payment_received': 'دفعة مستلمة',
+      'payment_made': 'دفعة مدفوعة',
+      'sales_return': 'مرتجع مبيعات',
+      'purchase_return': 'مرتجع مشتريات',
+      'opening_balance': 'رصيد افتتاحي',
+      'cancel_sale_invoice': 'إلغاء فاتورة مبيعات',
+      'cancel_purchase_invoice': 'إلغاء فاتورة مشتريات',
+      'cancel_payment_received': 'إلغاء دفعة مستلمة',
+      'cancel_payment_made': 'إلغاء دفعة مدفوعة',
+      'cancel_sales_return': 'إلغاء مرتجع مبيعات',
+      'cancel_purchase_return': 'إلغاء مرتجع مشتريات',
+      'invoice_amount_adjustment': 'تعديل قيمة فاتورة',
+      'opening_balance_update': 'تعديل الرصيد الافتتاحي'
     };
+    
+    return descriptions[transaction_type] || transaction_type;
   }
 }
-
-export default LedgerReportGenerator;
