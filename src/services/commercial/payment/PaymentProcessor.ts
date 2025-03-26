@@ -1,6 +1,4 @@
-
 import { supabase } from '@/integrations/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
 import InventoryService from '@/services/InventoryService';
 import InvoiceService from '@/services/commercial/invoice/InvoiceService';
 
@@ -11,7 +9,6 @@ class PaymentProcessor {
 
   constructor() {
     this.supabase = supabase;
-    // Fix InventoryService and InvoiceService instantiation
     this.inventoryService = InventoryService;
     this.invoiceService = InvoiceService.getInstance();
   }

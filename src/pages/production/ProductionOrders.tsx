@@ -15,7 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import PageTransition from '@/components/ui/PageTransition';
-import ProductionService from '@/services/ProductionService';
+import ProductionService, { ProductionOrder } from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 
 interface SemiFinishedProduct {
@@ -93,7 +93,7 @@ const ProductionOrders = () => {
   });
 
   const queryClient = useQueryClient();
-  const productionService = ProductionService.getInstance();
+  const productionService = ProductionService;
 
   const { data: productionOrders, isLoading, error, refetch } = useQuery({
     queryKey: ['production_orders'],
@@ -102,12 +102,12 @@ const ProductionOrders = () => {
 
   const { data: semiFinishedProducts } = useQuery({
     queryKey: ['semi_finished_products'],
-    queryFn: () => InventoryService.getInstance().getSemiFinishedProducts(),
+    queryFn: () => InventoryService.getSemiFinishedProducts(),
   });
 
   const { data: rawMaterials } = useQuery({
     queryKey: ['raw_materials'],
-    queryFn: () => InventoryService.getInstance().getRawMaterials(),
+    queryFn: () => InventoryService.getRawMaterials(),
   });
 
   const filteredOrders = React.useMemo(() => {
@@ -122,8 +122,8 @@ const ProductionOrders = () => {
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(order => 
-        order.semi_finished_name.toLowerCase().includes(query) ||
-        order.id.toLowerCase().includes(query)
+        order.semi_finished_name?.toLowerCase().includes(query) ||
+        order.id.toString().toLowerCase().includes(query)
       );
     }
     
@@ -529,7 +529,7 @@ const ProductionOrders = () => {
     }
     
     const csvContent = 'ID,المنتج,الكمية,التاريخ,الحالة,ملاحظات\n' +
-      filteredOrders.map(order => `"${order.id}","${order.semi_finished_name}","${order.quantity}","${order.date}","${order.status}","${order.notes || ''}"`).join('\n');
+      filteredOrders.map(order => `"${order.id}","${order.semi_finished_name || ''}","${order.quantity}","${order.date}","${order.status}","${order.notes || ''}"`).join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -664,7 +664,7 @@ const ProductionOrders = () => {
                         {format(new Date(order.date), 'yyyy-MM-dd')}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {order.semi_finished_name}
+                        {order.semi_finished_name || ''}
                       </TableCell>
                       <TableCell className="text-right">
                         {order.quantity}

@@ -1,7 +1,10 @@
+
 import BaseCommercialService from './commercial/BaseCommercialService';
 import InvoiceService from './commercial/invoice/InvoiceService';
 import ReturnService from './commercial/return/ReturnService';
 import PaymentService from './commercial/payment/PaymentService';
+import PartyService from './PartyService';
+import { Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry } from './CommercialTypes';
 
 class CommercialService extends BaseCommercialService {
   private static instance: CommercialService;

@@ -26,8 +26,6 @@ import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 import { PackagingOrder } from '@/services/ProductionService';
-import { FinishedProduct } from '@/types/inventoryTypes';
-import { useQuery } from '@tanstack/react-query';
 
 interface FinishedProduct {
   id: number;
@@ -83,8 +81,8 @@ const PackagingOrders = () => {
     unit: ''
   });
   
-  const productionService = ProductionService.getInstance();
-  const inventoryService = InventoryService.getInstance();
+  const productionService = ProductionService;
+  const inventoryService = InventoryService;
   
   const { 
     data: orders = [], 
@@ -365,7 +363,7 @@ const PackagingOrders = () => {
                 <DialogHeader>
                   <DialogTitle>إضافة أمر تعبئة جديد</DialogTitle>
                   <DialogDescription>
-                    اختر المنتج النهائي وحدد الكمية المطلوب تعبئتها.
+                    اختر المنتج النهائي وحدد الكمية ا��مطلوب تعبئتها.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
