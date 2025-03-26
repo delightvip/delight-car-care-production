@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 import { 
   Invoice, 
   InvoiceItem, 
@@ -10,25 +10,37 @@ import {
   LedgerEntry 
 } from "./CommercialTypes";
 
-// استيراد الخدمات المعاد هيكلتها
+// Import other service classes
 import InvoiceService from './commercial/invoice/InvoiceService';
 import PaymentService from './commercial/payment/PaymentService';
-import ReturnService from './commercial/return/ReturnService';
 import LedgerService from './commercial/ledger/LedgerService';
 import { format } from "date-fns";
+
+// ReturnService will be imported lazily to avoid circular dependencies
+let returnServiceInstance: any = null;
 
 class CommercialService {
   private static instance: CommercialService;
   private invoiceService: InvoiceService;
   private paymentService: PaymentService;
-  private returnService: ReturnService;
   private ledgerService: LedgerService;
   
   private constructor() {
     this.invoiceService = InvoiceService.getInstance();
     this.paymentService = PaymentService.getInstance();
-    this.returnService = ReturnService.getInstance();
     this.ledgerService = LedgerService.getInstance();
+    
+    // Don't initialize returnService here to avoid circular dependencies
+  }
+  
+  // Lazy getter for returnService to avoid circular dependencies
+  private getReturnService() {
+    if (!returnServiceInstance) {
+      // Import dynamically to avoid circular dependencies at startup
+      const ReturnService = require('./commercial/return/ReturnService').default;
+      returnServiceInstance = ReturnService.getInstance();
+    }
+    return returnServiceInstance;
   }
   
   public static getInstance(): CommercialService {
@@ -44,7 +56,11 @@ class CommercialService {
       return await this.invoiceService.getInvoices();
     } catch (error) {
       console.error('Error in getInvoices:', error);
-      toast.error('حدث خطأ أثناء جلب الفواتير');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب الفواتير",
+        variant: "destructive"
+      });
       return [];
     }
   }
@@ -54,7 +70,11 @@ class CommercialService {
       return await this.invoiceService.getInvoicesByParty(partyId);
     } catch (error) {
       console.error(`Error in getInvoicesByParty(${partyId}):`, error);
-      toast.error('حدث خطأ أثناء جلب فواتير الطرف');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب فواتير الطرف",
+        variant: "destructive"
+      });
       return [];
     }
   }
@@ -64,7 +84,11 @@ class CommercialService {
       return await this.invoiceService.getInvoiceById(id);
     } catch (error) {
       console.error(`Error in getInvoiceById(${id}):`, error);
-      toast.error('حدث خطأ أثناء جلب بيانات الفاتورة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب بيانات الفاتورة",
+        variant: "destructive"
+      });
       return null;
     }
   }
@@ -81,7 +105,11 @@ class CommercialService {
       return invoice;
     } catch (error) {
       console.error('Error in createInvoice:', error);
-      toast.error('حدث خطأ أثناء إنشاء الفاتورة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء الفاتورة",
+        variant: "destructive"
+      });
       return null;
     }
   }
@@ -107,7 +135,11 @@ class CommercialService {
       return confirmPromise;
     } catch (error) {
       console.error(`Error in confirmInvoice(${invoiceId}):`, error);
-      toast.error('حدث خطأ أثناء تأكيد الفاتورة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد الفاتورة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -133,7 +165,11 @@ class CommercialService {
       return cancelPromise;
     } catch (error) {
       console.error(`Error in cancelInvoice(${invoiceId}):`, error);
-      toast.error('حدث خطأ أثناء إلغاء الفاتورة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء الفاتورة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -143,7 +179,11 @@ class CommercialService {
       return await this.invoiceService.deleteInvoice(id);
     } catch (error) {
       console.error(`Error in deleteInvoice(${id}):`, error);
-      toast.error('حدث خطأ أثناء حذف الفاتورة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف الفاتورة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -153,7 +193,11 @@ class CommercialService {
       return await this.invoiceService.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
     } catch (error) {
       console.error(`Error in updateInvoiceStatusAfterPayment(${invoiceId}, ${paymentAmount}):`, error);
-      toast.error('حدث خطأ أثناء تحديث حالة الفاتورة بعد الدفع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث حالة الفاتورة بعد الدفع",
+        variant: "destructive"
+      });
     }
   }
   
@@ -162,7 +206,11 @@ class CommercialService {
       return await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
     } catch (error) {
       console.error(`Error in reverseInvoiceStatusAfterPaymentCancellation(${invoiceId}, ${paymentAmount}):`, error);
-      toast.error('حدث خطأ أثناء عكس حالة الفاتورة بعد إلغاء الدفع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء عكس حالة الفاتورة بعد إلغاء الدفع",
+        variant: "destructive"
+      });
     }
   }
   
@@ -172,7 +220,11 @@ class CommercialService {
       return await this.paymentService.getPayments();
     } catch (error) {
       console.error('Error in getPayments:', error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب المدفوعات",
+        variant: "destructive"
+      });
       return [];
     }
   }
@@ -182,7 +234,11 @@ class CommercialService {
       return await this.paymentService.getPaymentsByParty(partyId);
     } catch (error) {
       console.error(`Error in getPaymentsByParty(${partyId}):`, error);
-      toast.error('حدث خطأ أثناء جلب مدفوعات الطرف');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب مدفوعات الطرف",
+        variant: "destructive"
+      });
       return [];
     }
   }
@@ -192,7 +248,11 @@ class CommercialService {
       return await this.paymentService.recordPayment(paymentData);
     } catch (error) {
       console.error('Error in recordPayment:', error);
-      toast.error('حدث خطأ أثناء تسجيل الدفعة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تسجيل الدفعة",
+        variant: "destructive"
+      });
       return null;
     }
   }
@@ -218,7 +278,11 @@ class CommercialService {
       return confirmPromise;
     } catch (error) {
       console.error(`Error in confirmPayment(${paymentId}):`, error);
-      toast.error('حدث خطأ أثناء تأكيد الدفعة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد الدفعة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -244,7 +308,11 @@ class CommercialService {
       return cancelPromise;
     } catch (error) {
       console.error(`Error in cancelPayment(${paymentId}):`, error);
-      toast.error('حدث خطأ أثناء إلغاء الدفعة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء الدفعة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -254,7 +322,11 @@ class CommercialService {
       return await this.paymentService.updatePayment(id, paymentData);
     } catch (error) {
       console.error(`Error in updatePayment(${id}):`, error);
-      toast.error('حدث خطأ أثناء تحديث الدفعة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث الدفعة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -264,7 +336,11 @@ class CommercialService {
       return await this.paymentService.deletePayment(id);
     } catch (error) {
       console.error(`Error in deletePayment(${id}):`, error);
-      toast.error('حدث خطأ أثناء حذف الدفعة');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف الدفعة",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -272,70 +348,98 @@ class CommercialService {
   // Return methods
   public async getReturns(): Promise<Return[]> {
     try {
-      return await this.returnService.getReturns();
+      return await this.getReturnService().getReturns();
     } catch (error) {
       console.error('Error in getReturns:', error);
-      toast.error('حدث خطأ أثناء جلب المرتجعات');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب المرتجعات",
+        variant: "destructive"
+      });
       return [];
     }
   }
   
   public async getReturnById(id: string): Promise<Return | null> {
     try {
-      return await this.returnService.getReturnById(id);
+      return await this.getReturnService().getReturnById(id);
     } catch (error) {
       console.error(`Error in getReturnById(${id}):`, error);
-      toast.error('حدث خطأ أثناء جلب بيانات المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب بيانات المرتجع",
+        variant: "destructive"
+      });
       return null;
     }
   }
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      return await this.returnService.createReturn(returnData);
+      return await this.getReturnService().createReturn(returnData);
     } catch (error) {
       console.error('Error in createReturn:', error);
-      toast.error('حدث خطأ أثناء إنشاء المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء المرتجع",
+        variant: "destructive"
+      });
       return null;
     }
   }
   
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
-      return await this.returnService.updateReturn(id, returnData);
+      return await this.getReturnService().updateReturn(id, returnData);
     } catch (error) {
       console.error(`Error in updateReturn(${id}):`, error);
-      toast.error('حدث خطأ أثناء تحديث المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
   
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      return await this.returnService.confirmReturn(returnId);
+      return await this.getReturnService().confirmReturn(returnId);
     } catch (error) {
       console.error(`Error in confirmReturn(${returnId}):`, error);
-      toast.error('حدث خطأ أثناء تأكيد المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
   
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      return await this.returnService.cancelReturn(returnId);
+      return await this.getReturnService().cancelReturn(returnId);
     } catch (error) {
       console.error(`Error in cancelReturn(${returnId}):`, error);
-      toast.error('حدث خطأ أثناء إلغاء المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
   
   public async deleteReturn(id: string): Promise<boolean> {
     try {
-      return await this.returnService.deleteReturn(id);
+      return await this.getReturnService().deleteReturn(id);
     } catch (error) {
       console.error(`Error in deleteReturn(${id}):`, error);
-      toast.error('حدث خطأ أثناء حذف المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -346,7 +450,11 @@ class CommercialService {
       return await this.ledgerService.getLedgerEntries(partyId, startDate, endDate);
     } catch (error) {
       console.error(`Error in getLedgerEntries(${partyId}):`, error);
-      toast.error('حدث خطأ أثناء جلب سجلات الحساب');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب سجلات الحساب",
+        variant: "destructive"
+      });
       return [];
     }
   }
@@ -356,7 +464,11 @@ class CommercialService {
       return await this.ledgerService.generateAccountStatement(startDate, endDate, partyType);
     } catch (error) {
       console.error(`Error in generateAccountStatement(${startDate}, ${endDate}, ${partyType}):`, error);
-      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء كشف الحساب",
+        variant: "destructive"
+      });
       return null;
     }
   }
@@ -373,3 +485,4 @@ export type {
 };
 
 export default CommercialService;
+

@@ -2,7 +2,7 @@
 import { Return } from '@/services/CommercialTypes';
 import { ReturnEntity } from './ReturnEntity';
 import { ReturnProcessor } from './ReturnProcessor';
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 
 // خدمة المرتجعات الرئيسية
 export class ReturnService {
@@ -26,7 +26,11 @@ export class ReturnService {
       return returns;
     } catch (error) {
       console.error('Error in getReturns:', error);
-      toast.error('حدث خطأ أثناء جلب المرتجعات');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب المرتجعات",
+        variant: "destructive"
+      });
       return [];
     }
   }
@@ -37,7 +41,11 @@ export class ReturnService {
       return returnData;
     } catch (error) {
       console.error(`Error in getReturnById(${id}):`, error);
-      toast.error('حدث خطأ أثناء جلب بيانات المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب بيانات المرتجع",
+        variant: "destructive"
+      });
       return null;
     }
   }
@@ -51,7 +59,11 @@ export class ReturnService {
       
       if (!returnRecord) {
         console.error('Failed to create return');
-        toast.error('فشل إنشاء المرتجع');
+        toast({
+          title: "خطأ",
+          description: "فشل إنشاء المرتجع",
+          variant: "destructive"
+        });
         return null;
       }
       
@@ -70,11 +82,19 @@ export class ReturnService {
         }, 100);
       }
       
-      toast.success('تم إنشاء المرتجع بنجاح');
+      toast({
+        title: "نجاح",
+        description: "تم إنشاء المرتجع بنجاح",
+        variant: "success"
+      });
       return returnRecord;
     } catch (error) {
       console.error('Error creating return:', error);
-      toast.error('حدث خطأ أثناء إنشاء المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء المرتجع",
+        variant: "destructive"
+      });
       return null;
     }
   }
@@ -84,15 +104,27 @@ export class ReturnService {
       const success = await ReturnEntity.update(id, returnData);
       
       if (success) {
-        toast.success('تم تحديث المرتجع بنجاح');
+        toast({
+          title: "نجاح", 
+          description: "تم تحديث المرتجع بنجاح",
+          variant: "success"
+        });
       } else {
-        toast.error('فشل تحديث المرتجع');
+        toast({
+          title: "خطأ",
+          description: "فشل تحديث المرتجع",
+          variant: "destructive"
+        });
       }
       
       return success;
     } catch (error) {
       console.error(`Error in updateReturn(${id}):`, error);
-      toast.error('حدث خطأ أثناء تحديث المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -118,7 +150,11 @@ export class ReturnService {
       return confirmPromise;
     } catch (error) {
       console.error(`Error in confirmReturn(${returnId}):`, error);
-      toast.error('حدث خطأ أثناء تأكيد المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -144,7 +180,11 @@ export class ReturnService {
       return cancelPromise;
     } catch (error) {
       console.error(`Error in cancelReturn(${returnId}):`, error);
-      toast.error('حدث خطأ أثناء إلغاء المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -154,18 +194,31 @@ export class ReturnService {
       const success = await ReturnEntity.delete(id);
       
       if (success) {
-        toast.success('تم حذف المرتجع بنجاح');
+        toast({
+          title: "نجاح",
+          description: "تم حذف المرتجع بنجاح",
+          variant: "success" 
+        });
       } else {
-        toast.error('فشل حذف المرتجع');
+        toast({
+          title: "خطأ",
+          description: "فشل حذف المرتجع",
+          variant: "destructive"
+        });
       }
       
       return success;
     } catch (error) {
       console.error(`Error in deleteReturn(${id}):`, error);
-      toast.error('حدث خطأ أثناء حذف المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
 }
 
 export default ReturnService;
+

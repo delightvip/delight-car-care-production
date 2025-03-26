@@ -4,8 +4,7 @@ import { Return } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import { ReturnEntity } from "./ReturnEntity";
-import { toast } from "sonner";
-import CommercialService from "@/services/CommercialService";
+import { toast } from "@/components/ui/use-toast";
 
 interface InventoryItem {
   id: number;
@@ -20,12 +19,32 @@ interface InventoryItem {
 export class ReturnProcessor {
   private inventoryService: InventoryService;
   private partyService: PartyService;
-  private commercialService: CommercialService;
 
   constructor() {
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
-    this.commercialService = CommercialService.getInstance();
+  }
+
+  /**
+   * Get invoice details by ID without using CommercialService
+   */
+  private async getInvoiceById(invoiceId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          parties:party_id (name)
+        `)
+        .eq('id', invoiceId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error(`Error fetching invoice ${invoiceId}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -37,13 +56,21 @@ export class ReturnProcessor {
       
       if (!returnData) {
         console.error('Return not found:', returnId);
-        toast.error('لم يتم العثور على المرتجع');
+        toast({
+          title: "خطأ",
+          description: "لم يتم العثور على المرتجع",
+          variant: "destructive"
+        });
         return false;
       }
       
       if (returnData.payment_status === 'confirmed') {
         console.log('Return already confirmed:', returnId);
-        toast.info('المرتجع مؤكد بالفعل');
+        toast({
+          title: "تنبيه",
+          description: "المرتجع مؤكد بالفعل",
+          variant: "default"
+        });
         return true;
       }
 
@@ -51,11 +78,15 @@ export class ReturnProcessor {
       
       // إذا كان المرتجع مرتبط بفاتورة، تحقق من صحة الأصناف
       if (returnData.invoice_id) {
-        const invoice = await this.commercialService.getInvoiceById(returnData.invoice_id);
+        const invoice = await this.getInvoiceById(returnData.invoice_id);
         
         if (!invoice) {
           console.error('Invoice not found for return:', returnData.invoice_id);
-          toast.error('لم يتم العثور على الفاتورة المرتبطة بالمرتجع');
+          toast({
+            title: "خطأ",
+            description: "لم يتم العثور على الفاتورة المرتبطة بالمرتجع",
+            variant: "destructive"
+          });
           return false;
         }
 
@@ -68,7 +99,11 @@ export class ReturnProcessor {
           
           if (error) {
             console.error('Error updating return party_id:', error);
-            toast.error('حدث خطأ أثناء تحديث بيانات المرتجع');
+            toast({
+              title: "خطأ",
+              description: "حدث خطأ أثناء تحديث بيانات المرتجع",
+              variant: "destructive"
+            });
             return false;
           }
           
@@ -80,7 +115,11 @@ export class ReturnProcessor {
       // التحقق من وجود أصناف
       if (!returnData.items || returnData.items.length === 0) {
         console.error('No items in return:', returnId);
-        toast.error('لا توجد أصناف في المرتجع');
+        toast({
+          title: "خطأ",
+          description: "لا توجد أصناف في المرتجع",
+          variant: "destructive"
+        });
         return false;
       }
 
@@ -101,14 +140,22 @@ export class ReturnProcessor {
             
             if (itemError) {
               console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
             
             if (!currentItem) {
               console.error(`Item not found: ${item.item_name}`);
-              toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+              toast({
+                title: "خطأ", 
+                description: `لم يتم العثور على ${item.item_name} في المخزون`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -127,7 +174,11 @@ export class ReturnProcessor {
             
             if (updateError) {
               console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -162,7 +213,11 @@ export class ReturnProcessor {
             
             if (!result) {
               console.error('Failed to update customer balance for return:', returnId);
-              toast.error('حدث خطأ أثناء تحديث حساب العميل');
+              toast({
+                title: "خطأ",
+                description: "حدث خطأ أثناء تحديث حساب العميل",
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
             }
           } catch (err) {
@@ -184,14 +239,22 @@ export class ReturnProcessor {
             
             if (itemError) {
               console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
             
             if (!currentItem) {
               console.error(`Item not found: ${item.item_name}`);
-              toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+              toast({
+                title: "خطأ",
+                description: `لم يتم العثور على ${item.item_name} في المخزون`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -200,7 +263,11 @@ export class ReturnProcessor {
             const currentQuantity = Number(currentItem.quantity) || 0;
             if (currentQuantity < Number(item.quantity)) {
               console.error(`Insufficient quantity for ${item.item_name}: ${currentQuantity} < ${item.quantity}`);
-              toast.error(`كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`);
+              toast({
+                title: "خطأ",
+                description: `كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -218,7 +285,11 @@ export class ReturnProcessor {
             
             if (updateError) {
               console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -253,7 +324,11 @@ export class ReturnProcessor {
             
             if (!result) {
               console.error('Failed to update supplier balance for return:', returnId);
-              toast.error('حدث خطأ أثناء تحديث حساب المورد');
+              toast({
+                title: "خطأ",
+                description: "حدث خطأ أثناء تحديث حساب المورد",
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
             }
           } catch (err) {
@@ -267,7 +342,11 @@ export class ReturnProcessor {
       
       if (!allUpdatesSuccessful) {
         console.error('Some updates failed for return:', returnId);
-        toast.error('حدث خطأ أثناء تحديث بعض البيانات. يرجى التحقق من سجلات النظام.');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تحديث بعض البيانات. يرجى التحقق من سجلات النظام.",
+          variant: "destructive"
+        });
       }
       
       // تحديث حالة المرتجع إلى مؤكد حتى لو كانت هناك بعض الأخطاء في التحديثات
@@ -278,17 +357,29 @@ export class ReturnProcessor {
       
       if (error) {
         console.error('Error updating return status:', error);
-        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تحديث حالة المرتجع",
+          variant: "destructive"
+        });
         return false;
       }
       
       console.log('Return confirmed successfully:', returnId);
-      toast.success('تم تأكيد المرتجع بنجاح');
+      toast({
+        title: "نجاح",
+        description: "تم تأكيد المرتجع بنجاح",
+        variant: "success"
+      });
       
       return true;
     } catch (error) {
       console.error('Error confirming return:', error);
-      toast.error('حدث خطأ أثناء تأكيد المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -302,13 +393,21 @@ export class ReturnProcessor {
       
       if (!returnData) {
         console.error('Return not found:', returnId);
-        toast.error('لم يتم العثور على المرتجع');
+        toast({
+          title: "خطأ",
+          description: "لم يتم العثور على المرتجع",
+          variant: "destructive"
+        });
         return false;
       }
       
       if (returnData.payment_status !== 'confirmed') {
         console.error('Cannot cancel unconfirmed return:', returnId, returnData.payment_status);
-        toast.error('يمكن إلغاء المرتجعات المؤكدة فقط');
+        toast({
+          title: "خطأ",
+          description: "يمكن إلغاء المرتجعات المؤكدة فقط",
+          variant: "destructive"
+        });
         return false;
       }
 
@@ -317,7 +416,11 @@ export class ReturnProcessor {
       // التحقق من وجود أصناف
       if (!returnData.items || returnData.items.length === 0) {
         console.error('No items in return:', returnId);
-        toast.error('لا توجد أصناف في المرتجع');
+        toast({
+          title: "خطأ",
+          description: "لا توجد أصناف في المرتجع",
+          variant: "destructive"
+        });
         return false;
       }
       
@@ -336,14 +439,22 @@ export class ReturnProcessor {
             
             if (itemError) {
               console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
             
             if (!currentItem) {
               console.error(`Item not found: ${item.item_name}`);
-              toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+              toast({
+                title: "خطأ",
+                description: `لم يتم العثور على ${item.item_name} في المخزون`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -352,7 +463,11 @@ export class ReturnProcessor {
             const currentQuantity = Number(currentItem.quantity) || 0;
             if (currentQuantity < Number(item.quantity)) {
               console.error(`Insufficient quantity for ${item.item_name}: ${currentQuantity} < ${item.quantity}`);
-              toast.error(`كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`);
+              toast({
+                title: "خطأ",
+                description: `كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -370,7 +485,11 @@ export class ReturnProcessor {
             
             if (updateError) {
               console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -405,7 +524,11 @@ export class ReturnProcessor {
             
             if (!result) {
               console.error('Failed to update customer balance for cancelled return:', returnId);
-              toast.error('حدث خطأ أثناء تحديث حساب العميل');
+              toast({
+                title: "خطأ",
+                description: "حدث خطأ أثناء تحديث حساب العميل",
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
             }
           } catch (err) {
@@ -425,14 +548,22 @@ export class ReturnProcessor {
             
             if (itemError) {
               console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast.error(`حدث خطأ أثناء جلب معلومات ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
             
             if (!currentItem) {
               console.error(`Item not found: ${item.item_name}`);
-              toast.error(`لم يتم العثور على ${item.item_name} في المخزون`);
+              toast({
+                title: "خطأ",
+                description: `لم يتم العثور على ${item.item_name} في المخزون`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -451,7 +582,11 @@ export class ReturnProcessor {
             
             if (updateError) {
               console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast.error(`حدث خطأ أثناء تحديث مخزون ${item.item_name}`);
+              toast({
+                title: "خطأ",
+                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
               continue;
             }
@@ -486,7 +621,11 @@ export class ReturnProcessor {
             
             if (!result) {
               console.error('Failed to update supplier balance for cancelled return:', returnId);
-              toast.error('حدث خطأ أثناء تحديث حساب المورد');
+              toast({
+                title: "خطأ",
+                description: "حدث خطأ أثناء تحديث حساب المورد",
+                variant: "destructive"
+              });
               allUpdatesSuccessful = false;
             }
           } catch (err) {
@@ -498,7 +637,11 @@ export class ReturnProcessor {
       
       if (!allUpdatesSuccessful) {
         console.error('Some updates failed for cancelled return:', returnId);
-        toast.error('حدث خطأ أثناء تحديث بعض البيانات. يرجى التحقق من سجلات النظام.');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تحديث بعض البيانات. يرجى التحقق من سجلات النظام.",
+          variant: "destructive"
+        });
       }
       
       // تحديث حالة المرتجع إلى ملغى حتى لو كانت هناك بعض الأخطاء في التحديثات
@@ -509,17 +652,29 @@ export class ReturnProcessor {
       
       if (error) {
         console.error('Error updating return status:', error);
-        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تحديث حالة المرتجع",
+          variant: "destructive"
+        });
         return false;
       }
       
       console.log('Return cancelled successfully:', returnId);
-      toast.success('تم إلغاء المرتجع بنجاح');
+      toast({
+        title: "نجاح",
+        description: "تم إلغاء المرتجع بنجاح",
+        variant: "success"
+      });
       
       return true;
     } catch (error) {
       console.error('Error cancelling return:', error);
-      toast.error('حدث خطأ أثناء إلغاء المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
@@ -548,7 +703,6 @@ export class ReturnProcessor {
           return { data: null, error: new Error('نوع المنتج غير معروف') };
       }
       
-      // Fix: Use the tableName directly rather than passing it as a string to the from() method
       const result = await supabase
         .from(tableName as any) // Cast to any to fix TypeScript error
         .select('*')
@@ -590,7 +744,6 @@ export class ReturnProcessor {
       
       console.log(`Updating ${tableName} item ${itemId} to quantity ${newQuantity}`);
       
-      // Fix: Use the tableName directly rather than passing it as a string to the from() method
       return await supabase
         .from(tableName as any) // Cast to any to fix TypeScript error
         .update({ quantity: newQuantity })
@@ -638,3 +791,4 @@ export class ReturnProcessor {
     }
   }
 }
+
