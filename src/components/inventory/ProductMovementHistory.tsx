@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { InventoryMovement } from '@/types/inventoryTypes';
 
 interface ProductMovementHistoryProps {
   itemId: string;
@@ -28,14 +29,14 @@ const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId,
         .from('inventory_movements')
         .select(`
           *,
-          users (name, email)
+          users (name)
         `)
         .eq('item_id', itemId)
         .eq('item_type', itemType)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data;
+      return data as InventoryMovement[];
     }
   });
   

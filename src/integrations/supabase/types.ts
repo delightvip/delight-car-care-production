@@ -98,6 +98,45 @@ export type Database = {
           },
         ]
       }
+      inventory_movements: {
+        Row: {
+          balance_after: number
+          created_at: string | null
+          id: string
+          item_id: string
+          item_type: string
+          movement_type: string
+          quantity: number
+          reason: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          balance_after: number
+          created_at?: string | null
+          id?: string
+          item_id: string
+          item_type: string
+          movement_type: string
+          quantity: number
+          reason?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          balance_after?: number
+          created_at?: string | null
+          id?: string
+          item_id?: string
+          item_type?: string
+          movement_type?: string
+          quantity?: number
+          reason?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       invoice_items: {
         Row: {
           created_at: string | null

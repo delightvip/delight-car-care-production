@@ -56,6 +56,24 @@ import {
   Cell
 } from 'recharts';
 import ProductMovementHistory from '@/components/inventory/ProductMovementHistory';
+import { InventoryMovement } from '@/types/inventoryTypes';
+
+interface ProductData {
+  id: number | string;
+  code?: string;
+  name?: string;
+  unit?: string;
+  quantity?: number;
+  min_stock?: number;
+  unit_cost?: number;
+  cost_price?: number;
+  sale_price?: number;
+  description?: string;
+  supplier_id?: string;
+  supplier_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 const ProductDetails = () => {
   const { id, type } = useParams<{ id: string; type: string }>();
@@ -63,14 +81,14 @@ const ProductDetails = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
-  const productTitle = {
+  const productTitle: Record<string, string> = {
     'raw-materials': 'المواد الخام',
     'packaging': 'مواد التغليف',
     'semi-finished': 'المنتجات النصف مصنعة',
     'finished-products': 'المنتجات النهائية'
   };
   
-  const tableMapping = {
+  const tableMapping: Record<string, string> = {
     'raw-materials': 'raw_materials',
     'packaging': 'packaging_materials',
     'semi-finished': 'semi_finished_products',
@@ -89,23 +107,24 @@ const ProductDetails = () => {
         .single();
       
       if (error) throw error;
-      return data;
+      return data as ProductData;
     }
   });
   
-  const { data: movements, isLoading: isLoadingMovements } = useQuery({
+  const { data: movements } = useQuery<InventoryMovement[]>({
     queryKey: ['product-movements', tableName, id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('inventory_movements')
-        .select('*')
+        .select('*, users(name)')
         .eq('item_id', id)
         .eq('item_type', tableName)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data;
-    }
+      return data as InventoryMovement[];
+    },
+    enabled: !!id && !!tableName
   });
   
   const { data: usageStats } = useQuery({
@@ -168,12 +187,12 @@ const ProductDetails = () => {
     );
   }
   
-  const isLowStock = product.quantity <= product.min_stock;
+  const isLowStock = product.quantity && product.min_stock ? product.quantity <= product.min_stock : false;
   
   // Prepare chart data
   const pieData = [
-    { name: 'الكمية الحالية', value: product.quantity, color: '#3b82f6' },
-    { name: 'الحد الأدنى', value: product.min_stock, color: '#f59e0b' }
+    { name: 'الكمية الحالية', value: product.quantity || 0, color: '#3b82f6' },
+    { name: 'الحد الأدنى', value: product.min_stock || 0, color: '#f59e0b' }
   ];
   
   const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444'];
@@ -185,10 +204,10 @@ const ProductDetails = () => {
           <div>
             <Breadcrumb>
               <BreadcrumbItem>
-                <BreadcrumbLink as={Link} to="/">الرئيسية</BreadcrumbLink>
+                <BreadcrumbLink href="/">الرئيسية</BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbItem>
-                <BreadcrumbLink as={Link} to={`/inventory/${type}`}>
+                <BreadcrumbLink href={`/inventory/${type}`}>
                   {productTitle[type as keyof typeof productTitle]}
                 </BreadcrumbLink>
               </BreadcrumbItem>
@@ -214,8 +233,8 @@ const ProductDetails = () => {
               <RefreshCw className="h-4 w-4" />
               تحديث
             </Button>
-            <Button variant="outline" asChild className="gap-2">
-              <Link to={`/inventory/${type}/edit/${id}`}>
+            <Button variant="outline" className="gap-2">
+              <Link to={`/inventory/${type}/edit/${id}`} className="flex items-center gap-1">
                 <Edit className="h-4 w-4" />
                 تعديل
               </Link>
@@ -279,7 +298,7 @@ const ProductDetails = () => {
                           </div>
                           <div>
                             <dt className="text-muted-foreground">التكلفة</dt>
-                            <dd className="font-medium">{product.cost_price} ج.م</dd>
+                            <dd className="font-medium">{product.cost_price || product.unit_cost} ج.م</dd>
                           </div>
                           {product.sale_price && (
                             <div>
@@ -318,94 +337,117 @@ const ProductDetails = () => {
                             data={pieData}
                             cx="50%"
                             cy="50%"
-                            innerRadius={60}
-                            outerRadius={90}
-                            paddingAngle={5}
+                            labelLine={false}
+                            outerRadius={80}
+                            innerRadius={40}
+                            fill="#8884d8"
                             dataKey="value"
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            nameKey="name"
                           >
                             {pieData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
-                          <Tooltip />
-                          <Legend />
+                          <Tooltip 
+                            formatter={(value: number) => [`${value} ${product.unit}`, '']} 
+                            labelFormatter={(name) => name}
+                          />
+                          <Legend 
+                            layout="horizontal" 
+                            verticalAlign="bottom" 
+                            align="center"
+                            formatter={(value) => <span className="text-sm">{value}</span>}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
-                </TabsContent>
-                
-                <TabsContent value="stats" className="mt-6 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">تغيرات المخزون</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart
-                              data={movements?.slice(0, 10).map(m => ({
-                                date: new Date(m.created_at).toLocaleDateString('ar-EG'),
-                                amount: m.quantity,
-                                type: m.movement_type
-                              })).reverse()}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="date" />
-                              <YAxis />
-                              <Tooltip />
-                              <Area type="monotone" dataKey="amount" stroke="#8884d8" fill="#8884d8" />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">احصائيات الحركة</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={[
-                                { name: 'وارد', value: movements?.filter(m => m.movement_type === 'in').length || 0 },
-                                { name: 'صادر', value: movements?.filter(m => m.movement_type === 'out').length || 0 },
-                                { name: 'تسوية', value: movements?.filter(m => m.movement_type === 'adjustment').length || 0 }
-                              ]}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="name" />
-                              <YAxis />
-                              <Tooltip />
-                              <Bar dataKey="value" fill="#82ca9d" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </CardContent>
-                    </Card>
+                  
+                  <div className="mt-8">
+                    <h3 className="text-lg font-medium mb-4">حالة المخزون</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <Card>
+                        <CardContent className="p-4 flex flex-col items-center text-center">
+                          <div className="mt-2">
+                            <h4 className="text-lg font-medium">الكمية الحالية</h4>
+                            <p className="text-3xl font-bold text-primary">
+                              {product.quantity} {product.unit}
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {product.quantity && product.min_stock && product.quantity > product.min_stock * 2 
+                                ? 'المخزون في حالة جيدة' 
+                                : product.quantity > product.min_stock 
+                                  ? 'يجب متابعة المخزون' 
+                                  : 'المخزون منخفض!'
+                              }
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardContent className="p-4 flex flex-col items-center text-center">
+                          <div className="mt-2">
+                            <h4 className="text-lg font-medium">الحد الأدنى</h4>
+                            <p className="text-3xl font-bold text-amber-500">
+                              {product.min_stock} {product.unit}
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {product.quantity && product.min_stock ? 
+                                `${Math.round((product.quantity / product.min_stock) * 100)}% من الحد الأدنى` : 
+                                'غير محدد'
+                              }
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardContent className="p-4 flex flex-col items-center text-center">
+                          <div className="mt-2">
+                            <h4 className="text-lg font-medium">القيمة الإجمالية</h4>
+                            <p className="text-3xl font-bold text-green-600">
+                              {product.quantity && (product.cost_price || product.unit_cost) ? 
+                                `${(product.quantity * (product.cost_price || product.unit_cost || 0)).toLocaleString('ar-EG')}` : 
+                                '0'} ج.م
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              القيمة الإجمالية للمخزون
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardContent className="p-4 flex flex-col items-center text-center">
+                          <div className="mt-2">
+                            <h4 className="text-lg font-medium">تاريخ الإضافة</h4>
+                            <p className="text-xl font-bold">
+                              {product.created_at ? new Date(product.created_at).toLocaleDateString('ar-EG') : 'غير محدد'}
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              آخر تحديث: {product.updated_at ? new Date(product.updated_at).toLocaleDateString('ar-EG') : 'غير محدد'}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 </TabsContent>
                 
-                <TabsContent value="history" className="mt-6">
-                  <ProductMovementHistory itemId={id} itemType={tableName} />
-                </TabsContent>
-                
-                <TabsContent value="usage" className="mt-6">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg">استخدام المنتج خلال الأشهر السابقة</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-80">
+                <TabsContent value="stats" className="mt-6">
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>إحصائيات المخزون</CardTitle>
+                        <CardDescription>تحليل بيانات المخزون والاستهلاك</CardDescription>
+                      </CardHeader>
+                      <CardContent className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
+                          <BarChart
                             data={usageStats}
                             margin={{
-                              top: 5,
+                              top: 20,
                               right: 30,
                               left: 20,
                               bottom: 5,
@@ -414,18 +456,59 @@ const ProductDetails = () => {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="month" />
                             <YAxis />
-                            <Tooltip />
+                            <Tooltip formatter={(value) => [`${value} ${product.unit}`, 'الكمية']} />
                             <Legend />
-                            <Line
-                              type="monotone"
-                              dataKey="amount"
-                              stroke="#8884d8"
-                              activeDot={{ r: 8 }}
-                              name="كمية الاستخدام"
-                            />
-                          </LineChart>
+                            <Bar dataKey="amount" name="الاستهلاك الشهري" fill="#3b82f6" />
+                          </BarChart>
                         </ResponsiveContainer>
-                      </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="history" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>سجل حركة المخزون</CardTitle>
+                      <CardDescription>جميع العمليات التي تمت على هذا العنصر</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ProductMovementHistory itemId={id} itemType={tableName} />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="usage" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>معدلات الاستخدام</CardTitle>
+                      <CardDescription>تحليل معدلات استخدام المنتج</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={usageStats}
+                          margin={{
+                            top: 20,
+                            right: 30,
+                            left: 20,
+                            bottom: 5,
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`${value} ${product.unit}`, 'الكمية']} />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="amount"
+                            name="معدل الاستخدام"
+                            stroke="#10b981"
+                            activeDot={{ r: 8 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -433,112 +516,98 @@ const ProductDetails = () => {
             </CardContent>
           </Card>
           
-          <div className="space-y-6">
+          <div className="col-span-1 space-y-6">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">المخزون الحالي</CardTitle>
+                <CardTitle className="text-lg">ملخص المنتج</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2">
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">الكود</span>
+                  <span className="font-medium">{product.code}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">المخزون الحالي</span>
+                  <span className="font-medium">{product.quantity} {product.unit}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">الحد الأدنى</span>
+                  <span className="font-medium">{product.min_stock} {product.unit}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">التكلفة</span>
+                  <span className="font-medium">{product.cost_price || product.unit_cost} ج.م</span>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">آخر الحركات</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-4xl font-bold text-center my-4">
-                  {product.quantity}
-                  <span className="text-sm font-normal text-muted-foreground mr-1">
-                    {product.unit}
-                  </span>
-                </div>
-                <div className="relative pt-1">
-                  <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
-                    <div 
-                      style={{ 
-                        width: `${Math.min(100, (product.quantity / Math.max(product.min_stock * 2, 1)) * 100)}%` 
-                      }}
-                      className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
-                        product.quantity <= product.min_stock 
-                          ? 'bg-destructive' 
-                          : product.quantity <= product.min_stock * 1.5 
-                          ? 'bg-warning' 
-                          : 'bg-success'
-                      }`}
-                    ></div>
+                {movements && movements.length > 0 ? (
+                  <div className="space-y-3">
+                    {movements.slice(0, 5).map((movement) => {
+                      const getTypeIcon = (type: string) => {
+                        switch (type) {
+                          case 'in':
+                            return <ArrowUp className="h-4 w-4 text-green-500" />;
+                          case 'out':
+                            return <ArrowDown className="h-4 w-4 text-red-500" />;
+                          case 'adjustment':
+                            return <RefreshCw className="h-4 w-4 text-amber-500" />;
+                          default:
+                            return <Info className="h-4 w-4" />;
+                        }
+                      };
+                      
+                      return (
+                        <div key={movement.id} className="flex items-start space-x-2 space-x-reverse rtl:space-x-reverse">
+                          <div className="p-2 rounded-full bg-muted">
+                            {getTypeIcon(movement.movement_type)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">
+                              {movement.movement_type === 'in' ? 'إضافة للمخزون' : 
+                               movement.movement_type === 'out' ? 'خصم من المخزون' : 'تعديل المخزون'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {movement.quantity} {product.unit} · {new Date(movement.created_at).toLocaleDateString('ar-EG')}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-                <div className="text-center text-sm">
-                  <span className="text-muted-foreground">
-                    الحد الأدنى: {product.min_stock} {product.unit}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">الإجراءات السريعة</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button className="w-full justify-start gap-2" asChild>
-                  <Link to={`/inventory/movements/add?itemId=${id}&itemType=${tableName}&movementType=in`}>
-                    <TrendingUp className="h-4 w-4" />
-                    إضافة وارد
-                  </Link>
-                </Button>
-                <Button className="w-full justify-start gap-2" variant="secondary" asChild>
-                  <Link to={`/inventory/movements/add?itemId=${id}&itemType=${tableName}&movementType=out`}>
-                    <TrendingUp className="h-4 w-4 rotate-180" />
-                    صرف كمية
-                  </Link>
-                </Button>
-                <Button className="w-full justify-start gap-2" variant="outline" asChild>
-                  <Link to={`/inventory/movements/add?itemId=${id}&itemType=${tableName}&movementType=adjustment`}>
-                    <RefreshCw className="h-4 w-4" />
-                    تسوية مخزون
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Info className="h-4 w-4" />
-                  <span>معلومات إضافية</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">تاريخ الإنشاء:</span>
-                  <span>{new Date(product.created_at).toLocaleDateString('ar-EG')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">آخر تحديث:</span>
-                  <span>{new Date(product.updated_at).toLocaleDateString('ar-EG')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">تكلفة المخزون:</span>
-                  <span className="font-medium">{(product.quantity * product.cost_price).toFixed(2)} ج.م</span>
-                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-3">
+                    لا توجد حركات مخزون لهذا المنتج
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
+        
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>تأكيد الحذف</DialogTitle>
+              <DialogDescription>
+                هل أنت متأكد من رغبتك في حذف هذا العنصر؟ هذا الإجراء لا يمكن التراجع عنه.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>إلغاء</Button>
+              <Button variant="destructive" onClick={handleDelete}>حذف</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
-      
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>تأكيد الحذف</DialogTitle>
-            <DialogDescription>
-              هل أنت متأكد من حذف هذا العنصر؟ لا يمكن التراجع عن هذا الإجراء.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              إلغاء
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              تأكيد الحذف
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </PageTransition>
   );
 };
