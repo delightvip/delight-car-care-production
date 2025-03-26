@@ -8,10 +8,13 @@ import InventoryStats from '@/components/dashboard/InventoryStats';
 import InventoryDistribution from '@/components/dashboard/InventoryDistribution';
 import InventoryValueCard from '@/components/dashboard/InventoryValueCard';
 import ProductionChart from '@/components/dashboard/ProductionChart';
+import { CommercialStats } from '@/components/dashboard/CommercialStats';
+import { FinancialTrendsChart } from '@/components/dashboard/FinancialTrendsChart';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 
 const Index = () => {
@@ -147,86 +150,104 @@ const Index = () => {
             <h1 className="text-3xl font-bold tracking-tight">لوحة التحكم</h1>
             <p className="text-muted-foreground mt-1">مرحبًا بك في نظام إدارة المصنع</p>
           </div>
-          <Button variant="outline" size="sm" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            <span>إعدادات</span>
+          <Button variant="outline" size="sm" className="flex items-center gap-2" asChild>
+            <Link to="/settings">
+              <Settings className="h-4 w-4" />
+              <span>إعدادات</span>
+            </Link>
           </Button>
         </div>
         
-        <motion.div 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
-          variants={container}
-          initial="hidden"
-          animate="show"
-        >
-          <motion.div variants={item}>
-            <DashboardCard
-              title="إجمالي المواد"
-              value={rawMaterialsCount?.toString() || "0"}
-              description="المواد الأولية المتوفرة"
-              icon={<DashboardCardIcon icon={Package} className="bg-blue-100 text-blue-600" />}
-              link="/inventory/raw-materials"
-            />
-          </motion.div>
+        <Tabs defaultValue="overview" dir="rtl" className="w-full">
+          <TabsList className="w-full max-w-md mx-auto grid grid-cols-3">
+            <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
+            <TabsTrigger value="inventory">المخزون</TabsTrigger>
+            <TabsTrigger value="commercial">المعاملات التجارية</TabsTrigger>
+          </TabsList>
           
-          <motion.div variants={item}>
-            <DashboardCard
-              title="أوامر الإنتاج"
-              value={activeProductionOrders?.toString() || "0"}
-              description="أوامر إنتاج نشطة"
-              icon={<DashboardCardIcon icon={Layers} className="bg-green-100 text-green-600" />}
-              link="/production/orders"
-            />
-          </motion.div>
+          <TabsContent value="overview" className="mt-6 space-y-8">
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+              variants={container}
+              initial="hidden"
+              animate="show"
+            >
+              <motion.div variants={item}>
+                <DashboardCard
+                  title="إجمالي المواد"
+                  value={rawMaterialsCount?.toString() || "0"}
+                  description="المواد الأولية المتوفرة"
+                  icon={<DashboardCardIcon icon={Package} className="bg-blue-100 text-blue-600" />}
+                  link="/inventory/raw-materials"
+                />
+              </motion.div>
+              
+              <motion.div variants={item}>
+                <DashboardCard
+                  title="أوامر الإنتاج"
+                  value={activeProductionOrders?.toString() || "0"}
+                  description="أوامر إنتاج نشطة"
+                  icon={<DashboardCardIcon icon={Layers} className="bg-green-100 text-green-600" />}
+                  link="/production/orders"
+                />
+              </motion.div>
+              
+              <motion.div variants={item}>
+                <DashboardCard
+                  title="المخزون المنخفض"
+                  value={lowStockCount?.toString() || "0"}
+                  description="عناصر أقل من الحد الأدنى"
+                  icon={<DashboardCardIcon icon={AlertTriangle} className="bg-amber-100 text-amber-600" />}
+                  link="/inventory/low-stock"
+                  alert={lowStockCount ? lowStockCount > 0 : false}
+                />
+              </motion.div>
+              
+              <motion.div variants={item}>
+                <DashboardCard
+                  title="التحديثات"
+                  value={todayUpdates?.toString() || "0"}
+                  description="إجمالي التحديثات اليوم"
+                  icon={<DashboardCardIcon icon={Clock} className="bg-purple-100 text-purple-600" />}
+                  link="/inventory/tracking"
+                />
+              </motion.div>
+            </motion.div>
+            
+            <FinancialTrendsChart />
+            
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-2 gap-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <div className="space-y-6">
+                <ProductionChart />
+                <InventoryDistribution />
+              </div>
+              <div>
+                <InventoryValueCard />
+              </div>
+            </motion.div>
+          </TabsContent>
           
-          <motion.div variants={item}>
-            <DashboardCard
-              title="المخزون المنخفض"
-              value={lowStockCount?.toString() || "0"}
-              description="عناصر أقل من الحد الأدنى"
-              icon={<DashboardCardIcon icon={AlertTriangle} className="bg-amber-100 text-amber-600" />}
-              link="/inventory/low-stock"
-              alert={lowStockCount ? lowStockCount > 0 : false}
-            />
-          </motion.div>
-          
-          <motion.div variants={item}>
-            <DashboardCard
-              title="التحديثات"
-              value={todayUpdates?.toString() || "0"}
-              description="إجمالي التحديثات اليوم"
-              icon={<DashboardCardIcon icon={Clock} className="bg-purple-100 text-purple-600" />}
-              link="/inventory/tracking"
-            />
-          </motion.div>
-        </motion.div>
-        
-        <motion.div 
-          className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <div className="lg:col-span-2">
+          <TabsContent value="inventory" className="mt-6 space-y-8">
             <InventoryValueCard />
-          </div>
-          <div>
-            <ProductionChart />
-          </div>
-        </motion.div>
-        
-        <motion.div 
-          className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <InventoryStats />
-          <div className="glass-panel p-6 h-80 hover:shadow-lg transition-shadow duration-300">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">توزيع المخزون</h3>
-            <InventoryDistribution />
-          </div>
-        </motion.div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <InventoryStats />
+              <div className="glass-panel p-6 h-80 hover:shadow-lg transition-shadow duration-300">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">توزيع المخزون</h3>
+                <InventoryDistribution />
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="commercial" className="mt-6 space-y-8">
+            <CommercialStats />
+            <FinancialTrendsChart />
+          </TabsContent>
+        </Tabs>
         
         <motion.div 
           className="grid grid-cols-1 md:grid-cols-3 gap-6"
