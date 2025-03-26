@@ -1,14 +1,14 @@
 
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import './index.css'
 import { SidebarProvider } from './components/layout/SidebarContext'
+import { NotificationProvider } from './components/notifications/NotificationProvider'
 
 createRoot(document.getElementById("root")!).render(
-  <BrowserRouter>
-    <SidebarProvider>
+  <SidebarProvider>
+    <NotificationProvider>
       <App />
-    </SidebarProvider>
-  </BrowserRouter>
+    </NotificationProvider>
+  </SidebarProvider>
 );

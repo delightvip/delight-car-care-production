@@ -1,4 +1,3 @@
-
 import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DashboardCard from '@/components/dashboard/DashboardCard';
@@ -17,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 
-const Index = () => {
+export const Index = () => {
   // جلب عدد المواد الأولية
   const { data: rawMaterialsCount } = useQuery({
     queryKey: ['rawMaterialsCount'],
