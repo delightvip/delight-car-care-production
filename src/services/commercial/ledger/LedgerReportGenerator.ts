@@ -1,19 +1,7 @@
 
 import PartyService from '@/services/PartyService';
 import { supabase } from '@/integrations/supabase/client';
-
-// Define LedgerEntity interface if it's missing
-interface LedgerEntity {
-  id: string;
-  party_id: string;
-  date: string;
-  transaction_id: string;
-  transaction_type: string;
-  debit: number;
-  credit: number;
-  balance_after: number;
-  created_at?: string;
-}
+import { LedgerEntry } from '@/services/CommercialTypes';
 
 class LedgerReportGenerator {
   private partyService: PartyService;
@@ -47,8 +35,8 @@ class LedgerReportGenerator {
       
       return {
         party,
-        entries: data as LedgerEntity[],
-        summary: this.calculateSummary(data as LedgerEntity[]),
+        entries: data as LedgerEntry[],
+        summary: this.calculateSummary(data as LedgerEntry[]),
       };
     } catch (error) {
       console.error('Error generating party ledger report:', error);
@@ -87,14 +75,14 @@ class LedgerReportGenerator {
       const parties = await this.partyService.getParties();
       
       // Group by party
-      const groupedData: Record<string, LedgerEntity[]> = {};
+      const groupedData: Record<string, LedgerEntry[]> = {};
       
       data.forEach(entry => {
         if (!groupedData[entry.party_id]) {
           groupedData[entry.party_id] = [];
         }
         
-        groupedData[entry.party_id].push(entry as LedgerEntity);
+        groupedData[entry.party_id].push(entry as LedgerEntry);
       });
       
       const result = Object.keys(groupedData).map(partyId => {
@@ -109,7 +97,7 @@ class LedgerReportGenerator {
       
       return {
         reports: result,
-        summary: this.calculateSummary(data as LedgerEntity[])
+        summary: this.calculateSummary(data as LedgerEntry[])
       };
     } catch (error) {
       console.error('Error generating general ledger report:', error);
@@ -124,7 +112,7 @@ class LedgerReportGenerator {
     }
   }
   
-  private calculateSummary(entries: LedgerEntity[]) {
+  private calculateSummary(entries: LedgerEntry[]) {
     const totalDebit = entries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
     const totalCredit = entries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
     const balance = totalDebit - totalCredit;

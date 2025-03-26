@@ -48,9 +48,14 @@ class LedgerService {
 
   async addLedgerEntry(ledgerEntry: Omit<LedgerEntry, 'id' | 'created_at'>): Promise<LedgerEntry | null> {
     try {
+      const entry = {
+        ...ledgerEntry,
+        transaction_id: ledgerEntry.transaction_id || 'manual-entry'
+      };
+      
       const { data, error } = await supabase
         .from('ledger')
-        .insert(ledgerEntry)
+        .insert(entry)
         .select('*')
         .single();
 

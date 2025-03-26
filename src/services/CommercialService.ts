@@ -14,7 +14,66 @@ class CommercialService {
     return CommercialService.instance;
   }
 
-  // Get all invoices
+  async getParties() {
+    return PartyService.getInstance().getParties();
+  }
+
+  async getInvoicesByParty(partyId: string) {
+    try {
+      const { data, error } = await this.supabase
+        .from('invoices')
+        .select('*')
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching invoices by party:', error);
+      toast.error('حدث خطأ أثناء جلب الفواتير');
+      return [];
+    }
+  }
+
+  async getPaymentsByParty(partyId: string) {
+    try {
+      const { data, error } = await this.supabase
+        .from('payments')
+        .select('*')
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching payments by party:', error);
+      toast.error('حدث خطأ أثناء جلب المدفوعات');
+      return [];
+    }
+  }
+
+  async getLedgerEntries(partyId: string, startDate?: string, endDate?: string) {
+    return this.ledgerService.getLedgerEntries(partyId, startDate, endDate);
+  }
+
+  async generateAccountStatement(startDate: string, endDate: string, partyType: string) {
+    try {
+      const ledgerService = LedgerService.getInstance();
+      const statements = await ledgerService.generateAccountStatement(startDate, endDate, partyType);
+      return {
+        statements
+      };
+    } catch (error) {
+      console.error('Error generating account statement:', error);
+      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
+      return {
+        statements: []
+      };
+    }
+  }
+
   async getInvoices(): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
@@ -55,7 +114,6 @@ class CommercialService {
     }
   }
 
-  // Get all payments
   async getPayments(): Promise<Payment[]> {
     try {
       const { data, error } = await supabase
@@ -85,7 +143,6 @@ class CommercialService {
     }
   }
 
-  // Get all returns
   async getReturns(): Promise<Return[]> {
     try {
       const { data, error } = await supabase
@@ -125,7 +182,6 @@ class CommercialService {
     }
   }
 
-  // Get invoice by ID
   async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
       const { data, error } = await supabase
@@ -166,7 +222,6 @@ class CommercialService {
     }
   }
 
-  // Add a new invoice
   async addInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
       const { data: invoiceData, error: invoiceError } = await supabase
@@ -234,7 +289,6 @@ class CommercialService {
     }
   }
 
-  // Update an existing invoice
   async updateInvoice(id: string, invoice: Partial<Invoice>): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -261,7 +315,6 @@ class CommercialService {
     }
   }
 
-  // Delete an invoice
   async deleteInvoice(id: string): Promise<boolean> {
     try {
       const { error } = await supabase

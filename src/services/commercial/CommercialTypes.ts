@@ -3,4 +3,4 @@ import {
   Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry 
 } from '@/services/CommercialTypes';
 
-export { Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry };
+export type { Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry };

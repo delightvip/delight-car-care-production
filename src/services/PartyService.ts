@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -10,12 +9,12 @@ export interface Party {
   phone?: string;
   email?: string;
   address?: string;
-  balance: number; // Add balance property
+  balance: number; 
   opening_balance: number;
   balance_type: 'debit' | 'credit';
   created_at?: string;
-  code?: string; // Add code property
-  notes?: string; // Add notes property
+  code?: string;
+  notes?: string;
 }
 
 class PartyService {
@@ -47,7 +46,7 @@ class PartyService {
         balance_type: party.balance_type as 'debit' | 'credit',
         code: party.code || '',
         notes: party.notes || ''
-      }));
+      })) as Party[];
     } catch (error) {
       console.error('Error fetching parties:', error);
       toast.error('حدث خطأ أثناء جلب بيانات الأطراف');
@@ -72,7 +71,7 @@ class PartyService {
         balance_type: party.balance_type as 'debit' | 'credit',
         code: party.code || '',
         notes: party.notes || ''
-      }));
+      })) as Party[];
     } catch (error) {
       console.error(`Error fetching parties of type ${type}:`, error);
       toast.error('حدث خطأ أثناء جلب بيانات الأطراف');
@@ -99,7 +98,7 @@ class PartyService {
         balance_type: data.balance_type as 'debit' | 'credit',
         code: data.code || '',
         notes: data.notes || ''
-      };
+      } as Party;
     } catch (error) {
       console.error('Error adding party:', error);
       toast.error('حدث خطأ أثناء إضافة الطرف');
@@ -160,7 +159,7 @@ class PartyService {
         balance_type: data.balance_type as 'debit' | 'credit',
         code: data.code || '',
         notes: data.notes || ''
-      };
+      } as Party;
     } catch (error) {
       console.error(`Error fetching party with id ${id}:`, error);
       return null;
