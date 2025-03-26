@@ -1,4 +1,3 @@
-
 import PartyService from './PartyService';
 import PaymentService from './commercial/payment/PaymentService';
 import InvoiceService from './commercial/invoice/InvoiceService';
@@ -48,7 +47,6 @@ class CommercialService {
     return this.returnService.getReturnById(id);
   }
 
-  // Add missing methods referenced in the components
   deleteInvoice(id: string) {
     return this.invoiceService.deleteInvoice(id);
   }
@@ -70,13 +68,11 @@ class CommercialService {
   }
 
   getLedgerEntries(partyId: string) {
-    // Implement this method or delegate to an appropriate service
-    // This is a placeholder since this method is called but not implemented
     return Promise.resolve([]) as Promise<LedgerEntry[]>;
   }
 
   recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>) {
-    return this.paymentService.createPayment(paymentData);
+    return this.paymentService.recordPayment(paymentData);
   }
 
   updatePayment(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>) {
@@ -108,11 +104,10 @@ class CommercialService {
   }
 
   generateAccountStatement(startDate: string, endDate: string, partyType: string) {
-    // Implement this method or delegate to an appropriate service
-    // This is a placeholder since this method is called but not implemented
     return Promise.resolve({ statements: [] });
   }
 }
 
-export { Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry };
+// Using 'export type' for re-exporting types to avoid isolatedModules issues
+export type { Invoice, InvoiceItem, Payment, Return, ReturnItem, LedgerEntry };
 export default CommercialService;

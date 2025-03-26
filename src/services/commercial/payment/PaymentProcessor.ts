@@ -1,7 +1,8 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
-import InventoryService from '../../InventoryService';
-import InvoiceService from '../invoice/InvoiceService';
+import InventoryService from '@/services/InventoryService';
+import InvoiceService from '@/services/commercial/invoice/InvoiceService';
 
 class PaymentProcessor {
   private supabase;
