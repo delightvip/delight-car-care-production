@@ -18,7 +18,6 @@ import PageTransition from '@/components/ui/PageTransition';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 
-// Fix the import for SemiFinishedProduct types
 interface SemiFinishedProduct {
   id: number;
   name: string;
@@ -49,7 +48,7 @@ interface ProductionOrder {
   semi_finished_id: number;
   semi_finished_name: string;
   quantity: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'inProgress' | 'completed' | 'cancelled';
   notes?: string;
   created_at: string;
   materials: ProductionOrderMaterial[];
@@ -139,7 +138,6 @@ const ProductionOrders = () => {
       materials: []
     }));
     
-    // Fetch recipe for this semi-finished product
     productionService.getRecipeForSemiFinished(semiFinishedId)
       .then(recipe => {
         if (recipe && recipe.length > 0) {
@@ -161,7 +159,6 @@ const ProductionOrders = () => {
             variant: "default"
           });
         } else {
-          // If no recipe, add all raw materials as options
           if (rawMaterials && rawMaterials.length > 0) {
             const materials = rawMaterials.map(material => ({
               raw_material_id: material.id,
@@ -197,7 +194,6 @@ const ProductionOrders = () => {
     const quantity = parseInt(value, 10) || 1;
     
     setFormValues(prev => {
-      // Update quantities of materials proportionally
       const updatedMaterials = prev.materials.map(material => ({
         ...material,
         quantity: material.quantity * (quantity / prev.quantity)
@@ -253,7 +249,6 @@ const ProductionOrders = () => {
       return;
     }
     
-    // Find materials that are not already in the list
     const existingIds = new Set(formValues.materials.map(m => m.raw_material_id));
     const availableMaterials = rawMaterials.filter(m => !existingIds.has(m.id));
     
@@ -266,7 +261,6 @@ const ProductionOrders = () => {
       return;
     }
     
-    // Add the first available material
     const materialToAdd = availableMaterials[0];
     
     setFormValues(prev => ({
@@ -326,7 +320,6 @@ const ProductionOrders = () => {
         return;
       }
       
-      // Check if we have enough raw materials in stock
       for (const material of selectedMaterials) {
         const rawMaterial = rawMaterials?.find(rm => rm.id === material.raw_material_id);
         
@@ -376,7 +369,6 @@ const ProductionOrders = () => {
           variant: "default"
         });
         
-        // Reset form and refresh data
         setFormValues({
           semi_finished_id: 0,
           quantity: 1,
@@ -638,7 +630,7 @@ const ProductionOrders = () => {
                 <TabsList className="grid grid-cols-4">
                   <TabsTrigger value="all">الكل</TabsTrigger>
                   <TabsTrigger value="pending">قيد الانتظار</TabsTrigger>
-                  <TabsTrigger value="in_progress">قيد التنفيذ</TabsTrigger>
+                  <TabsTrigger value="inProgress">قيد التنفيذ</TabsTrigger>
                   <TabsTrigger value="completed">مكتمل</TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -679,7 +671,7 @@ const ProductionOrders = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         {order.status === 'pending' && <span className="text-yellow-500">قيد الانتظار</span>}
-                        {order.status === 'in_progress' && <span className="text-blue-500">قيد التنفيذ</span>}
+                        {order.status === 'inProgress' && <span className="text-blue-500">قيد التنفيذ</span>}
                         {order.status === 'completed' && <span className="text-green-500">مكتمل</span>}
                         {order.status === 'cancelled' && <span className="text-red-500">ملغي</span>}
                       </TableCell>
@@ -696,7 +688,7 @@ const ProductionOrders = () => {
                               بدء التنفيذ
                             </Button>
                           )}
-                          {order.status === 'in_progress' && (
+                          {order.status === 'inProgress' && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -707,7 +699,7 @@ const ProductionOrders = () => {
                               إكمال
                             </Button>
                           )}
-                          {(order.status === 'pending' || order.status === 'in_progress') && (
+                          {(order.status === 'pending' || order.status === 'inProgress') && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -736,7 +728,6 @@ const ProductionOrders = () => {
         </Card>
       </div>
 
-      {/* Dialog for adding new production order */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => !isProcessing && setIsAddDialogOpen(open)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -901,7 +892,6 @@ const ProductionOrders = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog for confirming production order */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={(open) => !isProcessing && setIsConfirmDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -926,7 +916,6 @@ const ProductionOrders = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog for cancelling production order */}
       <AlertDialog open={isCancelDialogOpen} onOpenChange={(open) => !isProcessing && setIsCancelDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>

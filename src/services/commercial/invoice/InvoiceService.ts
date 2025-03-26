@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice, InvoiceItem } from "@/services/CommercialTypes";
 
@@ -63,15 +62,17 @@ export class InvoiceService {
           return 0;
       }
       
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from(table)
         .select('unit_cost')
         .eq('id', itemId)
         .single();
       
-      if (error || !data) return 0;
+      if (error || !rawData) return 0;
       
-      return data.unit_cost || 0;
+      const itemCost = rawData?.unit_cost || 0;
+      
+      return itemCost;
     } catch (error) {
       console.error(`Error getting cost price for item ${itemId} of type ${itemType}:`, error);
       return 0;

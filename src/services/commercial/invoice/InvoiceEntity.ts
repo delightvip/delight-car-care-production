@@ -102,7 +102,7 @@ export class InvoiceEntity {
         id: item.id,
         invoice_id: item.invoice_id,
         item_id: item.item_id,
-        item_type: item.item_type,
+        item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
         item_name: item.item_name,
         quantity: item.quantity,
         unit_price: item.unit_price,
@@ -156,7 +156,7 @@ export class InvoiceEntity {
         const invoiceItems = invoiceData.items.map(item => ({
           invoice_id: invoiceRecord.id,
           item_id: item.item_id,
-          item_type: item.item_type,
+          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
           item_name: item.item_name,
           quantity: item.quantity,
           unit_price: item.unit_price,

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 
@@ -39,7 +40,9 @@ const Invoices = () => {
 
   return (
     <PageTransition>
-      {/* Render the formattedData */}
+      <div>
+        {/* Render the formattedData */}
+      </div>
     </PageTransition>
   );
 };

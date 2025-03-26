@@ -1,512 +1,381 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { useQuery } from '@tanstack/react-query';
-import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
+import * as z from 'zod';
+import { returnFormSchema, ReturnFormValues, ReturnFormItem } from '@/components/commercial/ReturnFormTypes';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form';
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from 'date-fns';
+import { CalendarIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Loader2, PlusCircle, Trash, CheckCircle } from 'lucide-react';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import { Return, ReturnItem } from '@/services/CommercialTypes';
-import CommercialService from '@/services/CommercialService';
-import InventoryService from '@/services/InventoryService';
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
 import PartyService from '@/services/PartyService';
-import { toast } from '@/hooks/use-toast';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ReturnFormHeader } from './returns/ReturnFormHeader';
-import { ReturnFormInvoice } from './returns/ReturnFormInvoice';
-import { ReturnFormParty } from './returns/ReturnFormParty';
-import { ReturnFormDetails } from './returns/ReturnFormDetails';
-import ReturnItemsSection from './returns/ReturnItemsSection';
-import { ReturnFormValues, returnFormSchema, ReturnFormItem } from './ReturnFormTypes';
+import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
 
 interface ReturnsFormProps {
-  onSubmit: (data: Omit<Return, 'id' | 'created_at'>) => void;
-  initialData?: Return;
+  onSubmit: (values: ReturnFormValues) => Promise<void>;
 }
 
-export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
-  const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
-  const [selectedItemType, setSelectedItemType] = useState<string>('finished_products');
-  const [loadingInvoiceItems, setLoadingInvoiceItems] = useState<boolean>(false);
-  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
+const ReturnsForm: React.FC<ReturnsFormProps> = ({ onSubmit }) => {
+  const { toast } = useToast();
+  const [items, setItems] = useState<ReturnFormItem[]>([]);
+  const [invoiceItems, setInvoiceItems] = useState<ReturnFormItem[]>([]);
+  const [isInvoiceRequired, setIsInvoiceRequired] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   
-  const commercialService = CommercialService.getInstance();
+  const inventoryService = InventoryService.getInstance();
   const partyService = PartyService.getInstance();
+  const commercialService = CommercialService.getInstance();
   
-  const defaultValues: ReturnFormValues = initialData 
-    ? {
-        return_type: initialData.return_type,
-        date: initialData.date ? new Date(initialData.date) : new Date(),
-        invoice_id: initialData.invoice_id,
-        party_id: initialData.party_id,
-        amount: initialData.amount,
-        notes: initialData.notes || '',
-        items: initialData.items ? initialData.items.map(item => ({
-          item_id: item.item_id,
-          item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          selected: true
-        })) : []
-      }
-    : {
-        return_type: 'sales_return' as const,
-        date: new Date(),
-        amount: 0,
-        notes: '',
-        items: []
-      };
+  const { data: rawMaterials } = useQuery({
+    queryKey: ['raw_materials'],
+    queryFn: () => inventoryService.getRawMaterials(),
+  });
   
-  const form = useForm<ReturnFormValues>({
-    resolver: zodResolver(returnFormSchema),
-    defaultValues
+  const { data: packagingMaterials } = useQuery({
+    queryKey: ['packaging_materials'],
+    queryFn: () => inventoryService.getPackagingMaterials(),
   });
-
-  const returnType = form.watch('return_type');
-  const selectedItems = form.watch('items');
-
-  const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
-    queryKey: ['invoices'],
-    queryFn: () => commercialService.getInvoices(),
+  
+  const { data: semiFinishedProducts } = useQuery({
+    queryKey: ['semi_finished_products'],
+    queryFn: () => inventoryService.getSemiFinishedProducts(),
   });
-
+  
+  const { data: finishedProducts } = useQuery({
+    queryKey: ['finished_products'],
+    queryFn: () => inventoryService.getFinishedProducts(),
+  });
+  
   const { data: parties } = useQuery({
     queryKey: ['parties'],
     queryFn: () => partyService.getParties(),
   });
-
-  const { data: inventoryItems, isLoading: isLoadingInventoryItems } = useQuery({
-    queryKey: ['inventory', selectedItemType],
-    queryFn: () => {
-      switch (selectedItemType) {
-        case 'raw_materials':
-          return InventoryService.getInstance().getRawMaterials();
-        case 'packaging_materials':
-          return InventoryService.getInstance().getPackagingMaterials();
-        case 'semi_finished_products':
-          return InventoryService.getInstance().getSemiFinishedProducts();
-        case 'finished_products':
-          return InventoryService.getInstance().getFinishedProducts();
-        default:
-          return [];
-      }
-    },
-    enabled: !!selectedItemType,
+  
+  const { data: invoices } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: () => commercialService.getInvoices(),
   });
 
+  useEffect(() => {
+    if (rawMaterials && packagingMaterials && semiFinishedProducts && finishedProducts) {
+      const allItems = [
+        ...rawMaterials.map(item => ({ ...item, item_type: 'raw_materials', item_name: item.raw_material_name, item_id: item.id })),
+        ...packagingMaterials.map(item => ({ ...item, item_type: 'packaging_materials', item_name: item.packaging_material_name, item_id: item.id })),
+        ...semiFinishedProducts.map(item => ({ ...item, item_type: 'semi_finished_products', item_name: item.semi_finished_name, item_id: item.id })),
+        ...finishedProducts.map(item => ({ ...item, item_type: 'finished_products', item_name: item.finished_product_name, item_id: item.id }))
+      ] as ReturnFormItem[];
+      setItems(allItems);
+    }
+  }, [rawMaterials, packagingMaterials, semiFinishedProducts, finishedProducts]);
+
+  const form = useForm<ReturnFormValues>({
+    resolver: zodResolver(returnFormSchema),
+    defaultValues: {
+      return_type: 'sales_return',
+      date: new Date(),
+      amount: 0,
+      items: []
+    }
+  });
+
+  useEffect(() => {
+    const subscription = form.watch((value, { name, type }) => {
+      if (name === 'return_type') {
+        setIsInvoiceRequired(value.return_type === 'sales_return');
+        form.setValue('invoice_id', undefined);
+        form.setValue('party_id', undefined);
+        setInvoiceItems([]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   const handleInvoiceChange = async (invoiceId: string) => {
-    form.setValue('invoice_id', invoiceId === 'no_invoice' ? undefined : invoiceId);
-    setSelectedInvoice(invoiceId === 'no_invoice' ? null : invoiceId);
-    
-    if (invoiceId !== 'no_invoice') {
-      setLoadingInvoiceItems(true);
+    setSelectedInvoiceId(invoiceId);
+    if (invoiceId) {
       try {
         const invoice = await commercialService.getInvoiceById(invoiceId);
-        
         if (invoice) {
-          form.setValue('party_id', invoice.party_id || undefined);
-          
-          form.setValue('items', []);
-          
-          if (invoice.items && invoice.items.length > 0) {
-            const returnItems = invoice.items.map(item => ({
-              item_id: Number(item.item_id),
-              item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
-              item_name: item.item_name,
-              quantity: 0,
-              unit_price: item.unit_price,
-              selected: false,
-              max_quantity: item.quantity,
-              invoice_quantity: item.quantity
-            }));
-            
-            form.setValue('items', returnItems);
-            setInvoiceItems(invoice.items);
-            calculateTotal();
-            
-            toast({
-              title: "نجاح",
-              description: "تم جلب أصناف الفاتورة بنجاح",
-              variant: "default"
-            });
-          } else {
-            toast({
-              title: "معلومات",
-              description: "لا توجد أصناف في الفاتورة المحددة",
-              variant: "default"
-            });
-          }
+          form.setValue('party_id', invoice.party_id);
+          const itemsWithMaxQuantity = invoice.items.map(item => ({
+            ...item,
+            item_id: item.item_id,
+            item_name: item.item_name,
+            item_type: item.item_type,
+            quantity: 0,
+            unit_price: item.unit_price,
+            selected: false,
+            max_quantity: item.quantity,
+            invoice_quantity: item.quantity
+          }));
+          setInvoiceItems(itemsWithMaxQuantity);
+        } else {
+          toast({
+            title: "خطأ",
+            description: "الفاتورة غير موجودة",
+            variant: "destructive"
+          });
+          form.setValue('party_id', undefined);
+          setInvoiceItems([]);
         }
       } catch (error) {
-        console.error('Error fetching invoice details:', error);
+        console.error("Failed to fetch invoice:", error);
         toast({
           title: "خطأ",
-          description: "حدث خطأ أثناء جلب تفاصيل الفاتورة",
+          description: "فشل في جلب الفاتورة",
           variant: "destructive"
         });
-      } finally {
-        setLoadingInvoiceItems(false);
+        form.setValue('party_id', undefined);
+        setInvoiceItems([]);
       }
     } else {
       form.setValue('party_id', undefined);
-      form.setValue('items', []);
       setInvoiceItems([]);
     }
   };
 
-  const handlePartyChange = (partyId: string) => {
-    form.setValue('party_id', partyId === 'no_party' ? undefined : partyId);
-  };
-
-  const calculateTotal = () => {
-    const items = form.getValues('items');
-    if (items && items.length > 0) {
-      const total = items.reduce((sum, item) => {
-        return sum + (item.selected ? (item.quantity * item.unit_price) : 0);
-      }, 0);
-      form.setValue('amount', total);
-      console.log('Calculated total amount:', total);
-    } else {
-      form.setValue('amount', 0);
-    }
-  };
-
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name?.startsWith('items.') || name === 'items') {
-        calculateTotal();
-      }
-    });
-    
-    return () => subscription.unsubscribe();
-  }, [form.watch]);
-
-  const addItem = () => {
-    const currentItems = form.getValues('items') || [];
-    form.setValue('items', [
-      ...currentItems, 
-      { 
-        item_id: 0, 
-        item_type: selectedItemType as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products', 
-        item_name: '', 
-        quantity: 1, 
-        unit_price: 0,
-        selected: true
-      }
-    ]);
-    calculateTotal();
-  };
-
-  const removeItem = (index: number) => {
-    const currentItems = form.getValues('items');
-    form.setValue('items', currentItems.filter((_, i) => i !== index));
-    calculateTotal();
-  };
-
-  const toggleItemSelection = (index: number, selected: boolean) => {
-    const items = form.getValues('items');
-    const updatedItems = [...items];
-    
-    updatedItems[index] = {
-      ...updatedItems[index],
-      selected
-    };
-    
-    if (!selected) {
-      updatedItems[index].quantity = 0;
-    }
-    
-    form.setValue('items', updatedItems);
-    calculateTotal();
-  };
-
-  const handleQuantityChange = (index: number, value: string) => {
-    const parsedValue = parseFloat(value) || 0;
-    const items = form.getValues('items');
-    const item = items[index];
-    
-    const maxQty = item.max_quantity || Number.MAX_VALUE;
-    const validatedQuantity = Math.min(parsedValue, maxQty);
-    
-    form.setValue(`items.${index}.quantity`, validatedQuantity);
-    
-    if (validatedQuantity > 0 && !item.selected) {
-      toggleItemSelection(index, true);
-    }
-    
-    calculateTotal();
-  };
-
-  const handleSubmitForm = async (values: ReturnFormValues) => {
-    try {
-      console.log('Form values before submission:', values);
-      
-      const selectedItems = values.items.filter(item => item.selected && item.quantity > 0);
-      
-      if (selectedItems.length === 0) {
-        toast({
-          title: "خطأ",
-          description: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      const returnData: Omit<Return, 'id' | 'created_at'> = {
-        return_type: values.return_type,
-        invoice_id: values.invoice_id,
-        party_id: values.party_id,
-        date: format(values.date, 'yyyy-MM-dd'),
-        amount: values.amount,
-        notes: values.notes,
-        payment_status: 'draft',
-        party_name: undefined,
-        items: selectedItems.map(item => ({
-          id: '', // Will be generated on the server
-          return_id: '', // Will be generated on the server
-          item_id: item.item_id,
-          item_type: item.item_type,
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price,
-          created_at: new Date().toISOString()
-        }))
-      };
-
-      console.log('Submitting return data:', returnData);
-      
-      onSubmit(returnData);
-    } catch (error) {
-      console.error('Error submitting return form:', error);
+  const onSubmitHandler = async (values: ReturnFormValues) => {
+    const selectedItems = invoiceItems.filter(item => item.selected);
+    if (selectedItems.length === 0) {
       toast({
         title: "خطأ",
-        description: "حدث خطأ أثناء معالجة النموذج",
+        description: "يجب اختيار صنف واحد على الأقل",
         variant: "destructive"
       });
+      return;
     }
+    
+    const totalAmount = selectedItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    
+    const returnData = {
+      ...values,
+      amount: totalAmount,
+      items: selectedItems.map(item => ({
+        item_id: item.item_id,
+        item_type: item.item_type,
+        item_name: item.item_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price
+      }))
+    };
+    
+    await onSubmit(returnData);
   };
-
-  const filteredInvoices = React.useMemo(() => {
-    if (!invoices) return [];
-    
-    return invoices.filter(inv => 
-      returnType === 'sales_return' 
-        ? inv.invoice_type === 'sale' 
-        : inv.invoice_type === 'purchase'
-    );
-  }, [invoices, returnType]);
-
-  const filteredParties = React.useMemo(() => {
-    if (!parties) return [];
-    
-    return parties.filter(party => 
-      returnType === 'sales_return' 
-        ? party.type === 'customer' 
-        : party.type === 'supplier'
-    );
-  }, [parties, returnType]);
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="return_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>نوع المرتجع</FormLabel>
-                <Select 
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    form.setValue('invoice_id', undefined);
-                    form.setValue('party_id', undefined);
-                    form.setValue('items', []);
-                    setSelectedInvoice(null);
-                    setInvoiceItems([]);
-                  }} 
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر نوع المرتجع" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="sales_return">مرتجع مبيعات</SelectItem>
-                    <SelectItem value="purchase_return">مرتجع مشتريات</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  حدد نوع المرتجع سواء كان مرتجع مبيعات (من العميل) أو مرتجع مشتريات (للمورد)
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+      <form onSubmit={form.handleSubmit(onSubmitHandler)} className="space-y-6">
+        <FormField
+          control={form.control}
+          name="return_type"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>نوع المرتجع</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر نوع المرتجع" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="sales_return">مرتجع مبيعات</SelectItem>
+                  <SelectItem value="purchase_return">مرتجع مشتريات</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
+        {isInvoiceRequired && (
           <FormField
             control={form.control}
             name="invoice_id"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>رقم الفاتورة (اختياري)</FormLabel>
-                <Select 
-                  onValueChange={handleInvoiceChange} 
-                  value={field.value || "no_invoice"}
-                  disabled={isLoadingInvoices || loadingInvoiceItems}
+                <FormLabel>الفاتورة المرتبطة</FormLabel>
+                <Select
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    handleInvoiceChange(value);
+                  }}
+                  defaultValue={field.value || ""}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      {isLoadingInvoices || loadingInvoiceItems ? (
-                        <div className="flex items-center justify-center w-full">
-                          <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                          <span>جاري التحميل...</span>
-                        </div>
-                      ) : (
-                        <SelectValue placeholder="اختر الفاتورة المرتبطة" />
-                      )}
+                      <SelectValue placeholder="اختر فاتورة" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="no_invoice">بدون فاتورة</SelectItem>
-                    {filteredInvoices.map((invoice) => (
+                    {invoices?.filter(invoice => invoice.invoice_type === 'sale').map(invoice => (
                       <SelectItem key={invoice.id} value={invoice.id}>
-                        {`${invoice.id.substring(0, 8)}... - ${invoice.party_name || 'غير محدد'} - ${invoice.total_amount}`}
+                        {invoice.id.substring(0, 8)}... - {invoice.party_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>
-                  يمكنك ربط المرتجع بفاتورة محددة لتسهيل عملية إرجاع الأصناف
-                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+        )}
 
-          {!selectedInvoice && (
-            <FormField
-              control={form.control}
-              name="party_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{returnType === 'sales_return' ? 'العميل' : 'المورد'}</FormLabel>
-                  <Select 
-                    onValueChange={handlePartyChange} 
-                    value={field.value || "no_party"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={`اختر ${returnType === 'sales_return' ? 'العميل' : 'المورد'}`} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="no_party">غير محدد</SelectItem>
-                      {filteredParties.map((party) => (
-                        <SelectItem key={party.id} value={party.id}>
-                          {party.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {returnType === 'sales_return' 
-                      ? 'حدد العميل الذي أرجع البضاعة' 
-                      : 'حدد المورد الذي سيتم إرجاع البضاعة إليه'}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>التاريخ</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full pl-3 text-right font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP", { locale: ar })
-                        ) : (
-                          <span>اختر التاريخ</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="amount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>إجمالي المبلغ</FormLabel>
+        <FormField
+          control={form.control}
+          name="party_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>الطرف</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value || ""}
+                disabled={true}
+              >
                 <FormControl>
-                  <Input
-                    type="number"
-                    {...field}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                    disabled
-                    className="bg-muted"
-                  />
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الطرف" />
+                  </SelectTrigger>
                 </FormControl>
-                <FormDescription>
-                  يتم حساب هذا المبلغ تلقائيًا من الأصنا المختارة
-                </FormDescription>
+                <SelectContent>
+                  {parties?.map(party => (
+                    <SelectItem key={party.id} value={party.id}>
+                      {party.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
                 <FormMessage />
               </FormItem>
             )}
           />
+        )}
+
+        <FormField
+          control={form.control}
+          name="date"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>تاريخ المرتجع</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-[240px] pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "yyyy-MM-dd")
+                      ) : (
+                        <span>اختر تاريخ</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date > new Date()
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid gap-4">
+          <Label htmlFor="items">الأصناف</Label>
+          <Separator />
+          {invoiceItems.length > 0 ? (
+            invoiceItems.map((item, index) => (
+              <div key={index} className="grid grid-cols-6 gap-2 items-center">
+                <FormField
+                  control={form.control}
+                  name={`items[${index}].selected`}
+                  render={({ field }) => (
+                    <FormItem className="col-span-1">
+                      <FormControl>
+                        <Checkbox
+                          checked={item.selected}
+                          onCheckedChange={(checked) => {
+                            const updatedItems = [...invoiceItems];
+                            updatedItems[index] = { ...item, selected: checked };
+                            setInvoiceItems(updatedItems);
+                          }}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Label htmlFor={`items[${index}].selected`} className="col-span-2 text-right">
+                  {item.item_name}
+                </Label>
+                <FormField
+                  control={form.control}
+                  name={`items[${index}].quantity`}
+                  render={({ field }) => {
+                    return (
+                      <FormItem className="col-span-3">
+                        <FormControl>
+                          <Input
+                            type="number"
+                            defaultValue="0"
+                            min="0"
+                            max={item.max_quantity}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value);
+                              const updatedItems = [...invoiceItems];
+                              updatedItems[index] = { ...item, quantity: value };
+                              setInvoiceItems(updatedItems);
+                            }}
+                            disabled={!item.selected}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
+                <Label className="col-span-6 text-right text-muted-foreground">
+                  الكمية المتاحة: {item.max_quantity}
+                </Label>
+              </div>
+            ))
+          ) : (
+            <div className="text-center text-muted-foreground">
+              {isInvoiceRequired ? 'اختر فاتورة لعرض الأصناف' : 'اختر نوع المرتجع لعرض الأصناف'}
+            </div>
+          )}
         </div>
 
         <FormField
@@ -516,37 +385,17 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             <FormItem>
               <FormLabel>ملاحظات</FormLabel>
               <FormControl>
-                <Textarea rows={3} {...field} value={field.value || ''} />
+                <Input type="text" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <ReturnItemsSection
-          form={form}
-          selectedInvoice={selectedInvoice}
-          selectedItemType={selectedItemType}
-          loadingInvoiceItems={loadingInvoiceItems}
-          isLoadingInventoryItems={isLoadingInventoryItems}
-          inventoryItems={inventoryItems || []}
-          setSelectedItemType={setSelectedItemType}
-          addItem={addItem}
-          removeItem={removeItem}
-          toggleItemSelection={toggleItemSelection}
-          handleQuantityChange={handleQuantityChange}
-        />
-
-        <div className="flex justify-end space-x-2">
-          <Button 
-            type="submit" 
-            disabled={loadingInvoiceItems || form.formState.isSubmitting}
-          >
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            حفظ المرتجع
-          </Button>
-        </div>
+        <Button type="submit">إضافة مرتجع</Button>
       </form>
     </Form>
   );
-}
+};
+
+export { ReturnsForm };

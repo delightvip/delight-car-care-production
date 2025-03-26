@@ -26,7 +26,7 @@ import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 import { PackagingOrder } from '@/services/ProductionService';
-import { FinishedProduct } from '@/services/InventoryService';
+import { FinishedProduct } from '@/types/inventoryTypes';
 import { useQuery } from '@tanstack/react-query';
 
 interface FinishedProduct {
@@ -125,7 +125,7 @@ const PackagingOrders = () => {
     { key: 'productName', title: 'المنتج' },
     { 
       key: 'quantity', 
-      title: 'الكمية',
+      title: 'ا��كمية',
       render: (value: number, record: any) => `${value} ${record.unit}`
     },
     { 
