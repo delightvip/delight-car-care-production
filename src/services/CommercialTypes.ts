@@ -24,7 +24,7 @@ export interface Invoice {
   total_amount: number;
   notes?: string;
   created_at: string;
-  items: InvoiceItem[]; // Added items array
+  items: InvoiceItem[]; 
 }
 
 export interface InvoiceItem {
@@ -32,7 +32,7 @@ export interface InvoiceItem {
   invoice_id: string;
   item_id: number;
   item_name: string;
-  item_type: string;
+  item_type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
   quantity: number;
   unit_price: number;
   total: number;
@@ -65,7 +65,7 @@ export interface Return {
   payment_status: 'draft' | 'confirmed' | 'cancelled';
   notes?: string;
   created_at: string;
-  items: ReturnItem[]; // Added items array
+  items: ReturnItem[]; 
 }
 
 export interface ReturnItem {
@@ -73,7 +73,7 @@ export interface ReturnItem {
   return_id: string;
   item_id: number;
   item_name: string;
-  item_type: string;
+  item_type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
   quantity: number;
   unit_price: number;
   total: number;

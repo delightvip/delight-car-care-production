@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
@@ -8,14 +7,12 @@ import FinancialService from "@/services/financial/FinancialService";
 import { format } from "date-fns";
 
 export class InvoiceProcessor {
-  private inventoryService: InventoryService;
   private partyService: PartyService;
-  private financialService: FinancialService;
-
+  private inventoryService: InventoryService;
+  
   constructor() {
-    this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
-    this.financialService = FinancialService.getInstance();
+    this.inventoryService = InventoryService.getInstance();
   }
 
   /**

@@ -147,15 +147,15 @@ const ProfitAnalysisPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <Label htmlFor="startDate">من تاريخ</Label>
-                <DatePicker
-                  selected={startDate}
+                <DatePicker 
+                  selected={startDate} 
                   onSelect={setStartDate}
                 />
               </div>
               <div>
                 <Label htmlFor="endDate">إلى تاريخ</Label>
-                <DatePicker
-                  selected={endDate}
+                <DatePicker 
+                  selected={endDate} 
                   onSelect={setEndDate}
                 />
               </div>

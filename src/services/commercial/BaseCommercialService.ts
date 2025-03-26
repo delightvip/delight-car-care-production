@@ -1,15 +1,14 @@
-
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from "sonner";
 import PartyService from '../PartyService';
 import InventoryService from '../InventoryService';
 
-class BaseCommercialService {
-  protected supabase: SupabaseClient;
-  protected partyService: PartyService;
-  protected inventoryService: InventoryService;
-
+abstract class BaseCommercialService {
+  protected supabase;
+  protected partyService;
+  protected inventoryService;
+  
   constructor() {
     this.supabase = supabase;
     this.partyService = PartyService.getInstance();

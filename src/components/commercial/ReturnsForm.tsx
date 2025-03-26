@@ -39,32 +39,8 @@ import { ReturnFormInvoice } from './returns/ReturnFormInvoice';
 import { ReturnFormParty } from './returns/ReturnFormParty';
 import { ReturnFormDetails } from './returns/ReturnFormDetails';
 import ReturnItemsSection from './returns/ReturnItemsSection';
-
-const returnFormSchema = z.object({
-  return_type: z.enum(['sales_return', 'purchase_return']),
-  invoice_id: z.string().optional(),
-  party_id: z.string().optional(),
-  date: z.date(),
-  amount: z.number().min(0, 'يجب أن يكون المبلغ أكبر من صفر'),
-  notes: z.string().optional(),
-  items: z.array(
-    z.object({
-      item_id: z.number(),
-      item_type: z.enum(['raw_materials', 'packaging_materials', 'semi_finished_products', 'finished_products']),
-      item_name: z.string(),
-      quantity: z.number().min(0.1, 'يجب أن تكون الكمية أكبر من صفر'),
-      unit_price: z.number().min(0, 'يجب أن يكون السعر أكبر من أو يساوي صفر'),
-      selected: z.boolean().optional(),
-      max_quantity: z.number().optional(),
-      invoice_quantity: z.number().optional()
-    })
-  ).refine(items => items.some(item => item.selected === true && item.quantity > 0), {
-    message: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
-    path: ["items"]
-  })
-});
-
-type ReturnFormValues = z.infer<typeof returnFormSchema>;
+import { ReturnFormValues, returnFormSchema, ReturnFormItem } from './ReturnFormTypes';
+import InventoryService from '@/services/InventoryService';
 
 interface ReturnsFormProps {
   onSubmit: (data: Omit<Return, 'id' | 'created_at'>) => void;
@@ -80,11 +56,22 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const commercialService = CommercialService.getInstance();
   const partyService = PartyService.getInstance();
   
-  const defaultValues = initialData 
+  const defaultValues: ReturnFormValues = initialData 
     ? {
-        ...initialData,
+        return_type: initialData.return_type,
         date: initialData.date ? new Date(initialData.date) : new Date(),
-        items: initialData.items || []
+        invoice_id: initialData.invoice_id,
+        party_id: initialData.party_id,
+        amount: initialData.amount,
+        notes: initialData.notes || '',
+        items: initialData.items ? initialData.items.map(item => ({
+          item_id: item.item_id,
+          item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          selected: true
+        })) : []
       }
     : {
         return_type: 'sales_return' as const,
@@ -115,16 +102,15 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const { data: inventoryItems, isLoading: isLoadingInventoryItems } = useQuery({
     queryKey: ['inventory', selectedItemType],
     queryFn: () => {
-      const inventoryService = InventoryService.getInstance();
       switch (selectedItemType) {
         case 'raw_materials':
-          return inventoryService.getRawMaterials();
+          return InventoryService.getInstance().getRawMaterials();
         case 'packaging_materials':
-          return inventoryService.getPackagingMaterials();
+          return InventoryService.getInstance().getPackagingMaterials();
         case 'semi_finished_products':
-          return inventoryService.getSemiFinishedProducts();
+          return InventoryService.getInstance().getSemiFinishedProducts();
         case 'finished_products':
-          return inventoryService.getFinishedProducts();
+          return InventoryService.getInstance().getFinishedProducts();
         default:
           return [];
       }
@@ -298,13 +284,17 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
         amount: values.amount,
         notes: values.notes,
         payment_status: 'draft',
+        party_name: undefined,
         items: selectedItems.map(item => ({
+          id: '', // Will be generated on the server
+          return_id: '', // Will be generated on the server
           item_id: item.item_id,
           item_type: item.item_type,
           item_name: item.item_name,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
+          total: item.quantity * item.unit_price,
+          created_at: new Date().toISOString()
         }))
       };
 
@@ -511,7 +501,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  يتم حساب هذا المبلغ تلقائيًا من الأصنا�� المختارة
+                  يتم حساب هذا المبلغ تلقائيًا من الأصنا المختارة
                 </FormDescription>
                 <FormMessage />
               </FormItem>

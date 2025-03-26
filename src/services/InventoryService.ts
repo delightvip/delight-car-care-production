@@ -1,7 +1,8 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-class InventoryService {
+export class InventoryService {
   private static instance: InventoryService;
 
   private constructor() {}

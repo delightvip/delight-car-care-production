@@ -29,6 +29,20 @@ import { PackagingOrder } from '@/services/ProductionService';
 import { FinishedProduct } from '@/services/InventoryService';
 import { useQuery } from '@tanstack/react-query';
 
+interface FinishedProduct {
+  id: number;
+  name: string;
+  code: string;
+  unit: string;
+  min_stock: number;
+  quantity: number;
+  unit_cost: number;
+  semi_finished_id: number;
+  semi_finished_quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
 const statusTranslations = {
   pending: 'قيد الانتظار',
   inProgress: 'قيد التنفيذ',
@@ -94,18 +108,8 @@ const PackagingOrders = () => {
     isLoading: isProductsLoading,
     refetch: refetchProducts
   } = useQuery({
-    queryKey: ['finishedProducts'],
-    queryFn: async () => {
-      try {
-        const products = await inventoryService.getFinishedProducts();
-        console.log("Fetched finished products:", products);
-        return products;
-      } catch (error) {
-        console.error("Error loading finished products:", error);
-        toast.error("حدث خطأ أثناء تحميل المنتجات النهائية");
-        return [];
-      }
-    }
+    queryKey: ['finished_products'],
+    queryFn: () => InventoryService.getInstance().getFinishedProducts(),
   });
   
   const isLoading = isOrdersLoading || isProductsLoading;
@@ -562,7 +566,7 @@ const PackagingOrders = () => {
                   <div className="bg-yellow-50 p-4 rounded-md text-yellow-800">
                     <h4 className="font-medium mb-1">تنبيه</h4>
                     <p className="text-sm">
-                      عند تحديث الحالة إلى "مكتمل"، سيتم خصم المكونات من المخزون وإضافة المنتج النهائي.
+                      عند تحديث الحالة إلى "مكتمل"، سيتم خصم المكونات من المخزون وإضافة الم��تج النهائي.
                     </p>
                   </div>
                 )}

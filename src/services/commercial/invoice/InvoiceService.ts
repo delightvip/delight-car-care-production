@@ -77,6 +77,11 @@ export class InvoiceService {
       return 0;
     }
   }
+  
+  // Create a getInstance method to align with other services
+  public static getInstance(): InvoiceService {
+    return new InvoiceService();
+  }
 }
 
 // Export a default instance for convenience

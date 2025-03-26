@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Return } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
@@ -125,7 +124,7 @@ export class ReturnProcessor {
 
       console.log('Return items:', returnData.items);
       
-      // تحديث المخزون وفقاً لنوع المرتجع
+      // ت��ديث المخزون وفقاً لنوع المرتجع
       let allUpdatesSuccessful = true;
       
       if (returnData.return_type === 'sales_return') {
@@ -516,7 +515,7 @@ export class ReturnProcessor {
             const result = await this.partyService.updatePartyBalance(
               returnData.party_id,
               returnData.amount,
-              true, // مدين لإلغاء مرتجعات المبيعات (استعادة دين العميل)
+              true, // مدين لإلغاء مرتجعات المبيعات (استعاد�� دين العميل)
               'إلغاء مرتجع مبيعات',
               'cancel_sales_return',
               returnId
@@ -791,4 +790,3 @@ export class ReturnProcessor {
     }
   }
 }
-
