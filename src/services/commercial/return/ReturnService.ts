@@ -6,7 +6,7 @@ import { toast } from '@/hooks/use-toast';
 
 // خدمة المرتجعات الرئيسية
 export class ReturnService {
-  private static instance: ReturnService;
+  private static instance: ReturnService | null = null;
   private returnProcessor: ReturnProcessor;
   
   private constructor() {
@@ -54,6 +54,15 @@ export class ReturnService {
     try {
       console.log('Creating return:', returnData);
       
+      if (!returnData.items || returnData.items.length === 0) {
+        toast({
+          title: "خطأ",
+          description: "يجب إضافة صنف واحد على الأقل إلى المرتجع",
+          variant: "destructive"
+        });
+        return null;
+      }
+      
       // إنشاء المرتجع في قاعدة البيانات
       const returnRecord = await ReturnEntity.create(returnData);
       
@@ -72,11 +81,7 @@ export class ReturnService {
       // إذا كانت حالة المرتجع هي "confirmed"، قم بتأكيده تلقائياً (بشكل غير متزامن)
       if (returnRecord && returnData.payment_status === 'confirmed') {
         // تجنب تجمد الواجهة باستخدام وعد
-        this.confirmReturn(returnRecord.id).then(success => {
-          console.log('Auto-confirmation result:', success);
-        }).catch(err => {
-          console.error('Error in auto-confirmation:', err);
-        });
+        this.processReturnConfirmation(returnRecord.id);
       }
       
       toast({
@@ -95,6 +100,15 @@ export class ReturnService {
       });
       return null;
     }
+  }
+  
+  // معالجة تأكيد المرتجع في الخلفية لمنع تجمد الواجهة
+  private processReturnConfirmation(returnId: string): void {
+    this.confirmReturn(returnId).then(success => {
+      console.log('Auto-confirmation result:', success);
+    }).catch(err => {
+      console.error('Error in auto-confirmation:', err);
+    });
   }
   
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
@@ -128,34 +142,52 @@ export class ReturnService {
   }
   
   public async confirmReturn(returnId: string): Promise<boolean> {
-    console.log('Starting return confirmation for:', returnId);
-    
     try {
-      // قم بتنفيذ تأكيد المرتجع
-      const result = await this.returnProcessor.confirmReturn(returnId);
+      console.log('Starting return confirmation for:', returnId);
       
-      if (result) {
-        console.log('Return confirmation succeeded for:', returnId);
-        toast({
-          title: "نجاح",
-          description: "تم تأكيد المرتجع بنجاح",
-          variant: "default"
-        });
-      } else {
-        console.log('Return confirmation failed for:', returnId);
+      // استخدام معالج المرتجعات لتنفيذ التأكيد بدون تجميد الواجهة
+      const confirmPromise = this.returnProcessor.confirmReturn(returnId);
+      
+      // عرض رسالة مبدئية للمستخدم
+      toast({
+        title: "جاري التنفيذ",
+        description: "جاري تأكيد المرتجع...",
+        variant: "default"
+      });
+      
+      // تنفيذ العملية في الخلفية
+      confirmPromise.then(result => {
+        if (result) {
+          console.log('Return confirmation succeeded for:', returnId);
+          toast({
+            title: "نجاح",
+            description: "تم تأكيد المرتجع بنجاح",
+            variant: "default"
+          });
+        } else {
+          console.log('Return confirmation failed for:', returnId);
+          toast({
+            title: "خطأ",
+            description: "فشل تأكيد المرتجع",
+            variant: "destructive"
+          });
+        }
+      }).catch(error => {
+        console.error(`Error in confirmReturn(${returnId}):`, error);
         toast({
           title: "خطأ",
-          description: "فشل تأكيد المرتجع",
+          description: "حدث خطأ أثناء تأكيد المرتجع",
           variant: "destructive"
         });
-      }
+      });
       
-      return result;
+      // إرجاع true لإخبار الواجهة أن العملية بدأت
+      return true;
     } catch (error) {
-      console.error(`Error in confirmReturn(${returnId}):`, error);
+      console.error(`Error starting confirmReturn(${returnId}):`, error);
       toast({
         title: "خطأ",
-        description: "حدث خطأ أثناء تأكيد المرتجع",
+        description: "حدث خطأ أثناء بدء عملية تأكيد المرتجع",
         variant: "destructive"
       });
       return false;
@@ -163,34 +195,52 @@ export class ReturnService {
   }
   
   public async cancelReturn(returnId: string): Promise<boolean> {
-    console.log('Starting return cancellation for:', returnId);
-    
     try {
-      // قم بتنفيذ إلغاء المرتجع
-      const result = await this.returnProcessor.cancelReturn(returnId);
+      console.log('Starting return cancellation for:', returnId);
       
-      if (result) {
-        console.log('Return cancellation succeeded for:', returnId);
-        toast({
-          title: "نجاح",
-          description: "تم إلغاء المرتجع بنجاح",
-          variant: "default"
-        });
-      } else {
-        console.log('Return cancellation failed for:', returnId);
+      // استخدام معالج المرتجعات لتنفيذ الإلغاء بدون تجميد الواجهة
+      const cancelPromise = this.returnProcessor.cancelReturn(returnId);
+      
+      // عرض رسالة مبدئية للمستخدم
+      toast({
+        title: "جاري التنفيذ",
+        description: "جاري إلغاء المرتجع...",
+        variant: "default"
+      });
+      
+      // تنفيذ العملية في الخلفية
+      cancelPromise.then(result => {
+        if (result) {
+          console.log('Return cancellation succeeded for:', returnId);
+          toast({
+            title: "نجاح",
+            description: "تم إلغاء المرتجع بنجاح",
+            variant: "default"
+          });
+        } else {
+          console.log('Return cancellation failed for:', returnId);
+          toast({
+            title: "خطأ",
+            description: "فشل إلغاء المرتجع",
+            variant: "destructive"
+          });
+        }
+      }).catch(error => {
+        console.error(`Error in cancelReturn(${returnId}):`, error);
         toast({
           title: "خطأ",
-          description: "فشل إلغاء المرتجع",
+          description: "حدث خطأ أثناء إلغاء المرتجع",
           variant: "destructive"
         });
-      }
+      });
       
-      return result;
+      // إرجاع true لإخبار الواجهة أن العملية بدأت
+      return true;
     } catch (error) {
-      console.error(`Error in cancelReturn(${returnId}):`, error);
+      console.error(`Error starting cancelReturn(${returnId}):`, error);
       toast({
         title: "خطأ",
-        description: "حدث خطأ أثناء إلغاء المرتجع",
+        description: "حدث خطأ أثناء بدء عملية إلغاء المرتجع",
         variant: "destructive"
       });
       return false;
