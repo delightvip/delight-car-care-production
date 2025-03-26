@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,10 +9,7 @@ import TransactionList from '@/components/financial/TransactionList';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { CalendarIcon } from 'lucide-react';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ar } from 'date-fns/locale';
 
 const FinancialDashboard = () => {
@@ -57,40 +53,15 @@ const FinancialDashboard = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h1 className="text-3xl font-bold">لوحة التحكم المالية</h1>
         <div className="flex flex-wrap gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-[300px] justify-start text-right">
-                <CalendarIcon className="ml-2 h-4 w-4" />
-                {dateRange.from ? (
-                  dateRange.to ? (
-                    <>
-                      {format(dateRange.from, "PPP", { locale: ar })} -{" "}
-                      {format(dateRange.to, "PPP", { locale: ar })}
-                    </>
-                  ) : (
-                    format(dateRange.from, "PPP", { locale: ar })
-                  )
-                ) : (
-                  "اختر الفترة"
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={dateRange.from}
-                selected={dateRange}
-                onSelect={(range) => {
-                  if (range?.from && range?.to) {
-                    setDateRange({ from: range.from, to: range.to });
-                  }
-                }}
-                locale={ar}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker
+            initialDateFrom={dateRange.from}
+            initialDateTo={dateRange.to}
+            onUpdate={({ range }) => {
+              if (range?.from && range?.to) {
+                setDateRange({ from: range.from, to: range.to });
+              }
+            }}
+          />
           
           <Button onClick={handleRefresh} variant="outline">
             <RefreshCw className="h-4 w-4 ml-2" />
