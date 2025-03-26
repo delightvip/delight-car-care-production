@@ -20,6 +20,7 @@ import InventorySemiFinished from './pages/inventory/InventorySemiFinished';
 import InventoryFinishedProducts from './pages/inventory/InventoryFinishedProducts';
 import LowStockItems from './pages/inventory/LowStockItems';
 import InventoryTracking from './pages/inventory/InventoryTracking';
+import ProductDetails from './pages/inventory/ProductDetails';
 
 // Production Pages
 import ProductionOrders from './pages/production/ProductionOrders';
@@ -66,6 +67,7 @@ function App() {
               <Route path="inventory/finished-products" element={<InventoryFinishedProducts />} />
               <Route path="inventory/low-stock" element={<LowStockItems />} />
               <Route path="inventory/tracking" element={<InventoryTracking />} />
+              <Route path="inventory/:type/:id" element={<ProductDetails />} />
               
               {/* Production Routes */}
               <Route path="production/orders" element={<ProductionOrders />} />

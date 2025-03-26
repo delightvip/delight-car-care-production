@@ -41,6 +41,18 @@ export default {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))'
         },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          foreground: 'hsl(var(--success-foreground))'
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))'
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          foreground: 'hsl(var(--info-foreground))'
+        },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))'
@@ -121,6 +133,10 @@ export default {
         'float': {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-5px)' }
+        },
+        'pulse': {
+          '0%, 100%': { opacity: 1 },
+          '50%': { opacity: 0.7 }
         }
       },
       animation: {
@@ -136,10 +152,13 @@ export default {
         'slide-out-right': 'slide-out-right 0.3s ease-out',
         'slide-up': 'slide-up 0.4s ease-out',
         'float': 'float 3s ease-in-out infinite',
+        'pulse': 'pulse 2s ease-in-out infinite',
       },
       boxShadow: {
         'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
         'glass-hover': '0 8px 32px rgba(0, 0, 0, 0.15)',
+        'card': '0 2px 10px rgba(0, 0, 0, 0.05)',
+        'card-hover': '0 10px 30px rgba(0, 0, 0, 0.1)',
       },
       backdropBlur: {
         'xs': '2px',

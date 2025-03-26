@@ -12,13 +12,13 @@ const InvoiceStatusBadge: React.FC<InvoiceStatusBadgeProps> = ({ status, classNa
   const getStatusStyles = () => {
     switch (status) {
       case 'draft':
-        return 'bg-yellow-500 hover:bg-yellow-600';
+        return 'bg-warning/20 text-warning border-warning hover:bg-warning/30';
       case 'confirmed':
-        return 'bg-green-500 hover:bg-green-600';
+        return 'bg-success/20 text-success border-success hover:bg-success/30';
       case 'cancelled':
-        return 'bg-red-500 hover:bg-red-600';
+        return 'bg-destructive/20 text-destructive border-destructive hover:bg-destructive/30';
       default:
-        return 'bg-gray-500 hover:bg-gray-600';
+        return 'bg-muted text-muted-foreground hover:bg-muted/80';
     }
   };
 
@@ -36,7 +36,7 @@ const InvoiceStatusBadge: React.FC<InvoiceStatusBadgeProps> = ({ status, classNa
   };
 
   return (
-    <Badge className={cn(getStatusStyles(), className)}>
+    <Badge className={cn(getStatusStyles(), className)} variant="outline">
       {getStatusText()}
     </Badge>
   );

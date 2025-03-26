@@ -1,12 +1,32 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useSidebar } from './SidebarContext';
 import ModernSidebar from './ModernSidebar';
 import Navbar from './Navbar';
+import { useTheme } from '@/components/theme-provider';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 export const Layout = () => {
   const { isOpen } = useSidebar();
+  const { theme } = useTheme();
+  const [rtl] = useLocalStorage('rtl-mode', true);
+  
+  // Apply RTL setting
+  useEffect(() => {
+    document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+  }, [rtl]);
+  
+  // Apply dark/light mode class
+  useEffect(() => {
+    const root = window.document.documentElement;
+    
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [theme]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -20,3 +40,5 @@ export const Layout = () => {
     </div>
   );
 };
+
+export default Layout;
