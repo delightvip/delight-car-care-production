@@ -6,6 +6,16 @@ import PartyService from "@/services/PartyService";
 import { ReturnEntity } from "./ReturnEntity";
 import { toast } from "sonner";
 
+interface InventoryItem {
+  id: number;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+  name: string;
+  code: string;
+  [key: string]: any;
+}
+
 export class ReturnProcessor {
   private inventoryService: InventoryService;
   private partyService: PartyService;
@@ -386,8 +396,9 @@ export class ReturnProcessor {
         return { data: null, error: new Error('نوع المنتج غير معروف') };
     }
     
+    // Use type assertion to avoid TS error with dynamic table names
     return await supabase
-      .from(tableName)
+      .from(tableName as any)
       .select('*')
       .eq('id', itemId)
       .single();
@@ -416,8 +427,9 @@ export class ReturnProcessor {
         return { error: new Error('نوع المنتج غير معروف') };
     }
     
+    // Use type assertion to avoid TS error with dynamic table names
     return await supabase
-      .from(tableName)
+      .from(tableName as any)
       .update({ quantity: newQuantity })
       .eq('id', itemId);
   }

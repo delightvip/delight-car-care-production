@@ -47,8 +47,9 @@ const ProductDetailsContainer = () => {
   const { data: product, isLoading, error, refetch } = useQuery({
     queryKey: ['product', tableName, id],
     queryFn: async () => {
+      // Use type assertion to handle dynamic table selection
       const { data, error } = await supabase
-        .from(tableName)
+        .from(tableName as any)
         .select('*')
         .eq('id', numericId)
         .single();
@@ -218,7 +219,7 @@ const ProductDetailsContainer = () => {
   const handleDelete = async () => {
     try {
       const { error } = await supabase
-        .from(tableName)
+        .from(tableName as any)
         .delete()
         .eq('id', numericId);
         
@@ -260,7 +261,20 @@ const ProductDetailsContainer = () => {
     );
   }
   
-  const isLowStock = product.quantity && product.min_stock ? product.quantity <= product.min_stock : false;
+  // Type assertion to ensure the product has the properties we need
+  const typedProduct = product as {
+    id: number;
+    name: string;
+    code: string;
+    quantity: number;
+    min_stock: number;
+    unit_cost?: number;
+    cost_price?: number;
+    unit: string;
+  };
+  
+  const isLowStock = typedProduct.quantity && typedProduct.min_stock ? 
+    typedProduct.quantity <= typedProduct.min_stock : false;
   
   return (
     <PageTransition>
@@ -278,17 +292,17 @@ const ProductDetailsContainer = () => {
               </BreadcrumbItem>
               <BreadcrumbItem>
                 <BreadcrumbLink>
-                  {product.name}
+                  {typedProduct.name}
                 </BreadcrumbLink>
               </BreadcrumbItem>
             </Breadcrumb>
-            <h1 className="text-3xl font-bold mt-2">{product.name}</h1>
+            <h1 className="text-3xl font-bold mt-2">{typedProduct.name}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge variant={isLowStock ? "destructive" : "outline"}>
                 {isLowStock ? 'مخزون منخفض' : 'المخزون متاح'}
               </Badge>
               <Badge variant="outline" className="bg-primary/10">
-                الكود: {product.code}
+                الكود: {typedProduct.code}
               </Badge>
             </div>
           </div>
@@ -312,7 +326,7 @@ const ProductDetailsContainer = () => {
         </div>
         
         <ProductDetailsView 
-          product={product}
+          product={typedProduct}
           productType={type || ''}
           tableName={tableName}
           movements={movements}
