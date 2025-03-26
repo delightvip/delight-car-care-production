@@ -1,8 +1,7 @@
-
 import { Return } from '@/services/CommercialTypes';
 import { ReturnEntity } from './ReturnEntity';
 import { ReturnProcessor } from './ReturnProcessor';
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 // خدمة المرتجعات الرئيسية
 export class ReturnService {
@@ -221,4 +220,3 @@ export class ReturnService {
 }
 
 export default ReturnService;
-

@@ -1,8 +1,7 @@
-
 import { Payment } from '@/services/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
 import { PaymentProcessor } from './PaymentProcessor';
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 // الخدمة الرئيسية للدفعات
 export class PaymentService {
@@ -73,4 +72,3 @@ export class PaymentService {
 }
 
 export default PaymentService;
-
