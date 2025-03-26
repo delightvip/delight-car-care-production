@@ -52,8 +52,8 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-      <NotificationProvider>
-        <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <NotificationProvider>
           <Routes>
             <Route path="/" element={<Layout />}>
               {/* Dashboard */}
@@ -94,8 +94,8 @@ function App() {
             </Route>
           </Routes>
           <Toaster position="top-left" dir="rtl" />
-        </QueryClientProvider>
-      </NotificationProvider>
+        </NotificationProvider>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }
