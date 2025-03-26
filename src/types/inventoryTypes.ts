@@ -1,4 +1,17 @@
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  quantity: number;
+  min_stock?: number;
+  unit: string;
+  unit_cost?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface InventoryMovement {
   id: string;
   item_id: string;

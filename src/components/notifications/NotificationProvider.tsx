@@ -1,29 +1,15 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
-import { 
-  AlertTriangle, Package, Beaker, Box, 
-  ShoppingBag, Bell, InfoIcon, CheckCircle
-} from 'lucide-react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchLowStockItems } from '@/services/NotificationService';
+import NotificationPanel from './NotificationPanel';
 
-interface NotificationType {
-  id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  link?: string;
-  date: Date;
-  read: boolean;
-}
-
-interface NotificationContextType {
-  notifications: NotificationType[];
-  unreadCount: number;
-  lowStockItems: {
+type NotificationContextType = {
+  isOpen: boolean;
+  toggleNotifications: () => void;
+  closeNotifications: () => void;
+  notificationCount: number;
+  lowStockData: {
     totalCount: number;
     counts: {
       rawMaterials: number;
@@ -32,16 +18,11 @@ interface NotificationContextType {
       finished: number;
     };
     items: any[];
-  } | null;
-  addNotification: (notification: Omit<NotificationType, 'id' | 'date' | 'read'>) => void;
-  markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
-  clearNotification: (id: string) => void;
-  clearAllNotifications: () => void;
+  };
   refreshLowStockData: () => void;
-}
+};
 
-const NotificationContext = createContext<NotificationContextType | null>(null);
+const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
@@ -52,232 +33,210 @@ export const useNotifications = () => {
 };
 
 const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [notifications, setNotifications] = useState<NotificationType[]>([]);
-  const [prevLowStockCounts, setPrevLowStockCounts] = useState({
-    rawMaterials: 0,
-    semiFinished: 0,
-    packaging: 0,
-    finished: 0,
-    totalCount: 0
+  const [isOpen, setIsOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [lowStockData, setLowStockData] = useState<{
+    totalCount: number;
+    counts: {
+      rawMaterials: number;
+      semiFinished: number;
+      packaging: number;
+      finished: number;
+    };
+    items: any[];
+  }>({
+    totalCount: 0,
+    counts: {
+      rawMaterials: 0,
+      semiFinished: 0,
+      packaging: 0,
+      finished: 0,
+    },
+    items: [],
   });
-  
-  const { data: lowStockItems, refetch: refetchLowStock } = useQuery({
+
+  const { data, refetch } = useQuery({
     queryKey: ['lowStockItems'],
-    queryFn: fetchLowStockItems,
-    refetchInterval: 30000, // كل 30 ثانية
-    staleTime: 20000, // تعتبر البيانات قديمة بعد 20 ثانية
+    queryFn: async () => {
+      try {
+        // Raw Materials
+        const rawMaterialsResponse = await supabase
+          .from('raw_materials')
+          .select('*')
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
+
+        // Semi-finished Products
+        const semiFinishedResponse = await supabase
+          .from('semi_finished_products')
+          .select('*')
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
+
+        // Packaging Materials
+        const packagingResponse = await supabase
+          .from('packaging_materials')
+          .select('*')
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
+
+        // Finished Products
+        const finishedResponse = await supabase
+          .from('finished_products')
+          .select('*')
+          .lte('quantity', 'min_stock')
+          .gt('min_stock', 0);
+
+        const rawMaterials = rawMaterialsResponse.data || [];
+        const semiFinished = semiFinishedResponse.data || [];
+        const packaging = packagingResponse.data || [];
+        const finished = finishedResponse.data || [];
+
+        // Format data for display
+        const rawMaterialsFormatted = rawMaterials.map(item => ({
+          id: item.id,
+          name: item.name,
+          type: 'raw_materials',
+          typeName: 'مواد خام',
+          code: item.code,
+          quantity: item.quantity,
+          min_stock: item.min_stock,
+          unit: item.unit,
+          unit_cost: item.unit_cost
+        }));
+
+        const semiFinishedFormatted = semiFinished.map(item => ({
+          id: item.id,
+          name: item.name,
+          type: 'semi_finished_products',
+          typeName: 'منتجات نصف مصنعة',
+          code: item.code,
+          quantity: item.quantity,
+          min_stock: item.min_stock,
+          unit: item.unit,
+          unit_cost: item.unit_cost
+        }));
+
+        const packagingFormatted = packaging.map(item => ({
+          id: item.id,
+          name: item.name,
+          type: 'packaging_materials',
+          typeName: 'مواد تعبئة',
+          code: item.code,
+          quantity: item.quantity,
+          min_stock: item.min_stock,
+          unit: item.unit,
+          unit_cost: item.unit_cost
+        }));
+
+        const finishedFormatted = finished.map(item => ({
+          id: item.id,
+          name: item.name,
+          type: 'finished_products',
+          typeName: 'منتجات نهائية',
+          code: item.code,
+          quantity: item.quantity,
+          min_stock: item.min_stock,
+          unit: item.unit,
+          unit_cost: item.unit_cost
+        }));
+
+        // Combine all items
+        const allItems = [
+          ...rawMaterialsFormatted,
+          ...semiFinishedFormatted,
+          ...packagingFormatted,
+          ...finishedFormatted
+        ];
+
+        // Sort by most critical (lowest quantity relative to min_stock) to highest
+        allItems.sort((a, b) => {
+          const ratioA = a.quantity / a.min_stock;
+          const ratioB = b.quantity / b.min_stock;
+          return ratioA - ratioB;
+        });
+
+        return {
+          totalCount: allItems.length,
+          items: allItems,
+          counts: {
+            rawMaterials: rawMaterials.length,
+            semiFinished: semiFinished.length,
+            packaging: packaging.length,
+            finished: finished.length
+          }
+        };
+      } catch (error) {
+        console.error('Error fetching low stock items:', error);
+        return {
+          totalCount: 0,
+          items: [],
+          counts: {
+            rawMaterials: 0,
+            semiFinished: 0,
+            packaging: 0,
+            finished: 0
+          }
+        };
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // إضافة إشعار جديد
-  const addNotification = useCallback((notification: Omit<NotificationType, 'id' | 'date' | 'read'>) => {
-    const newNotification = {
-      ...notification,
-      id: crypto.randomUUID(),
-      date: new Date(),
-      read: false,
-    };
-    
-    setNotifications(prev => {
-      // تجنب تكرار الإشعارات المتشابهة خلال فترة قصيرة
-      const isDuplicate = prev.some(
-        n => n.title === notification.title && 
-        n.message === notification.message &&
-        Date.now() - new Date(n.date).getTime() < 300000 // 5 دقائق
-      );
-      
-      if (isDuplicate) {
-        return prev;
-      }
-      
-      return [newNotification, ...prev];
-    });
-    
-    // عرض إشعار toast
-    showToast(newNotification);
-  }, []);
-
-  // عرض إشعار toast
-  const showToast = useCallback((notification: NotificationType) => {
-    const getIconByType = () => {
-      switch (notification.type) {
-        case 'info': return <InfoIcon size={18} />;
-        case 'success': return <CheckCircle size={18} />;
-        case 'warning': return <AlertTriangle size={18} />;
-        case 'error': return <AlertTriangle size={18} />;
-        default: return <Bell size={18} />;
-      }
-    };
-    
-    toast(notification.title, {
-      description: notification.message,
-      icon: getIconByType(),
-      duration: 5000,
-      action: notification.link ? {
-        label: 'فتح',
-        onClick: () => window.location.href = notification.link as string,
-      } : undefined,
-    });
-  }, []);
-
-  // تحديث حالة قراءة الإشعار
-  const markAsRead = useCallback((id: string) => {
-    setNotifications(prev => 
-      prev.map(item => 
-        item.id === id ? { ...item, read: true } : item
-      )
-    );
-  }, []);
-
-  // تحديث حالة قراءة كل الإشعارات
-  const markAllAsRead = useCallback(() => {
-    setNotifications(prev => 
-      prev.map(item => ({ ...item, read: true }))
-    );
-  }, []);
-
-  // حذف إشعار
-  const clearNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(item => item.id !== id));
-  }, []);
-
-  // حذف كل الإشعارات
-  const clearAllNotifications = useCallback(() => {
-    setNotifications([]);
-  }, []);
-
-  // حساب عدد الإشعارات غير المقروءة
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  // إعادة تحميل بيانات المخزون المنخفض
-  const refreshLowStockData = useCallback(() => {
-    refetchLowStock();
-  }, [refetchLowStock]);
-
-  // إضافة مستمع للتغييرات في قاعدة البيانات
+  // Update notification count
   useEffect(() => {
-    const setupRealtimeSubscriptions = async () => {
-      // إعداد قناة Supabase الحقيقية للاستماع للتغييرات
-      const channel = supabase
-        .channel('db-changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'raw_materials',
-        }, () => refreshLowStockData())
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'semi_finished_products',
-        }, () => refreshLowStockData())
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'packaging_materials',
-        }, () => refreshLowStockData())
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'finished_products',
-        }, () => refreshLowStockData())
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    };
-
-    setupRealtimeSubscriptions();
-  }, [refreshLowStockData]);
-
-  // مقارنة أعداد المخزون المنخفض بالأعداد السابقة وإظهار إشعارات إذا تغيرت
-  useEffect(() => {
-    if (!lowStockItems) return;
-
-    // تحقق مما إذا كانت هناك تغييرات في عدد عناصر المخزون المنخفض
-    const hasChanges = lowStockItems.counts.rawMaterials !== prevLowStockCounts.rawMaterials ||
-                      lowStockItems.counts.semiFinished !== prevLowStockCounts.semiFinished ||
-                      lowStockItems.counts.packaging !== prevLowStockCounts.packaging ||
-                      lowStockItems.counts.finished !== prevLowStockCounts.finished;
-
-    if (hasChanges) {
-      // عرض إشعارات المخزون المنخفض للأقسام التي تغيرت
-      if (lowStockItems.counts.rawMaterials > 0 && 
-          lowStockItems.counts.rawMaterials !== prevLowStockCounts.rawMaterials) {
-        addNotification({
-          title: 'تنبيه المواد الأولية',
-          message: `يوجد ${lowStockItems.counts.rawMaterials} من المواد الأولية بمخزون منخفض`,
-          type: 'warning',
-          link: '/inventory/low-stock'
-        });
-      }
-      
-      if (lowStockItems.counts.semiFinished > 0 && 
-          lowStockItems.counts.semiFinished !== prevLowStockCounts.semiFinished) {
-        addNotification({
-          title: 'تنبيه المنتجات النصف مصنعة',
-          message: `يوجد ${lowStockItems.counts.semiFinished} من المنتجات النصف مصنعة بمخزون منخفض`,
-          type: 'warning',
-          link: '/inventory/low-stock'
-        });
-      }
-      
-      if (lowStockItems.counts.packaging > 0 && 
-          lowStockItems.counts.packaging !== prevLowStockCounts.packaging) {
-        addNotification({
-          title: 'تنبيه مستلزمات التعبئة',
-          message: `يوجد ${lowStockItems.counts.packaging} من مستلزمات التعبئة بمخزون منخفض`,
-          type: 'warning',
-          link: '/inventory/low-stock'
-        });
-      }
-      
-      if (lowStockItems.counts.finished > 0 && 
-          lowStockItems.counts.finished !== prevLowStockCounts.finished) {
-        addNotification({
-          title: 'تنبيه المنتجات النهائية',
-          message: `يوجد ${lowStockItems.counts.finished} من المنتجات النهائية بمخزون منخفض`,
-          type: 'warning',
-          link: '/inventory/low-stock'
-        });
-      }
-      
-      // حفظ القيم الجديدة للمقارنة في المرة القادمة
-      setPrevLowStockCounts({
-        rawMaterials: lowStockItems.counts.rawMaterials,
-        semiFinished: lowStockItems.counts.semiFinished,
-        packaging: lowStockItems.counts.packaging,
-        finished: lowStockItems.counts.finished,
-        totalCount: lowStockItems.totalCount
+    if (data) {
+      setLowStockData({
+        totalCount: data.totalCount,
+        counts: {
+          rawMaterials: data.counts.rawMaterials,
+          semiFinished: data.counts.semiFinished,
+          packaging: data.counts.packaging,
+          finished: data.counts.finished
+        },
+        items: data.items
       });
+      setNotificationCount(data.totalCount);
+    } else {
+      setLowStockData({
+        totalCount: 0,
+        counts: {
+          rawMaterials: 0,
+          semiFinished: 0,
+          packaging: 0,
+          finished: 0
+        },
+        items: []
+      });
+      setNotificationCount(0);
     }
-  }, [lowStockItems, prevLowStockCounts, addNotification]);
+  }, [data]);
 
-  // مراقبة تحديثات وإضافات قاعدة البيانات لضمان ظهور الإشعارات
-  useEffect(() => {
-    // تنفيذ فحص أولي للمخزون المنخفض عند تحميل الصفحة
-    refreshLowStockData();
-    
-    // فحص دوري كل دقيقة
-    const interval = setInterval(refreshLowStockData, 60000);
-    
-    return () => clearInterval(interval);
-  }, [refreshLowStockData]);
+  const toggleNotifications = () => {
+    setIsOpen(!isOpen);
+  };
+
+  const closeNotifications = () => {
+    setIsOpen(false);
+  };
+
+  const refreshLowStockData = () => {
+    refetch();
+  };
 
   return (
     <NotificationContext.Provider
       value={{
-        notifications,
-        unreadCount,
-        lowStockItems,
-        addNotification,
-        markAsRead,
-        markAllAsRead,
-        clearNotification,
-        clearAllNotifications,
-        refreshLowStockData
+        isOpen,
+        toggleNotifications,
+        closeNotifications,
+        notificationCount,
+        lowStockData,
+        refreshLowStockData,
       }}
     >
       {children}
+      <NotificationPanel />
     </NotificationContext.Provider>
   );
 };

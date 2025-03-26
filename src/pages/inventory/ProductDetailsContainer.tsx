@@ -1,385 +1,324 @@
 
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import PageTransition from '@/components/ui/PageTransition';
-import { Button } from '@/components/ui/button';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink } from '@/components/ui/breadcrumb';
-import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, AlertTriangle, Edit, Trash2, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import ProductDetailsView from '@/components/inventory/ProductDetailsView';
 import { InventoryMovement } from '@/types/inventoryTypes';
+import PageTransition from '@/components/ui/PageTransition';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import LoadingIndicator from '@/components/ui/LoadingIndicator';
 
-const ProductDetailsContainer = () => {
-  const { id, type } = useParams<{ id: string; type: string }>();
-  const navigate = useNavigate();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+interface ProductDetailsContainerProps {
+  id?: string;
+}
+
+const ProductDetailsContainer: React.FC<ProductDetailsContainerProps> = ({ id }) => {
+  const [productType, setProductType] = React.useState<string>('');
+  const [tableName, setTableName] = React.useState<string>('');
   
-  // Convert string id to number
-  const numericId = id ? parseInt(id, 10) : 0;
+  // Auto-detect the product type from the URL if not provided
+  React.useEffect(() => {
+    if (!id) return;
+    
+    const detectProductType = async () => {
+      // Try each product table to find the item
+      const tables = [
+        { name: 'raw_materials', type: 'raw' },
+        { name: 'packaging_materials', type: 'packaging' },
+        { name: 'semi_finished_products', type: 'semi-finished' },
+        { name: 'finished_products', type: 'finished' }
+      ];
+      
+      for (const table of tables) {
+        const { data, error } = await supabase
+          .from(table.name)
+          .select('id')
+          .eq('id', id)
+          .single();
+        
+        if (data && !error) {
+          setProductType(table.type);
+          setTableName(table.name);
+          break;
+        }
+      }
+    };
+    
+    detectProductType();
+  }, [id]);
   
-  const productTitle: Record<string, string> = {
-    'raw-materials': 'المواد الخام',
-    'packaging': 'مواد التغليف',
-    'semi-finished': 'المنتجات النصف مصنعة',
-    'finished-products': 'المنتجات النهائية'
-  };
-  
-  const tableMapping: Record<string, string> = {
-    'raw-materials': 'raw_materials',
-    'packaging': 'packaging_materials',
-    'semi-finished': 'semi_finished_products',
-    'finished-products': 'finished_products'
-  };
-  
-  const tableName = tableMapping[type as keyof typeof tableMapping] || 'raw_materials';
-  
-  const { data: product, isLoading, error, refetch } = useQuery({
-    queryKey: ['product', tableName, id],
+  // Fetch product details
+  const { data: product, isLoading: isLoadingProduct } = useQuery({
+    queryKey: ['product', productType, id],
     queryFn: async () => {
-      // Use type assertion with "as any" for dynamic table selection
+      if (!tableName || !id) return null;
+      
       const { data, error } = await supabase
-        .from(tableName as any)
+        .from(tableName)
         .select('*')
-        .eq('id', numericId)
+        .eq('id', id)
         .single();
       
       if (error) throw error;
       return data;
-    }
+    },
+    enabled: !!tableName && !!id,
   });
   
-  const { data: movements } = useQuery<InventoryMovement[]>({
-    queryKey: ['product-movements', tableName, id],
+  // Fetch inventory movements
+  const { data: movements, isLoading: isLoadingMovements } = useQuery({
+    queryKey: ['movements', productType, id],
     queryFn: async () => {
+      if (!id) return [];
+      
       const { data, error } = await supabase
         .from('inventory_movements')
-        .select('*, users(name)')
+        .select(`
+          *,
+          users (
+            name
+          )
+        `)
         .eq('item_id', id)
-        .eq('item_type', tableName)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(20);
       
       if (error) throw error;
       return data as InventoryMovement[];
     },
-    enabled: !!id && !!tableName
+    enabled: !!id,
   });
   
-  // Fetch related products based on product type
-  const { data: relatedProducts } = useQuery({
-    queryKey: ['related-products', tableName, id],
+  // Fetch usage in semi-finished products
+  const { data: usageStats, isLoading: isLoadingUsage } = useQuery({
+    queryKey: ['usage', productType, id],
     queryFn: async () => {
-      if (tableName === 'raw_materials') {
-        // Find semi-finished products that use this raw material
-        const { data: semiFinished, error: semiError } = await supabase
-          .from('semi_finished_ingredients')
-          .select('semi_finished_id, percentage, semi_finished_products(name)')
-          .eq('raw_material_id', numericId);
-        
-        if (semiError) throw semiError;
-        
-        return semiFinished.map(item => ({
-          id: item.semi_finished_id,
-          name: item.semi_finished_products?.name || 'منتج غير معروف',
-          type: 'semi_finished_products',
-          percentage: item.percentage
-        }));
-      } 
-      else if (tableName === 'packaging_materials') {
-        // Find finished products that use this packaging material
-        const { data: finished, error: finishedError } = await supabase
-          .from('finished_product_packaging')
-          .select('finished_product_id, quantity, finished_products(name)')
-          .eq('packaging_material_id', numericId);
-        
-        if (finishedError) throw finishedError;
-        
-        return finished.map(item => ({
-          id: item.finished_product_id,
-          name: item.finished_products?.name || 'منتج غير معروف',
-          type: 'finished_products',
-          quantity: item.quantity
-        }));
+      if (!id || !['raw', 'packaging', 'semi-finished'].includes(productType)) {
+        return [];
       }
-      else if (tableName === 'semi_finished_products') {
-        // Get raw materials that are ingredients of this semi-finished product
-        const { data: ingredients, error: ingredientsError } = await supabase
+      
+      if (productType === 'raw') {
+        // Find usage in semi-finished products
+        const { data, error } = await supabase
           .from('semi_finished_ingredients')
-          .select('raw_material_id, percentage, raw_materials(name)')
-          .eq('semi_finished_id', numericId);
+          .select(`
+            ingredient_quantity,
+            semi_finished_products (
+              id,
+              name,
+              code,
+              unit
+            )
+          `)
+          .eq('ingredient_id', id);
         
-        if (ingredientsError) throw ingredientsError;
-        
-        return ingredients.map(item => ({
-          id: item.raw_material_id,
-          name: item.raw_materials?.name || 'مادة غير معروفة',
-          type: 'raw_materials',
-          percentage: item.percentage
+        if (error) throw error;
+        return data.map(item => ({
+          id: item.semi_finished_products.id,
+          name: item.semi_finished_products.name,
+          code: item.semi_finished_products.code,
+          quantity: item.ingredient_quantity,
+          unit: item.semi_finished_products.unit,
+          type: 'semi_finished_products'
         }));
-      }
-      else if (tableName === 'finished_products') {
-        // Get semi-finished product and packaging materials used in this product
-        const { data: semi, error: semiError } = await supabase
-          .from('finished_products')
-          .select('semi_finished_id, semi_finished_quantity, semi_finished_products(name)')
-          .eq('id', numericId)
-          .single();
+      } else if (productType === 'semi-finished') {
+        // Find usage in finished products
+        const { data, error } = await supabase
+          .from('finished_product_ingredients')
+          .select(`
+            ingredient_quantity,
+            finished_products (
+              id,
+              name,
+              code,
+              unit
+            )
+          `)
+          .eq('ingredient_id', id)
+          .eq('ingredient_type', 'semi_finished');
         
-        if (semiError) throw semiError;
-        
-        const { data: packaging, error: packagingError } = await supabase
+        if (error) throw error;
+        return data.map(item => ({
+          id: item.finished_products.id,
+          name: item.finished_products.name,
+          code: item.finished_products.code,
+          quantity: item.ingredient_quantity,
+          unit: item.finished_products.unit,
+          type: 'finished_products'
+        }));
+      } else if (productType === 'packaging') {
+        // Find usage in finished products
+        const { data, error } = await supabase
           .from('finished_product_packaging')
-          .select('packaging_material_id, quantity, packaging_materials(name)')
-          .eq('finished_product_id', numericId);
+          .select(`
+            quantity,
+            finished_products (
+              id,
+              name,
+              code,
+              unit
+            )
+          `)
+          .eq('packaging_id', id);
         
-        if (packagingError) throw packagingError;
-        
-        const result = [];
-        
-        if (semi && semi.semi_finished_id) {
-          result.push({
-            id: semi.semi_finished_id,
-            name: semi.semi_finished_products?.name || 'منتج نصف مصنع غير معروف',
-            type: 'semi_finished_products',
-            quantity: semi.semi_finished_quantity
-          });
-        }
-        
-        if (packaging && packaging.length > 0) {
-          packaging.forEach(item => {
-            result.push({
-              id: item.packaging_material_id,
-              name: item.packaging_materials?.name || 'مادة تغليف غير معروفة',
-              type: 'packaging_materials',
-              quantity: item.quantity
-            });
-          });
-        }
-        
-        return result;
+        if (error) throw error;
+        return data.map(item => ({
+          id: item.finished_products.id,
+          name: item.finished_products.name,
+          code: item.finished_products.code,
+          quantity: item.quantity,
+          unit: item.finished_products.unit,
+          type: 'finished_products'
+        }));
       }
       
       return [];
     },
-    enabled: !!id && !!tableName
+    enabled: !!id && ['raw', 'packaging', 'semi-finished'].includes(productType),
   });
   
-  const { data: usageStats } = useQuery({
-    queryKey: ['product-usage', tableName, id],
+  // Fetch related products
+  const { data: relatedProducts, isLoading: isLoadingRelated } = useQuery({
+    queryKey: ['related', productType, id],
     queryFn: async () => {
-      // Get inventory movement history aggregated by month
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      if (!id || productType !== 'finished') {
+        return [];
+      }
       
-      const { data, error } = await supabase
-        .from('inventory_movements')
-        .select('created_at, quantity, movement_type')
-        .eq('item_id', id)
-        .eq('item_type', tableName)
-        .gte('created_at', sixMonthsAgo.toISOString())
-        .order('created_at', { ascending: true });
+      // For finished products, get ingredient products
+      const { data: ingredients, error: ingredientsError } = await supabase
+        .from('finished_product_ingredients')
+        .select(`
+          ingredient_id,
+          ingredient_type,
+          ingredient_quantity,
+          raw_materials!inner (
+            id,
+            name,
+            code,
+            unit
+          )
+        `)
+        .eq('finished_product_id', id)
+        .eq('ingredient_type', 'raw');
       
-      if (error) throw error;
+      const { data: semiFinished, error: semiFinishedError } = await supabase
+        .from('finished_product_ingredients')
+        .select(`
+          ingredient_id,
+          ingredient_type,
+          ingredient_quantity,
+          semi_finished_products!inner (
+            id,
+            name,
+            code,
+            unit
+          )
+        `)
+        .eq('finished_product_id', id)
+        .eq('ingredient_type', 'semi_finished');
       
-      // Group data by month
-      const monthMap = new Map();
-      const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+      const { data: packaging, error: packagingError } = await supabase
+        .from('finished_product_packaging')
+        .select(`
+          packaging_id,
+          quantity,
+          packaging_materials!inner (
+            id,
+            name,
+            code,
+            unit
+          )
+        `)
+        .eq('finished_product_id', id);
       
-      data.forEach(movement => {
-        const date = new Date(movement.created_at);
-        const monthName = months[date.getMonth()];
-        
-        if (!monthMap.has(monthName)) {
-          monthMap.set(monthName, { month: monthName, amount: 0 });
-        }
-        
-        const entry = monthMap.get(monthName);
-        
-        // Add to usage only if it's outgoing movement ('out')
-        if (movement.movement_type === 'out') {
-          entry.amount += Math.abs(Number(movement.quantity));
-        }
-      });
+      if (ingredientsError || semiFinishedError || packagingError) {
+        throw new Error('Error fetching related products');
+      }
       
-      return Array.from(monthMap.values());
+      const rawMaterials = ingredients?.map(item => ({
+        id: item.raw_materials.id,
+        name: item.raw_materials.name,
+        code: item.raw_materials.code,
+        quantity: item.ingredient_quantity,
+        unit: item.raw_materials.unit,
+        type: 'raw_materials'
+      })) || [];
+      
+      const semiFinishedProducts = semiFinished?.map(item => ({
+        id: item.semi_finished_products.id,
+        name: item.semi_finished_products.name,
+        code: item.semi_finished_products.code,
+        quantity: item.ingredient_quantity,
+        unit: item.semi_finished_products.unit,
+        type: 'semi_finished_products'
+      })) || [];
+      
+      const packagingMaterials = packaging?.map(item => ({
+        id: item.packaging_materials.id,
+        name: item.packaging_materials.name,
+        code: item.packaging_materials.code,
+        quantity: item.quantity,
+        unit: item.packaging_materials.unit,
+        type: 'packaging_materials'
+      })) || [];
+      
+      return [...rawMaterials, ...semiFinishedProducts, ...packagingMaterials];
     },
-    enabled: !!id && !!tableName
+    enabled: !!id && productType === 'finished',
   });
   
-  const handleDelete = async () => {
-    try {
-      const { error } = await supabase
-        .from(tableName as any)
-        .delete()
-        .eq('id', numericId);
-        
-      if (error) throw error;
-      
-      toast.success('تم حذف العنصر بنجاح');
-      navigate(`/inventory/${type}`);
-    } catch (error) {
-      console.error('Error deleting item:', error);
-      toast.error('حدث خطأ أثناء محاولة حذف العنصر');
-    } finally {
-      setShowDeleteDialog(false);
-    }
-  };
+  const isLoading = isLoadingProduct || isLoadingMovements || isLoadingUsage || isLoadingRelated || !productType;
   
   if (isLoading) {
     return (
       <PageTransition>
-        <div className="flex items-center justify-center h-96">
-          <RefreshCw className="animate-spin h-12 w-12 text-primary" />
-        </div>
-      </PageTransition>
-    );
-  }
-  
-  if (error || !product) {
-    return (
-      <PageTransition>
-        <div className="text-center py-12">
-          <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
-          <h3 className="text-lg font-medium">حدث خطأ أثناء تحميل البيانات</h3>
-          <p className="text-muted-foreground mt-2 mb-4">لم نتمكن من العثور على المنتج المطلوب</p>
-          <Button variant="outline" onClick={() => navigate(-1)} className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            العودة
-          </Button>
-        </div>
-      </PageTransition>
-    );
-  }
-  
-  // Type assertion to ensure the product has the properties we need
-  // Here we safely cast to the interface we need
-  interface ProductType {
-    id: number;
-    name: string;
-    code: string;
-    quantity: number;
-    min_stock: number;
-    unit_cost?: number;
-    cost_price?: number;
-    unit: string;
-  }
-  
-  // Use safe type assertion with a runtime check for required properties
-  const hasRequiredProperties = (obj: any): obj is ProductType => {
-    return obj && 
-      typeof obj.id === 'number' && 
-      typeof obj.name === 'string' && 
-      typeof obj.code === 'string' && 
-      'quantity' in obj && 
-      'min_stock' in obj && 
-      typeof obj.unit === 'string';
-  };
-  
-  if (!hasRequiredProperties(product)) {
-    return (
-      <PageTransition>
-        <div className="text-center py-12">
-          <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
-          <h3 className="text-lg font-medium">حدث خطأ في بيانات المنتج</h3>
-          <p className="text-muted-foreground mt-2 mb-4">بيانات المنتج غير صالحة</p>
-          <Button variant="outline" onClick={() => navigate(-1)} className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            العودة
-          </Button>
-        </div>
-      </PageTransition>
-    );
-  }
-  
-  const typedProduct = product as ProductType;
-  
-  const isLowStock = typedProduct.quantity && typedProduct.min_stock ? 
-    typedProduct.quantity <= typedProduct.min_stock : false;
-  
-  return (
-    <PageTransition>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <Breadcrumb>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/">الرئيسية</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbItem>
-                <BreadcrumbLink href={`/inventory/${type}`}>
-                  {productTitle[type as keyof typeof productTitle]}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbItem>
-                <BreadcrumbLink>
-                  {typedProduct.name}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-            </Breadcrumb>
-            <h1 className="text-3xl font-bold mt-2">{typedProduct.name}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={isLowStock ? "destructive" : "outline"}>
-                {isLowStock ? 'مخزون منخفض' : 'المخزون متاح'}
-              </Badge>
-              <Badge variant="outline" className="bg-primary/10">
-                الكود: {typedProduct.code}
-              </Badge>
-            </div>
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-9 w-32" />
           </div>
           
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => refetch()} className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              تحديث
-            </Button>
-            <Button variant="outline" className="gap-2">
-              <Link to={`/inventory/${type}/edit/${id}`} className="flex items-center gap-1">
-                <Edit className="h-4 w-4" />
-                تعديل
-              </Link>
-            </Button>
-            <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} className="gap-2">
-              <Trash2 className="h-4 w-4" />
-              حذف
-            </Button>
-          </div>
+          <Card className="p-6">
+            <div className="flex justify-center py-8">
+              <LoadingIndicator size="large" text="جاري تحميل معلومات المنتج..." />
+            </div>
+          </Card>
         </div>
-        
-        <ProductDetailsView 
-          product={typedProduct}
-          productType={type || ''}
-          tableName={tableName}
-          movements={movements}
-          usageStats={usageStats}
-          relatedProducts={relatedProducts}
-        />
-        
-        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>تأكيد الحذف</DialogTitle>
-              <DialogDescription>
-                هل أنت متأكد من رغبتك في حذف هذا العنصر؟ هذا الإجراء لا يمكن التراجع عنه.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>إلغاء</Button>
-              <Button variant="destructive" onClick={handleDelete}>حذف</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </PageTransition>
+      </PageTransition>
+    );
+  }
+  
+  if (!product) {
+    return (
+      <PageTransition>
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold tracking-tight">منتج غير موجود</h1>
+          </div>
+          
+          <Card className="p-6">
+            <div className="flex justify-center py-8">
+              <p className="text-muted-foreground">
+                لم يتم العثور على المنتج المطلوب. قد يكون تم حذفه أو أن الرابط غير صحيح.
+              </p>
+            </div>
+          </Card>
+        </div>
+      </PageTransition>
+    );
+  }
+  
+  return (
+    <ProductDetailsView
+      product={product}
+      productType={productType}
+      tableName={tableName}
+      movements={movements || []}
+      usageStats={usageStats || []}
+      relatedProducts={relatedProducts || []}
+    />
   );
 };
 
