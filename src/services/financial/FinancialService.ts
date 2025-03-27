@@ -1,45 +1,10 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-export interface Transaction {
-  id: string;
-  date: string;
-  type: 'income' | 'expense';
-  category_id: string;
-  category_name: string;
-  amount: number;
-  payment_method: 'cash' | 'bank' | 'other';
-  notes?: string;
-  reference_id?: string;
-  reference_type?: string;
-  created_at: string;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  type: 'income' | 'expense';
-  description?: string;
-  created_at?: string;
-}
-
-export interface FinancialBalance {
-  cash_balance: number;
-  bank_balance: number;
-  total_balance: number;
-}
-
-export interface FinancialSummary {
-  totalIncome: number;
-  totalExpenses: number;
-  netProfit: number;
-  balance: FinancialBalance;
-  recentTransactions: Transaction[];
-}
-
-export default class FinancialService {
+class FinancialService {
   private static instance: FinancialService;
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): FinancialService {
     if (!FinancialService.instance) {
@@ -48,417 +13,1072 @@ export default class FinancialService {
     return FinancialService.instance;
   }
 
-  public async getTransactions(
-    startDate?: string,
-    endDate?: string,
-    type?: 'income' | 'expense',
-    categoryId?: string,
-    limit?: number
-  ): Promise<Transaction[]> {
-    let query = supabase
-      .from('financial_transactions')
-      .select(`
-        id,
-        date,
-        type,
-        category_id,
-        amount,
-        payment_method,
-        notes,
-        reference_id,
-        reference_type,
-        created_at,
-        financial_categories:category_id(name)
-      `)
-      .order('date', { ascending: false });
-
-    if (startDate) {
-      query = query.gte('date', startDate);
-    }
-
-    if (endDate) {
-      query = query.lte('date', endDate);
-    }
-
-    if (type) {
-      query = query.eq('type', type);
-    }
-
-    if (categoryId) {
-      query = query.eq('category_id', categoryId);
-    }
-
-    if (limit) {
-      query = query.limit(limit);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching transactions:', error);
-      return [];
-    }
-
-    return (data || []).map(item => ({
-      id: item.id,
-      date: item.date,
-      type: item.type as 'income' | 'expense',
-      category_id: item.category_id,
-      category_name: item.financial_categories?.name || '',
-      amount: item.amount,
-      payment_method: item.payment_method as 'cash' | 'bank' | 'other',
-      notes: item.notes,
-      reference_id: item.reference_id,
-      reference_type: item.reference_type,
-      created_at: item.created_at
-    }));
-  }
-
-  public async getCategories(): Promise<Category[]> {
-    const { data, error } = await supabase
-      .from('financial_categories')
-      .select('*')
-      .order('name');
-
-    if (error) {
-      console.error('Error fetching categories:', error);
-      return [];
-    }
-
-    return (data || []).map(item => ({
-      id: item.id,
-      name: item.name,
-      type: item.type as 'income' | 'expense',
-      description: item.description,
-      created_at: item.created_at
-    }));
-  }
-
-  public async getCategory(id: string): Promise<Category | null> {
-    const { data, error } = await supabase
-      .from('financial_categories')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      console.error('Error fetching category:', error);
-      return null;
-    }
-
-    return {
-      id: data.id,
-      name: data.name,
-      type: data.type as 'income' | 'expense',
-      description: data.description,
-      created_at: data.created_at
-    };
-  }
-
-  public async createCategory(category: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
-    const { data, error } = await supabase
-      .from('financial_categories')
-      .insert(category)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating category:', error);
-      return null;
-    }
-
-    return {
-      id: data.id,
-      name: data.name,
-      type: data.type as 'income' | 'expense',
-      description: data.description,
-      created_at: data.created_at
-    };
-  }
-
-  public async updateCategory(id: string, category: Partial<Category>): Promise<Category | null> {
-    const { data, error } = await supabase
-      .from('financial_categories')
-      .update(category)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating category:', error);
-      return null;
-    }
-
-    return {
-      id: data.id,
-      name: data.name,
-      type: data.type as 'income' | 'expense',
-      description: data.description,
-      created_at: data.created_at
-    };
-  }
-
-  public async deleteCategory(id: string): Promise<boolean> {
-    const { data: transactions, error: checkError } = await supabase
-      .from('financial_transactions')
-      .select('id')
-      .eq('category_id', id)
-      .limit(1);
-
-    if (checkError) {
-      console.error('Error checking for category usage:', checkError);
-      return false;
-    }
-
-    if (transactions && transactions.length > 0) {
-      console.error('Cannot delete category that is being used in transactions');
-      return false;
-    }
-
-    const { error } = await supabase
-      .from('financial_categories')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error deleting category:', error);
-      return false;
-    }
-
-    return true;
-  }
-
-  public async createTransaction(transaction: Omit<Transaction, 'id' | 'created_at' | 'category_name'>): Promise<Transaction | null> {
-    if (transaction.payment_method !== 'other') {
-      await this.updateBalance(
-        transaction.type === 'income' ? transaction.amount : -transaction.amount,
-        transaction.payment_method
-      );
-    }
-
-    const { data, error } = await supabase
-      .from('financial_transactions')
-      .insert(transaction)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating transaction:', error);
-      return null;
-    }
-
-    const { data: category } = await supabase
-      .from('financial_categories')
-      .select('name')
-      .eq('id', transaction.category_id)
-      .single();
-
-    return {
-      ...data,
-      type: data.type as 'income' | 'expense',
-      payment_method: data.payment_method as 'cash' | 'bank' | 'other',
-      category_name: category?.name || ''
-    };
-  }
-
-  public async updateTransaction(
-    id: string, 
-    transaction: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name'>>
-  ): Promise<Transaction | null> {
-    const { data: original, error: getError } = await supabase
-      .from('financial_transactions')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (getError || !original) {
-      console.error('Error fetching original transaction:', getError);
-      return null;
-    }
-
-    if (
-      (transaction.amount !== undefined && transaction.amount !== original.amount) ||
-      (transaction.type !== undefined && transaction.type !== original.type) ||
-      (transaction.payment_method !== undefined && transaction.payment_method !== original.payment_method)
-    ) {
-      if (original.payment_method !== 'other') {
-        await this.updateBalance(
-          original.type === 'income' ? -original.amount : original.amount,
-          original.payment_method as 'cash' | 'bank'
-        );
-      }
-
-      if ((transaction.payment_method || original.payment_method) !== 'other') {
-        await this.updateBalance(
-          (transaction.type || original.type) === 'income' 
-            ? (transaction.amount || original.amount) 
-            : -(transaction.amount || original.amount),
-          (transaction.payment_method || original.payment_method) as 'cash' | 'bank'
-        );
-      }
-    }
-
-    const { data, error } = await supabase
-      .from('financial_transactions')
-      .update(transaction)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating transaction:', error);
-      return null;
-    }
-
-    const { data: category } = await supabase
-      .from('financial_categories')
-      .select('name')
-      .eq('id', data.category_id)
-      .single();
-
-    return {
-      ...data,
-      type: data.type as 'income' | 'expense',
-      payment_method: data.payment_method as 'cash' | 'bank' | 'other',
-      category_name: category?.name || ''
-    };
-  }
-
-  public async deleteTransaction(id: string): Promise<boolean> {
-    const { data: transaction, error: getError } = await supabase
-      .from('financial_transactions')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (getError || !transaction) {
-      console.error('Error fetching transaction for deletion:', getError);
-      return false;
-    }
-
-    if (transaction.payment_method !== 'other') {
-      await this.updateBalance(
-        transaction.type === 'income' ? -transaction.amount : transaction.amount,
-        transaction.payment_method
-      );
-    }
-
-    const { error } = await supabase
-      .from('financial_transactions')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error deleting transaction:', error);
-      return false;
-    }
-
-    return true;
-  }
-
-  public async adjustBalance(accountType: "cash" | "bank", amount: number, isIncrease: boolean): Promise<boolean> {
+  async getExpenseCategories() {
     try {
-      const { data: currentBalance, error: getError } = await supabase
-        .from('financial_balance')
+      const { data, error } = await supabase
+        .from('expense_categories')
         .select('*')
-        .eq('id', '1')
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error("Error fetching expense categories:", error);
+        toast.error("Failed to load expense categories.");
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Unexpected error fetching expense categories:", error);
+      toast.error("Failed to load expense categories due to an unexpected error.");
+      return [];
+    }
+  }
+
+  async addExpenseCategory(name: string) {
+    try {
+      const { data, error } = await supabase
+        .from('expense_categories')
+        .insert([{ name }])
+        .select()
         .single();
 
-      if (getError) {
-        console.error('Error getting current balance:', getError);
+      if (error) {
+        console.error("Error adding expense category:", error);
+        toast.error("Failed to add expense category.");
+        return null;
+      }
+
+      toast.success("Expense category added successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error adding expense category:", error);
+      toast.error("Failed to add expense category due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async updateExpenseCategory(id: string, name: string) {
+    try {
+      const { data, error } = await supabase
+        .from('expense_categories')
+        .update({ name })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error updating expense category:", error);
+        toast.error("Failed to update expense category.");
+        return null;
+      }
+
+      toast.success("Expense category updated successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error updating expense category:", error);
+      toast.error("Failed to update expense category due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async deleteExpenseCategory(id: string) {
+    try {
+      const { error } = await supabase
+        .from('expense_categories')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error("Error deleting expense category:", error);
+        toast.error("Failed to delete expense category.");
         return false;
       }
 
-      const updates = isIncrease
-        ? { cash_balance: currentBalance.cash_balance + amount }
-        : { bank_balance: currentBalance.bank_balance + amount };
-
-      const { error: updateError } = await supabase
-        .from('financial_balance')
-        .update(updates)
-        .eq('id', '1');
-
-      if (updateError) {
-        console.error('Error updating balance:', updateError);
-        return false;
-      }
-
+      toast.success("Expense category deleted successfully!");
       return true;
     } catch (error) {
-      console.error('Error adjusting balance:', error);
+      console.error("Unexpected error deleting expense category:", error);
+      toast.error("Failed to delete expense category due to an unexpected error.");
       return false;
     }
   }
 
-  private async updateBalance(amount: number, method: 'cash' | 'bank'): Promise<boolean> {
-    const { data: currentBalance, error: getError } = await supabase
-      .from('financial_balance')
-      .select('*')
-      .eq('id', '1')
-      .single();
+  async getTransactions(startDate?: string, endDate?: string) {
+    try {
+      let query = supabase
+        .from('transactions')
+        .select(`
+          *,
+          expense_category (
+            name
+          )
+        `)
+        .order('date', { ascending: false });
 
-    if (getError) {
-      console.error('Error getting current balance:', getError);
+      if (startDate) {
+        query = query.gte('date', startDate);
+      }
+
+      if (endDate) {
+        query = query.lte('date', endDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Error fetching transactions:", error);
+        toast.error("Failed to load transactions.");
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Unexpected error fetching transactions:", error);
+      toast.error("Failed to load transactions due to an unexpected error.");
+      return [];
+    }
+  }
+
+  async recordTransaction(
+    method: 'cash' | 'bank',
+    amount: number,
+    type: 'income' | 'expense',
+    categoryId: string | null,
+    date: string,
+    notes: string = ''
+  ) {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method,
+          amount,
+          type,
+          expense_category_id: categoryId,
+          date,
+          notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error recording transaction:", error);
+        toast.error("Failed to record transaction.");
+        return null;
+      }
+
+      toast.success("Transaction recorded successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error recording transaction:", error);
+      toast.error("Failed to record transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async updateTransaction(
+    id: string,
+    method: 'cash' | 'bank',
+    amount: number,
+    type: 'income' | 'expense',
+    categoryId: string | null,
+    date: string,
+    notes: string = ''
+  ) {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .update({
+          method,
+          amount,
+          type,
+          expense_category_id: categoryId,
+          date,
+          notes
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error updating transaction:", error);
+        toast.error("Failed to update transaction.");
+        return null;
+      }
+
+      toast.success("Transaction updated successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error updating transaction:", error);
+      toast.error("Failed to update transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async deleteTransaction(id: string) {
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error("Error deleting transaction:", error);
+        toast.error("Failed to delete transaction.");
+        return false;
+      }
+
+      toast.success("Transaction deleted successfully!");
+      return true;
+    } catch (error) {
+      console.error("Unexpected error deleting transaction:", error);
+      toast.error("Failed to delete transaction due to an unexpected error.");
       return false;
     }
+  }
 
-    const updates = method === 'cash'
-      ? { cash_balance: currentBalance.cash_balance + amount }
-      : { bank_balance: currentBalance.bank_balance + amount };
+  async getAccountBalance() {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('amount, type');
 
-    const { error: updateError } = await supabase
-      .from('financial_balance')
-      .update(updates)
-      .eq('id', '1');
+      if (error) {
+        console.error("Error fetching transactions for balance:", error);
+        toast.error("Failed to calculate account balance.");
+        return null;
+      }
 
-    if (updateError) {
-      console.error('Error updating balance:', updateError);
-      return false;
+      let balance = 0;
+      data.forEach(transaction => {
+        if (transaction.type === 'income') {
+          balance += transaction.amount;
+        } else {
+          balance -= transaction.amount;
+        }
+      });
+
+      return balance;
+    } catch (error) {
+      console.error("Unexpected error fetching transactions for balance:", error);
+      toast.error("Failed to calculate account balance due to an unexpected error.");
+      return null;
     }
-
-    return true;
   }
 
-  public async getBalance(): Promise<FinancialBalance> {
-    const { data, error } = await supabase
-      .from('financial_balance')
-      .select('*')
-      .eq('id', '1')
-      .single();
+  async generateFinancialReport(startDate: string, endDate: string) {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          expense_category (
+            name
+          )
+        `)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
 
-    if (error) {
-      console.error('Error getting balance:', error);
-      return { cash_balance: 0, bank_balance: 0, total_balance: 0 };
+      if (error) {
+        console.error("Error generating financial report:", error);
+        toast.error("Failed to generate financial report.");
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Unexpected error generating financial report:", error);
+      toast.error("Failed to generate financial report due to an unexpected error.");
+      return [];
     }
-
-    return {
-      cash_balance: data.cash_balance || 0,
-      bank_balance: data.bank_balance || 0,
-      total_balance: (data.cash_balance || 0) + (data.bank_balance || 0)
-    };
   }
 
-  public async getFinancialSummary(startDate?: string, endDate?: string): Promise<FinancialSummary> {
-    const transactions = await this.getTransactions(startDate, endDate);
-    
-    const totalIncome = transactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const totalExpenses = transactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const balance = await this.getBalance();
-    
-    const recentTransactions = await this.getTransactions(undefined, undefined, undefined, undefined, 5);
-    
-    return {
-      totalIncome,
-      totalExpenses,
-      netProfit: totalIncome - totalExpenses,
-      balance,
-      recentTransactions
-    };
+  async getTotalExpensesByCategory(startDate: string, endDate: string) {
+    try {
+      const { data, error } = await supabase.from('transactions').select(`expense_category_id, amount`).gte('date', startDate).lte('date', endDate).eq('type', 'expense')
+
+      if (error) {
+        console.error("Error generating financial report:", error);
+        toast.error("Failed to generate financial report.");
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Unexpected error generating financial report:", error);
+      toast.error("Failed to generate financial report due to an unexpected error.");
+      return [];
+    }
   }
-}
+
+  async addInitialBalance(amount: number, date: string, method: 'cash' | 'bank', notes: string = '') {
+    try {
+      // Record the initial balance as an income transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method,
+          amount,
+          type: 'income', // Treat initial balance as income
+          expense_category_id: null, // No category for initial balance
+          date,
+          notes: `رصيد افتتاحي: ${notes}` // Optional notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error recording initial balance:", error);
+        toast.error("Failed to record initial balance.");
+        return null;
+      }
+
+      toast.success("Initial balance recorded successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error recording initial balance:", error);
+      toast.error("Failed to record initial balance due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async recordOpeningBalance(amount: number, date: string, method: string, notes: string = '') {
+    try {
+      // Ensure method is either 'cash' or 'bank'
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Record the opening balance as an income transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: 'income', // Treat opening balance as income
+          expense_category_id: null, // No category for opening balance
+          date: date,
+          notes: `رصيد افتتاحي: ${notes}` // Optional notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error recording opening balance:", error);
+        toast.error("Failed to record opening balance.");
+        return null;
+      }
+
+      toast.success("Opening balance recorded successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error recording opening balance:", error);
+      toast.error("Failed to record opening balance due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async recordExpense(amount: number, categoryId: string, date: string, method: string, notes: string = '') {
+    try {
+      // Ensure method is either 'cash' or 'bank'
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Record the expense transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: 'expense', // Treat as expense
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes // Optional notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error recording expense:", error);
+        toast.error("Failed to record expense.");
+        return null;
+      }
+
+      toast.success("Expense recorded successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error recording expense:", error);
+      toast.error("Failed to record expense due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async recordIncome(amount: number, date: string, method: string, notes: string = '') {
+    try {
+      // Ensure method is either 'cash' or 'bank'
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Record the income transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: 'income', // Treat as income
+          expense_category_id: null, // No category for income
+          date: date,
+          notes: notes // Optional notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error recording income:", error);
+        toast.error("Failed to record income.");
+        return null;
+      }
+
+      toast.success("Income recorded successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error recording income:", error);
+      toast.error("Failed to record income due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async recordTransactionWithMethod(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Record the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error recording transaction:", error);
+        toast.error("Failed to record transaction.");
+        return null;
+      }
+
+      toast.success("Transaction recorded successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error recording transaction:", error);
+      toast.error("Failed to record transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async logTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Log the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error logging transaction:", error);
+        toast.error("Failed to log transaction.");
+        return null;
+      }
+
+      toast.success("Transaction logged successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error logging transaction:", error);
+      toast.error("Failed to log transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async createTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Create the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error creating transaction:", error);
+        toast.error("Failed to create transaction.");
+        return null;
+      }
+
+      toast.success("Transaction created successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error creating transaction:", error);
+      toast.error("Failed to create transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async addTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Add the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error adding transaction:", error);
+        toast.error("Failed to add transaction.");
+        return null;
+      }
+
+      toast.success("Transaction added successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error adding transaction:", error);
+      toast.error("Failed to add transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async saveTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Save the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error saving transaction:", error);
+        toast.error("Failed to save transaction.");
+        return null;
+      }
+
+      toast.success("Transaction saved successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error saving transaction:", error);
+      toast.error("Failed to save transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async storeTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Store the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error storing transaction:", error);
+        toast.error("Failed to store transaction.");
+        return null;
+      }
+
+      toast.success("Transaction stored successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error storing transaction:", error);
+      toast.error("Failed to store transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async registerTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Register the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error registering transaction:", error);
+        toast.error("Failed to register transaction.");
+        return null;
+      }
+
+      toast.success("Transaction registered successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error registering transaction:", error);
+      toast.error("Failed to register transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async captureTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Capture the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error capturing transaction:", error);
+        toast.error("Failed to capture transaction.");
+        return null;
+      }
+
+      toast.success("Transaction captured successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error capturing transaction:", error);
+      toast.error("Failed to capture transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async postTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Post the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error posting transaction:", error);
+        toast.error("Failed to post transaction.");
+        return null;
+      }
+
+      toast.success("Transaction posted successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error posting transaction:", error);
+      toast.error("Failed to post transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async putTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Put the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error putting transaction:", error);
+        toast.error("Failed to put transaction.");
+        return null;
+      }
+
+      toast.success("Transaction put successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error putting transaction:", error);
+      toast.error("Failed to put transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async pushTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Push the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error pushing transaction:", error);
+        toast.error("Failed to push transaction.");
+        return null;
+      }
+
+      toast.success("Transaction pushed successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error pushing transaction:", error);
+      toast.error("Failed to push transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async insertTransaction(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Insert the transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error inserting transaction:", error);
+        toast.error("Failed to insert transaction.");
+        return null;
+      }
+
+      toast.success("Transaction inserted successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error inserting transaction:", error);
+      toast.error("Failed to insert transaction due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async addEntry(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Add the entry
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error adding entry:", error);
+        toast.error("Failed to add entry.");
+        return null;
+      }
+
+      toast.success("Entry added successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error adding entry:", error);
+      toast.error("Failed to add entry due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async createEntry(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Create the entry
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error creating entry:", error);
+        toast.error("Failed to create entry.");
+        return null;
+      }
+
+      toast.success("Entry created successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error creating entry:", error);
+      toast.error("Failed to create entry due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async saveEntry(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Save the entry
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error saving entry:", error);
+        toast.error("Failed to save entry.");
+        return null;
+      }
+
+      toast.success("Entry saved successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error saving entry:", error);
+      toast.error("Failed to save entry due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async storeEntry(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Store the entry
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id: categoryId,
+          date: date,
+          notes: notes
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error storing entry:", error);
+        toast.error("Failed to store entry.");
+        return null;
+      }
+
+      toast.success("Entry stored successfully!");
+      return data;
+    } catch (error) {
+      console.error("Unexpected error storing entry:", error);
+      toast.error("Failed to store entry due to an unexpected error.");
+      return null;
+    }
+  }
+
+  async registerEntry(method: string, amount: number, type: 'income' | 'expense', categoryId: string | null, date: string, notes: string = '') {
+    try {
+      // Validate the method
+      if (method !== 'cash' && method !== 'bank') {
+        console.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        toast.error("Invalid payment method. Must be 'cash' or 'bank'.");
+        return null;
+      }
+
+      // Register the entry
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([{
+          method: method,
+          amount: amount,
+          type: type,
+          expense_category_id
