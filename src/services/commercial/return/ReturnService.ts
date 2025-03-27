@@ -4,20 +4,17 @@ import { Return, ReturnItem } from "@/services/CommercialTypes";
 import { toast } from "sonner";
 import { OperationLocks, runAsyncOperation } from "@/utils/asyncUtils";
 import { ErrorHandler } from "@/utils/errorHandler";
-import InventoryService from "@/services/InventoryService";
-import LedgerService from "../ledger/LedgerService";
+import { ReturnProcessor } from "./ReturnProcessor";
 
 /**
  * خدمة إدارة المرتجعات
  */
 export class ReturnService {
   private static instance: ReturnService;
-  private inventoryService: InventoryService;
-  private ledgerService: LedgerService;
+  private returnProcessor: ReturnProcessor;
 
   private constructor() {
-    this.inventoryService = InventoryService.getInstance();
-    this.ledgerService = LedgerService.getInstance();
+    this.returnProcessor = new ReturnProcessor();
   }
 
   public static getInstance(): ReturnService {
@@ -172,13 +169,21 @@ export class ReturnService {
           partyName = party?.name || "";
         }
 
-        return {
+        const createdReturn = {
           ...data,
           party_name: partyName,
           return_type: data.return_type as "sales_return" | "purchase_return",
           payment_status: data.payment_status as "draft" | "confirmed" | "cancelled",
           items: returnData.items,
         };
+
+        // تأكيد المرتجع تلقائياً إذا كانت حالته مؤكدة
+        if (returnData.payment_status === "confirmed") {
+          await this.confirmReturn(data.id);
+          return this.getReturnById(data.id);
+        }
+
+        return createdReturn;
       },
       "createReturn",
       "حدث خطأ أثناء إنشاء المرتجع",
@@ -264,89 +269,9 @@ export class ReturnService {
    * @param returnId معرف المرتجع
    */
   public async confirmReturn(returnId: string): Promise<boolean> {
-    return OperationLocks.runWithLock(`confirm-return-${returnId}`, async () => {
-      return runAsyncOperation(async () => {
-        try {
-          // الحصول على بيانات المرتجع كاملة
-          const returnData = await this.getReturnById(returnId);
-          if (!returnData) {
-            toast.error("لم يتم العثور على المرتجع");
-            return false;
-          }
-
-          if (returnData.payment_status !== "draft") {
-            toast.error("لا يمكن تأكيد مرتجع تم تأكيده أو إلغاؤه من قبل");
-            return false;
-          }
-
-          // تحديث حالة المرتجع
-          const { error: updateError } = await supabase
-            .from("returns")
-            .update({ payment_status: "confirmed" })
-            .eq("id", returnId);
-
-          if (updateError) throw updateError;
-
-          // تحديث المخزون والحسابات
-          if (returnData.items && returnData.items.length > 0) {
-            // 1. تحديث المخزون
-            for (const item of returnData.items) {
-              let quantity: number;
-              
-              if (returnData.return_type === "sales_return") {
-                // مرتجع مبيعات: إضافة للمخزون
-                quantity = item.quantity;
-              } else {
-                // مرتجع مشتريات: خصم من المخزون
-                quantity = -item.quantity;
-              }
-
-              await this.updateInventoryItem(
-                item.item_type,
-                item.item_id,
-                quantity,
-                `Return #${returnId} - ${returnData.return_type}`
-              );
-            }
-          }
-
-          // 2. إضافة قيد في سجل الحساب إذا كان هناك طرف مرتبط
-          if (returnData.party_id) {
-            let debit = 0;
-            let credit = 0;
-
-            if (returnData.return_type === "sales_return") {
-              // مرتجع مبيعات: المنشأة تستحق على العميل
-              debit = 0;
-              credit = returnData.amount;
-            } else {
-              // مرتجع مشتريات: المنشأة تدفع للمورد
-              debit = returnData.amount;
-              credit = 0;
-            }
-
-            await this.ledgerService.addLedgerEntry({
-              party_id: returnData.party_id,
-              transaction_id: returnId,
-              transaction_type: returnData.return_type,
-              date: returnData.date,
-              debit,
-              credit,
-              notes: `مرتجع ${returnData.return_type === "sales_return" ? "مبيعات" : "مشتريات"} رقم ${returnId}`,
-            });
-          }
-
-          return true;
-        } catch (error) {
-          ErrorHandler.handleError(
-            error,
-            "confirmReturn",
-            "حدث خطأ أثناء تأكيد المرتجع"
-          );
-          return false;
-        }
-      });
-    });
+    // استخدام ReturnProcessor للتأكيد
+    const returnData = await this.getReturnById(returnId);
+    return this.returnProcessor.confirmReturn(returnId, returnData || undefined);
   }
 
   /**
@@ -354,89 +279,9 @@ export class ReturnService {
    * @param returnId معرف المرتجع
    */
   public async cancelReturn(returnId: string): Promise<boolean> {
-    return OperationLocks.runWithLock(`cancel-return-${returnId}`, async () => {
-      return runAsyncOperation(async () => {
-        try {
-          // الحصول على بيانات المرتجع كاملة
-          const returnData = await this.getReturnById(returnId);
-          if (!returnData) {
-            toast.error("لم يتم العثور على المرتجع");
-            return false;
-          }
-
-          if (returnData.payment_status !== "confirmed") {
-            toast.error("لا يمكن إلغاء مرتجع غير مؤكد أو تم إلغاؤه من قبل");
-            return false;
-          }
-
-          // تحديث حالة المرتجع
-          const { error: updateError } = await supabase
-            .from("returns")
-            .update({ payment_status: "cancelled" })
-            .eq("id", returnId);
-
-          if (updateError) throw updateError;
-
-          // عكس تأثير المرتجع على المخزون والحسابات
-          if (returnData.items && returnData.items.length > 0) {
-            // 1. تحديث المخزون
-            for (const item of returnData.items) {
-              let quantity: number;
-              
-              if (returnData.return_type === "sales_return") {
-                // عكس مرتجع مبيعات: خصم من المخزون
-                quantity = -item.quantity;
-              } else {
-                // عكس مرتجع مشتريات: إضافة للمخزون
-                quantity = item.quantity;
-              }
-
-              await this.updateInventoryItem(
-                item.item_type,
-                item.item_id,
-                quantity,
-                `Cancel Return #${returnId} - ${returnData.return_type}`
-              );
-            }
-          }
-
-          // 2. إضافة قيد عكسي في سجل الحساب إذا كان هناك طرف مرتبط
-          if (returnData.party_id) {
-            let debit = 0;
-            let credit = 0;
-
-            if (returnData.return_type === "sales_return") {
-              // عكس مرتجع مبيعات: المنشأة تدين العميل
-              debit = returnData.amount;
-              credit = 0;
-            } else {
-              // عكس مرتجع مشتريات: المنشأة تستحق على المورد
-              debit = 0;
-              credit = returnData.amount;
-            }
-
-            await this.ledgerService.addLedgerEntry({
-              party_id: returnData.party_id,
-              transaction_id: returnId,
-              transaction_type: `cancel_${returnData.return_type}`,
-              date: new Date().toISOString().split("T")[0],
-              debit,
-              credit,
-              notes: `إلغاء مرتجع ${returnData.return_type === "sales_return" ? "مبيعات" : "مشتريات"} رقم ${returnId}`,
-            });
-          }
-
-          return true;
-        } catch (error) {
-          ErrorHandler.handleError(
-            error,
-            "cancelReturn",
-            "حدث خطأ أثناء إلغاء المرتجع"
-          );
-          return false;
-        }
-      });
-    });
+    // استخدام ReturnProcessor للإلغاء
+    const returnData = await this.getReturnById(returnId);
+    return this.returnProcessor.cancelReturn(returnId, returnData || undefined);
   }
 
   /**
@@ -477,44 +322,6 @@ export class ReturnService {
       "حدث خطأ أثناء حذف المرتجع",
       false
     );
-  }
-
-  /**
-   * تحديث عنصر المخزون
-   * طريقة مساعدة للتفاعل مع خدمة المخزون
-   * @param itemType نوع العنصر
-   * @param itemId معرف العنصر
-   * @param quantity الكمية (موجبة للإضافة، سالبة للخصم)
-   * @param reason سبب التحديث
-   */
-  private async updateInventoryItem(
-    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-    itemId: number,
-    quantity: number,
-    reason: string
-  ): Promise<void> {
-    try {
-      // التعامل مع أنواع العناصر المختلفة
-      switch (itemType) {
-        case "raw_materials":
-          await this.inventoryService.updateRawMaterial(itemId, { quantity });
-          break;
-        case "packaging_materials":
-          await this.inventoryService.updatePackagingMaterial(itemId, { quantity });
-          break;
-        case "semi_finished_products":
-          await this.inventoryService.updateSemiFinishedProduct(itemId, { quantity });
-          break;
-        case "finished_products":
-          await this.inventoryService.updateFinishedProduct(itemId, { quantity });
-          break;
-        default:
-          throw new Error(`نوع عنصر غير معروف: ${itemType}`);
-      }
-    } catch (error) {
-      console.error(`Error updating inventory item (${itemType}, ${itemId}):`, error);
-      throw error;
-    }
   }
 }
 

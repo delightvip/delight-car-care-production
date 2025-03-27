@@ -1,0 +1,180 @@
+
+import { FinancialIntegration } from '@/services/interfaces/FinancialIntegration';
+import FinancialService from '@/services/financial/FinancialService';
+import { toast } from 'sonner';
+import { ErrorHandler } from '@/utils/errorHandler';
+import InventoryService from '@/services/InventoryService';
+
+/**
+ * خدمة التكامل بين النظام التجاري والنظام المالي
+ * تقوم بتنفيذ واجهة التكامل المالي وربط العمليات التجارية بالعمليات المالية
+ */
+export class CommercialFinanceIntegration implements FinancialIntegration {
+  private static instance: CommercialFinanceIntegration;
+  private financialService: FinancialService;
+  private inventoryService: InventoryService;
+
+  private constructor() {
+    this.financialService = FinancialService.getInstance();
+    this.inventoryService = InventoryService.getInstance();
+  }
+
+  public static getInstance(): CommercialFinanceIntegration {
+    if (!CommercialFinanceIntegration.instance) {
+      CommercialFinanceIntegration.instance = new CommercialFinanceIntegration();
+    }
+    return CommercialFinanceIntegration.instance;
+  }
+
+  /**
+   * تسجيل معاملة مالية مرتبطة بالحركات التجارية
+   * @param transactionData بيانات المعاملة المالية
+   */
+  public async recordFinancialTransaction(transactionData: {
+    type: 'income' | 'expense';
+    amount: number;
+    payment_method: 'cash' | 'bank' | 'other';
+    category_id: string;
+    reference_id?: string;
+    reference_type?: string;
+    date: string;
+    notes?: string;
+  }): Promise<boolean> {
+    return ErrorHandler.wrapOperation(
+      async () => {
+        const result = await this.financialService.createTransaction({
+          date: transactionData.date,
+          type: transactionData.type,
+          category_id: transactionData.category_id,
+          amount: transactionData.amount,
+          payment_method: transactionData.payment_method,
+          notes: transactionData.notes,
+          reference_id: transactionData.reference_id,
+          reference_type: transactionData.reference_type
+        });
+
+        return !!result;
+      },
+      "recordFinancialTransaction",
+      "حدث خطأ أثناء تسجيل المعاملة المالية",
+      false
+    );
+  }
+
+  /**
+   * تحديث رصيد الخزينة
+   * @param amount المبلغ (موجب للإضافة، سالب للخصم)
+   * @param method طريقة الدفع (نقدي أو بنك)
+   */
+  public async updateBalance(amount: number, method: 'cash' | 'bank'): Promise<boolean> {
+    return ErrorHandler.wrapOperation(
+      async () => {
+        // استخدام دالة updateBalance المخفية في FinancialService
+        // هذه الطريقة خاصة وستكون متاحة فقط لهذا التكامل
+        if (typeof (this.financialService as any).updateBalance === 'function') {
+          return await (this.financialService as any).updateBalance(amount, method);
+        } else {
+          throw new Error('updateBalance method is not available in FinancialService');
+        }
+      },
+      "updateBalance",
+      "حدث خطأ أثناء تحديث رصيد الخزينة",
+      false
+    );
+  }
+
+  /**
+   * حساب الأرباح من فاتورة مبيعات
+   * @param invoiceId معرف الفاتورة
+   * @param itemsData بيانات عناصر الفاتورة
+   */
+  public async calculateInvoiceProfit(
+    invoiceId: string,
+    itemsData: Array<{
+      item_id: number;
+      item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
+      quantity: number;
+      unit_price: number;
+      cost_price: number;
+    }>
+  ): Promise<{ totalCost: number; totalPrice: number; profit: number; profitMargin: number; }> {
+    return ErrorHandler.wrapOperation(
+      async () => {
+        let totalCost = 0;
+        let totalPrice = 0;
+
+        for (const item of itemsData) {
+          // استخدام cost_price إذا كان مُحدد، وإلا نحصل عليه من المخزون
+          let costPrice = item.cost_price;
+          
+          if (!costPrice) {
+            // الحصول على سعر التكلفة من المخزون
+            try {
+              costPrice = await this.getItemCostPrice(item.item_type, item.item_id);
+            } catch (error) {
+              console.error(`Error getting cost price for item ${item.item_id}:`, error);
+              costPrice = 0;
+            }
+          }
+
+          totalCost += costPrice * item.quantity;
+          totalPrice += item.unit_price * item.quantity;
+        }
+
+        const profit = totalPrice - totalCost;
+        const profitMargin = totalPrice > 0 ? (profit / totalPrice) * 100 : 0;
+
+        return {
+          totalCost,
+          totalPrice,
+          profit,
+          profitMargin
+        };
+      },
+      "calculateInvoiceProfit",
+      "حدث خطأ أثناء حساب أرباح الفاتورة",
+      {
+        totalCost: 0,
+        totalPrice: 0,
+        profit: 0,
+        profitMargin: 0
+      }
+    );
+  }
+
+  /**
+   * الحصول على سعر التكلفة لعنصر من المخزون
+   * @param itemType نوع العنصر
+   * @param itemId معرف العنصر
+   * @returns سعر التكلفة للوحدة
+   */
+  private async getItemCostPrice(
+    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+    itemId: number
+  ): Promise<number> {
+    try {
+      let item;
+      switch (itemType) {
+        case "raw_materials":
+          item = await this.inventoryService.getRawMaterialById(itemId);
+          return item?.unit_cost || 0;
+        case "packaging_materials":
+          item = await this.inventoryService.getPackagingMaterialById(itemId);
+          return item?.unit_cost || 0;
+        case "semi_finished_products":
+          item = await this.inventoryService.getSemiFinishedProductById(itemId);
+          return item?.unit_cost || 0;
+        case "finished_products":
+          item = await this.inventoryService.getFinishedProductById(itemId);
+          return item?.unit_cost || 0;
+        default:
+          return 0;
+      }
+    } catch (error) {
+      console.error(`Error getting cost price for ${itemType} ${itemId}:`, error);
+      return 0;
+    }
+  }
+}
+
+export default CommercialFinanceIntegration;
