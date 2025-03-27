@@ -111,16 +111,24 @@ export class InvoiceProfitCalculator {
       let item;
       switch (itemType) {
         case "raw_materials":
-          item = await this.inventoryService.getRawMaterialById(itemId);
+          // Get all raw materials and find the one with matching ID
+          const rawMaterials = await this.inventoryService.getRawMaterials();
+          item = rawMaterials.find(m => m.id === itemId);
           return item?.unit_cost || 0;
         case "packaging_materials":
-          item = await this.inventoryService.getPackagingMaterialById(itemId);
+          // Get all packaging materials and find the one with matching ID
+          const packagingMaterials = await this.inventoryService.getPackagingMaterials();
+          item = packagingMaterials.find(m => m.id === itemId);
           return item?.unit_cost || 0;
         case "semi_finished_products":
-          item = await this.inventoryService.getSemiFinishedProductById(itemId);
+          // Get all semi-finished products and find the one with matching ID
+          const semiFinishedProducts = await this.inventoryService.getSemiFinishedProducts();
+          item = semiFinishedProducts.find(p => p.id === itemId);
           return item?.unit_cost || 0;
         case "finished_products":
-          item = await this.inventoryService.getFinishedProductById(itemId);
+          // Get all finished products and find the one with matching ID
+          const finishedProducts = await this.inventoryService.getFinishedProducts();
+          item = finishedProducts.find(p => p.id === itemId);
           return item?.unit_cost || 0;
         default:
           return 0;
