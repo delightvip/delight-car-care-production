@@ -51,7 +51,7 @@ export class ReturnService {
           date: item.date,
           return_type: item.return_type as "sales_return" | "purchase_return",
           amount: item.amount,
-          payment_status: item.payment_status,
+          payment_status: item.payment_status as "draft" | "confirmed" | "cancelled",
           notes: item.notes,
           created_at: item.created_at,
         }));
@@ -73,8 +73,7 @@ export class ReturnService {
           .from("returns")
           .select(`
             *,
-            parties:party_id (name),
-            return_items:id (*)
+            parties:party_id (name)
           `)
           .eq("id", id)
           .single();
@@ -82,6 +81,14 @@ export class ReturnService {
         if (error) throw error;
 
         if (!data) return null;
+
+        // Fetch return items in a separate query
+        const { data: returnItems, error: itemsError } = await supabase
+          .from("return_items")
+          .select("*")
+          .eq("return_id", id);
+
+        if (itemsError) throw itemsError;
 
         return {
           id: data.id,
@@ -91,8 +98,8 @@ export class ReturnService {
           date: data.date,
           return_type: data.return_type as "sales_return" | "purchase_return",
           amount: data.amount,
-          items: data.return_items as ReturnItem[],
-          payment_status: data.payment_status,
+          items: returnItems || [],
+          payment_status: data.payment_status as "draft" | "confirmed" | "cancelled",
           notes: data.notes,
           created_at: data.created_at,
         };
@@ -163,6 +170,7 @@ export class ReturnService {
           ...data,
           party_name: partyName,
           return_type: data.return_type as "sales_return" | "purchase_return",
+          payment_status: data.payment_status as "draft" | "confirmed" | "cancelled",
           items: returnData.items,
         };
       },
@@ -277,20 +285,20 @@ export class ReturnService {
           if (returnData.items && returnData.items.length > 0) {
             // 1. تحديث المخزون
             for (const item of returnData.items) {
-              let movement_type: string;
+              let quantity: number;
               
               if (returnData.return_type === "sales_return") {
                 // مرتجع مبيعات: إضافة للمخزون
-                movement_type = "addition";
+                quantity = item.quantity;
               } else {
                 // مرتجع مشتريات: خصم من المخزون
-                movement_type = "subtraction";
+                quantity = -item.quantity;
               }
 
-              await this.inventoryService.updateInventoryItem(
+              await this.updateInventoryItem(
                 item.item_type,
                 item.item_id,
-                movement_type === "addition" ? item.quantity : -item.quantity,
+                quantity,
                 `Return #${returnId} - ${returnData.return_type}`
               );
             }
@@ -367,20 +375,20 @@ export class ReturnService {
           if (returnData.items && returnData.items.length > 0) {
             // 1. تحديث المخزون
             for (const item of returnData.items) {
-              let movement_type: string;
+              let quantity: number;
               
               if (returnData.return_type === "sales_return") {
                 // عكس مرتجع مبيعات: خصم من المخزون
-                movement_type = "subtraction";
+                quantity = -item.quantity;
               } else {
                 // عكس مرتجع مشتريات: إضافة للمخزون
-                movement_type = "addition";
+                quantity = item.quantity;
               }
 
-              await this.inventoryService.updateInventoryItem(
+              await this.updateInventoryItem(
                 item.item_type,
                 item.item_id,
-                movement_type === "addition" ? item.quantity : -item.quantity,
+                quantity,
                 `Cancel Return #${returnId} - ${returnData.return_type}`
               );
             }
@@ -463,6 +471,44 @@ export class ReturnService {
       "حدث خطأ أثناء حذف المرتجع",
       false
     );
+  }
+
+  /**
+   * تحديث عنصر المخزون
+   * طريقة مساعدة للتفاعل مع خدمة المخزون
+   * @param itemType نوع العنصر
+   * @param itemId معرف العنصر
+   * @param quantity الكمية (موجبة للإضافة، سالبة للخصم)
+   * @param reason سبب التحديث
+   */
+  private async updateInventoryItem(
+    itemType: string,
+    itemId: number,
+    quantity: number,
+    reason: string
+  ): Promise<void> {
+    try {
+      // التعامل مع أنواع العناصر المختلفة
+      switch (itemType) {
+        case "raw_materials":
+          await this.inventoryService.updateRawMaterialQuantity(itemId, quantity, reason);
+          break;
+        case "packaging_materials":
+          await this.inventoryService.updatePackagingMaterialQuantity(itemId, quantity, reason);
+          break;
+        case "semi_finished_products":
+          await this.inventoryService.updateSemiFinishedProductQuantity(itemId, quantity, reason);
+          break;
+        case "finished_products":
+          await this.inventoryService.updateFinishedProductQuantity(itemId, quantity, reason);
+          break;
+        default:
+          throw new Error(`نوع عنصر غير معروف: ${itemType}`);
+      }
+    } catch (error) {
+      console.error(`Error updating inventory item (${itemType}, ${itemId}):`, error);
+      throw error;
+    }
   }
 }
 
