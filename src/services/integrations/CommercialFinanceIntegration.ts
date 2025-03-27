@@ -4,6 +4,7 @@ import FinancialService from '@/services/financial/FinancialService';
 import { toast } from 'sonner';
 import { ErrorHandler } from '@/utils/errorHandler';
 import InventoryService from '@/services/InventoryService';
+import LedgerService from '@/services/commercial/ledger/LedgerService';
 
 /**
  * خدمة التكامل بين النظام التجاري والنظام المالي
@@ -13,10 +14,12 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
   private static instance: CommercialFinanceIntegration;
   private financialService: FinancialService;
   private inventoryService: InventoryService;
+  private ledgerService: LedgerService;
 
   private constructor() {
     this.financialService = FinancialService.getInstance();
     this.inventoryService = InventoryService.getInstance();
+    this.ledgerService = LedgerService.getInstance();
   }
 
   public static getInstance(): CommercialFinanceIntegration {
@@ -42,6 +45,7 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
   }): Promise<boolean> {
     return ErrorHandler.wrapOperation(
       async () => {
+        // إنشاء المعاملة المالية
         const result = await this.financialService.createTransaction({
           date: transactionData.date,
           type: transactionData.type,
@@ -52,6 +56,12 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
           reference_id: transactionData.reference_id,
           reference_type: transactionData.reference_type
         });
+
+        // تحديث رصيد الخزينة
+        if (result && (transactionData.payment_method === 'cash' || transactionData.payment_method === 'bank')) {
+          const amount = transactionData.type === 'income' ? transactionData.amount : -transactionData.amount;
+          await this.updateBalance(amount, transactionData.payment_method);
+        }
 
         return !!result;
       },
@@ -70,7 +80,6 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
     return ErrorHandler.wrapOperation(
       async () => {
         // استخدام دالة updateBalance المخفية في FinancialService
-        // هذه الطريقة خاصة وستكون متاحة فقط لهذا التكامل
         if (typeof (this.financialService as any).updateBalance === 'function') {
           return await (this.financialService as any).updateBalance(amount, method);
         } else {
@@ -95,7 +104,7 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
       item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
       quantity: number;
       unit_price: number;
-      cost_price: number;
+      cost_price?: number;
     }>
   ): Promise<{ totalCost: number; totalPrice: number; profit: number; profitMargin: number; }> {
     return ErrorHandler.wrapOperation(
@@ -105,15 +114,14 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
 
         for (const item of itemsData) {
           // استخدام cost_price إذا كان مُحدد، وإلا نحصل عليه من المخزون
-          let costPrice = item.cost_price;
+          let costPrice = item.cost_price || 0;
           
           if (!costPrice) {
-            // الحصول على سعر التكلفة من المخزون
             try {
               costPrice = await this.getItemCostPrice(item.item_type, item.item_id);
             } catch (error) {
               console.error(`Error getting cost price for item ${item.item_id}:`, error);
-              costPrice = 0;
+              // استمر في العملية حتى مع وجود خطأ في سعر التكلفة
             }
           }
 
@@ -154,33 +162,82 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
   ): Promise<number> {
     try {
       let item;
+      
+      // استخدام الطريقة المناسبة وفقاً لنوع العنصر
       switch (itemType) {
         case "raw_materials":
-          const rawMaterials = await this.inventoryService.getRawMaterials();
-          item = rawMaterials.find(m => m.id === itemId);
-          return item?.unit_cost || 0;
+          try {
+            const rawMaterials = await this.inventoryService.getRawMaterials();
+            if (!rawMaterials) return 0;
+            item = rawMaterials.find(m => m.id === itemId);
+          } catch (error) {
+            console.error('Error fetching raw materials:', error);
+            return 0;
+          }
+          break;
           
         case "packaging_materials":
-          const packagingMaterials = await this.inventoryService.getPackagingMaterials();
-          item = packagingMaterials.find(m => m.id === itemId);
-          return item?.unit_cost || 0;
+          try {
+            const packagingMaterials = await this.inventoryService.getPackagingMaterials();
+            if (!packagingMaterials) return 0;
+            item = packagingMaterials.find(m => m.id === itemId);
+          } catch (error) {
+            console.error('Error fetching packaging materials:', error);
+            return 0;
+          }
+          break;
           
         case "semi_finished_products":
-          const semiFinishedProducts = await this.inventoryService.getSemiFinishedProducts();
-          item = semiFinishedProducts.find(p => p.id === itemId);
-          return item?.unit_cost || 0;
+          try {
+            const semiFinishedProducts = await this.inventoryService.getSemiFinishedProducts();
+            if (!semiFinishedProducts) return 0;
+            item = semiFinishedProducts.find(p => p.id === itemId);
+          } catch (error) {
+            console.error('Error fetching semi-finished products:', error);
+            return 0;
+          }
+          break;
           
         case "finished_products":
-          const finishedProducts = await this.inventoryService.getFinishedProducts();
-          item = finishedProducts.find(p => p.id === itemId);
-          return item?.unit_cost || 0;
+          try {
+            const finishedProducts = await this.inventoryService.getFinishedProducts();
+            if (!finishedProducts) return 0;
+            item = finishedProducts.find(p => p.id === itemId);
+          } catch (error) {
+            console.error('Error fetching finished products:', error);
+            return 0;
+          }
+          break;
           
         default:
           return 0;
       }
+      
+      return item?.unit_cost || 0;
     } catch (error) {
-      console.error(`Error getting cost price for ${itemType} ${itemId}:`, error);
+      console.error(`Error in getItemCostPrice for ${itemType} ${itemId}:`, error);
       return 0;
+    }
+  }
+
+  /**
+   * تسجيل معاملة في سجل الحساب
+   * @param ledgerEntry بيانات القيد
+   */
+  public async recordLedgerEntry(ledgerEntry: {
+    party_id: string;
+    transaction_id: string;
+    transaction_type: string;
+    date: string;
+    debit: number;
+    credit: number;
+    notes?: string;
+  }): Promise<boolean> {
+    try {
+      return await this.ledgerService.addLedgerEntry(ledgerEntry);
+    } catch (error) {
+      console.error('Error recording ledger entry:', error);
+      return false;
     }
   }
 }

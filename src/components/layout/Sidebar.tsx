@@ -25,7 +25,9 @@ import {
   Tags,
   Receipt,
   CreditCard,
-  RotateCcw
+  RotateCcw,
+  FileText,
+  ClipboardList
 } from 'lucide-react';
 import { useSidebar } from './SidebarContext';
 
@@ -133,7 +135,7 @@ const Sidebar: React.FC = () => {
             />
             <NavItem 
               to="/inventory/product-details" 
-              icon={<ListChecks size={20} />} 
+              icon={<FileText size={20} />} 
               label="تفاصيل المنتج" 
               active={pathname === '/inventory/product-details'}
             />
@@ -186,6 +188,12 @@ const Sidebar: React.FC = () => {
               active={pathname.startsWith('/commercial/returns')}
             />
             <NavItem 
+              to="/commercial/payments" 
+              icon={<CreditCard size={20} />} 
+              label="المعاملات المالية" 
+              active={pathname.startsWith('/commercial/payments')}
+            />
+            <NavItem 
               to="/commercial/parties" 
               icon={<Users size={20} />} 
               label="العملاء والموردين" 
@@ -217,6 +225,12 @@ const Sidebar: React.FC = () => {
               icon={<Tags size={20} />} 
               label="فئات المعاملات" 
               active={pathname === '/financial/categories'}
+            />
+            <NavItem 
+              to="/financial/reports" 
+              icon={<ClipboardList size={20} />} 
+              label="التقارير المالية" 
+              active={pathname === '/financial/reports'}
             />
           </NavGroup>
           
