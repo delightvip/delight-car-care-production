@@ -78,6 +78,27 @@ export abstract class FinanceIntegrationBase implements FinancialIntegration {
   }
 
   /**
+   * حساب الأرباح من فاتورة مبيعات
+   * @param invoiceId معرف الفاتورة
+   * @param itemsData بيانات عناصر الفاتورة
+   */
+  public abstract calculateInvoiceProfit(
+    invoiceId: string,
+    itemsData: Array<{
+      item_id: number;
+      item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
+      quantity: number;
+      unit_price: number;
+      cost_price?: number;
+    }>
+  ): Promise<{
+    totalCost: number;
+    totalPrice: number;
+    profit: number;
+    profitMargin: number;
+  }>;
+
+  /**
    * تسجيل معاملة في سجل الحساب
    * هذه دالة مجردة يجب تنفيذها في الفئات الفرعية
    */
