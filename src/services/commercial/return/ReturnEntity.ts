@@ -18,6 +18,12 @@ export class ReturnEntity {
       
       if (error) throw error;
       
+      // Make sure data is not null or undefined
+      if (!data) {
+        console.error('No data returned from returns query');
+        return [];
+      }
+      
       // Map the data to our Return type with party name
       const returnsWithParties = data.map(returnData => ({
         id: returnData.id,

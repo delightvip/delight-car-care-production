@@ -50,7 +50,9 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
 
   useEffect(() => {
     // Initialize selectedItems with all item IDs when the component mounts
-    setSelectedItems(items.map(item => item.id));
+    if (items && Array.isArray(items)) {
+      setSelectedItems(items.map(item => item.id));
+    }
   }, [items]);
 
   const isItemSelected = (itemId: string) => selectedItems.includes(itemId);
@@ -72,12 +74,15 @@ const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
     }
   };
 
+  // Safety check for items
+  const safeItems = items && Array.isArray(items) ? items : [];
+
   return (
     <div className="grid gap-4">
       <Label htmlFor="items">Return Items</Label>
       <ScrollArea className="h-[200px] w-full rounded-md border">
         <div className="p-4">
-          {items.map((item) => (
+          {safeItems.map((item) => (
             <div key={item.id} className="mb-4 flex items-center space-x-4">
               <Checkbox 
                 checked={isItemSelected(item.id)} 
