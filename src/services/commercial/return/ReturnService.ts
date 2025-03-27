@@ -1,3 +1,4 @@
+
 import { Return } from '@/services/CommercialTypes';
 import { ReturnEntity } from './ReturnEntity';
 import { ReturnProcessor } from './ReturnProcessor';
@@ -21,15 +22,14 @@ export class ReturnService {
   
   public async getReturns(): Promise<Return[]> {
     try {
-      console.log('ReturnService: Fetching returns');
       const returns = await ReturnEntity.fetchAll();
-      // Ensure we return an array even if null/undefined
-      return returns || [];
+      return returns;
     } catch (error) {
       console.error('Error in getReturns:', error);
       toast({
-        variant: "destructive",
-        description: "حدث خطأ أثناء جلب المرتجعات"
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب المرتجعات",
+        variant: "destructive"
       });
       return [];
     }
@@ -42,8 +42,9 @@ export class ReturnService {
     } catch (error) {
       console.error(`Error in getReturnById(${id}):`, error);
       toast({
-        variant: "destructive",
-        description: "حدث خطأ أثناء جلب بيانات المرتجع"
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب بيانات المرتجع",
+        variant: "destructive"
       });
       return null;
     }
@@ -55,8 +56,9 @@ export class ReturnService {
       
       if (!returnData.items || returnData.items.length === 0) {
         toast({
-          variant: "destructive",
-          description: "يجب إضافة صنف واحد على الأقل إلى المرتجع"
+          title: "خطأ",
+          description: "يجب إضافة صنف واحد على الأقل إلى المرتجع",
+          variant: "destructive"
         });
         return null;
       }
@@ -67,8 +69,9 @@ export class ReturnService {
       if (!returnRecord) {
         console.error('Failed to create return');
         toast({
-          variant: "destructive",
-          description: "فشل إنشاء المرتجع"
+          title: "خطأ",
+          description: "فشل إنشاء المرتجع",
+          variant: "destructive"
         });
         return null;
       }
@@ -77,20 +80,23 @@ export class ReturnService {
       
       // إذا كانت حالة المرتجع هي "confirmed"، قم بتأكيده تلقائياً (بشكل غير متزامن)
       if (returnRecord && returnData.payment_status === 'confirmed') {
-        // تجنب تجمد الو��جهة باستخدام وعد
+        // تجنب تجمد الواجهة باستخدام وعد
         this.processReturnConfirmation(returnRecord.id);
       }
       
       toast({
-        description: "تم إنشاء المرتجع بنجاح"
+        title: "نجاح",
+        description: "تم إنشاء المرتجع بنجاح",
+        variant: "default"
       });
       
       return returnRecord;
     } catch (error) {
       console.error('Error creating return:', error);
       toast({
-        variant: "destructive",
-        description: "حدث خطأ أثناء إنشاء المرتجع"
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء المرتجع",
+        variant: "destructive"
       });
       return null;
     }
@@ -111,12 +117,15 @@ export class ReturnService {
       
       if (success) {
         toast({
-          description: "تم تحديث المرتجع بنجاح"
+          title: "نجاح", 
+          description: "تم تحديث المرتجع بنجاح",
+          variant: "default"
         });
       } else {
         toast({
-          variant: "destructive",
-          description: "فشل تحديث المرتجع"
+          title: "خطأ",
+          description: "فشل تحديث المرتجع",
+          variant: "destructive"
         });
       }
       
@@ -124,8 +133,9 @@ export class ReturnService {
     } catch (error) {
       console.error(`Error in updateReturn(${id}):`, error);
       toast({
-        variant: "destructive",
-        description: "حدث خطأ أثناء تحديث المرتجع"
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث المرتجع",
+        variant: "destructive"
       });
       return false;
     }
@@ -140,7 +150,9 @@ export class ReturnService {
       
       // عرض رسالة مبدئية للمستخدم
       toast({
-        description: "جاري تأكيد المرتجع..."
+        title: "جاري التنفيذ",
+        description: "جاري تأكيد المرتجع...",
+        variant: "default"
       });
       
       // تنفيذ العملية في الخلفية
@@ -148,20 +160,24 @@ export class ReturnService {
         if (result) {
           console.log('Return confirmation succeeded for:', returnId);
           toast({
-            description: "تم تأكيد المرتجع بنجاح"
+            title: "نجاح",
+            description: "تم تأكيد المرتجع بنجاح",
+            variant: "default"
           });
         } else {
           console.log('Return confirmation failed for:', returnId);
           toast({
-            variant: "destructive",
-            description: "فشل تأكيد المرتجع"
+            title: "خطأ",
+            description: "فشل تأكيد المرتجع",
+            variant: "destructive"
           });
         }
       }).catch(error => {
         console.error(`Error in confirmReturn(${returnId}):`, error);
         toast({
-          variant: "destructive",
-          description: "حدث خطأ أثناء تأكيد المرتجع"
+          title: "خطأ",
+          description: "حدث خطأ أثناء تأكيد المرتجع",
+          variant: "destructive"
         });
       });
       
@@ -170,8 +186,9 @@ export class ReturnService {
     } catch (error) {
       console.error(`Error starting confirmReturn(${returnId}):`, error);
       toast({
-        variant: "destructive",
-        description: "حدث خطأ أثناء بدء عملية تأكيد المرتجع"
+        title: "خطأ",
+        description: "حدث خطأ أثناء بدء عملية تأكيد المرتجع",
+        variant: "destructive"
       });
       return false;
     }
@@ -186,7 +203,9 @@ export class ReturnService {
       
       // عرض رسالة مبدئية للمستخدم
       toast({
-        description: "جاري إلغاء المرتجع..."
+        title: "جاري التنفيذ",
+        description: "جاري إلغاء المرتجع...",
+        variant: "default"
       });
       
       // تنفيذ العملية في الخلفية
@@ -194,20 +213,24 @@ export class ReturnService {
         if (result) {
           console.log('Return cancellation succeeded for:', returnId);
           toast({
-            description: "تم إلغاء المرتجع بنجاح"
+            title: "نجاح",
+            description: "تم إلغاء المرتجع بنجاح",
+            variant: "default"
           });
         } else {
           console.log('Return cancellation failed for:', returnId);
           toast({
-            variant: "destructive",
-            description: "فشل إلغاء المرتجع"
+            title: "خطأ",
+            description: "فشل إلغاء المرتجع",
+            variant: "destructive"
           });
         }
       }).catch(error => {
         console.error(`Error in cancelReturn(${returnId}):`, error);
         toast({
-          variant: "destructive",
-          description: "حدث خطأ أثناء إلغاء المرتجع"
+          title: "خطأ",
+          description: "حدث خطأ أثناء إلغاء المرتجع",
+          variant: "destructive"
         });
       });
       
@@ -216,8 +239,9 @@ export class ReturnService {
     } catch (error) {
       console.error(`Error starting cancelReturn(${returnId}):`, error);
       toast({
-        variant: "destructive",
-        description: "حدث خطأ أثناء بدء عملية إلغاء المرتجع"
+        title: "خطأ",
+        description: "حدث خطأ أثناء بدء عملية إلغاء المرتجع",
+        variant: "destructive"
       });
       return false;
     }
@@ -229,12 +253,15 @@ export class ReturnService {
       
       if (success) {
         toast({
-          description: "تم حذف المرتجع بنجاح"
+          title: "نجاح",
+          description: "تم حذف المرتجع بنجاح",
+          variant: "default" 
         });
       } else {
         toast({
-          variant: "destructive",
-          description: "فشل حذف المرتجع"
+          title: "خطأ",
+          description: "فشل حذف المرتجع",
+          variant: "destructive"
         });
       }
       
@@ -242,8 +269,9 @@ export class ReturnService {
     } catch (error) {
       console.error(`Error in deleteReturn(${id}):`, error);
       toast({
-        variant: "destructive",
-        description: "حدث خطأ أثناء حذف المرتجع"
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف المرتجع",
+        variant: "destructive"
         });
       return false;
     }

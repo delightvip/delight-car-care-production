@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +52,7 @@ const ProfitAnalysisPage = () => {
     // Get sales invoices
     const allInvoices = await invoiceService.getInvoices();
     const filteredInvoices = allInvoices.filter(invoice => 
-      invoice.invoice_type === 'sale' && 
+      invoice.invoice_type === 'sales' && 
       invoice.payment_status === 'confirmed' &&
       new Date(invoice.date) >= new Date(startDate!) &&
       new Date(invoice.date) <= new Date(endDate!)
