@@ -356,6 +356,40 @@ export default class FinancialService {
     return true;
   }
 
+  public async adjustBalance(accountType: "cash" | "bank", amount: number, isIncrease: boolean): Promise<boolean> {
+    try {
+      const { data: currentBalance, error: getError } = await supabase
+        .from('financial_balance')
+        .select('*')
+        .eq('id', '1')
+        .single();
+
+      if (getError) {
+        console.error('Error getting current balance:', getError);
+        return false;
+      }
+
+      const updates = isIncrease
+        ? { cash_balance: currentBalance.cash_balance + amount }
+        : { bank_balance: currentBalance.bank_balance + amount };
+
+      const { error: updateError } = await supabase
+        .from('financial_balance')
+        .update(updates)
+        .eq('id', '1');
+
+      if (updateError) {
+        console.error('Error updating balance:', updateError);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error adjusting balance:', error);
+      return false;
+    }
+  }
+
   private async updateBalance(amount: number, method: 'cash' | 'bank'): Promise<boolean> {
     const { data: currentBalance, error: getError } = await supabase
       .from('financial_balance')
