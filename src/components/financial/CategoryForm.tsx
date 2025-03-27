@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import FinancialService, { Category } from '@/services/financial/FinancialService';
 import { ArrowLeft, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Define schema for form validation
 const categorySchema = z.object({
@@ -67,8 +68,7 @@ const CategoryForm: React.FC = () => {
     const loadData = async () => {
       if (isEditing && id) {
         setLoading(true);
-        const categories = await financialService.getCategories();
-        const category = categories.find(c => c.id === id);
+        const category = await financialService.getCategory(id);
         
         if (category) {
           form.reset({
@@ -85,24 +85,33 @@ const CategoryForm: React.FC = () => {
     };
     
     loadData();
-  }, [isEditing, id]);
+  }, [isEditing, id, form]);
   
   const onSubmit = async (data: CategoryFormValues) => {
     setSubmitting(true);
     
     let success = false;
     
-    if (isEditing && id) {
-      success = await financialService.updateCategory(id, data);
-    } else {
-      const result = await financialService.createCategory(data);
-      success = !!result;
-    }
-    
-    setSubmitting(false);
-    
-    if (success) {
-      navigate('/financial/categories');
+    try {
+      if (isEditing && id) {
+        const updated = await financialService.updateCategory(id, data);
+        success = !!updated;
+      } else {
+        const created = await financialService.createCategory(data);
+        success = !!created;
+      }
+      
+      if (success) {
+        toast.success(isEditing ? "تم تعديل الفئة بنجاح" : "تم إضافة الفئة بنجاح");
+        navigate('/financial/categories');
+      } else {
+        toast.error("حدث خطأ أثناء حفظ البيانات");
+      }
+    } catch (error) {
+      console.error("Error saving category:", error);
+      toast.error("حدث خطأ أثناء حفظ البيانات");
+    } finally {
+      setSubmitting(false);
     }
   };
   
