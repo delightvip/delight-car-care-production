@@ -166,13 +166,14 @@ const AccountStatements: React.FC<AccountStatementsProps> = () => {
             {reportData && (
               <div className="mt-6">
                 <h3 className="text-lg font-semibold">Report:</h3>
-                <p>{reportData.statements?.length || 0} account statements generated.</p>
-                {reportData.statements?.map((statement: any, index: number) => (
+                <p>{reportData.length || 0} account statements generated.</p>
+                {reportData.map((statement: any, index: number) => (
                   <div key={index} className="mt-4 p-4 border rounded-md">
-                    <p><strong>Party:</strong> {statement.party_name}</p>
-                    <p><strong>Opening Balance:</strong> {statement.opening_balance.toFixed(2)}</p>
-                    <p><strong>Closing Balance:</strong> {statement.closing_balance.toFixed(2)}</p>
-                    <p><strong>Total Transactions:</strong> {statement.entries.length}</p>
+                    <p><strong>Transaction Type:</strong> {statement.transaction_type}</p>
+                    <p><strong>Date:</strong> {statement.date}</p>
+                    <p><strong>Debit:</strong> {statement.debit || 0}</p>
+                    <p><strong>Credit:</strong> {statement.credit || 0}</p>
+                    <p><strong>Balance After:</strong> {statement.balance_after}</p>
                   </div>
                 ))}
               </div>

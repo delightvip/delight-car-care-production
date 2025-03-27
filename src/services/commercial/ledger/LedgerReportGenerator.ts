@@ -43,7 +43,8 @@ class LedgerReportGenerator {
         debit: entry.debit,
         credit: entry.credit,
         balance_after: entry.balance_after,
-        created_at: entry.created_at
+        created_at: entry.created_at,
+        notes: entry.notes
       }));
     } catch (error) {
       console.error('Error generating ledger report:', error);

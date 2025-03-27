@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import InventoryService from '@/services/InventoryService';
 import PartyService from '@/services/PartyService';
+import LedgerReportGenerator from './commercial/ledger/LedgerReportGenerator';
 import { Return, Invoice, Payment, LedgerEntry } from './CommercialTypes';
 import { toast } from "sonner";
 
@@ -9,10 +10,12 @@ class CommercialService {
   private static instance: CommercialService;
   private partyService: PartyService;
   private inventoryService: InventoryService;
+  private ledgerReportGenerator: LedgerReportGenerator;
   
   private constructor() {
     this.partyService = PartyService.getInstance();
     this.inventoryService = InventoryService.getInstance();
+    this.ledgerReportGenerator = LedgerReportGenerator.getInstance();
   }
   
   public static getInstance(): CommercialService {
@@ -48,7 +51,8 @@ class CommercialService {
           return {
             ...invoice,
             party_name: invoice.parties?.name,
-            items: items || []
+            items: items || [],
+            payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled"
           } as Invoice;
         })
       );
@@ -84,7 +88,8 @@ class CommercialService {
       return {
         ...data,
         party_name: data.parties?.name,
-        items: items || []
+        items: items || [],
+        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled"
       } as Invoice;
     } catch (error) {
       console.error(`Error fetching invoice with id ${id}:`, error);
@@ -140,7 +145,8 @@ class CommercialService {
       return {
         ...data,
         party_name: party?.name,
-        items: invoice.items
+        items: invoice.items,
+        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled"
       } as Invoice;
     } catch (error) {
       console.error('Error creating invoice:', error);
@@ -262,7 +268,10 @@ class CommercialService {
       
       if (error) throw error;
       
-      return data || [];
+      return (data || []).map(invoice => ({
+        ...invoice,
+        payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled"
+      }));
     } catch (error) {
       console.error('Error fetching invoices by party:', error);
       toast.error('حدث خطأ أثناء جلب فواتير الطرف');
@@ -351,7 +360,8 @@ class CommercialService {
       return {
         ...data,
         party_name: party?.name,
-        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled"
+        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled",
+        payment_type: data.payment_type as "collection" | "disbursement"
       };
     } catch (error) {
       console.error('Error recording payment:', error);
@@ -480,10 +490,11 @@ class CommercialService {
       
       if (error) throw error;
       
-      return data?.map(payment => ({
+      return (data || []).map(payment => ({
         ...payment,
-        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled"
-      })) || [];
+        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled",
+        payment_type: payment.payment_type as "collection" | "disbursement"
+      }));
     } catch (error) {
       console.error('Error fetching payments by party:', error);
       toast.error('حدث خطأ أثناء جلب مدفوعات الطرف');
@@ -511,21 +522,11 @@ class CommercialService {
   }
   
   // Add account statement generation method
-  public async generateAccountStatement(partyId: string, startDate: string, endDate: string): Promise<LedgerEntry[]> {
+  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<LedgerEntry[]> {
     try {
-      const { data, error } = await supabase
-        .from('ledger')
-        .select('*')
-        .eq('party_id', partyId)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: true });
-      
-      if (error) throw error;
-      
-      return data || [];
+      return this.ledgerReportGenerator.generateLedgerReport(startDate, endDate, partyType as any);
     } catch (error) {
-      console.error(`Error generating account statement for party ${partyId}:`, error);
+      console.error(`Error generating account statement:`, error);
       toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
       return [];
     }

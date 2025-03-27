@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Party } from "@/services/CommercialTypes";
+import { Party } from "./CommercialTypes";
 import { toast } from "sonner";
 
 class PartyService {
@@ -179,3 +179,4 @@ class PartyService {
 }
 
 export default PartyService;
+export type { Party } from "./CommercialTypes";

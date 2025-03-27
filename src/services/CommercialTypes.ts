@@ -9,6 +9,9 @@ export interface Party {
   balance_type?: string;
   opening_balance?: number;
   created_at?: string;
+  balance?: number;
+  code?: string;
+  notes?: string;
 }
 
 export interface InvoiceItem {
@@ -19,6 +22,7 @@ export interface InvoiceItem {
   item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
   quantity: number;
   unit_price: number;
+  unit_cost?: number;
   total?: number;
   created_at?: string;
 }
@@ -89,4 +93,5 @@ export interface LedgerEntry {
   credit?: number;
   balance_after: number;
   created_at?: string;
+  notes?: string;
 }
