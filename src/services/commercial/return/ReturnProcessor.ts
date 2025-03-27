@@ -1,4 +1,3 @@
-
 import { Return } from "@/services/CommercialTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -102,9 +101,6 @@ export class ReturnProcessor {
           }
 
           // 3. تسجيل معاملة مالية إذا كان المرتجع نقدي
-          // Fixed the comparison error - data.payment_status has been updated in the database but not in our in-memory object
-          // Instead of checking data.payment_status which is still "draft", we can just assume we're now in "confirmed" state
-          // since we've just updated it in the database
           if (data.party_id) {
             // هنا يمكن إضافة منطق لتحديد ما إذا كان المرتجع نقدي أو آجل
             // وإضافة المعاملة المالية المناسبة

@@ -1,3 +1,4 @@
+
 import { FinancialIntegration } from '@/services/interfaces/FinancialIntegration';
 import FinancialService from '@/services/financial/FinancialService';
 import { toast } from 'sonner';
@@ -155,25 +156,25 @@ export class CommercialFinanceIntegration implements FinancialIntegration {
       let item;
       switch (itemType) {
         case "raw_materials":
-          // Get all raw materials and find the one with matching ID
           const rawMaterials = await this.inventoryService.getRawMaterials();
           item = rawMaterials.find(m => m.id === itemId);
           return item?.unit_cost || 0;
+          
         case "packaging_materials":
-          // Get all packaging materials and find the one with matching ID
           const packagingMaterials = await this.inventoryService.getPackagingMaterials();
           item = packagingMaterials.find(m => m.id === itemId);
           return item?.unit_cost || 0;
+          
         case "semi_finished_products":
-          // Get all semi-finished products and find the one with matching ID
           const semiFinishedProducts = await this.inventoryService.getSemiFinishedProducts();
           item = semiFinishedProducts.find(p => p.id === itemId);
           return item?.unit_cost || 0;
+          
         case "finished_products":
-          // Get all finished products and find the one with matching ID
           const finishedProducts = await this.inventoryService.getFinishedProducts();
           item = finishedProducts.find(p => p.id === itemId);
           return item?.unit_cost || 0;
+          
         default:
           return 0;
       }
