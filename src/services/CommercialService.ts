@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { 
   Invoice, 
   InvoiceItem, 
@@ -9,38 +9,28 @@ import {
   ReturnItem, 
   LedgerEntry 
 } from "./CommercialTypes";
+import { ErrorHandler } from "@/utils/errorHandler";
+import { OperationLocks, runAsyncOperation } from "@/utils/asyncUtils";
 
 // Import other service classes
 import InvoiceService from './commercial/invoice/InvoiceService';
 import PaymentService from './commercial/payment/PaymentService';
 import LedgerService from './commercial/ledger/LedgerService';
-import { format } from "date-fns";
+import ReturnService from './commercial/return/ReturnService';
 
-// ReturnService will be imported lazily to avoid circular dependencies
-let returnServiceInstance: any = null;
-
+// الواجهة الرئيسية لخدمات الحركات التجارية
 class CommercialService {
   private static instance: CommercialService;
   private invoiceService: InvoiceService;
   private paymentService: PaymentService;
   private ledgerService: LedgerService;
+  private returnService: ReturnService;
   
   private constructor() {
     this.invoiceService = InvoiceService.getInstance();
     this.paymentService = PaymentService.getInstance();
     this.ledgerService = LedgerService.getInstance();
-    
-    // Don't initialize returnService here to avoid circular dependencies
-  }
-  
-  // Lazy getter for returnService to avoid circular dependencies
-  private getReturnService() {
-    if (!returnServiceInstance) {
-      // Import dynamically to avoid circular dependencies at startup
-      const ReturnService = require('./commercial/return/ReturnService').default;
-      returnServiceInstance = ReturnService.getInstance();
-    }
-    return returnServiceInstance;
+    this.returnService = ReturnService.getInstance();
   }
   
   public static getInstance(): CommercialService {
@@ -50,431 +40,391 @@ class CommercialService {
     return CommercialService.instance;
   }
   
-  // Invoice methods
+  // ============ خدمات الفواتير ============
+  
+  /**
+   * الحصول على جميع الفواتير
+   */
   public async getInvoices(): Promise<Invoice[]> {
-    try {
-      return await this.invoiceService.getInvoices();
-    } catch (error) {
-      console.error('Error in getInvoices:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب الفواتير",
-        variant: "destructive"
-      });
-      return [];
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.invoiceService.getInvoices(),
+      "getInvoices",
+      "حدث خطأ أثناء جلب الفواتير",
+      []
+    ) as Promise<Invoice[]>;
   }
   
+  /**
+   * الحصول على فواتير طرف معين
+   * @param partyId معرف الطرف
+   */
   public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
-    try {
-      return await this.invoiceService.getInvoicesByParty(partyId);
-    } catch (error) {
-      console.error(`Error in getInvoicesByParty(${partyId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب فواتير الطرف",
-        variant: "destructive"
-      });
-      return [];
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.invoiceService.getInvoicesByParty(partyId),
+      `getInvoicesByParty(${partyId})`,
+      "حدث خطأ أثناء جلب فواتير الطرف",
+      []
+    ) as Promise<Invoice[]>;
   }
   
+  /**
+   * الحصول على فاتورة معينة بواسطة المعرف
+   * @param id معرف الفاتورة
+   */
   public async getInvoiceById(id: string): Promise<Invoice | null> {
-    try {
-      return await this.invoiceService.getInvoiceById(id);
-    } catch (error) {
-      console.error(`Error in getInvoiceById(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب بيانات الفاتورة",
-        variant: "destructive"
-      });
-      return null;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.invoiceService.getInvoiceById(id),
+      `getInvoiceById(${id})`,
+      "حدث خطأ أثناء جلب بيانات الفاتورة",
+      null
+    );
   }
   
+  /**
+   * إنشاء فاتورة جديدة
+   * @param invoiceData بيانات الفاتورة
+   */
   public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
-    try {
-      const invoice = await this.invoiceService.createInvoice(invoiceData);
-      
-      if (!invoice) {
-        console.error('Failed to create invoice');
-        return null;
-      }
-      
-      return invoice;
-    } catch (error) {
-      console.error('Error in createInvoice:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إنشاء الفاتورة",
-        variant: "destructive"
-      });
-      return null;
-    }
+    return ErrorHandler.wrapOperation(
+      async () => {
+        const invoice = await this.invoiceService.createInvoice(invoiceData);
+        
+        if (!invoice) {
+          console.error('Failed to create invoice');
+          return null;
+        }
+        
+        return invoice;
+      },
+      "createInvoice",
+      "حدث خطأ أثناء إنشاء الفاتورة",
+      null
+    );
   }
   
+  /**
+   * تأكيد فاتورة
+   * @param invoiceId معرف الفاتورة
+   */
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
-    try {
-      // استخدام وعد يتم حله بعد تأكيد الفاتورة
-      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
-      const confirmPromise = new Promise<boolean>((resolve) => {
-        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
-        // وتجنب تجمد واجهة المستخدم
-        setTimeout(async () => {
-          try {
-            const result = await this.invoiceService.confirmInvoice(invoiceId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in confirmInvoice timeout(${invoiceId}):`, error);
-            resolve(false);
-          }
-        }, 100);
+    return OperationLocks.runWithLock(`confirm-invoice-${invoiceId}`, async () => {
+      return runAsyncOperation(async () => {
+        try {
+          const result = await this.invoiceService.confirmInvoice(invoiceId);
+          return result;
+        } catch (error) {
+          ErrorHandler.handleError(
+            error,
+            `confirmInvoice(${invoiceId})`,
+            "حدث خطأ أثناء تأكيد الفاتورة"
+          );
+          return false;
+        }
       });
-      
-      return confirmPromise;
-    } catch (error) {
-      console.error(`Error in confirmInvoice(${invoiceId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تأكيد الفاتورة",
-        variant: "destructive"
-      });
-      return false;
-    }
+    });
   }
   
+  /**
+   * إلغاء فاتورة
+   * @param invoiceId معرف الفاتورة
+   */
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
-    try {
-      // استخدام وعد يتم حله بعد إلغاء الفاتورة
-      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
-      const cancelPromise = new Promise<boolean>((resolve) => {
-        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
-        // وتجنب تجمد واجهة المستخدم
-        setTimeout(async () => {
-          try {
-            const result = await this.invoiceService.cancelInvoice(invoiceId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in cancelInvoice timeout(${invoiceId}):`, error);
-            resolve(false);
-          }
-        }, 100);
+    return OperationLocks.runWithLock(`cancel-invoice-${invoiceId}`, async () => {
+      return runAsyncOperation(async () => {
+        try {
+          const result = await this.invoiceService.cancelInvoice(invoiceId);
+          return result;
+        } catch (error) {
+          ErrorHandler.handleError(
+            error,
+            `cancelInvoice(${invoiceId})`,
+            "حدث خطأ أثناء إلغاء الفاتورة"
+          );
+          return false;
+        }
       });
-      
-      return cancelPromise;
-    } catch (error) {
-      console.error(`Error in cancelInvoice(${invoiceId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إلغاء الفاتورة",
-        variant: "destructive"
-      });
-      return false;
-    }
+    });
   }
   
+  /**
+   * حذف فاتورة
+   * @param id معرف الفاتورة
+   */
   public async deleteInvoice(id: string): Promise<boolean> {
-    try {
-      return await this.invoiceService.deleteInvoice(id);
-    } catch (error) {
-      console.error(`Error in deleteInvoice(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء حذف الفاتورة",
-        variant: "destructive"
-      });
-      return false;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.invoiceService.deleteInvoice(id),
+      `deleteInvoice(${id})`,
+      "حدث خطأ أثناء حذف الفاتورة",
+      false
+    ) as Promise<boolean>;
   }
   
+  /**
+   * تحديث حالة الفاتورة بعد إجراء دفعة
+   * @param invoiceId معرف الفاتورة
+   * @param paymentAmount مبلغ الدفعة
+   */
   public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
-    try {
-      return await this.invoiceService.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
-    } catch (error) {
-      console.error(`Error in updateInvoiceStatusAfterPayment(${invoiceId}, ${paymentAmount}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تحديث حالة الفاتورة بعد الدفع",
-        variant: "destructive"
-      });
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.invoiceService.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount),
+      `updateInvoiceStatusAfterPayment(${invoiceId}, ${paymentAmount})`,
+      "حدث خطأ أثناء تحديث حالة الفاتورة بعد الدفع",
+      undefined
+    ) as Promise<void>;
   }
   
+  /**
+   * عكس تحديث حالة الفاتورة بعد إلغاء دفعة
+   * @param invoiceId معرف الفاتورة
+   * @param paymentAmount مبلغ الدفعة
+   */
   public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
-    try {
-      return await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
-    } catch (error) {
-      console.error(`Error in reverseInvoiceStatusAfterPaymentCancellation(${invoiceId}, ${paymentAmount}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء عكس حالة الفاتورة بعد إلغاء الدفع",
-        variant: "destructive"
-      });
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount),
+      `reverseInvoiceStatusAfterPaymentCancellation(${invoiceId}, ${paymentAmount})`,
+      "حدث خطأ أثناء عكس حالة الفاتورة بعد إلغاء الدفع",
+      undefined
+    ) as Promise<void>;
   }
   
-  // Payment methods
+  // ============ خدمات المدفوعات ============
+  
+  /**
+   * الحصول على جميع المدفوعات
+   */
   public async getPayments(): Promise<Payment[]> {
-    try {
-      return await this.paymentService.getPayments();
-    } catch (error) {
-      console.error('Error in getPayments:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب المدفوعات",
-        variant: "destructive"
-      });
-      return [];
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.paymentService.getPayments(),
+      "getPayments",
+      "حدث خطأ أثناء جلب المدفوعات",
+      []
+    ) as Promise<Payment[]>;
   }
   
+  /**
+   * الحصول على مدفوعات طرف معين
+   * @param partyId معرف الطرف
+   */
   public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
-    try {
-      return await this.paymentService.getPaymentsByParty(partyId);
-    } catch (error) {
-      console.error(`Error in getPaymentsByParty(${partyId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب مدفوعات الطرف",
-        variant: "destructive"
-      });
-      return [];
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.paymentService.getPaymentsByParty(partyId),
+      `getPaymentsByParty(${partyId})`,
+      "حدث خطأ أثناء جلب مدفوعات الطرف",
+      []
+    ) as Promise<Payment[]>;
   }
   
+  /**
+   * تسجيل دفعة جديدة
+   * @param paymentData بيانات الدفعة
+   */
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
-    try {
-      return await this.paymentService.recordPayment(paymentData);
-    } catch (error) {
-      console.error('Error in recordPayment:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تسجيل الدفعة",
-        variant: "destructive"
-      });
-      return null;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.paymentService.recordPayment(paymentData),
+      "recordPayment",
+      "حدث خطأ أثناء تسجيل الدفعة",
+      null
+    );
   }
   
+  /**
+   * تأكيد دفعة
+   * @param paymentId معرف الدفعة
+   */
   public async confirmPayment(paymentId: string): Promise<boolean> {
-    try {
-      // استخدام وعد يتم حله بعد تأكيد الدفعة
-      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
-      const confirmPromise = new Promise<boolean>((resolve) => {
-        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
-        // وتجنب تجمد واجهة المستخدم
-        setTimeout(async () => {
-          try {
-            const result = await this.paymentService.confirmPayment(paymentId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in confirmPayment timeout(${paymentId}):`, error);
-            resolve(false);
-          }
-        }, 100);
+    return OperationLocks.runWithLock(`confirm-payment-${paymentId}`, async () => {
+      return runAsyncOperation(async () => {
+        try {
+          const result = await this.paymentService.confirmPayment(paymentId);
+          return result;
+        } catch (error) {
+          ErrorHandler.handleError(
+            error,
+            `confirmPayment(${paymentId})`,
+            "حدث خطأ أثناء تأكيد الدفعة"
+          );
+          return false;
+        }
       });
-      
-      return confirmPromise;
-    } catch (error) {
-      console.error(`Error in confirmPayment(${paymentId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تأكيد الدفعة",
-        variant: "destructive"
-      });
-      return false;
-    }
+    });
   }
   
+  /**
+   * إلغاء دفعة
+   * @param paymentId معرف الدفعة
+   */
   public async cancelPayment(paymentId: string): Promise<boolean> {
-    try {
-      // استخدام وعد يتم حله بعد إلغاء الدفعة
-      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
-      const cancelPromise = new Promise<boolean>((resolve) => {
-        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
-        // وتجنب تجمد واجهة المستخدم
-        setTimeout(async () => {
-          try {
-            const result = await this.paymentService.cancelPayment(paymentId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in cancelPayment timeout(${paymentId}):`, error);
-            resolve(false);
-          }
-        }, 100);
+    return OperationLocks.runWithLock(`cancel-payment-${paymentId}`, async () => {
+      return runAsyncOperation(async () => {
+        try {
+          const result = await this.paymentService.cancelPayment(paymentId);
+          return result;
+        } catch (error) {
+          ErrorHandler.handleError(
+            error,
+            `cancelPayment(${paymentId})`,
+            "حدث خطأ أثناء إلغاء الدفعة"
+          );
+          return false;
+        }
       });
-      
-      return cancelPromise;
-    } catch (error) {
-      console.error(`Error in cancelPayment(${paymentId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إلغاء الدفعة",
-        variant: "destructive"
-      });
-      return false;
-    }
+    });
   }
   
+  /**
+   * تحديث دفعة
+   * @param id معرف الدفعة
+   * @param paymentData بيانات الدفعة المحدثة
+   */
   public async updatePayment(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {
-    try {
-      return await this.paymentService.updatePayment(id, paymentData);
-    } catch (error) {
-      console.error(`Error in updatePayment(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تحديث الدفعة",
-        variant: "destructive"
-      });
-      return false;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.paymentService.updatePayment(id, paymentData),
+      `updatePayment(${id})`,
+      "حدث خطأ أثناء تحديث الدفعة",
+      false
+    ) as Promise<boolean>;
   }
   
+  /**
+   * حذف دفعة
+   * @param id معرف الدفعة
+   */
   public async deletePayment(id: string): Promise<boolean> {
-    try {
-      return await this.paymentService.deletePayment(id);
-    } catch (error) {
-      console.error(`Error in deletePayment(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء حذف الدفعة",
-        variant: "destructive"
-      });
-      return false;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.paymentService.deletePayment(id),
+      `deletePayment(${id})`,
+      "حدث خطأ أثناء حذف الدفعة",
+      false
+    ) as Promise<boolean>;
   }
   
-  // Return methods
+  // ============ خدمات المرتجعات ============
+  
+  /**
+   * الحصول على جميع المرتجعات
+   */
   public async getReturns(): Promise<Return[]> {
-    try {
-      return await this.getReturnService().getReturns();
-    } catch (error) {
-      console.error('Error in getReturns:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب المرتجعات",
-        variant: "destructive"
-      });
-      return [];
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.returnService.getReturns(),
+      "getReturns",
+      "حدث خطأ أثناء جلب المرتجعات",
+      []
+    ) as Promise<Return[]>;
   }
   
+  /**
+   * الحصول على مرتجع محدد بواسطة المعرف
+   * @param id معرف المرتجع
+   */
   public async getReturnById(id: string): Promise<Return | null> {
-    try {
-      return await this.getReturnService().getReturnById(id);
-    } catch (error) {
-      console.error(`Error in getReturnById(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب بيانات المرتجع",
-        variant: "destructive"
-      });
-      return null;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.returnService.getReturnById(id),
+      `getReturnById(${id})`,
+      "حدث خطأ أثناء جلب بيانات المرتجع",
+      null
+    );
   }
   
+  /**
+   * إنشاء مرتجع جديد
+   * @param returnData بيانات المرتجع
+   */
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
-    try {
-      return await this.getReturnService().createReturn(returnData);
-    } catch (error) {
-      console.error('Error in createReturn:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إنشاء المرتجع",
-        variant: "destructive"
-      });
-      return null;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.returnService.createReturn(returnData),
+      "createReturn",
+      "حدث خطأ أثناء إنشاء المرتجع",
+      null
+    );
   }
   
+  /**
+   * تحديث مرتجع
+   * @param id معرف المرتجع
+   * @param returnData بيانات المرتجع المحدثة
+   */
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
-    try {
-      return await this.getReturnService().updateReturn(id, returnData);
-    } catch (error) {
-      console.error(`Error in updateReturn(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تحديث المرتجع",
-        variant: "destructive"
-      });
-      return false;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.returnService.updateReturn(id, returnData),
+      `updateReturn(${id})`,
+      "حدث خطأ أثناء تحديث المرتجع",
+      false
+    ) as Promise<boolean>;
   }
   
+  /**
+   * تأكيد مرتجع
+   * @param returnId معرف المرتجع
+   */
   public async confirmReturn(returnId: string): Promise<boolean> {
-    try {
-      return await this.getReturnService().confirmReturn(returnId);
-    } catch (error) {
-      console.error(`Error in confirmReturn(${returnId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تأكيد المرتجع",
-        variant: "destructive"
-      });
-      return false;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.returnService.confirmReturn(returnId),
+      `confirmReturn(${returnId})`,
+      "حدث خطأ أثناء تأكيد المرتجع",
+      false
+    ) as Promise<boolean>;
   }
   
+  /**
+   * إلغاء مرتجع
+   * @param returnId معرف المرتجع
+   */
   public async cancelReturn(returnId: string): Promise<boolean> {
-    try {
-      return await this.getReturnService().cancelReturn(returnId);
-    } catch (error) {
-      console.error(`Error in cancelReturn(${returnId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إلغاء المرتجع",
-        variant: "destructive"
-      });
-      return false;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.returnService.cancelReturn(returnId),
+      `cancelReturn(${returnId})`,
+      "حدث خطأ أثناء إلغاء المرتجع",
+      false
+    ) as Promise<boolean>;
   }
   
+  /**
+   * حذف مرتجع
+   * @param id معرف المرتجع
+   */
   public async deleteReturn(id: string): Promise<boolean> {
-    try {
-      return await this.getReturnService().deleteReturn(id);
-    } catch (error) {
-      console.error(`Error in deleteReturn(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء حذف المرتجع",
-        variant: "destructive"
-      });
-      return false;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.returnService.deleteReturn(id),
+      `deleteReturn(${id})`,
+      "حدث خطأ أثناء حذف المرتجع",
+      false
+    ) as Promise<boolean>;
   }
   
-  // Ledger methods
+  // ============ خدمات سجل الحساب ============
+  
+  /**
+   * الحصول على قيود سجل الحساب لطرف معين
+   * @param partyId معرف الطرف
+   * @param startDate تاريخ البداية (اختياري)
+   * @param endDate تاريخ النهاية (اختياري)
+   */
   public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
-    try {
-      return await this.ledgerService.getLedgerEntries(partyId, startDate, endDate);
-    } catch (error) {
-      console.error(`Error in getLedgerEntries(${partyId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب سجلات الحساب",
-        variant: "destructive"
-      });
-      return [];
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.ledgerService.getLedgerEntries(partyId, startDate, endDate),
+      `getLedgerEntries(${partyId})`,
+      "حدث خطأ أثناء جلب سجلات الحساب",
+      []
+    ) as Promise<LedgerEntry[]>;
   }
   
+  /**
+   * إنشاء كشف حساب
+   * @param startDate تاريخ البداية
+   * @param endDate تاريخ النهاية
+   * @param partyType نوع الطرف (اختياري)
+   */
   public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
-    try {
-      return await this.ledgerService.generateAccountStatement(startDate, endDate, partyType);
-    } catch (error) {
-      console.error(`Error in generateAccountStatement(${startDate}, ${endDate}, ${partyType}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إنشاء كشف الحساب",
-        variant: "destructive"
-      });
-      return null;
-    }
+    return ErrorHandler.wrapOperation(
+      () => this.ledgerService.generateAccountStatement(startDate, endDate, partyType),
+      `generateAccountStatement(${startDate}, ${endDate}, ${partyType})`,
+      "حدث خطأ أثناء إنشاء كشف الحساب",
+      null
+    );
   }
 }
 
-// Re-export the CommercialTypes so they can be imported from this module as well
+// إعادة تصدير الأنواع ليتم استيرادها من هذا الوحدة أيضًا
 export type { 
   Invoice, 
   InvoiceItem, 
@@ -485,4 +435,3 @@ export type {
 };
 
 export default CommercialService;
-
