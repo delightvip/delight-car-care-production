@@ -68,36 +68,51 @@ const CategoryForm: React.FC = () => {
     const loadData = async () => {
       if (isEditing && id) {
         setLoading(true);
-        const category = await financialService.getCategory(id);
-        
-        if (category) {
-          form.reset({
-            name: category.name,
-            type: category.type,
-            description: category.description || '',
-          });
+        try {
+          const category = await financialService.getCategory(id);
+          
+          if (category) {
+            form.reset({
+              name: category.name,
+              type: category.type,
+              description: category.description || '',
+            });
+          } else {
+            toast.error("لم يتم العثور على الفئة");
+            navigate('/financial/categories');
+          }
+        } catch (error) {
+          console.error("Error loading category:", error);
+          toast.error("حدث خطأ أثناء تحميل بيانات الفئة");
+        } finally {
+          setLoading(false);
         }
-        
-        setLoading(false);
       } else {
         setLoading(false);
       }
     };
     
     loadData();
-  }, [isEditing, id, form]);
+  }, [isEditing, id, form, navigate, financialService]);
   
   const onSubmit = async (data: CategoryFormValues) => {
     setSubmitting(true);
     
-    let success = false;
-    
     try {
+      // Ensure we're passing valid data that matches the required type
+      const categoryData: Omit<Category, 'id' | 'created_at'> = {
+        name: data.name,
+        type: data.type,
+        description: data.description
+      };
+      
+      let success = false;
+      
       if (isEditing && id) {
-        const updated = await financialService.updateCategory(id, data);
+        const updated = await financialService.updateCategory(id, categoryData);
         success = !!updated;
       } else {
-        const created = await financialService.createCategory(data);
+        const created = await financialService.createCategory(categoryData);
         success = !!created;
       }
       
