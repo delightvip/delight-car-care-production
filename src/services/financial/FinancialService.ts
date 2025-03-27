@@ -1,5 +1,4 @@
 
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface Transaction {
@@ -180,7 +179,7 @@ export default class FinancialService {
     };
   }
 
-  public async updateCategory(id: string, category: Partial<Category>): Promise<Category | null> {
+  public async updateCategory(id: string, category: Partial<Omit<Category, 'id' | 'created_at'>>): Promise<Category | null> {
     const { data, error } = await supabase
       .from('financial_categories')
       .update(category)
@@ -267,7 +266,7 @@ export default class FinancialService {
       type: data.type as 'income' | 'expense',
       payment_method: data.payment_method as 'cash' | 'bank' | 'other',
       category_name: category?.name || ''
-    };
+    } as Transaction;
   }
 
   public async updateTransaction(
@@ -335,7 +334,7 @@ export default class FinancialService {
       type: data.type as 'income' | 'expense',
       payment_method: data.payment_method as 'cash' | 'bank' | 'other',
       category_name: category?.name || ''
-    };
+    } as Transaction;
   }
 
   public async deleteTransaction(id: string): Promise<boolean> {
@@ -453,4 +452,3 @@ export default class FinancialService {
     };
   }
 }
-

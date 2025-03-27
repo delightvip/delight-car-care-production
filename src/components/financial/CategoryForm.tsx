@@ -99,11 +99,11 @@ const CategoryForm: React.FC = () => {
     setSubmitting(true);
     
     try {
-      // Ensure we're passing valid data that matches the required type
+      // التأكد من أن جميع الحقول المطلوبة متوفرة في البيانات
       const categoryData: Omit<Category, 'id' | 'created_at'> = {
-        name: data.name,
-        type: data.type,
-        description: data.description
+        name: data.name, // الحقل مطلوب دائماً
+        type: data.type, // الحقل مطلوب دائماً
+        description: data.description // حقل اختياري
       };
       
       let success = false;
