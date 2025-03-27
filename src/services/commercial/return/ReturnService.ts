@@ -90,6 +90,12 @@ export class ReturnService {
 
         if (itemsError) throw itemsError;
 
+        // Cast the item_type to the expected enum type
+        const typedItems = (returnItems || []).map(item => ({
+          ...item,
+          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products"
+        }));
+
         return {
           id: data.id,
           invoice_id: data.invoice_id,
@@ -98,7 +104,7 @@ export class ReturnService {
           date: data.date,
           return_type: data.return_type as "sales_return" | "purchase_return",
           amount: data.amount,
-          items: returnItems || [],
+          items: typedItems,
           payment_status: data.payment_status as "draft" | "confirmed" | "cancelled",
           notes: data.notes,
           created_at: data.created_at,
@@ -482,7 +488,7 @@ export class ReturnService {
    * @param reason سبب التحديث
    */
   private async updateInventoryItem(
-    itemType: string,
+    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
     itemId: number,
     quantity: number,
     reason: string
@@ -491,16 +497,16 @@ export class ReturnService {
       // التعامل مع أنواع العناصر المختلفة
       switch (itemType) {
         case "raw_materials":
-          await this.inventoryService.updateRawMaterialQuantity(itemId, quantity, reason);
+          await this.inventoryService.updateRawMaterial(itemId, { quantity });
           break;
         case "packaging_materials":
-          await this.inventoryService.updatePackagingMaterialQuantity(itemId, quantity, reason);
+          await this.inventoryService.updatePackagingMaterial(itemId, { quantity });
           break;
         case "semi_finished_products":
-          await this.inventoryService.updateSemiFinishedProductQuantity(itemId, quantity, reason);
+          await this.inventoryService.updateSemiFinishedProduct(itemId, { quantity });
           break;
         case "finished_products":
-          await this.inventoryService.updateFinishedProductQuantity(itemId, quantity, reason);
+          await this.inventoryService.updateFinishedProduct(itemId, { quantity });
           break;
         default:
           throw new Error(`نوع عنصر غير معروف: ${itemType}`);
