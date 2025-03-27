@@ -1,741 +1,488 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { Category, Transaction, FinancialSummary, Invoice, Payment, Return } from "./CommercialTypes";
-import PartyService from "./PartyService";
+import { toast } from "@/components/ui/use-toast";
+import { 
+  Invoice, 
+  InvoiceItem, 
+  Payment, 
+  Return, 
+  ReturnItem, 
+  LedgerEntry 
+} from "./CommercialTypes";
+
+// Import other service classes
+import InvoiceService from './commercial/invoice/InvoiceService';
+import PaymentService from './commercial/payment/PaymentService';
+import LedgerService from './commercial/ledger/LedgerService';
+import { format } from "date-fns";
+
+// ReturnService will be imported lazily to avoid circular dependencies
+let returnServiceInstance: any = null;
 
 class CommercialService {
   private static instance: CommercialService;
-
-  private constructor() {}
-
+  private invoiceService: InvoiceService;
+  private paymentService: PaymentService;
+  private ledgerService: LedgerService;
+  
+  private constructor() {
+    this.invoiceService = InvoiceService.getInstance();
+    this.paymentService = PaymentService.getInstance();
+    this.ledgerService = LedgerService.getInstance();
+    
+    // Don't initialize returnService here to avoid circular dependencies
+  }
+  
+  // Lazy getter for returnService to avoid circular dependencies
+  private getReturnService() {
+    if (!returnServiceInstance) {
+      // Import dynamically to avoid circular dependencies at startup
+      const ReturnService = require('./commercial/return/ReturnService').default;
+      returnServiceInstance = ReturnService.getInstance();
+    }
+    return returnServiceInstance;
+  }
+  
   public static getInstance(): CommercialService {
     if (!CommercialService.instance) {
       CommercialService.instance = new CommercialService();
     }
     return CommercialService.instance;
   }
-
-  // Inventory Management
-  private getInventoryTableForItemType(itemType: string): string {
-    switch (itemType) {
-      case "raw_materials":
-        return "raw_materials";
-      case "packaging_materials":
-        return "packaging_materials";
-      case "semi_finished_products":
-        return "semi_finished_products";
-      case "finished_products":
-        return "finished_products";
-      default:
-        throw new Error(`Unknown item type: ${itemType}`);
-    }
-  }
-
-  public async getInventory(itemType: string): Promise<any[]> {
-    const table = this.getInventoryTableForItemType(itemType);
-    try {
-      const { data, error } = await supabase.from(table).select("*");
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error(`Error fetching ${itemType} inventory:`, error);
-      toast.error(`Failed to fetch ${itemType} inventory.`);
-      return [];
-    }
-  }
-
-  public async getItemById(itemType: string, id: number): Promise<any | null> {
-    const table = this.getInventoryTableForItemType(itemType);
-    try {
-      const { data, error } = await supabase
-        .from(table)
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error(`Error fetching ${itemType} item with id ${id}:`, error);
-      toast.error(`Failed to fetch ${itemType} item.`);
-      return null;
-    }
-  }
-
-  public async addItem(itemType: string, item: any): Promise<any | null> {
-    const table = this.getInventoryTableForItemType(itemType);
-    try {
-      const { data, error } = await supabase.from(table).insert(item).select().single();
-      if (error) throw error;
-      toast.success(`تمت إضافة ${itemType} بنجاح`);
-      return data;
-    } catch (error) {
-      console.error(`Error adding ${itemType} item:`, error);
-      toast.error(`Failed to add ${itemType} item.`);
-      return null;
-    }
-  }
-
-  public async updateItem(itemType: string, id: number, item: any): Promise<boolean> {
-    const table = this.getInventoryTableForItemType(itemType);
-    try {
-      const { error } = await supabase.from(table).update(item).eq("id", id);
-      if (error) throw error;
-      toast.success(`تم تحديث ${itemType} بنجاح`);
-      return true;
-    } catch (error) {
-      console.error(`Error updating ${itemType} item:`, error);
-      toast.error(`Failed to update ${itemType} item.`);
-      return false;
-    }
-  }
-
-  public async deleteItem(itemType: string, id: number): Promise<boolean> {
-    const table = this.getInventoryTableForItemType(itemType);
-    try {
-      const { error } = await supabase.from(table).delete().eq("id", id);
-      if (error) throw error;
-      toast.success(`تم حذف ${itemType} بنجاح`);
-      return true;
-    } catch (error) {
-      console.error(`Error deleting ${itemType} item:`, error);
-      toast.error(`Failed to delete ${itemType} item.`);
-      return false;
-    }
-  }
-
-  public async recordInventoryMovement(movement: {
-    item_id: string;
-    item_type: string;
-    quantity: number;
-    movement_type: string;
-    reason: string;
-  }): Promise<boolean> {
-    try {
-      const { error } = await supabase.from("inventory_movements").insert(movement);
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error("Error recording inventory movement:", error);
-      return false;
-    }
-  }
-
-  // Invoice Management
+  
+  // Invoice methods
   public async getInvoices(): Promise<Invoice[]> {
     try {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data || [];
+      return await this.invoiceService.getInvoices();
     } catch (error) {
-      console.error("Error fetching invoices:", error);
-      toast.error("Failed to fetch invoices.");
-      return [];
-    }
-  }
-
-  public async getInvoiceById(id: string): Promise<Invoice | null> {
-    try {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error(`Error fetching invoice with id ${id}:`, error);
-      toast.error("Failed to fetch invoice.");
-      return null;
-    }
-  }
-
-  public async createInvoice(invoice: Omit<Invoice, "id" | "created_at">): Promise<Invoice | null> {
-    try {
-      const { data, error } = await supabase.from("invoices").insert(invoice).select().single();
-      if (error) throw error;
-      toast.success("Invoice created successfully!");
-      return data;
-    } catch (error) {
-      console.error("Error creating invoice:", error);
-      toast.error("Failed to create invoice.");
-      return null;
-    }
-  }
-
-  public async updateInvoice(id: string, invoice: Partial<Invoice>): Promise<boolean> {
-    try {
-      const { error } = await supabase.from("invoices").update(invoice).eq("id", id);
-      if (error) throw error;
-      toast.success("Invoice updated successfully!");
-      return true;
-    } catch (error) {
-      console.error("Error updating invoice:", error);
-      toast.error("Failed to update invoice.");
-      return false;
-    }
-  }
-
-  // Invoice Items Management
-  public async getInvoiceItems(invoiceId: string): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from("invoice_items")
-        .select("*")
-        .eq("invoice_id", invoiceId);
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error fetching invoice items:", error);
-      toast.error("Failed to fetch invoice items.");
-      return [];
-    }
-  }
-
-  public async addInvoiceItem(item: any): Promise<any | null> {
-    try {
-      const { data, error } = await supabase.from("invoice_items").insert(item).select().single();
-      if (error) throw error;
-      toast.success("Invoice item added successfully!");
-      return data;
-    } catch (error) {
-      console.error("Error adding invoice item:", error);
-      toast.error("Failed to add invoice item.");
-      return null;
-    }
-  }
-
-  public async updateInvoiceItem(id: string, item: any): Promise<boolean> {
-    try {
-      const { error } = await supabase.from("invoice_items").update(item).eq("id", id);
-      if (error) throw error;
-      toast.success("Invoice item updated successfully!");
-      return true;
-    } catch (error) {
-      console.error("Error updating invoice item:", error);
-      toast.error("Failed to update invoice item.");
-      return false;
-    }
-  }
-
-  public async deleteInvoiceItem(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase.from("invoice_items").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("Invoice item deleted successfully!");
-      return true;
-    } catch (error) {
-      console.error("Error deleting invoice item:", error);
-      toast.error("Failed to delete invoice item.");
-      return false;
-    }
-  }
-
-  // Add these methods to the CommercialService class to handle returns:
-
-  public async getReturns(): Promise<Return[]> {
-    try {
-      const { data, error } = await supabase
-        .from('returns')
-        .select(`
-        *,
-        parties:party_id (name)
-      `)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-
-      return (data || []).map(returnItem => ({
-        ...returnItem,
-        party_name: returnItem.parties?.name
-      }));
-    } catch (error) {
-      console.error('Error fetching returns:', error);
-      toast.error('حدث خطأ أثناء جلب بيانات المرتجعات');
-      return [];
-    }
-  }
-
-  public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
-    try {
-      const { data, error } = await supabase
-        .from('returns')
-        .insert(returnData)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Insert return items if available
-      if (returnData.items && returnData.items.length > 0) {
-        const returnItems = returnData.items.map(item => ({
-          ...item,
-          return_id: data.id
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('return_items')
-          .insert(returnItems);
-
-        if (itemsError) throw itemsError;
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error creating return:', error);
-      toast.error('حدث خطأ أثناء إنشاء المرتجع');
-      return null;
-    }
-  }
-
-  public async confirmReturn(id: string): Promise<boolean> {
-    try {
-      // Get return details
-      const { data: returnData, error: returnError } = await supabase
-        .from('returns')
-        .select(`*, return_items(*)`)
-        .eq('id', id)
-        .single();
-
-      if (returnError) throw returnError;
-
-      // Update return status
-      const { error: updateError } = await supabase
-        .from('returns')
-        .update({ payment_status: 'confirmed' })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      // Update inventory for each item
-      const returnItems = returnData.return_items || [];
-      for (const item of returnItems) {
-        await this.updateInventoryForReturnItem(item, returnData.return_type);
-      }
-
-      // Update party balance if present
-      if (returnData.party_id) {
-        await this.updatePartyBalanceForReturn(returnData);
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error confirming return:', error);
-      toast.error('حدث خطأ أثناء تأكيد المرتجع');
-      return false;
-    }
-  }
-
-  public async cancelReturn(id: string): Promise<boolean> {
-    try {
-      // Get return details
-      const { data: returnData, error: returnError } = await supabase
-        .from('returns')
-        .select(`*, return_items(*)`)
-        .eq('id', id)
-        .single();
-
-      if (returnError) throw returnError;
-
-      // Can only cancel confirmed returns
-      if (returnData.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء المرتجعات المؤكدة فقط');
-        return false;
-      }
-
-      // Update return status
-      const { error: updateError } = await supabase
-        .from('returns')
-        .update({ payment_status: 'cancelled' })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      // Reverse inventory changes
-      const returnItems = returnData.return_items || [];
-      for (const item of returnItems) {
-        await this.reverseInventoryForReturnItem(item, returnData.return_type);
-      }
-
-      // Reverse party balance changes if present
-      if (returnData.party_id) {
-        await this.reversePartyBalanceForReturn(returnData);
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error cancelling return:', error);
-      toast.error('حدث خطأ أثناء إلغاء المرتجع');
-      return false;
-    }
-  }
-
-  private async updateInventoryForReturnItem(item: any, returnType: string): Promise<void> {
-    // Implementation details vary based on item_type and return_type
-    // This is a simplified version
-    try {
-      const table = this.getInventoryTableForItemType(item.item_type);
-
-      // For sales returns, we add to inventory
-      // For purchase returns, we subtract from inventory
-      const isAddition = returnType === 'sales_return';
-      const quantityChange = isAddition ? item.quantity : -item.quantity;
-
-      // Get current quantity
-      const { data, error } = await supabase
-        .from(table)
-        .select('quantity')
-        .eq('id', item.item_id)
-        .single();
-
-      if (error) throw error;
-
-      const newQuantity = (data.quantity || 0) + quantityChange;
-
-      // Update inventory quantity
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ quantity: newQuantity })
-        .eq('id', item.item_id);
-
-      if (updateError) throw updateError;
-
-      // Record inventory movement
-      await this.recordInventoryMovement({
-        item_id: item.item_id.toString(),
-        item_type: item.item_type,
-        quantity: quantityChange,
-        movement_type: returnType,
-        reason: `Return ID: ${item.return_id}`
+      console.error('Error in getInvoices:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب الفواتير",
+        variant: "destructive"
       });
-    } catch (error) {
-      console.error('Error updating inventory for return item:', error);
-      throw error;
+      return [];
     }
   }
-
-  private async reverseInventoryForReturnItem(item: any, returnType: string): Promise<void> {
-    // This just does the opposite of updateInventoryForReturnItem
-    try {
-      const table = this.getInventoryTableForItemType(item.item_type);
-
-      // For sales returns, we added to inventory, so now subtract
-      // For purchase returns, we subtracted from inventory, so now add
-      const isAddition = returnType === 'purchase_return';
-      const quantityChange = isAddition ? item.quantity : -item.quantity;
-
-      // Get current quantity
-      const { data, error } = await supabase
-        .from(table)
-        .select('quantity')
-        .eq('id', item.item_id)
-        .single();
-
-      if (error) throw error;
-
-      const newQuantity = (data.quantity || 0) + quantityChange;
-
-      // Update inventory quantity
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ quantity: newQuantity })
-        .eq('id', item.item_id);
-
-      if (updateError) throw updateError;
-
-      // Record inventory movement
-      await this.recordInventoryMovement({
-        item_id: item.item_id.toString(),
-        item_type: item.item_type,
-        quantity: quantityChange,
-        movement_type: `${returnType}_cancel`,
-        reason: `Cancelled Return ID: ${item.return_id}`
-      });
-    } catch (error) {
-      console.error('Error reversing inventory for return item:', error);
-      throw error;
-    }
-  }
-
-  private async updatePartyBalanceForReturn(returnData: any): Promise<void> {
-    try {
-      const partyService = PartyService.getInstance();
-
-      // For sales return, customer gets credit (we owe them money)
-      // For purchase return, supplier owes us money
-      const isDebit = returnData.return_type === 'purchase_return';
-
-      await partyService.updatePartyBalance(
-        returnData.party_id,
-        returnData.amount,
-        isDebit,
-        `مرتجع ${returnData.return_type === 'sales_return' ? 'مبيعات' : 'مشتريات'} رقم: ${returnData.id}`,
-        returnData.return_type,
-        returnData.id
-      );
-    } catch (error) {
-      console.error('Error updating party balance for return:', error);
-      throw error;
-    }
-  }
-
-  private async reversePartyBalanceForReturn(returnData: any): Promise<void> {
-    try {
-      const partyService = PartyService.getInstance();
-
-      // Do the opposite of what updatePartyBalanceForReturn did
-      const isDebit = returnData.return_type === 'sales_return';
-
-      await partyService.updatePartyBalance(
-        returnData.party_id,
-        returnData.amount,
-        isDebit,
-        `إلغاء مرتجع ${returnData.return_type === 'sales_return' ? 'مبيعات' : 'مشتريات'} رقم: ${returnData.id}`,
-        `${returnData.return_type}_cancel`,
-        returnData.id
-      );
-    } catch (error) {
-      console.error('Error reversing party balance for return:', error);
-      throw error;
-    }
-  }
-
-  // Also add these methods for invoice and payment operations that are missing:
-
+  
   public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('party_id', partyId)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-
-      return data || [];
+      return await this.invoiceService.getInvoicesByParty(partyId);
     } catch (error) {
-      console.error(`Error fetching invoices for party ${partyId}:`, error);
-      toast.error('حدث خطأ أثناء جلب الفواتير');
+      console.error(`Error in getInvoicesByParty(${partyId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب فواتير الطرف",
+        variant: "destructive"
+      });
       return [];
     }
   }
-
-  public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
+  
+  public async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('party_id', partyId)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-
-      return data || [];
+      return await this.invoiceService.getInvoiceById(id);
     } catch (error) {
-      console.error(`Error fetching payments for party ${partyId}:`, error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
-      return [];
-    }
-  }
-
-  public async deleteInvoice(id: string): Promise<boolean> {
-    try {
-      // Check if invoice can be deleted
-      const { data: invoice, error: fetchError } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      if (invoice.payment_status !== 'draft') {
-        toast.error('لا يمكن حذف الفاتورة المؤكدة. قم بإلغائها أولا.');
-        return false;
-      }
-
-      // Delete invoice items first
-      const { error: itemsError } = await supabase
-        .from('invoice_items')
-        .delete()
-        .eq('invoice_id', id);
-
-      if (itemsError) throw itemsError;
-
-      // Delete invoice
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success('تم حذف الفاتورة بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error deleting invoice:', error);
-      toast.error('حدث خطأ أثناء حذف الفاتورة');
-      return false;
-    }
-  }
-
-  public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
-    try {
-      const { data, error } = await supabase
-        .from('payments')
-        .insert(paymentData)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      return data;
-    } catch (error) {
-      console.error('Error recording payment:', error);
-      toast.error('حدث خطأ أثناء تسجيل الدفعة');
+      console.error(`Error in getInvoiceById(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب بيانات الفاتورة",
+        variant: "destructive"
+      });
       return null;
     }
   }
-
-  public async updatePayment(id: string, paymentData: Partial<Payment>): Promise<boolean> {
+  
+  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
-      const { error } = await supabase
-        .from('payments')
-        .update(paymentData)
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success('تم تحديث الدفعة بنجاح');
-      return true;
+      const invoice = await this.invoiceService.createInvoice(invoiceData);
+      
+      if (!invoice) {
+        console.error('Failed to create invoice');
+        return null;
+      }
+      
+      return invoice;
     } catch (error) {
-      console.error('Error updating payment:', error);
-      toast.error('حدث خطأ أثناء تحديث الدفعة');
+      console.error('Error in createInvoice:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء الفاتورة",
+        variant: "destructive"
+      });
+      return null;
+    }
+  }
+  
+  public async confirmInvoice(invoiceId: string): Promise<boolean> {
+    try {
+      // استخدام وعد يتم حله بعد تأكيد الفاتورة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
+      const confirmPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
+        // وتجنب تجمد واجهة المستخدم
+        setTimeout(async () => {
+          try {
+            const result = await this.invoiceService.confirmInvoice(invoiceId);
+            resolve(result);
+          } catch (error) {
+            console.error(`Error in confirmInvoice timeout(${invoiceId}):`, error);
+            resolve(false);
+          }
+        }, 100);
+      });
+      
+      return confirmPromise;
+    } catch (error) {
+      console.error(`Error in confirmInvoice(${invoiceId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد الفاتورة",
+        variant: "destructive"
+      });
       return false;
     }
   }
-
+  
+  public async cancelInvoice(invoiceId: string): Promise<boolean> {
+    try {
+      // استخدام وعد يتم حله بعد إلغاء الفاتورة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
+      const cancelPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
+        // وتجنب تجمد واجهة المستخدم
+        setTimeout(async () => {
+          try {
+            const result = await this.invoiceService.cancelInvoice(invoiceId);
+            resolve(result);
+          } catch (error) {
+            console.error(`Error in cancelInvoice timeout(${invoiceId}):`, error);
+            resolve(false);
+          }
+        }, 100);
+      });
+      
+      return cancelPromise;
+    } catch (error) {
+      console.error(`Error in cancelInvoice(${invoiceId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء الفاتورة",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  public async deleteInvoice(id: string): Promise<boolean> {
+    try {
+      return await this.invoiceService.deleteInvoice(id);
+    } catch (error) {
+      console.error(`Error in deleteInvoice(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف الفاتورة",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
+    try {
+      return await this.invoiceService.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
+    } catch (error) {
+      console.error(`Error in updateInvoiceStatusAfterPayment(${invoiceId}, ${paymentAmount}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث حالة الفاتورة بعد الدفع",
+        variant: "destructive"
+      });
+    }
+  }
+  
+  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
+    try {
+      return await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
+    } catch (error) {
+      console.error(`Error in reverseInvoiceStatusAfterPaymentCancellation(${invoiceId}, ${paymentAmount}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء عكس حالة الفاتورة بعد إلغاء الدفع",
+        variant: "destructive"
+      });
+    }
+  }
+  
+  // Payment methods
+  public async getPayments(): Promise<Payment[]> {
+    try {
+      return await this.paymentService.getPayments();
+    } catch (error) {
+      console.error('Error in getPayments:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب المدفوعات",
+        variant: "destructive"
+      });
+      return [];
+    }
+  }
+  
+  public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
+    try {
+      return await this.paymentService.getPaymentsByParty(partyId);
+    } catch (error) {
+      console.error(`Error in getPaymentsByParty(${partyId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب مدفوعات الطرف",
+        variant: "destructive"
+      });
+      return [];
+    }
+  }
+  
+  public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
+    try {
+      return await this.paymentService.recordPayment(paymentData);
+    } catch (error) {
+      console.error('Error in recordPayment:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تسجيل الدفعة",
+        variant: "destructive"
+      });
+      return null;
+    }
+  }
+  
+  public async confirmPayment(paymentId: string): Promise<boolean> {
+    try {
+      // استخدام وعد يتم حله بعد تأكيد الدفعة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
+      const confirmPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
+        // وتجنب تجمد واجهة المستخدم
+        setTimeout(async () => {
+          try {
+            const result = await this.paymentService.confirmPayment(paymentId);
+            resolve(result);
+          } catch (error) {
+            console.error(`Error in confirmPayment timeout(${paymentId}):`, error);
+            resolve(false);
+          }
+        }, 100);
+      });
+      
+      return confirmPromise;
+    } catch (error) {
+      console.error(`Error in confirmPayment(${paymentId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد الدفعة",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  public async cancelPayment(paymentId: string): Promise<boolean> {
+    try {
+      // استخدام وعد يتم حله بعد إلغاء الدفعة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
+      const cancelPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
+        // وتجنب تجمد واجهة المستخدم
+        setTimeout(async () => {
+          try {
+            const result = await this.paymentService.cancelPayment(paymentId);
+            resolve(result);
+          } catch (error) {
+            console.error(`Error in cancelPayment timeout(${paymentId}):`, error);
+            resolve(false);
+          }
+        }, 100);
+      });
+      
+      return cancelPromise;
+    } catch (error) {
+      console.error(`Error in cancelPayment(${paymentId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء الدفعة",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  public async updatePayment(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {
+    try {
+      return await this.paymentService.updatePayment(id, paymentData);
+    } catch (error) {
+      console.error(`Error in updatePayment(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث الدفعة",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
   public async deletePayment(id: string): Promise<boolean> {
     try {
-      const { data: payment, error: fetchError } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      if (payment.payment_status !== 'draft') {
-        toast.error('لا يمكن حذف الدفعة المؤكدة. قم بإلغائها أولا.');
-        return false;
-      }
-
-      const { error } = await supabase
-        .from('payments')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success('تم حذف الدفعة بنجاح');
-      return true;
+      return await this.paymentService.deletePayment(id);
     } catch (error) {
-      console.error('Error deleting payment:', error);
-      toast.error('حدث خطأ أثناء حذف الدفعة');
+      console.error(`Error in deletePayment(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف الدفعة",
+        variant: "destructive"
+      });
       return false;
     }
   }
-
-  public async confirmPayment(id: string): Promise<boolean> {
+  
+  // Return methods
+  public async getReturns(): Promise<Return[]> {
     try {
-      // Get payment details
-      const { data: payment, error: fetchError } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Update payment status
-      const { error: updateError } = await supabase
-        .from('payments')
-        .update({ payment_status: 'confirmed' })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      // Update party balance
-      if (payment.party_id) {
-        const partyService = PartyService.getInstance();
-        await partyService.updatePartyBalance(
-          payment.party_id,
-          payment.amount,
-          payment.payment_type === 'disbursement', // Disbursement is debit
-          `دفعة ${payment.payment_type === 'collection' ? 'محصلة' : 'مدفوعة'} رقم: ${payment.id}`,
-          'payment',
-          payment.id
-        );
-      }
-
-      toast.success('تم تأكيد الدفعة بنجاح');
-      return true;
+      return await this.getReturnService().getReturns();
     } catch (error) {
-      console.error('Error confirming payment:', error);
-      toast.error('حدث خطأ أثناء تأكيد الدفعة');
-      return false;
+      console.error('Error in getReturns:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب المرتجعات",
+        variant: "destructive"
+      });
+      return [];
     }
   }
-
-  public async cancelPayment(id: string): Promise<boolean> {
+  
+  public async getReturnById(id: string): Promise<Return | null> {
     try {
-      // Get payment details
-      const { data: payment, error: fetchError } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      if (payment.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء الدفعات المؤكدة فقط');
-        return false;
-      }
-
-      // Update payment status
-      const { error: updateError } = await supabase
-        .from('payments')
-        .update({ payment_status: 'cancelled' })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      // Reverse party balance
-      if (payment.party_id) {
-        const partyService = PartyService.getInstance();
-        await partyService.updatePartyBalance(
-          payment.party_id,
-          payment.amount,
-          payment.payment_type === 'collection', // Reverse of confirmation
-          `إلغاء دفعة ${payment.payment_type === 'collection' ? 'محصلة' : 'مدفوعة'} رقم: ${payment.id}`,
-          'payment_cancel',
-          payment.id
-        );
-      }
-
-      toast.success('تم إلغاء الدفعة بنجاح');
-      return true;
+      return await this.getReturnService().getReturnById(id);
     } catch (error) {
-      console.error('Error cancelling payment:', error);
-      toast.error('حدث خطأ أثناء إلغاء الدفعة');
+      console.error(`Error in getReturnById(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب بيانات المرتجع",
+        variant: "destructive"
+      });
+      return null;
+    }
+  }
+  
+  public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
+    try {
+      return await this.getReturnService().createReturn(returnData);
+    } catch (error) {
+      console.error('Error in createReturn:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء المرتجع",
+        variant: "destructive"
+      });
+      return null;
+    }
+  }
+  
+  public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
+    try {
+      return await this.getReturnService().updateReturn(id, returnData);
+    } catch (error) {
+      console.error(`Error in updateReturn(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث المرتجع",
+        variant: "destructive"
+      });
       return false;
     }
   }
-
+  
+  public async confirmReturn(returnId: string): Promise<boolean> {
+    try {
+      return await this.getReturnService().confirmReturn(returnId);
+    } catch (error) {
+      console.error(`Error in confirmReturn(${returnId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد المرتجع",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  public async cancelReturn(returnId: string): Promise<boolean> {
+    try {
+      return await this.getReturnService().cancelReturn(returnId);
+    } catch (error) {
+      console.error(`Error in cancelReturn(${returnId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إلغاء المرتجع",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  public async deleteReturn(id: string): Promise<boolean> {
+    try {
+      return await this.getReturnService().deleteReturn(id);
+    } catch (error) {
+      console.error(`Error in deleteReturn(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء حذف المرتجع",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  // Ledger methods
+  public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
+    try {
+      return await this.ledgerService.getLedgerEntries(partyId, startDate, endDate);
+    } catch (error) {
+      console.error(`Error in getLedgerEntries(${partyId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب سجلات الحساب",
+        variant: "destructive"
+      });
+      return [];
+    }
+  }
+  
+  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
+    try {
+      return await this.ledgerService.generateAccountStatement(startDate, endDate, partyType);
+    } catch (error) {
+      console.error(`Error in generateAccountStatement(${startDate}, ${endDate}, ${partyType}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء كشف الحساب",
+        variant: "destructive"
+      });
+      return null;
+    }
+  }
 }
 
+// Re-export the CommercialTypes so they can be imported from this module as well
+export type { 
+  Invoice, 
+  InvoiceItem, 
+  Payment, 
+  Return, 
+  ReturnItem, 
+  LedgerEntry 
+};
+
 export default CommercialService;
-export type { Transaction, Category, FinancialSummary } from "./CommercialTypes";
+

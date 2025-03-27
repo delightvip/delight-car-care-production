@@ -19,7 +19,7 @@ export const returnFormSchema = z.object({
       max_quantity: z.number().optional(),
       invoice_quantity: z.number().optional()
     })
-  ).refine(items => items.length > 0 && items.some(item => item.selected === true && item.quantity > 0), {
+  ).refine(items => items.some(item => item.selected === true && item.quantity > 0), {
     message: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
     path: ["items"]
   })

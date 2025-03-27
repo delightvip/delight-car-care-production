@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import {
   Form,
   FormControl,
@@ -20,19 +22,50 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon, Loader2, PlusCircle, Trash, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import CommercialService, { Return } from '@/services/CommercialService';
+import { ar } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { Return, ReturnItem } from '@/services/CommercialTypes';
+import CommercialService from '@/services/CommercialService';
 import InventoryService from '@/services/InventoryService';
 import PartyService from '@/services/PartyService';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ReturnFormHeader } from './returns/ReturnFormHeader';
 import { ReturnFormInvoice } from './returns/ReturnFormInvoice';
 import { ReturnFormParty } from './returns/ReturnFormParty';
 import { ReturnFormDetails } from './returns/ReturnFormDetails';
-import ReturnItemsSection from './returns/ReturnItemsSection';
-import { returnFormSchema, ReturnFormValues } from './returns/ReturnFormTypes';
+import { ReturnItemsSection } from './returns/ReturnItemsSection';
+
+const returnFormSchema = z.object({
+  return_type: z.enum(['sales_return', 'purchase_return']),
+  invoice_id: z.string().optional(),
+  party_id: z.string().optional(),
+  date: z.date(),
+  amount: z.number().min(0, 'يجب أن يكون المبلغ أكبر من صفر'),
+  notes: z.string().optional(),
+  items: z.array(
+    z.object({
+      item_id: z.number(),
+      item_type: z.enum(['raw_materials', 'packaging_materials', 'semi_finished_products', 'finished_products']),
+      item_name: z.string(),
+      quantity: z.number().min(0.1, 'يجب أن تكون الكمية أكبر من صفر'),
+      unit_price: z.number().min(0, 'يجب أن يكون السعر أكبر من أو يساوي صفر'),
+      selected: z.boolean().optional(),
+      max_quantity: z.number().optional(),
+      invoice_quantity: z.number().optional()
+    })
+  ).refine(items => items.some(item => item.selected === true && item.quantity > 0), {
+    message: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
+    path: ["items"]
+  })
+});
+
+type ReturnFormValues = z.infer<typeof returnFormSchema>;
 
 interface ReturnsFormProps {
   onSubmit: (data: Omit<Return, 'id' | 'created_at'>) => void;
@@ -48,14 +81,14 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
   const commercialService = CommercialService.getInstance();
   const partyService = PartyService.getInstance();
   
-  const defaultValues: ReturnFormValues = initialData 
+  const defaultValues = initialData 
     ? {
         ...initialData,
         date: initialData.date ? new Date(initialData.date) : new Date(),
         items: initialData.items || []
       }
     : {
-        return_type: 'sales_return',
+        return_type: 'sales_return' as const,
         date: new Date(),
         amount: 0,
         notes: '',
@@ -100,14 +133,6 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     enabled: !!selectedItemType,
   });
 
-  const handleReturnTypeChange = (value: string) => {
-    form.setValue('invoice_id', undefined);
-    form.setValue('party_id', undefined);
-    form.setValue('items', []);
-    setSelectedInvoice(null);
-    setInvoiceItems([]);
-  };
-
   const handleInvoiceChange = async (invoiceId: string) => {
     form.setValue('invoice_id', invoiceId === 'no_invoice' ? undefined : invoiceId);
     setSelectedInvoice(invoiceId === 'no_invoice' ? null : invoiceId);
@@ -125,7 +150,7 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
           if (invoice.items && invoice.items.length > 0) {
             const returnItems = invoice.items.map(item => ({
               item_id: Number(item.item_id),
-              item_type: item.item_type,
+              item_type: item.item_type as 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
               item_name: item.item_name,
               quantity: 0,
               unit_price: item.unit_price,
@@ -138,14 +163,26 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
             setInvoiceItems(invoice.items);
             calculateTotal();
             
-            toast.success('تم جلب أصناف الفاتورة بنجاح');
+            toast({
+              title: "نجاح",
+              description: "تم جلب أصناف الفاتورة بنجاح",
+              variant: "default"
+            });
           } else {
-            toast.info('لا توجد أصناف في الفاتورة المحددة');
+            toast({
+              title: "معلومات",
+              description: "لا توجد أصناف في الفاتورة المحددة",
+              variant: "default"
+            });
           }
         }
       } catch (error) {
         console.error('Error fetching invoice details:', error);
-        toast.error('حدث خطأ أثناء جلب تفاصيل الفاتورة');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء جلب تفاصيل الفاتورة",
+          variant: "destructive"
+        });
       } finally {
         setLoadingInvoiceItems(false);
       }
@@ -246,7 +283,11 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       const selectedItems = values.items.filter(item => item.selected && item.quantity > 0);
       
       if (selectedItems.length === 0) {
-        toast.error('يجب اختيار صنف واحد على الأقل وتحديد كمية له');
+        toast({
+          title: "خطأ",
+          description: "يجب اختيار صنف واحد على الأقل وتحديد كمية له",
+          variant: "destructive"
+        });
         return;
       }
       
@@ -273,7 +314,11 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
       onSubmit(returnData);
     } catch (error) {
       console.error('Error submitting return form:', error);
-      toast.error('حدث خطأ أثناء معالجة النموذج');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء معالجة النموذج",
+        variant: "destructive"
+      });
     }
   };
 
@@ -301,26 +346,178 @@ export function ReturnsForm({ onSubmit, initialData }: ReturnsFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ReturnFormHeader form={form} onReturnTypeChange={handleReturnTypeChange} />
+          <FormField
+            control={form.control}
+            name="return_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>نوع المرتجع</FormLabel>
+                <Select 
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    form.setValue('invoice_id', undefined);
+                    form.setValue('party_id', undefined);
+                    form.setValue('items', []);
+                    setSelectedInvoice(null);
+                    setInvoiceItems([]);
+                  }} 
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر نوع المرتجع" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="sales_return">مرتجع مبيعات</SelectItem>
+                    <SelectItem value="purchase_return">مرتجع مشتريات</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  حدد نوع المرتجع سواء كان مرتجع مبيعات (من العميل) أو مرتجع مشتريات (للمورد)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <ReturnFormInvoice 
-            form={form} 
-            isLoadingInvoices={isLoadingInvoices}
-            loadingInvoiceItems={loadingInvoiceItems}
-            filteredInvoices={filteredInvoices}
-            onInvoiceChange={handleInvoiceChange}
+          <FormField
+            control={form.control}
+            name="invoice_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>رقم الفاتورة (اختياري)</FormLabel>
+                <Select 
+                  onValueChange={handleInvoiceChange} 
+                  value={field.value || "no_invoice"}
+                  disabled={isLoadingInvoices || loadingInvoiceItems}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      {isLoadingInvoices || loadingInvoiceItems ? (
+                        <div className="flex items-center justify-center w-full">
+                          <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                          <span>جاري التحميل...</span>
+                        </div>
+                      ) : (
+                        <SelectValue placeholder="اختر الفاتورة المرتبطة" />
+                      )}
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="no_invoice">بدون فاتورة</SelectItem>
+                    {filteredInvoices.map((invoice) => (
+                      <SelectItem key={invoice.id} value={invoice.id}>
+                        {`${invoice.id.substring(0, 8)}... - ${invoice.party_name || 'غير محدد'} - ${invoice.total_amount}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  يمكنك ربط المرتجع بفاتورة محددة لتسهيل عملية إرجاع الأصناف
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
           />
 
           {!selectedInvoice && (
-            <ReturnFormParty 
-              form={form} 
-              returnType={returnType}
-              filteredParties={filteredParties}
-              onPartyChange={handlePartyChange}
+            <FormField
+              control={form.control}
+              name="party_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{returnType === 'sales_return' ? 'العميل' : 'المورد'}</FormLabel>
+                  <Select 
+                    onValueChange={handlePartyChange} 
+                    value={field.value || "no_party"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={`اختر ${returnType === 'sales_return' ? 'العميل' : 'المورد'}`} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="no_party">غير محدد</SelectItem>
+                      {filteredParties.map((party) => (
+                        <SelectItem key={party.id} value={party.id}>
+                          {party.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {returnType === 'sales_return' 
+                      ? 'حدد العميل الذي أرجع البضاعة' 
+                      : 'حدد المورد الذي سيتم إرجاع البضاعة إليه'}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
           )}
 
-          <ReturnFormDetails form={form} />
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>التاريخ</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full pl-3 text-right font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {field.value ? (
+                          format(field.value, "PPP", { locale: ar })
+                        ) : (
+                          <span>اختر التاريخ</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="amount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>إجمالي المبلغ</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    disabled
+                    className="bg-muted"
+                  />
+                </FormControl>
+                <FormDescription>
+                  يتم حساب هذا المبلغ تلقائيًا من الأصناف المختارة
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         <FormField

@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 
 const Returns = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -85,38 +85,69 @@ const Returns = () => {
         }
       }
       
-      // Create the return as a draft first
-      const result = await commercialService.createReturn({
-        ...returnData,
-        payment_status: 'draft'
+      // Use setTimeout to prevent UI freezing
+      const createReturnPromise = new Promise<Return | null>(async (resolve) => {
+        try {
+          // تعيين حالة المرتجع للتأكيد تلقائياً كمسودة أولاً
+          const result = await commercialService.createReturn({
+            ...returnData,
+            payment_status: 'draft'
+          });
+          
+          console.log('Return creation result:', result);
+          resolve(result);
+        } catch (error) {
+          console.error('Error in return creation:', error);
+          resolve(null);
+        }
       });
       
+      const result = await createReturnPromise;
+      
       if (result) {
-        // Auto-confirm the return after creation
+        // تأكيد المرتجع تلقائياً بعد إنشائه
         console.log('Auto confirming return:', result.id);
         
+        // Use setTimeout for async operation
         setTimeout(async () => {
           try {
             const confirmed = await commercialService.confirmReturn(result.id);
             console.log('Return confirm result:', confirmed);
             
-            // Refresh data
+            // تحديث البيانات
             queryClient.invalidateQueries({ queryKey: ['returns'] });
             queryClient.invalidateQueries({ queryKey: ['parties'] });
             queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
+            queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
+            queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
+            queryClient.invalidateQueries({ queryKey: ['finished_products'] });
           } catch (confirmError) {
             console.error('Error confirming return:', confirmError);
           }
         }, 500);
         
-        toast.success('تم إنشاء المرتجع وتأكيده بنجاح');
+        toast({
+          title: "نجاح",
+          description: "تم إنشاء المرتجع وتأكيده بنجاح",
+          variant: "default"
+        });
+        
         setIsAddDialogOpen(false);
       } else {
-        toast.error('حدث خطأ أثناء إنشاء المرتجع');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء إنشاء المرتجع",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error('Error handling return creation:', error);
-      toast.error('حدث خطأ أثناء إنشاء المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إنشاء المرتجع",
+        variant: "destructive"
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -129,21 +160,48 @@ const Returns = () => {
       setIsProcessing(true);
       console.log('Confirming return:', selectedReturnId);
       
-      const success = await commercialService.confirmReturn(selectedReturnId);
+      // Use setTimeout to prevent UI freezing
+      const confirmPromise = new Promise<boolean>(async (resolve) => {
+        try {
+          const success = await commercialService.confirmReturn(selectedReturnId);
+          resolve(success);
+        } catch (error) {
+          console.error('Error in confirm promise:', error);
+          resolve(false);
+        }
+      });
+      
+      const success = await confirmPromise;
       
       if (success) {
-        // Refresh data
+        // تحديث البيانات
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
+        queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
+        queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
+        queryClient.invalidateQueries({ queryKey: ['finished_products'] });
         
-        toast.success('تم تأكيد المرتجع بنجاح');
+        toast({
+          title: "نجاح",
+          description: "تم تأكيد المرتجع بنجاح",
+          variant: "default"
+        });
       } else {
-        toast.error('حدث خطأ أثناء تأكيد المرتجع');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تأكيد المرتجع",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error('Error confirming return:', error);
-      toast.error('حدث خطأ أثناء تأكيد المرتجع');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد المرتجع",
+        variant: "destructive"
+      });
     } finally {
       setIsConfirmDialogOpen(false);
       setSelectedReturnId(null);
@@ -158,21 +216,48 @@ const Returns = () => {
       setIsProcessing(true);
       console.log('Cancelling return:', selectedReturnId);
       
-      const success = await commercialService.cancelReturn(selectedReturnId);
+      // Use setTimeout to prevent UI freezing
+      const cancelPromise = new Promise<boolean>(async (resolve) => {
+        try {
+          const success = await commercialService.cancelReturn(selectedReturnId);
+          resolve(success);
+        } catch (error) {
+          console.error('Error in cancel promise:', error);
+          resolve(false);
+        }
+      });
+      
+      const success = await cancelPromise;
       
       if (success) {
-        // Refresh data
+        // تحديث البيانات
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
+        queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
+        queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
+        queryClient.invalidateQueries({ queryKey: ['finished_products'] });
         
-        toast.success('تم إلغاء المرتجع بنجاح');
+        toast({
+          title: "نجاح",
+          description: "تم إلغاء المرتجع بنجاح",
+          variant: "default"
+        });
       } else {
-        toast.error('حدث خطأ أثناء إلغاء المرتجع');
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء إلغاء المرتجع",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error('Error cancelling return:', error);
-      toast.error('حدث خطأ أثناء إلغاء المرتجع');
+      toast({
+        title: "خطأ", 
+        description: "حدث خطأ أثناء إلغاء المرتجع",
+        variant: "destructive"
+      });
     } finally {
       setIsCancelDialogOpen(false);
       setSelectedReturnId(null);
@@ -192,7 +277,11 @@ const Returns = () => {
 
   const exportToCsv = () => {
     if (!filteredReturns.length) {
-      toast.error('لا توجد بيانات للتصدير');
+      toast({
+        title: "خطأ",
+        description: "لا توجد بيانات للتصدير",
+        variant: "destructive"
+      });
       return;
     }
     
@@ -209,13 +298,22 @@ const Returns = () => {
     document.body.removeChild(link);
   };
 
+  // وظيفة إعادة تحميل البيانات
   const handleRefresh = async () => {
     try {
       await refetch();
-      toast.success('تم تحديث البيانات بنجاح');
+      toast({
+        title: "نجاح",
+        description: "تم تحديث البيانات بنجاح",
+        variant: "default"
+      });
     } catch (error) {
       console.error('Error refreshing data:', error);
-      toast.error('حدث خطأ أثناء تحديث البيانات');
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث البيانات",
+        variant: "destructive"
+      });
     }
   };
 

@@ -1,11 +1,15 @@
 
-import { supabase } from "@/integrations/supabase/client";
-import { LedgerEntry } from "../CommercialTypes";
+import BaseCommercialService from './BaseCommercialService';
+import { LedgerEntry } from '../CommercialTypes';
+import { toast } from "sonner";
+import { format } from 'date-fns';
 
-class LedgerService {
+class LedgerService extends BaseCommercialService {
   private static instance: LedgerService;
   
-  private constructor() {}
+  private constructor() {
+    super();
+  }
   
   public static getInstance(): LedgerService {
     if (!LedgerService.instance) {
@@ -14,86 +18,207 @@ class LedgerService {
     return LedgerService.instance;
   }
   
-  public async getLedgerEntriesByParty(partyId: string): Promise<LedgerEntry[]> {
+  public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
     try {
-      const { data, error } = await supabase
+      let query = this.supabase
         .from('ledger')
         .select('*')
         .eq('party_id', partyId)
-        .order('date', { ascending: false });
+        .order('date', { ascending: true });
+      
+      if (startDate) {
+        query = query.gte('date', startDate);
+      }
+      
+      if (endDate) {
+        query = query.lte('date', endDate);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       
-      return data || [];
+      // Get party name
+      const party = await this.partyService.getPartyById(partyId);
+      
+      return data.map(entry => ({
+        id: entry.id,
+        party_id: entry.party_id,
+        party_name: party?.name,
+        transaction_id: entry.transaction_id,
+        transaction_type: entry.transaction_type,
+        date: entry.date,
+        debit: entry.debit,
+        credit: entry.credit,
+        balance_after: entry.balance_after,
+        created_at: entry.created_at,
+        notes: ''
+      }));
     } catch (error) {
       console.error('Error fetching ledger entries:', error);
+      toast.error('حدث خطأ أثناء جلب سجل الحساب');
       return [];
     }
   }
   
-  public async getLedgerEntriesByType(type: 'customer' | 'supplier'): Promise<LedgerEntry[]> {
+  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
     try {
-      // First get all parties of the specified type
-      const { data: parties, error: partiesError } = await supabase
-        .from('parties')
-        .select('id')
-        .eq('type', type);
+      // Get parties of the specified type or all if not specified
+      let parties;
+      if (partyType && partyType !== 'all') {
+        // Convert partyType to the correct type
+        const validPartyType = (partyType === 'customer' || partyType === 'supplier' || partyType === 'other') 
+          ? partyType as "customer" | "supplier" | "other"
+          : "customer"; // Default to customer if invalid value
+        
+        parties = await this.partyService.getPartiesByType(validPartyType);
+      } else {
+        parties = await this.partyService.getParties();
+      }
       
-      if (partiesError) throw partiesError;
+      // For each party, get their ledger entries in the date range and calculate balances
+      const statements = await Promise.all(
+        parties.map(async (party) => {
+          const entries = await this.getLedgerEntries(party.id, startDate, endDate);
+          
+          let openingBalance = 0;
+          
+          // Get the balance before the start date
+          const { data: previousEntries, error: previousError } = await this.supabase
+            .from('ledger')
+            .select('balance_after')
+            .eq('party_id', party.id)
+            .lt('date', startDate)
+            .order('date', { ascending: false })
+            .limit(1);
+          
+          if (!previousError && previousEntries.length > 0) {
+            openingBalance = previousEntries[0].balance_after;
+          } else {
+            // If no previous entries, use the opening balance from party
+            openingBalance = party.balance_type === 'debit' 
+              ? party.opening_balance 
+              : -party.opening_balance;
+          }
+          
+          // Calculate totals
+          let totalDebit = 0;
+          let totalCredit = 0;
+          
+          entries.forEach(entry => {
+            totalDebit += entry.debit || 0;
+            totalCredit += entry.credit || 0;
+          });
+          
+          const closingBalance = openingBalance + totalDebit - totalCredit;
+          
+          return {
+            party_id: party.id,
+            party_name: party.name,
+            party_type: party.type,
+            opening_balance: openingBalance,
+            entries: entries,
+            total_debit: totalDebit,
+            total_credit: totalCredit,
+            closing_balance: closingBalance
+          };
+        })
+      );
       
-      if (!parties || parties.length === 0) return [];
-      
-      // Then get all ledger entries for these parties
-      const partyIds = parties.map(party => party.id);
-      const { data, error } = await supabase
-        .from('ledger')
-        .select('*')
-        .in('party_id', partyIds)
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      return data || [];
+      return statements;
     } catch (error) {
-      console.error(`Error fetching ledger entries for ${type}:`, error);
+      console.error('Error generating account statement:', error);
+      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
       return [];
     }
   }
   
-  public async addLedgerEntry(entry: Omit<LedgerEntry, 'id' | 'created_at'>): Promise<LedgerEntry | null> {
+  public async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
     try {
-      const { data, error } = await supabase
+      const party = await this.partyService.getPartyById(partyId);
+      if (!party) {
+        throw new Error('لم يتم العثور على الطرف التجاري');
+      }
+      
+      const entries = await this.getLedgerEntries(partyId, startDate, endDate);
+      
+      let openingBalance = 0;
+      
+      // Get the balance before the start date
+      const { data: previousEntries, error: previousError } = await this.supabase
         .from('ledger')
-        .insert(entry)
-        .select()
-        .single();
+        .select('balance_after')
+        .eq('party_id', partyId)
+        .lt('date', startDate)
+        .order('date', { ascending: false })
+        .limit(1);
       
-      if (error) throw error;
+      if (!previousError && previousEntries.length > 0) {
+        openingBalance = previousEntries[0].balance_after;
+      } else {
+        // If no previous entries, use the opening balance from party
+        openingBalance = party.balance_type === 'debit' 
+          ? party.opening_balance 
+          : -party.opening_balance;
+      }
       
-      return data;
+      // Calculate totals
+      let totalDebit = 0;
+      let totalCredit = 0;
+      
+      entries.forEach(entry => {
+        totalDebit += entry.debit || 0;
+        totalCredit += entry.credit || 0;
+      });
+      
+      const closingBalance = openingBalance + totalDebit - totalCredit;
+      
+      return {
+        party_id: party.id,
+        party_name: party.name,
+        party_type: party.type,
+        opening_balance: openingBalance,
+        entries: entries,
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        closing_balance: closingBalance
+      };
     } catch (error) {
-      console.error('Error adding ledger entry:', error);
+      console.error('Error generating single party statement:', error);
+      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
       return null;
     }
   }
   
-  public async getPartyBalance(partyId: string): Promise<number> {
+  public async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
     try {
-      const { data, error } = await supabase
-        .from('party_balances')
-        .select('balance')
-        .eq('party_id', partyId)
-        .single();
+      const ledgerEntries = await this.getLedgerEntries(partyId, startDate, endDate);
+      const party = await this.partyService.getPartyById(partyId);
       
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 means no rows returned, which is fine - we'll just return 0
-        throw error;
+      if (!ledgerEntries.length) {
+        return '';
       }
       
-      return data?.balance || 0;
+      // Create CSV headers
+      let csvContent = 'التاريخ,نوع المعاملة,البيان,المرجع,مدين,دائن,الرصيد\n';
+      
+      // Add CSV rows
+      ledgerEntries.forEach(entry => {
+        const date = format(new Date(entry.date), 'yyyy-MM-dd');
+        const transactionType = this.getTransactionDescription(entry.transaction_type);
+        const reference = entry.transaction_id || '';
+        const debit = entry.debit || 0;
+        const credit = entry.credit || 0;
+        const balance = entry.balance_after;
+        
+        csvContent += `${date},"${transactionType}","${entry.notes}","${reference}",${debit},${credit},${balance}\n`;
+      });
+      
+      return csvContent;
     } catch (error) {
-      console.error(`Error fetching balance for party ${partyId}:`, error);
-      return 0;
+      console.error('Error exporting ledger to CSV:', error);
+      toast.error('حدث خطأ أثناء تصدير سجل الحساب');
+      return '';
     }
   }
 }

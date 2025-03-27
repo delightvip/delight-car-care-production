@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Party } from '@/services/CommercialTypes';
+import { Party } from '@/services/PartyService';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 const partyFormSchema = z.object({
@@ -38,11 +38,9 @@ const partyFormSchema = z.object({
   address: z.string().optional(),
   opening_balance: z.number().default(0),
   balance_type: z.enum(['credit', 'debit']).default('debit'),
-  notes: z.string().optional(),
-  code: z.string().optional(),
 });
 
-export type PartyFormValues = z.infer<typeof partyFormSchema>;
+type PartyFormValues = z.infer<typeof partyFormSchema>;
 
 interface PartyFormProps {
   onSubmit: (data: PartyFormValues) => void;
@@ -61,8 +59,6 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
       address: initialData?.address || '',
       opening_balance: initialData?.opening_balance || 0,
       balance_type: (initialData?.balance_type as any) || 'debit',
-      notes: initialData?.notes || '',
-      code: initialData?.code || '',
     },
   });
 
@@ -189,20 +185,6 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                   </FormItem>
                 )}
               />
-              
-              <FormField
-                control={form.control}
-                name="code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>الكود</FormLabel>
-                    <FormControl>
-                      <Input placeholder="كود الطرف (اختياري)" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
             
             <FormField
@@ -213,20 +195,6 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                   <FormLabel>العنوان</FormLabel>
                   <FormControl>
                     <Textarea placeholder="العنوان" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ملاحظات</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="ملاحظات" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

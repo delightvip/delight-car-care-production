@@ -1,44 +1,56 @@
 
-export interface Party {
+export interface Invoice {
   id: string;
-  name: string;
-  type: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  balance_type?: string;
-  opening_balance?: number;
-  created_at?: string;
-  balance?: number;
-  code?: string;
+  invoice_type: 'sale' | 'purchase';
+  party_id: string;
+  party_name?: string;
+  date: string;
+  total_amount: number;
+  items: InvoiceItem[];
+  status: 'paid' | 'partial' | 'unpaid';
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
   notes?: string;
+  created_at?: string;
 }
 
 export interface InvoiceItem {
   id?: string;
   invoice_id?: string;
   item_id: number;
-  item_name: string;
   item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
+  item_name: string;
   quantity: number;
   unit_price: number;
-  unit_cost?: number;
   total?: number;
   created_at?: string;
 }
 
-export interface Invoice {
+export interface Payment {
   id: string;
-  invoice_type: "sale" | "purchase";
+  party_id: string;
+  party_name?: string;
+  date: string;
+  amount: number;
+  payment_type: 'collection' | 'disbursement';
+  method: 'cash' | 'check' | 'bank_transfer' | 'other';
+  related_invoice_id?: string;
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  notes?: string;
+  created_at?: string;
+}
+
+export interface Return {
+  id: string;
+  invoice_id?: string;
   party_id?: string;
   party_name?: string;
   date: string;
-  status: string;
-  payment_status: "draft" | "confirmed" | "cancelled";
-  total_amount: number;
+  return_type: 'sales_return' | 'purchase_return';
+  amount: number;
+  items?: ReturnItem[];
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
   notes?: string;
   created_at?: string;
-  items?: InvoiceItem[];
 }
 
 export interface ReturnItem {
@@ -50,82 +62,19 @@ export interface ReturnItem {
   quantity: number;
   unit_price: number;
   total?: number;
-  selected?: boolean;
-  max_quantity?: number;
-  invoice_quantity?: number;
-}
-
-export interface Return {
-  id: string;
-  return_type: "sales_return" | "purchase_return";
-  invoice_id?: string;
-  party_id?: string;
-  party_name?: string;
-  date: string;
-  amount: number;
-  payment_status: "draft" | "confirmed" | "cancelled";
-  notes?: string;
-  created_at?: string;
-  items?: ReturnItem[];
-}
-
-export interface Payment {
-  id: string;
-  payment_type: "collection" | "disbursement";
-  party_id?: string;
-  party_name?: string;
-  amount: number;
-  date: string;
-  method: string;
-  payment_status: "draft" | "confirmed" | "cancelled";
-  related_invoice_id?: string;
-  notes?: string;
   created_at?: string;
 }
 
 export interface LedgerEntry {
   id: string;
-  party_id?: string;
+  party_id: string;
+  party_name?: string;
   transaction_id?: string;
   transaction_type: string;
   date: string;
-  debit?: number;
-  credit?: number;
+  debit: number;
+  credit: number;
   balance_after: number;
   created_at?: string;
   notes?: string;
-}
-
-// Financial types
-export interface Transaction {
-  id: string;
-  type: "income" | "expense";
-  category_id: string;
-  category_name?: string;
-  amount: number;
-  date: string;
-  payment_method: "cash" | "bank" | "other";
-  notes?: string;
-  reference_id?: string;
-  reference_type?: string;
-  created_at?: string;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  type: "income" | "expense";
-  description?: string;
-  created_at?: string;
-}
-
-export interface FinancialSummary {
-  totalIncome: number;
-  totalExpenses: number;
-  netProfit: number;
-  balance: {
-    cash_balance: number;
-    bank_balance: number;
-  };
-  recentTransactions: Transaction[];
 }
