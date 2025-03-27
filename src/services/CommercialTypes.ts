@@ -95,3 +95,37 @@ export interface LedgerEntry {
   created_at?: string;
   notes?: string;
 }
+
+// Financial types
+export interface Transaction {
+  id: string;
+  type: "income" | "expense";
+  category_id: string;
+  category_name?: string;
+  amount: number;
+  date: string;
+  payment_method: "cash" | "bank" | "other";
+  notes?: string;
+  reference_id?: string;
+  reference_type?: string;
+  created_at?: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  type: "income" | "expense";
+  description?: string;
+  created_at?: string;
+}
+
+export interface FinancialSummary {
+  totalIncome: number;
+  totalExpenses: number;
+  netProfit: number;
+  balance: {
+    cash_balance: number;
+    bank_balance: number;
+  };
+  recentTransactions: Transaction[];
+}

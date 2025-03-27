@@ -165,7 +165,8 @@ class PartyService {
           date: new Date().toISOString().split('T')[0],
           debit: isDebit ? amount : 0,
           credit: isDebit ? 0 : amount,
-          balance_after: newBalance
+          balance_after: newBalance,
+          notes: description
         });
       
       if (ledgerError) throw ledgerError;

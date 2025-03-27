@@ -1,11 +1,10 @@
 
-import { LedgerEntry } from '@/services/CommercialTypes';
-import { LedgerEntity } from './LedgerEntity';
-import { LedgerReportGenerator } from './LedgerReportGenerator';
+import { supabase } from "@/integrations/supabase/client";
+import { LedgerEntry } from "../../CommercialTypes";
+import LedgerReportGenerator from "./LedgerReportGenerator";
 import { toast } from "sonner";
 
-// خدمة سجل الحساب الرئيسية
-export class LedgerService {
+class LedgerService {
   private static instance: LedgerService;
   
   private constructor() {}
@@ -17,20 +16,94 @@ export class LedgerService {
     return LedgerService.instance;
   }
   
-  public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
-    return LedgerEntity.fetchLedgerEntries(partyId, startDate, endDate);
+  // Add a ledger entry
+  public async addLedgerEntry(entry: Omit<LedgerEntry, 'id' | 'created_at'>): Promise<LedgerEntry | null> {
+    try {
+      if (!entry.transaction_id) {
+        throw new Error("Transaction ID is required");
+      }
+      
+      const { data, error } = await supabase
+        .from('ledger')
+        .insert(entry)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      return data;
+    } catch (error) {
+      console.error('Error adding ledger entry:', error);
+      return null;
+    }
   }
   
-  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
-    return LedgerReportGenerator.generateAccountStatement(startDate, endDate, partyType);
+  // Get ledger entries for a party
+  public async getLedgerEntriesForParty(partyId: string): Promise<LedgerEntry[]> {
+    try {
+      const { data, error } = await supabase
+        .from('ledger')
+        .select('*')
+        .eq('party_id', partyId)
+        .order('date', { ascending: true });
+      
+      if (error) throw error;
+      
+      return data || [];
+    } catch (error) {
+      console.error(`Error fetching ledger entries for party ${partyId}:`, error);
+      return [];
+    }
   }
   
-  public async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
-    return LedgerReportGenerator.generateSinglePartyStatement(partyId, startDate, endDate);
+  // Generate ledger report between dates
+  public async generateLedgerReport(startDate: string, endDate: string, type?: 'customer' | 'supplier'): Promise<LedgerEntry[]> {
+    try {
+      const reportGenerator = LedgerReportGenerator.getInstance();
+      const report = await reportGenerator.generateLedgerReport(startDate, endDate, type);
+      return report;
+    } catch (error) {
+      console.error('Error generating ledger report:', error);
+      toast.error('حدث خطأ أثناء إنشاء تقرير الحسابات');
+      return [];
+    }
   }
   
-  public async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
-    return LedgerReportGenerator.exportLedgerToCSV(partyId, startDate, endDate);
+  // Generate account statement for a specific party
+  public async generateAccountStatement(partyId: string, startDate: string, endDate: string): Promise<LedgerEntry[]> {
+    try {
+      const reportGenerator = LedgerReportGenerator.getInstance();
+      const statement = await reportGenerator.generateAccountStatement(partyId, startDate, endDate);
+      return statement;
+    } catch (error) {
+      console.error(`Error generating account statement for party ${partyId}:`, error);
+      toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
+      return [];
+    }
+  }
+  
+  // Get party balance
+  public async getPartyBalance(partyId: string): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .from('party_balances')
+        .select('balance')
+        .eq('party_id', partyId)
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No records found
+          return 0;
+        }
+        throw error;
+      }
+      
+      return data?.balance || 0;
+    } catch (error) {
+      console.error(`Error fetching balance for party ${partyId}:`, error);
+      return 0;
+    }
   }
 }
 

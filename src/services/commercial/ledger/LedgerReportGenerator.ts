@@ -44,7 +44,7 @@ class LedgerReportGenerator {
         credit: entry.credit,
         balance_after: entry.balance_after,
         created_at: entry.created_at,
-        notes: entry.notes
+        notes: entry.notes || ''
       }));
     } catch (error) {
       console.error('Error generating ledger report:', error);
@@ -64,7 +64,18 @@ class LedgerReportGenerator {
       
       if (error) throw error;
       
-      return data || [];
+      return (data || []).map(entry => ({
+        id: entry.id,
+        party_id: entry.party_id,
+        transaction_id: entry.transaction_id || '',
+        transaction_type: entry.transaction_type,
+        date: entry.date,
+        debit: entry.debit,
+        credit: entry.credit,
+        balance_after: entry.balance_after,
+        created_at: entry.created_at,
+        notes: entry.notes || ''
+      }));
     } catch (error) {
       console.error(`Error generating account statement for party ${partyId}:`, error);
       return [];
