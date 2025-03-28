@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import FinancialService, { Category } from '@/services/financial/FinancialService';
+import FinancialService from '@/services/financial/FinancialService';
+import { Category } from '@/services/financial/FinancialTypes';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

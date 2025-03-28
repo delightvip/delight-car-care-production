@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Transaction } from '@/services/financial/FinancialService';
+import { Transaction } from '@/services/financial/FinancialTypes';
 import FinancialService from '@/services/financial/FinancialService';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Badge } from '@/components/ui/badge';

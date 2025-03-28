@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -34,14 +33,12 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
   const [expanded, setExpanded] = useState(false);
   const financialService = FinancialService.getInstance();
   
-  // استعلام للحصول على المعاملات المالية المرتبطة
   const { data: linkedTransactions, isLoading, error, refetch } = useQuery({
     queryKey: ['financial-links', commercialId],
     queryFn: () => financialService.findLinkedFinancialTransactions(commercialId),
     enabled: !!commercialId
   });
   
-  // بيانات المعاملة التجارية
   const getCommercialInfo = () => {
     if (commercialType === 'invoice') {
       const invoice = commercialData as Invoice;
@@ -68,7 +65,6 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
   
   const commercialInfo = getCommercialInfo();
   
-  // إنشاء الارتباط بين المعاملة التجارية والمالية
   const handleCreateLink = async () => {
     try {
       let success = false;
@@ -94,7 +90,6 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
     }
   };
   
-  // تنسيق عرض المعاملة المالية
   const formatTransaction = (transaction: Transaction) => {
     return {
       date: format(new Date(transaction.date), 'yyyy-MM-dd'),
@@ -128,7 +123,6 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
       {expanded && (
         <CardContent>
           <div className="space-y-4">
-            {/* معلومات المعاملة التجارية */}
             <div className="p-3 bg-muted rounded-md">
               <div className="flex justify-between items-center">
                 <h3 className="font-medium">{commercialInfo.title}</h3>
@@ -153,7 +147,6 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
             
             <Separator />
             
-            {/* المعاملات المالية المرتبطة */}
             {isLoading ? (
               <div className="text-center py-4">جاري تحميل المعاملات المالية المرتبطة...</div>
             ) : error ? (
@@ -205,7 +198,6 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
               </div>
             )}
             
-            {/* زر إنشاء ارتباط جديد */}
             {hasLinkedTransactions && commercialInfo.status === 'confirmed' && (
               <div className="flex justify-end mt-4">
                 <Button onClick={handleCreateLink} variant="outline">

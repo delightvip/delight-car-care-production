@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addDays, format, startOfMonth, endOfMonth } from 'date-fns';
-import FinancialService, { FinancialSummary } from '@/services/financial/FinancialService';
+import FinancialService from '@/services/financial/FinancialService';
+import { FinancialSummary } from '@/services/financial/FinancialTypes';
 import FinancialSummaryCards from '@/components/financial/FinancialSummaryCards';
 import TransactionList from '@/components/financial/TransactionList';
 import { Button } from '@/components/ui/button';

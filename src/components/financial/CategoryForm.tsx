@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import FinancialService, { Category } from '@/services/financial/FinancialService';
+import FinancialService from '@/services/financial/FinancialService';
+import { Category } from '@/services/financial/FinancialTypes';
 import { ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'sonner';
 

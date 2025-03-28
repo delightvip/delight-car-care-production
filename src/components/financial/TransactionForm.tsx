@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -69,13 +68,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   const financialService = FinancialService.getInstance();
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>(initialData?.type || 'income');
   
-  // استعلام للحصول على الفئات المالية
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['categories', transactionType],
     queryFn: () => financialService.getCategories(transactionType),
   });
   
-  // تكوين نموذج المعاملة
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {
@@ -88,7 +85,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     },
   });
   
-  // تحديث نوع المعاملة عند تغييره
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === 'type' && value.type) {
@@ -99,14 +95,21 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     return () => subscription.unsubscribe();
   }, [form]);
   
-  // معالجة تقديم النموذج
   const onSubmit = async (data: TransactionFormValues) => {
     try {
       let result;
       
       if (isEditing && initialData?.id) {
-        // تحديث معاملة موجودة
-        result = await financialService.updateTransaction(initialData.id, data);
+        const updateData: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>> = {
+          type: data.type,
+          amount: data.amount,
+          category_id: data.category_id,
+          date: data.date,
+          payment_method: data.payment_method,
+          notes: data.notes
+        };
+        
+        result = await financialService.updateTransaction(initialData.id, updateData);
         if (result) {
           toast.success('تم تحديث المعاملة المالية بنجاح');
           if (onSuccessfulSubmit) {
@@ -116,8 +119,18 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
           }
         }
       } else {
-        // إنشاء معاملة جديدة
-        result = await financialService.createTransaction(data);
+        const newTransaction: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
+          type: data.type,
+          amount: data.amount,
+          category_id: data.category_id,
+          date: data.date,
+          payment_method: data.payment_method,
+          notes: data.notes || '',
+          reference_id: undefined,
+          reference_type: undefined
+        };
+        
+        result = await financialService.createTransaction(newTransaction);
         if (result) {
           toast.success('تم إنشاء المعاملة المالية بنجاح');
           form.reset();
@@ -279,7 +292,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
                     <Textarea placeholder="أدخل أي ملاحظات إضافية" {...field} />
                   </FormControl>
                   <FormDescription>
-                    يمكنك إضافة أي معلومات إضافية عن المعاملة هنا
+                    يمكنك إضافة أي معلومات إضافية عن المعاملة ��نا
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

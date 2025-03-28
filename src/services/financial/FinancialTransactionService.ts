@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Transaction } from "./FinancialTypes";
@@ -65,7 +64,7 @@ class FinancialTransactionService {
         id: item.id,
         date: item.date,
         amount: item.amount,
-        type: item.type,
+        type: item.type as 'income' | 'expense',
         category_id: item.category_id,
         category_name: item.financial_categories?.name || '',
         category_type: item.financial_categories?.type || item.type,
@@ -74,7 +73,7 @@ class FinancialTransactionService {
         reference_type: item.reference_type,
         notes: item.notes,
         created_at: item.created_at
-      }));
+      })) as Transaction[];
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast.error('حدث خطأ أثناء جلب المعاملات المالية');
@@ -108,7 +107,7 @@ class FinancialTransactionService {
         id: data.id,
         date: data.date,
         amount: data.amount,
-        type: data.type,
+        type: data.type as 'income' | 'expense',
         category_id: data.category_id,
         category_name: data.financial_categories?.name || '',
         category_type: data.financial_categories?.type || data.type,
@@ -117,7 +116,7 @@ class FinancialTransactionService {
         reference_type: data.reference_type,
         notes: data.notes,
         created_at: data.created_at
-      };
+      } as Transaction;
     } catch (error) {
       console.error('Error fetching transaction:', error);
       toast.error('حدث خطأ أثناء جلب بيانات المعاملة المالية');
@@ -174,7 +173,7 @@ class FinancialTransactionService {
         id: data.id,
         date: data.date,
         amount: data.amount,
-        type: data.type,
+        type: data.type as 'income' | 'expense',
         category_id: data.category_id,
         category_name: categoryData?.name || '',
         category_type: categoryData?.type || data.type,
@@ -183,7 +182,7 @@ class FinancialTransactionService {
         reference_type: data.reference_type,
         notes: data.notes,
         created_at: data.created_at
-      };
+      } as Transaction;
     } catch (error) {
       console.error('Error creating transaction:', error);
       toast.error('حدث خطأ أثناء تسجيل المعاملة المالية');
@@ -391,8 +390,10 @@ class FinancialTransactionService {
     notes?: string,
     date?: Date
   ): Promise<Transaction | null> {
+    const formattedDate = date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+    
     const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
-      date: date || new Date(),
+      date: formattedDate,
       amount,
       type,
       category_id: categoryId,

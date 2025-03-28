@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FinancialSummary, Category, Transaction, FinancialBalance } from "./FinancialTypes";
@@ -6,6 +5,7 @@ import FinancialTransactionService from "./FinancialTransactionService";
 import FinancialCategoryService from "./FinancialCategoryService";
 import FinancialReportService from "./FinancialReportService";
 import FinancialCommercialBridge from "./FinancialCommercialBridge";
+import { format } from "date-fns";
 
 /**
  * الخدمة المالية الرئيسية
@@ -210,7 +210,7 @@ class FinancialService {
         .update({
           cash_balance: cashBalance,
           bank_balance: bankBalance,
-          last_updated: new Date()
+          last_updated: format(new Date(), 'yyyy-MM-dd')
         })
         .eq('id', '1');
       

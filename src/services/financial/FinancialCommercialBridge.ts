@@ -3,6 +3,7 @@ import { Payment, Invoice, Return } from '@/services/commercial/CommercialTypes'
 import FinancialTransactionService from './FinancialTransactionService';
 import FinancialCategoryService from './FinancialCategoryService';
 import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * خدمة ربط بين النظام المالي ونظام المعاملات التجارية
