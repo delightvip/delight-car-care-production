@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import CommercialService from '@/services/CommercialService';
 import { Return } from '@/types/returns';
+import ReturnService from '@/services/commercial/return/ReturnService';
 
 export const useReturnActions = () => {
   const [selectedReturnId, setSelectedReturnId] = useState<string | null>(null);
@@ -15,17 +15,14 @@ export const useReturnActions = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
-  const commercialService = CommercialService.getInstance();
+  const returnService = ReturnService.getInstance();
 
   const handleCreateReturn = async (returnData: Omit<Return, 'id' | 'created_at'>): Promise<void> => {
     try {
       setIsProcessing(true);
       console.log('Creating return with data:', returnData);
       
-      const result = await commercialService.createReturn({
-        ...returnData,
-        payment_status: 'draft'
-      });
+      const result = await returnService.createReturn(returnData);
       
       if (result) {
         queryClient.invalidateQueries({ queryKey: ['returns'] });
@@ -49,9 +46,10 @@ export const useReturnActions = () => {
     try {
       setIsProcessing(true);
       console.log('Confirming return:', selectedReturnId);
-      const success = await commercialService.confirmReturn(selectedReturnId);
+      const success = await returnService.confirmReturn(selectedReturnId);
       
       if (success) {
+        // Invalidate relevant queries to refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -77,9 +75,10 @@ export const useReturnActions = () => {
     try {
       setIsProcessing(true);
       console.log('Cancelling return:', selectedReturnId);
-      const success = await commercialService.cancelReturn(selectedReturnId);
+      const success = await returnService.cancelReturn(selectedReturnId);
       
       if (success) {
+        // Invalidate relevant queries to refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -105,7 +104,7 @@ export const useReturnActions = () => {
     try {
       setIsProcessing(true);
       console.log('Deleting return:', selectedReturnId);
-      const success = await commercialService.deleteReturn(selectedReturnId);
+      const success = await returnService.deleteReturn(selectedReturnId);
       
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['returns'] });
@@ -127,7 +126,7 @@ export const useReturnActions = () => {
   const handleViewDetails = async (returnId: string): Promise<void> => {
     try {
       console.log('Viewing return details:', returnId);
-      const returnData = await commercialService.getReturnById(returnId);
+      const returnData = await returnService.getReturnById(returnId);
       if (returnData) {
         setViewingReturn(returnData as Return);
         setSelectedReturnId(returnId);

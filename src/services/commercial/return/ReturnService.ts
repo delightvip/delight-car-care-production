@@ -6,6 +6,7 @@ import FinancialCommercialBridge from "@/services/financial/FinancialCommercialB
 import returnDataService from "./ReturnDataService";
 import returnInventoryService from "./ReturnInventoryService";
 import { ReturnProcessingService } from "./ReturnProcessingService";
+import returnValidationService from "./ReturnValidationService";
 
 /**
  * خدمة إدارة المرتجعات
@@ -59,9 +60,16 @@ class ReturnService {
         date: formattedDate
       };
       
-      // التحقق من وجود أصناف مختارة وصالحة
+      // التحقق من صحة البيانات قبل الإنشاء
       if (!returnWithFormattedDate.items || returnWithFormattedDate.items.length === 0) {
         toast.error('يجب إضافة صنف واحد على الأقل للمرتجع');
+        return null;
+      }
+
+      // التحقق من وجود أصناف بكميات صحيحة
+      const validItems = returnWithFormattedDate.items.filter(item => item.quantity > 0);
+      if (validItems.length === 0) {
+        toast.error('يجب تحديد كمية صحيحة لصنف واحد على الأقل');
         return null;
       }
 
@@ -76,7 +84,7 @@ class ReturnService {
       }
     } catch (error) {
       console.error('Error creating return:', error);
-      toast.error('حدث خطأ أثناء إنشاء المرتجع');
+      toast.error(`حدث خطأ أثناء إنشاء المرتجع: ${(error as Error).message}`);
       return null;
     }
   }
@@ -90,6 +98,15 @@ class ReturnService {
       let formattedData = { ...returnData };
       if (returnData.date && typeof returnData.date === 'object') {
         formattedData.date = format(new Date(returnData.date as any), 'yyyy-MM-dd');
+      }
+
+      // التحقق من صحة البيانات قبل التحديث
+      if (returnData.items && returnData.items.length > 0) {
+        const validItems = returnData.items.filter(item => item.quantity > 0);
+        if (validItems.length === 0) {
+          toast.error('يجب تحديد كمية صحيحة لصنف واحد على الأقل');
+          return false;
+        }
       }
       
       const success = await returnDataService.updateReturn(id, formattedData);
@@ -122,20 +139,14 @@ class ReturnService {
   public async deleteReturn(id: string): Promise<boolean> {
     try {
       // 1. التحقق من حالة المرتجع
-      const returnData = await this.getReturnById(id);
+      const validationResult = await returnValidationService.validateBeforeDelete(id);
       
-      if (!returnData) {
-        toast.error('لم يتم العثور على المرتجع');
+      if (!validationResult.valid) {
+        toast.error(validationResult.message || 'لا يمكن حذف هذا المرتجع');
         return false;
       }
 
-      // 2. لا يمكن حذف مرتجع مؤكد، يجب إلغاؤه أولاً
-      if (returnData.payment_status === 'confirmed') {
-        toast.error('لا يمكن حذف مرتجع مؤكد. يرجى إلغائه أولاً ثم حذفه');
-        return false;
-      }
-
-      // 3. حذف المرتجع وأصنافه
+      // 2. حذف المرتجع وأصنافه
       const success = await returnDataService.deleteReturn(id);
       toast.success('تم حذف المرتجع بنجاح');
       return success;

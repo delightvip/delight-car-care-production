@@ -5,23 +5,26 @@ import { toast } from "sonner";
 
 /**
  * خدمة التعامل مع قاعدة البيانات للمرتجعات
+ * تم تحسين الاستعلامات وإضافة تحقق أفضل
  */
 export class ReturnDataService {
   /**
-   * جلب جميع المرتجعات
+   * جلب جميع المرتجعات مع التفاصيل المرتبطة في استعلام واحد
    */
   public async fetchAllReturns(): Promise<Return[]> {
     try {
-      // استعلام جلب المرتجعات مع أسماء الأطراف
+      // تحسين: جلب المرتجعات وأسماء الأطراف في استعلام واحد
       let { data: returns, error } = await supabase
         .from('returns')
         .select(`
           *,
-          parties:party_id (name)
+          parties:party_id (id, name),
+          return_items:id (*)
         `)
         .order('date', { ascending: false });
 
       if (error) {
+        console.error('Error fetching returns:', error);
         throw error;
       }
 
@@ -34,7 +37,8 @@ export class ReturnDataService {
         ...ret,
         party_name: ret.parties?.name || 'غير محدد',
         return_type: ret.return_type as 'sales_return' | 'purchase_return',
-        payment_status: ret.payment_status as 'draft' | 'confirmed' | 'cancelled'
+        payment_status: ret.payment_status as 'draft' | 'confirmed' | 'cancelled',
+        items: ret.return_items || []
       }));
 
       return formattedReturns as Return[];
@@ -50,17 +54,19 @@ export class ReturnDataService {
    */
   public async fetchReturnById(id: string): Promise<Return | null> {
     try {
-      // استعلام جلب المرتجع مع اسم الطرف
+      // تحسين: استعلام متعدد الجداول للحصول على كل البيانات دفعة واحدة
       let { data: returnData, error } = await supabase
         .from('returns')
         .select(`
           *,
-          parties:party_id (name)
+          parties:party_id (id, name),
+          return_items:id (*)
         `)
         .eq('id', id)
         .single();
 
       if (error) {
+        console.error(`Error fetching return with ID ${id}:`, error);
         throw error;
       }
 
@@ -68,27 +74,14 @@ export class ReturnDataService {
         return null;
       }
 
-      // جلب أصناف المرتجع
-      const { data: returnItems, error: itemsError } = await supabase
-        .from('return_items')
-        .select('*')
-        .eq('return_id', id);
-
-      if (itemsError) {
-        throw itemsError;
-      }
-
-      // Map item_type to the proper type
-      const typedItems = returnItems?.map(item => ({
-        ...item,
-        item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products"
-      })) || [];
-
       // تنسيق البيانات النهائية
       const formattedReturn: Return = {
         ...returnData,
         party_name: returnData.parties?.name || 'غير محدد',
-        items: typedItems as ReturnItem[],
+        items: (returnData.return_items || []).map(item => ({
+          ...item,
+          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products"
+        })) as ReturnItem[],
         return_type: returnData.return_type as 'sales_return' | 'purchase_return',
         payment_status: returnData.payment_status as 'draft' | 'confirmed' | 'cancelled'
       };
@@ -102,10 +95,15 @@ export class ReturnDataService {
   }
 
   /**
-   * إنشاء مرتجع جديد
+   * إنشاء مرتجع جديد مع تحسينات التحقق
    */
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
+      // التحقق من البيانات قبل الإنشاء
+      if (!this.validateReturnData(returnData)) {
+        throw new Error("البيانات غير مكتملة أو غير صالحة");
+      }
+
       // إنشاء المرتجع في قاعدة البيانات
       const { data: newReturn, error } = await supabase
         .from('returns')
@@ -149,16 +147,22 @@ export class ReturnDataService {
           .insert(formattedItems);
 
         if (itemsError) {
+          // إذا فشل إدخال الأصناف، نحذف المرتجع الذي تم إنشاؤه
+          await this.deleteReturn(newReturn.id);
           throw itemsError;
         }
       }
+
+      // سجل العملية في سجل الأحداث
+      await this.logReturnAction(newReturn.id, "create", returnData.return_type);
       
       // Return the created return with proper type casting
       return {
         ...newReturn,
         return_type: newReturn.return_type as 'sales_return' | 'purchase_return',
         payment_status: newReturn.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        party_name: returnData.party_name
+        party_name: returnData.party_name,
+        items: returnData.items?.filter(item => item.quantity > 0)
       } as Return;
     } catch (error) {
       console.error('Error creating return:', error);
@@ -225,6 +229,9 @@ export class ReturnDataService {
         }
       }
 
+      // سجل العملية في سجل الأحداث
+      await this.logReturnAction(id, "update", returnData.return_type);
+
       return true;
     } catch (error) {
       console.error(`Error updating return ${id}:`, error);
@@ -248,6 +255,9 @@ export class ReturnDataService {
         throw error;
       }
 
+      // سجل العملية في سجل الأحداث
+      await this.logReturnAction(id, `status_change_to_${status}`);
+
       return true;
     } catch (error) {
       console.error(`Error updating return status ${id}:`, error);
@@ -270,6 +280,9 @@ export class ReturnDataService {
         throw itemsError;
       }
 
+      // سجل العملية في سجل الأحداث
+      await this.logReturnAction(id, "delete");
+
       // حذف المرتجع
       const { error } = await supabase
         .from('returns')
@@ -288,6 +301,61 @@ export class ReturnDataService {
   }
 
   /**
+   * التحقق من بيانات المرتجع
+   * @private
+   */
+  private validateReturnData(returnData: Omit<Return, 'id' | 'created_at'>): boolean {
+    // التحقق من وجود البيانات الأساسية
+    if (!returnData.return_type || !returnData.date) {
+      console.error("Missing required return data:", { returnData });
+      toast.error("بيانات المرتجع غير مكتملة");
+      return false;
+    }
+
+    // التحقق من الأصناف
+    if (!returnData.items || returnData.items.length === 0) {
+      console.error("No items in return data");
+      toast.error("يجب إضافة صنف واحد على الأقل للمرتجع");
+      return false;
+    }
+
+    // التحقق من وجود أصناف بكميات صالحة
+    const hasValidItems = returnData.items.some(item => 
+      item.quantity > 0 && item.item_id && item.item_type
+    );
+
+    if (!hasValidItems) {
+      console.error("No valid items with quantity > 0");
+      toast.error("يجب اختيار صنف واحد على الأقل وتحديد كمية صالحة له");
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * تسجيل عمليات المرتجعات في سجل الأحداث
+   * @private
+   */
+  private async logReturnAction(
+    returnId: string, 
+    action: string, 
+    returnType?: string
+  ): Promise<void> {
+    try {
+      // يمكن إضافة سجل للعمليات في جدول منفصل
+      // حسب متطلبات النظام، هذا مثال فقط
+      console.log(`Audit log: Return ${returnId} action: ${action}, type: ${returnType || 'unknown'}`);
+
+      // يمكن إضافة تنفيذ فعلي لتسجيل العمليات هنا
+      // await supabase.from('audit_log').insert({...});
+    } catch (error) {
+      console.error("Error logging return action:", error);
+      // نستمر بالعمل حتى لو فشل تسجيل العملية
+    }
+  }
+
+  /**
    * جلب المرتجعات حسب الطرف
    */
   public async fetchReturnsByParty(partyId: string): Promise<Return[]> {
@@ -296,7 +364,8 @@ export class ReturnDataService {
         .from('returns')
         .select(`
           *,
-          parties:party_id (name)
+          parties:party_id (id, name),
+          return_items:id (*)
         `)
         .eq('party_id', partyId)
         .order('date', { ascending: false });
@@ -313,6 +382,7 @@ export class ReturnDataService {
       const formattedReturns = returns.map(ret => ({
         ...ret,
         party_name: ret.parties?.name || 'غير محدد',
+        items: ret.return_items || [],
         return_type: ret.return_type as 'sales_return' | 'purchase_return',
         payment_status: ret.payment_status as 'draft' | 'confirmed' | 'cancelled'
       }));
@@ -334,7 +404,8 @@ export class ReturnDataService {
         .from('returns')
         .select(`
           *,
-          parties:party_id (name)
+          parties:party_id (id, name),
+          return_items:id (*)
         `)
         .eq('invoice_id', invoiceId)
         .order('date', { ascending: false });
@@ -351,6 +422,7 @@ export class ReturnDataService {
       const formattedReturns = returns.map(ret => ({
         ...ret,
         party_name: ret.parties?.name || 'غير محدد',
+        items: ret.return_items || [],
         return_type: ret.return_type as 'sales_return' | 'purchase_return',
         payment_status: ret.payment_status as 'draft' | 'confirmed' | 'cancelled'
       }));

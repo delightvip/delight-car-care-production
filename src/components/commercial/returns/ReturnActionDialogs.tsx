@@ -46,6 +46,24 @@ export const ReturnActionDialogs: React.FC<ReturnActionDialogsProps> = ({
   onDelete,
   selectedReturnId
 }) => {
+  // Function to handle confirmation flow
+  const handleConfirmFlow = async (): Promise<void> => {
+    setIsDetailsOpen(false);
+    setIsConfirmDialogOpen(true);
+  };
+  
+  // Function to handle cancellation flow
+  const handleCancelFlow = async (): Promise<void> => {
+    setIsDetailsOpen(false);
+    setIsCancelDialogOpen(true);
+  };
+  
+  // Function to handle deletion flow
+  const handleDeleteFlow = async (): Promise<void> => {
+    setIsDetailsOpen(false);
+    setIsDeleteDialogOpen(true);
+  };
+
   return (
     <>
       {viewingReturn && (
@@ -56,26 +74,17 @@ export const ReturnActionDialogs: React.FC<ReturnActionDialogsProps> = ({
           isProcessing={isProcessing}
           onConfirm={
             viewingReturn.payment_status === 'draft' 
-              ? async () => {
-                  setIsDetailsOpen(false);
-                  setIsConfirmDialogOpen(true);
-                }
+              ? handleConfirmFlow
               : undefined
           }
           onCancel={
             viewingReturn.payment_status === 'confirmed'
-              ? async () => {
-                  setIsDetailsOpen(false);
-                  setIsCancelDialogOpen(true);
-                }
+              ? handleCancelFlow
               : undefined
           }
           onDelete={
             viewingReturn.payment_status === 'draft'
-              ? async () => {
-                  setIsDetailsOpen(false);
-                  setIsDeleteDialogOpen(true);
-                }
+              ? handleDeleteFlow
               : undefined
           }
         />

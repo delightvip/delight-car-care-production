@@ -4,7 +4,7 @@ import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
 import returnDataService from "./ReturnDataService";
 import returnInventoryService from "./ReturnInventoryService";
-import ReturnService from "./ReturnService";
+import returnValidationService from "./ReturnValidationService";
 
 /**
  * خدمة معالجة المرتجعات
@@ -22,7 +22,14 @@ export class ReturnProcessingService {
    */
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      // 1. جلب بيانات المرتجع كاملة
+      // 1. التحقق من صحة المرتجع قبل التأكيد
+      const validationResult = await returnValidationService.validateBeforeConfirm(returnId);
+      if (!validationResult.valid) {
+        toast.error(validationResult.message || 'فشل التحقق من صحة المرتجع');
+        return false;
+      }
+
+      // 2. جلب بيانات المرتجع كاملة
       const returnData = await returnDataService.fetchReturnById(returnId);
       
       if (!returnData || !returnData.items || returnData.items.length === 0) {
@@ -32,46 +39,27 @@ export class ReturnProcessingService {
 
       console.log("Confirming return with data:", returnData);
 
-      // 2. تحديث حالة المرتجع إلى مؤكد
+      // 3. تحديث حالة المرتجع إلى مؤكد
       await returnDataService.updateReturnStatus(returnId, 'confirmed');
 
-      // 3. تحديث المخزون بناءً على نوع المرتجع
-      for (const item of returnData.items) {
-        if (returnData.return_type === 'sales_return') {
-          // مرتجع مبيعات: إضافة الكميات للمخزون (العميل أعاد البضاعة)
-          console.log(`Increasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
-          await returnInventoryService.increaseItemQuantity(
-            item.item_type,
-            item.item_id,
-            item.quantity
-          );
-        } else {
-          // مرتجع مشتريات: خصم الكميات من المخزون (إعادة بضاعة للمورد)
-          console.log(`Decreasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
-          await returnInventoryService.decreaseItemQuantity(
-            item.item_type,
-            item.item_id,
-            item.quantity
-          );
-        }
+      // 4. تحديث المخزون بناءً على نوع المرتجع
+      try {
+        await this.updateInventory(returnData, 'confirm');
+      } catch (error) {
+        // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مسودة
+        await returnDataService.updateReturnStatus(returnId, 'draft');
+        throw error;
       }
 
-      // 4. تسجيل المعاملة المالية المقابلة
-      const note = returnData.return_type === 'sales_return' 
-        ? `مرتجع مبيعات من ${returnData.party_name || ''}` 
-        : `مرتجع مشتريات إلى ${returnData.party_name || ''}`;
-
-      // استخدام جسر الربط المالي
-      await this.financialBridge.handleReturnConfirmation({
-        id: returnId,
-        return_type: returnData.return_type,
-        amount: returnData.amount,
-        date: returnData.date,
-        party_id: returnData.party_id,
-        party_name: returnData.party_name,
-        invoice_id: returnData.invoice_id,
-        notes: note
-      });
+      // 5. تسجيل المعاملة المالية المقابلة
+      try {
+        await this.recordFinancialTransaction(returnData, 'confirm');
+      } catch (error) {
+        // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مسودة
+        await this.updateInventory(returnData, 'reverse_confirm');
+        await returnDataService.updateReturnStatus(returnId, 'draft');
+        throw error;
+      }
 
       toast.success('تم تأكيد المرتجع وتحديث المخزون والحسابات');
       return true;
@@ -87,7 +75,14 @@ export class ReturnProcessingService {
    */
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      // 1. جلب بيانات المرتجع كاملة
+      // 1. التحقق من صحة المرتجع قبل الإلغاء
+      const validationResult = await returnValidationService.validateBeforeCancel(returnId);
+      if (!validationResult.valid) {
+        toast.error(validationResult.message || 'فشل التحقق من صحة المرتجع');
+        return false;
+      }
+
+      // 2. جلب بيانات المرتجع كاملة
       const returnData = await returnDataService.fetchReturnById(returnId);
       
       if (!returnData) {
@@ -97,47 +92,27 @@ export class ReturnProcessingService {
 
       console.log("Cancelling return with data:", returnData);
 
-      // 2. التحقق من أن المرتجع مؤكد وليس ملغي بالفعل
-      if (returnData.payment_status !== 'confirmed') {
-        toast.error('لا يمكن إلغاء مرتجع غير مؤكد');
-        return false;
-      }
-
       // 3. تحديث حالة المرتجع إلى ملغي
       await returnDataService.updateReturnStatus(returnId, 'cancelled');
 
       // 4. عكس تأثير المرتجع على المخزون
-      if (returnData.items && returnData.items.length > 0) {
-        for (const item of returnData.items) {
-          if (returnData.return_type === 'sales_return') {
-            // إلغاء مرتجع مبيعات: خصم الكميات من المخزون (عكس الإضافة السابقة)
-            console.log(`Decreasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
-            await returnInventoryService.decreaseItemQuantity(
-              item.item_type,
-              item.item_id,
-              item.quantity
-            );
-          } else {
-            // إلغاء مرتجع مشتريات: إضافة الكميات للمخزون (عكس الخصم السابق)
-            console.log(`Increasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
-            await returnInventoryService.increaseItemQuantity(
-              item.item_type,
-              item.item_id,
-              item.quantity
-            );
-          }
-        }
+      try {
+        await this.updateInventory(returnData, 'cancel');
+      } catch (error) {
+        // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مؤكد
+        await returnDataService.updateReturnStatus(returnId, 'confirmed');
+        throw error;
       }
 
       // 5. عكس المعاملة المالية
-      await this.financialBridge.handleReturnCancellation({
-        id: returnId,
-        return_type: returnData.return_type,
-        amount: returnData.amount,
-        date: returnData.date,
-        party_id: returnData.party_id,
-        party_name: returnData.party_name
-      });
+      try {
+        await this.recordFinancialTransaction(returnData, 'cancel');
+      } catch (error) {
+        // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مؤكد
+        await this.updateInventory(returnData, 'reverse_cancel');
+        await returnDataService.updateReturnStatus(returnId, 'confirmed');
+        throw error;
+      }
 
       toast.success('تم إلغاء المرتجع وعكس تأثيره على المخزون والحسابات');
       return true;
@@ -145,6 +120,88 @@ export class ReturnProcessingService {
       console.error(`Error cancelling return ${returnId}:`, error);
       toast.error('حدث خطأ أثناء إلغاء المرتجع');
       return false;
+    }
+  }
+
+  /**
+   * تحديث المخزون بناءً على نوع المرتجع والعملية
+   * @private
+   */
+  private async updateInventory(returnData: Return, action: 'confirm' | 'cancel' | 'reverse_confirm' | 'reverse_cancel'): Promise<void> {
+    if (!returnData.items || returnData.items.length === 0) {
+      return;
+    }
+
+    for (const item of returnData.items) {
+      // تحديد نوع العملية بناءً على نوع المرتجع والعملية المطلوبة
+      let shouldIncrease = false;
+
+      if (returnData.return_type === 'sales_return') {
+        // مرتجع مبيعات: عند التأكيد نزيد المخزون، عند الإلغاء ننقص المخزون
+        if (action === 'confirm' || action === 'reverse_cancel') {
+          shouldIncrease = true;
+        }
+      } else {
+        // مرتجع مشتريات: عند التأكيد ننقص المخزون، عند الإلغاء نزيد المخزون
+        if (action === 'cancel' || action === 'reverse_confirm') {
+          shouldIncrease = true;
+        }
+      }
+
+      console.log(`${shouldIncrease ? 'Increasing' : 'Decreasing'} inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
+      
+      if (shouldIncrease) {
+        await returnInventoryService.increaseItemQuantity(
+          item.item_type,
+          item.item_id,
+          item.quantity
+        );
+      } else {
+        await returnInventoryService.decreaseItemQuantity(
+          item.item_type,
+          item.item_id,
+          item.quantity
+        );
+      }
+    }
+  }
+
+  /**
+   * تسجيل المعاملة المالية
+   * @private
+   */
+  private async recordFinancialTransaction(returnData: Return, action: 'confirm' | 'cancel'): Promise<void> {
+    // 1. إعداد بيانات المعاملة المالية
+    const note = returnData.return_type === 'sales_return' 
+      ? `مرتجع مبيعات من ${returnData.party_name || ''}` 
+      : `مرتجع مشتريات إلى ${returnData.party_name || ''}`;
+
+    // 2. تحديد نوع المعاملة بناءً على الإجراء
+    const transactionData = (action === 'confirm')
+      ? {
+          id: returnData.id,
+          return_type: returnData.return_type,
+          amount: returnData.amount,
+          date: returnData.date,
+          party_id: returnData.party_id,
+          party_name: returnData.party_name,
+          invoice_id: returnData.invoice_id,
+          notes: note
+        }
+      : {
+          id: returnData.id,
+          return_type: returnData.return_type,
+          amount: returnData.amount,
+          date: returnData.date,
+          party_id: returnData.party_id,
+          party_name: returnData.party_name
+        };
+
+    // 3. استخدام جسر الربط المالي
+    if (action === 'confirm') {
+      await this.financialBridge.handleReturnConfirmation(transactionData);
+    } else {
+      await this.financialBridge.handleReturnCancellation(transactionData);
     }
   }
 }
