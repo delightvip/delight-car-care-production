@@ -61,7 +61,7 @@ export class ReturnValidationService {
         .from('returns')
         .select(`
           *,
-          return_items:id (*)
+          return_items!return_id (*)
         `)
         .eq('id', returnId)
         .single();
@@ -85,7 +85,7 @@ export class ReturnValidationService {
 
       // التحقق من توفر الكميات في المخزون في حالة مرتجع المشتريات
       if (returnData.return_type === 'purchase_return') {
-        for (const item of returnData.return_items) {
+        for (const item of returnData.return_items as ReturnItem[]) {
           // جلب الكمية المتوفرة في المخزون
           const { data: inventoryItem, error: inventoryError } = await this.getInventoryItemQuantity(
             item.item_type,
@@ -186,27 +186,27 @@ export class ReturnValidationService {
     itemId: number
   ): Promise<{ data?: { quantity: number }; error?: Error }> {
     try {
-      let table = '';
+      let tableName: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
       
       switch (itemType) {
         case 'raw_materials':
-          table = 'raw_materials';
+          tableName = 'raw_materials';
           break;
         case 'packaging_materials':
-          table = 'packaging_materials';
+          tableName = 'packaging_materials';
           break;
         case 'semi_finished_products':
-          table = 'semi_finished_products';
+          tableName = 'semi_finished_products';
           break;
         case 'finished_products':
-          table = 'finished_products';
+          tableName = 'finished_products';
           break;
         default:
           return { error: new Error(`Invalid item type: ${itemType}`) };
       }
       
       const { data, error } = await supabase
-        .from(table)
+        .from(tableName)
         .select('quantity')
         .eq('id', itemId)
         .single();
@@ -215,7 +215,7 @@ export class ReturnValidationService {
         return { error };
       }
       
-      return { data };
+      return { data: data as { quantity: number } };
     } catch (error) {
       console.error(`Error getting inventory item quantity:`, error);
       return { error: error as Error };

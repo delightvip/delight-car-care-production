@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Return, ReturnItem } from "@/types/returns";
 import { toast } from "sonner";
@@ -19,7 +18,7 @@ export class ReturnDataService {
         .select(`
           *,
           parties:party_id (id, name),
-          return_items:id (*)
+          return_items!return_id (*)
         `)
         .order('date', { ascending: false });
 
@@ -60,7 +59,7 @@ export class ReturnDataService {
         .select(`
           *,
           parties:party_id (id, name),
-          return_items:id (*)
+          return_items!return_id (*)
         `)
         .eq('id', id)
         .single();
@@ -365,7 +364,7 @@ export class ReturnDataService {
         .select(`
           *,
           parties:party_id (id, name),
-          return_items:id (*)
+          return_items!return_id (*)
         `)
         .eq('party_id', partyId)
         .order('date', { ascending: false });
@@ -405,7 +404,7 @@ export class ReturnDataService {
         .select(`
           *,
           parties:party_id (id, name),
-          return_items:id (*)
+          return_items!return_id (*)
         `)
         .eq('invoice_id', invoiceId)
         .order('date', { ascending: false });
