@@ -42,10 +42,10 @@ export interface ReturnItem {
   created_at?: string;
 }
 
-// Return interface
+// Return interface - making invoice_id optional to match CommercialTypes
 export interface Return {
   id: string;
-  invoice_id: string;
+  invoice_id?: string; // Making this optional to match CommercialTypes
   party_id?: string;
   party_name?: string;
   date: string;

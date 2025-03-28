@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -208,7 +207,7 @@ const Returns = () => {
     try {
       const returnData = await commercialService.getReturnById(returnId);
       if (returnData) {
-        setViewingReturn(returnData);
+        setViewingReturn(returnData as Return); // Add type assertion here
         setSelectedReturnId(returnId);
         setIsDetailsOpen(true);
       } else {
@@ -221,32 +220,37 @@ const Returns = () => {
   };
 
   // export data to CSV
-  const exportToCsv = () => {
-    if (!filteredReturns.length) {
-      toast.error('لا توجد بيانات للتصدير');
-      return;
+  const exportToCsv = async () => { // Make this async
+    try {
+      if (!filteredReturns.length) {
+        toast.error('لا توجد بيانات للتصدير');
+        return;
+      }
+      
+      const csvContent = 'ID,النوع,الطرف,التاريخ,المبلغ,الفاتورة المرتبطة,الحالة\n' +
+        filteredReturns.map(returnItem => 
+          `"${returnItem.id}","${returnItem.return_type === 'sales_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}","${returnItem.party_name || ''}","${returnItem.date}","${returnItem.amount}","${returnItem.invoice_id || ''}","${
+            returnItem.payment_status === 'confirmed' ? 'مؤكد' : 
+            returnItem.payment_status === 'cancelled' ? 'ملغي' : 'مسودة'
+          }"`
+        ).join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `returns-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      toast.error('حدث خطأ أثناء تصدير البيانات');
     }
-    
-    const csvContent = 'ID,النوع,الطرف,التاريخ,المبلغ,الفاتورة المرتبطة,الحالة\n' +
-      filteredReturns.map(returnItem => 
-        `"${returnItem.id}","${returnItem.return_type === 'sales_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}","${returnItem.party_name || ''}","${returnItem.date}","${returnItem.amount}","${returnItem.invoice_id || ''}","${
-          returnItem.payment_status === 'confirmed' ? 'مؤكد' : 
-          returnItem.payment_status === 'cancelled' ? 'ملغي' : 'مسودة'
-        }"`
-      ).join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `returns-${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // refresh data
-  const handleRefresh = async () => {
+  const handleRefresh = async () => { // Make this async
     try {
       await refetch();
       toast.success('تم تحديث البيانات بنجاح');
