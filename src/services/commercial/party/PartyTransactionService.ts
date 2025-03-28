@@ -78,7 +78,7 @@ export class PartyTransactionService {
         balance_after: entry.balance_after,
         created_at: entry.created_at,
         description: this.getTransactionDescription(entry.transaction_type),
-        // Since 'notes' doesn't exist in the database response, we'll set it as an empty string
+        // في قاعدة البيانات لا توجد خاصية notes، لذا نضع قيمة افتراضية فارغة
         notes: ''
       }));
       

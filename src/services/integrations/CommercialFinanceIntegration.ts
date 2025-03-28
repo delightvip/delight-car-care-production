@@ -1,4 +1,3 @@
-
 import { FinanceIntegrationBase } from './finance/FinanceIntegrationBase';
 import ProfitCalculationService from './finance/ProfitCalculationService';
 import TransactionService from '@/services/financial/TransactionService';
