@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Transaction, LedgerEntry } from './PartyTypes';
 import { toast } from 'sonner';
@@ -78,8 +77,7 @@ export class PartyTransactionService {
         balance_after: entry.balance_after,
         created_at: entry.created_at,
         description: this.getTransactionDescription(entry.transaction_type),
-        // Add a default empty string for notes since it doesn't exist in the db response
-        notes: ''
+        notes: entry.notes || '' // Add default empty string if notes is undefined
       }));
       
       return ledgerEntries;
