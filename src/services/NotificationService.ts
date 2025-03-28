@@ -1,37 +1,37 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, createLowStockFilter, rpcFunctions } from '@/integrations/supabase/client';
 
 // استدعاء بيانات المخزون المنخفض
 export async function fetchLowStockItems() {
   try {
     console.log("Fetching low stock items...");
     
-    // فحص المواد الأولية ذات المخزون المنخفض - fixed query syntax
+    // فحص المواد الأولية ذات المخزون المنخفض - updated query syntax
     const rawMaterialsResponse = await supabase
       .from('raw_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
-    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - fixed query syntax
+    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - updated query syntax
     const semiFinishedResponse = await supabase
       .from('semi_finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
-    // فحص مستلزمات التعبئة ذات المخزون المنخفض - fixed query syntax
+    // فحص مستلزمات التعبئة ذات المخزون المنخفض - updated query syntax
     const packagingResponse = await supabase
       .from('packaging_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
-    // فحص المنتجات النهائية ذات المخزون المنخفض - fixed query syntax
+    // فحص المنتجات النهائية ذات المخزون المنخفض - updated query syntax
     const finishedResponse = await supabase
       .from('finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
     
     // تحقق من الأخطاء

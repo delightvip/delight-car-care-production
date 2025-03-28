@@ -19,14 +19,14 @@ import { InventoryLowStockTable } from '@/components/inventory/InventoryLowStock
 const LowStockItems = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
-  // استعلام المواد الأولية ذات المخزون المنخفض - fixed query
+  // استعلام المواد الأولية ذات المخزون المنخفض - updated query
   const { data: rawMaterials, isLoading: rawMaterialsLoading, error: rawMaterialsError } = useQuery({
     queryKey: ['lowStockRawMaterials'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('raw_materials')
         .select('*')
-        .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+        .lt('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;
@@ -34,14 +34,14 @@ const LowStockItems = () => {
     },
   });
   
-  // استعلام المنتجات نصف المصنعة ذات المخزون المنخفض - fixed query
+  // استعلام المنتجات نصف المصنعة ذات المخزون المنخفض - updated query
   const { data: semiFinished, isLoading: semiFinishedLoading, error: semiFinishedError } = useQuery({
     queryKey: ['lowStockSemiFinished'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('semi_finished_products')
         .select('*')
-        .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+        .lt('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;
@@ -49,14 +49,14 @@ const LowStockItems = () => {
     },
   });
   
-  // استعلام مستلزمات التعبئة ذات المخزون المنخفض - fixed query
+  // استعلام مستلزمات التعبئة ذات المخزون المنخفض - updated query
   const { data: packaging, isLoading: packagingLoading, error: packagingError } = useQuery({
     queryKey: ['lowStockPackaging'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('packaging_materials')
         .select('*')
-        .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+        .lt('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;
@@ -64,14 +64,14 @@ const LowStockItems = () => {
     },
   });
   
-  // استعلام المنتجات النهائية ذات المخزون المنخفض - fixed query
+  // استعلام المنتجات النهائية ذات المخزون المنخفض - updated query
   const { data: finishedProducts, isLoading: finishedProductsLoading, error: finishedProductsError } = useQuery({
     queryKey: ['lowStockFinishedProducts'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('finished_products')
         .select('*')
-        .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
+        .lt('quantity', 'min_stock')
         .gt('min_stock', 0);
         
       if (error) throw error;
