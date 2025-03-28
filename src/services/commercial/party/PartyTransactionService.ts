@@ -78,7 +78,8 @@ export class PartyTransactionService {
         balance_after: entry.balance_after,
         created_at: entry.created_at,
         description: this.getTransactionDescription(entry.transaction_type),
-        notes: entry.notes || ''
+        // Add a default empty string for notes since it doesn't exist in the db response
+        notes: ''
       }));
       
       return ledgerEntries;

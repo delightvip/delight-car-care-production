@@ -5,6 +5,7 @@ import TransactionService from '@/services/financial/TransactionService';
 import { FinancialTransaction } from '@/services/interfaces/FinancialIntegration';
 import { toast } from 'sonner';
 import LedgerService from '@/services/commercial/ledger/LedgerService';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * خدمة التكامل بين النظام التجاري والنظام المالي
