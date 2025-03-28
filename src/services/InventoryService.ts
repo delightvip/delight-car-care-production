@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -58,7 +57,6 @@ export interface FinishedProduct {
   semi_finished_quantity: number;
   created_at: string | null;
   updated_at: string | null;
-  // Add these properties to match expected usage
   semiFinished: {
     code: string;
     name: string;
@@ -83,7 +81,6 @@ class InventoryService {
     return InventoryService.instance;
   }
   
-  // المواد الخام
   public async getRawMaterials(): Promise<RawMaterial[]> {
     try {
       const { data, error } = await supabase
@@ -158,7 +155,6 @@ class InventoryService {
     }
   }
   
-  // مواد التعبئة والتغليف
   public async getPackagingMaterials(): Promise<PackagingMaterial[]> {
     try {
       const { data, error } = await supabase
@@ -233,7 +229,6 @@ class InventoryService {
     }
   }
   
-  // المنتجات نصف المصنعة
   public async getSemiFinishedProducts(): Promise<SemiFinishedProduct[]> {
     try {
       const { data, error } = await supabase
@@ -243,7 +238,6 @@ class InventoryService {
       
       if (error) throw error;
       
-      // Fetch ingredients for each product
       const productsWithIngredients = await Promise.all(
         (data || []).map(async (product) => {
           const ingredients = await this.getSemiFinishedIngredients(product.id);
@@ -319,7 +313,6 @@ class InventoryService {
       
       toast.success(`تم تحديث ${data.name} بنجاح`);
       
-      // Fetch ingredients to include in the returned data
       const ingredients = await this.getSemiFinishedIngredients(id);
       
       return { ...data, ingredients };
@@ -348,7 +341,6 @@ class InventoryService {
     }
   }
   
-  // المنتجات تامة الصنع
   public async getFinishedProducts(): Promise<FinishedProduct[]> {
     try {
       const { data, error } = await supabase
@@ -358,7 +350,6 @@ class InventoryService {
       
       if (error) throw error;
       
-      // Fetch packaging materials for each product
       const productsWithDetails = await Promise.all(
         (data || []).map(async (product) => {
           const packaging = await this.getProductPackaging(product.id);
@@ -417,7 +408,6 @@ class InventoryService {
       
       if (error) throw error;
       
-      // Get the semi-finished product details
       const { data: semiFinished } = await supabase
         .from('semi_finished_products')
         .select('code, name')
@@ -453,7 +443,6 @@ class InventoryService {
       
       if (error) throw error;
       
-      // Fetch packaging to include in the returned data
       const packaging = await this.getProductPackaging(id);
       
       toast.success(`تم تحديث ${data.name} بنجاح`);
@@ -491,8 +480,7 @@ class InventoryService {
       return false;
     }
   }
-
-  // Add this method to the InventoryService class to handle inventory movements
+  
   public async recordItemMovement(movement: {
     type: string;
     category: string;
@@ -502,21 +490,98 @@ class InventoryService {
     note: string;
   }): Promise<void> {
     try {
-      // Since we can't directly access inventory_movements table, we'll use a workaround
-      // This function simulates updating movement records by updating quantities in the existing tables
-      
-      // Here we should ideally call an API or a function that adds entries to inventory_movements
-      // But for now, we'll just log the movement
       console.log('Inventory movement recorded:', movement);
     } catch (error) {
       console.error('Error recording inventory movement:', error);
       toast.error('حدث خطأ أثناء تسجيل حركة المخزون');
     }
   }
-
-  // Add the missing methods required by the ProductionService
   
-  // Get a raw material by code
+  public async updateItemQuantity(
+    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+    itemId: number,
+    quantity: number,
+    source: string = "system"
+  ): Promise<boolean> {
+    try {
+      let currentItem;
+      let updatedQuantity;
+      let itemName = '';
+      
+      switch (itemType) {
+        case "raw_materials":
+          const rawMaterials = await this.getRawMaterials();
+          currentItem = rawMaterials.find(m => m.id === itemId);
+          if (!currentItem) return false;
+          
+          itemName = currentItem.name;
+          updatedQuantity = currentItem.quantity + quantity;
+          
+          await this.updateRawMaterial(itemId, { 
+            quantity: updatedQuantity 
+          });
+          break;
+          
+        case "packaging_materials":
+          const packagingMaterials = await this.getPackagingMaterials();
+          currentItem = packagingMaterials.find(m => m.id === itemId);
+          if (!currentItem) return false;
+          
+          itemName = currentItem.name;
+          updatedQuantity = currentItem.quantity + quantity;
+          
+          await this.updatePackagingMaterial(itemId, { 
+            quantity: updatedQuantity 
+          });
+          break;
+          
+        case "semi_finished_products":
+          const semiFinishedProducts = await this.getSemiFinishedProducts();
+          currentItem = semiFinishedProducts.find(p => p.id === itemId);
+          if (!currentItem) return false;
+          
+          itemName = currentItem.name;
+          updatedQuantity = currentItem.quantity + quantity;
+          
+          await this.updateSemiFinishedProduct(itemId, { 
+            quantity: updatedQuantity 
+          });
+          break;
+          
+        case "finished_products":
+          const finishedProducts = await this.getFinishedProducts();
+          currentItem = finishedProducts.find(p => p.id === itemId);
+          if (!currentItem) return false;
+          
+          itemName = currentItem.name;
+          updatedQuantity = currentItem.quantity + quantity;
+          
+          await this.updateFinishedProduct(itemId, { 
+            quantity: updatedQuantity 
+          });
+          break;
+          
+        default:
+          return false;
+      }
+      
+      await this.recordItemMovement({
+        type: quantity > 0 ? 'in' : 'out',
+        category: itemType,
+        itemName: itemName,
+        quantity: Math.abs(quantity),
+        date: new Date(),
+        note: `تم ${quantity > 0 ? 'إضافة' : 'خصم'} الكمية عن طريق: ${source}`
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating item quantity:', error);
+      toast.error('حدث خطأ أثناء تحديث كمية العنصر');
+      return false;
+    }
+  }
+  
   public async getRawMaterialByCode(code: string): Promise<{ data: RawMaterial | null, error: any }> {
     try {
       const { data, error } = await supabase
@@ -532,7 +597,6 @@ class InventoryService {
     }
   }
   
-  // Return raw materials to inventory
   public async returnRawMaterials(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -550,7 +614,6 @@ class InventoryService {
     }
   }
   
-  // Consume raw materials from inventory
   public async consumeRawMaterials(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -573,7 +636,6 @@ class InventoryService {
     }
   }
   
-  // Update raw materials importance
   public async updateRawMaterialsImportance(codes: string[]): Promise<boolean> {
     try {
       for (const code of codes) {
@@ -591,7 +653,6 @@ class InventoryService {
     }
   }
   
-  // Add semi-finished product to inventory
   public async addSemiFinishedToInventory(
     code: string, 
     quantity: number, 
@@ -621,7 +682,6 @@ class InventoryService {
     }
   }
   
-  // Remove semi-finished product from inventory
   public async removeSemiFinishedFromInventory(code: string, quantity: number): Promise<boolean> {
     try {
       const { data: semiFinishedProduct } = await supabase
@@ -636,7 +696,7 @@ class InventoryService {
       }
       
       if (semiFinishedProduct.quantity < quantity) {
-        toast.error('كمية المنتج النصف مصنع غير كافية');
+        toast.error('كمية المنتج النصف مصنع غي�� كافية');
         return false;
       }
       
@@ -651,7 +711,6 @@ class InventoryService {
     }
   }
   
-  // Check if semi-finished product is available
   public async checkSemiFinishedAvailability(code: string, quantity: number): Promise<boolean> {
     try {
       const { data: semiFinishedProduct } = await supabase
@@ -667,7 +726,6 @@ class InventoryService {
     }
   }
   
-  // Check if packaging materials are available
   public async checkPackagingAvailability(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -689,7 +747,6 @@ class InventoryService {
     }
   }
   
-  // Return packaging materials to inventory
   public async returnPackagingMaterials(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -713,7 +770,6 @@ class InventoryService {
     }
   }
   
-  // Remove finished product from inventory
   public async removeFinishedFromInventory(code: string, quantity: number): Promise<boolean> {
     try {
       const { data: finishedProduct } = await supabase
@@ -743,7 +799,6 @@ class InventoryService {
     }
   }
   
-  // Produce finished product
   public async produceFinishedProduct(
     productCode: string,
     quantity: number,
@@ -752,7 +807,6 @@ class InventoryService {
     packagingMaterials: { code: string, requiredQuantity: number }[]
   ): Promise<boolean> {
     try {
-      // Consume semi-finished product
       const semiFinishedRemoved = await this.removeSemiFinishedFromInventory(
         semiFinishedCode, 
         semiFinishedQuantity
@@ -762,7 +816,6 @@ class InventoryService {
         return false;
       }
       
-      // Consume packaging materials
       for (const material of packagingMaterials) {
         const { data: packagingMaterial } = await supabase
           .from('packaging_materials')
@@ -771,7 +824,6 @@ class InventoryService {
           .single();
         
         if (!packagingMaterial || packagingMaterial.quantity < material.requiredQuantity) {
-          // Rollback and return semi-finished product to inventory
           await this.addSemiFinishedToInventory(semiFinishedCode, semiFinishedQuantity);
           toast.error(`مادة التعبئة ${packagingMaterial?.name || material.code} غير متوفرة بالكمية المطلوبة`);
           return false;
@@ -782,7 +834,6 @@ class InventoryService {
         });
       }
       
-      // Add finished product
       const { data: finishedProduct } = await supabase
         .from('finished_products')
         .select('*')
@@ -790,7 +841,6 @@ class InventoryService {
         .single();
       
       if (!finishedProduct) {
-        // Rollback and return all consumed materials
         await this.addSemiFinishedToInventory(semiFinishedCode, semiFinishedQuantity);
         await this.returnPackagingMaterials(packagingMaterials);
         toast.error('المنتج التام الصنع غير موجود');
