@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -19,11 +20,7 @@ import {
   BoxIcon,
   ArrowLeftRight,
   Truck,
-  AlertTriangle,
-  DollarSign,
-  CreditCard,
-  LineChart,
-  TagIcon
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarContext';
@@ -219,12 +216,6 @@ const ModernSidebar: React.FC = () => {
           <SidebarItem to="/commercial/returns" icon={ArrowUpDown} title="المرتجعات" />
           <SidebarItem to="/commercial/statements" icon={ClipboardList} title="كشوف الحسابات" />
           <SidebarItem to="/commercial/purchase-orders" icon={Truck} title="أوامر الشراء" />
-        </SidebarGroup>
-
-        <SidebarGroup title="المعاملات المالية" icon={DollarSign} defaultOpen={false}>
-          <SidebarItem to="/financial" icon={LineChart} title="لوحة تحكم المالية" />
-          <SidebarItem to="/financial/transactions/new" icon={CreditCard} title="معاملة جديدة" />
-          <SidebarItem to="/financial/categories" icon={TagIcon} title="الفئات المالية" />
         </SidebarGroup>
 
         <SidebarGroup title="التحليلات" icon={BarChart3} defaultOpen={false}>

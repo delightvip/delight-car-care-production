@@ -22,12 +22,7 @@ import {
   Wallet,
   DollarSign,
   PieChart,
-  Tags,
-  Receipt,
-  CreditCard,
-  RotateCcw,
-  FileText,
-  ClipboardList
+  Tags
 } from 'lucide-react';
 import { useSidebar } from './SidebarContext';
 
@@ -134,12 +129,6 @@ const Sidebar: React.FC = () => {
               active={pathname === '/inventory/finished-products'}
             />
             <NavItem 
-              to="/inventory/product-details" 
-              icon={<FileText size={20} />} 
-              label="تفاصيل المنتج" 
-              active={pathname === '/inventory/product-details'}
-            />
-            <NavItem 
               to="/inventory/low-stock" 
               icon={<AlertTriangle size={20} />} 
               label="المخزون المنخفض" 
@@ -174,45 +163,12 @@ const Sidebar: React.FC = () => {
             />
           </NavGroup>
           
-          <NavGroup title="التجارة" icon={<ShoppingBag size={16} />} defaultOpen={pathname.startsWith('/commercial')}>
-            <NavItem 
-              to="/commercial/invoices" 
-              icon={<Receipt size={20} />} 
-              label="الفواتير" 
-              active={pathname.startsWith('/commercial/invoices')}
-            />
-            <NavItem 
-              to="/commercial/returns" 
-              icon={<RotateCcw size={20} />} 
-              label="المرتجعات" 
-              active={pathname.startsWith('/commercial/returns')}
-            />
-            <NavItem 
-              to="/commercial/payments" 
-              icon={<CreditCard size={20} />} 
-              label="المعاملات المالية" 
-              active={pathname.startsWith('/commercial/payments')}
-            />
-            <NavItem 
-              to="/commercial/parties" 
-              icon={<Users size={20} />} 
-              label="العملاء والموردين" 
-              active={pathname.startsWith('/commercial/parties')}
-            />
-          </NavGroup>
-
           <NavGroup title="المالية" icon={<Wallet size={16} />} defaultOpen={pathname.startsWith('/financial')}>
             <NavItem 
               to="/financial" 
               icon={<DollarSign size={20} />} 
               label="لوحة التحكم المالية" 
               active={pathname === '/financial'}
-            />
-            <NavItem 
-              to="/financial/transactions" 
-              icon={<CreditCard size={20} />} 
-              label="المعاملات المالية" 
-              active={pathname.includes('/financial/transactions')}
             />
             <NavItem 
               to="/financial/transactions/new" 
@@ -225,12 +181,6 @@ const Sidebar: React.FC = () => {
               icon={<Tags size={20} />} 
               label="فئات المعاملات" 
               active={pathname === '/financial/categories'}
-            />
-            <NavItem 
-              to="/financial/reports" 
-              icon={<ClipboardList size={20} />} 
-              label="التقارير المالية" 
-              active={pathname === '/financial/reports'}
             />
           </NavGroup>
           

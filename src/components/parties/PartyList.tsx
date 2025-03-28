@@ -3,20 +3,45 @@ import React, { useState } from 'react';
 import { 
   Table, 
   TableBody, 
+  TableCell, 
   TableHead, 
   TableHeader, 
-  TableRow,
-  TableCell
+  TableRow 
 } from '@/components/ui/table';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus } from 'lucide-react';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { 
+  MoreHorizontal, 
+  Edit, 
+  Trash2, 
+  FileText, 
+  Plus, 
+  Search,
+  FileDown,
+  ExternalLink
+} from 'lucide-react';
 import { Party } from '@/services/PartyService';
+import { PartyForm } from './PartyForm';
 import { useNavigate } from 'react-router-dom';
-import { PartyTableRow } from './PartyTableRow';
-import { AddPartyDialog, DeleteConfirmationDialog, EditPartyDialog } from './PartyDialogs';
-import { PartySearch } from './PartySearch';
 
 interface PartyListProps {
   parties: Party[];
@@ -91,16 +116,34 @@ export function PartyList({
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-xl font-bold">{title}</CardTitle>
         <div className="flex items-center space-x-2">
-          <Button size="sm" className="h-8 gap-1" onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="h-4 w-4" /> إضافة
-          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="h-8 gap-1">
+                <Plus className="h-4 w-4" /> إضافة
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>إضافة طرف جديد</DialogTitle>
+                <DialogDescription>
+                  أدخل بيانات الطرف التجاري الجديد.
+                </DialogDescription>
+              </DialogHeader>
+              <PartyForm onSubmit={handleAddSubmit} />
+            </DialogContent>
+          </Dialog>
         </div>
       </CardHeader>
       <CardContent>
-        <PartySearch 
-          searchQuery={searchQuery} 
-          setSearchQuery={setSearchQuery} 
-        />
+        <div className="flex items-center mb-4">
+          <Search className="mr-2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="البحث حسب الاسم أو رقم الهاتف..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
         
         <ScrollArea className="h-[450px]">
           <Table>
@@ -116,13 +159,45 @@ export function PartyList({
             <TableBody>
               {filteredParties.length > 0 ? (
                 filteredParties.map((party) => (
-                  <PartyTableRow
-                    key={party.id}
-                    party={party}
-                    onEdit={handleEditClick}
-                    onDelete={handleDeleteClick}
-                    onViewDetails={handleViewDetails}
-                  />
+                  <TableRow key={party.id}>
+                    <TableCell className="font-medium">{party.name}</TableCell>
+                    <TableCell>
+                      {party.type === 'customer' ? 'عميل' : 
+                       party.type === 'supplier' ? 'مورّد' : 'أخرى'}
+                    </TableCell>
+                    <TableCell>{party.phone || '-'}</TableCell>
+                    <TableCell className="text-right">
+                      <span className={party.balance > 0 ? 'text-red-600' : party.balance < 0 ? 'text-green-600' : ''}>
+                        {Math.abs(party.balance).toFixed(2)} {party.balance > 0 ? '(مدين)' : party.balance < 0 ? '(دائن)' : ''}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">فتح القائمة</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleViewDetails(party)}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            <span>عرض التفاصيل</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditClick(party)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            <span>تعديل</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDeleteClick(party)}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>حذف</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
                 ))
               ) : (
                 <TableRow>
@@ -135,26 +210,44 @@ export function PartyList({
           </Table>
         </ScrollArea>
         
-        {/* Dialogs */}
-        <DeleteConfirmationDialog
-          isOpen={isDeleteDialogOpen}
-          onClose={() => setIsDeleteDialogOpen(false)}
-          party={partyToDelete}
-          onConfirm={confirmDelete}
-        />
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>تأكيد الحذف</DialogTitle>
+              <DialogDescription>
+                هل أنت متأكد من حذف الطرف التجاري "{partyToDelete?.name}"؟ هذا الإجراء لا يمكن التراجع عنه.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete}>
+                حذف
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         
-        <AddPartyDialog
-          isOpen={isAddDialogOpen}
-          onClose={() => setIsAddDialogOpen(false)}
-          onSubmit={handleAddSubmit}
-        />
-        
-        <EditPartyDialog
-          isOpen={isEditDialogOpen}
-          onClose={() => setIsEditDialogOpen(false)}
-          party={editingParty}
-          onSubmit={handleEditSubmit}
-        />
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>تعديل بيانات الطرف</DialogTitle>
+              <DialogDescription>
+                تعديل بيانات الطرف التجاري.
+              </DialogDescription>
+            </DialogHeader>
+            {editingParty && (
+              <PartyForm 
+                onSubmit={handleEditSubmit} 
+                initialData={editingParty} 
+                isEditing={true} 
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

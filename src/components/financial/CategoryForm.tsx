@@ -26,7 +26,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import FinancialService, { Category } from '@/services/financial/FinancialService';
 import { ArrowLeft, Save } from 'lucide-react';
-import { toast } from 'sonner';
 
 // Define schema for form validation
 const categorySchema = z.object({
@@ -68,65 +67,42 @@ const CategoryForm: React.FC = () => {
     const loadData = async () => {
       if (isEditing && id) {
         setLoading(true);
-        try {
-          const category = await financialService.getCategory(id);
-          
-          if (category) {
-            form.reset({
-              name: category.name,
-              type: category.type,
-              description: category.description || '',
-            });
-          } else {
-            toast.error("لم يتم العثور على الفئة");
-            navigate('/financial/categories');
-          }
-        } catch (error) {
-          console.error("Error loading category:", error);
-          toast.error("حدث خطأ أثناء تحميل بيانات الفئة");
-        } finally {
-          setLoading(false);
+        const categories = await financialService.getCategories();
+        const category = categories.find(c => c.id === id);
+        
+        if (category) {
+          form.reset({
+            name: category.name,
+            type: category.type,
+            description: category.description || '',
+          });
         }
+        
+        setLoading(false);
       } else {
         setLoading(false);
       }
     };
     
     loadData();
-  }, [isEditing, id, form, navigate, financialService]);
+  }, [isEditing, id]);
   
   const onSubmit = async (data: CategoryFormValues) => {
     setSubmitting(true);
     
-    try {
-      // التأكد من أن جميع الحقول المطلوبة متوفرة في البيانات
-      const categoryData: Omit<Category, 'id' | 'created_at'> = {
-        name: data.name, // الحقل مطلوب دائماً
-        type: data.type, // الحقل مطلوب دائماً
-        description: data.description // حقل اختياري
-      };
-      
-      let success = false;
-      
-      if (isEditing && id) {
-        const updated = await financialService.updateCategory(id, categoryData);
-        success = !!updated;
-      } else {
-        const created = await financialService.createCategory(categoryData);
-        success = !!created;
-      }
-      
-      if (success) {
-        toast.success(isEditing ? "تم تعديل الفئة بنجاح" : "تم إضافة الفئة بنجاح");
-        navigate('/financial/categories');
-      } else {
-        toast.error("حدث خطأ أثناء حفظ البيانات");
-      }
-    } catch (error) {
-      console.error("Error saving category:", error);
-      toast.error("حدث خطأ أثناء حفظ البيانات");
-    } finally {
-      setSubmitting(false);
+    let success = false;
+    
+    if (isEditing && id) {
+      success = await financialService.updateCategory(id, data);
+    } else {
+      const result = await financialService.createCategory(data);
+      success = !!result;
+    }
+    
+    setSubmitting(false);
+    
+    if (success) {
+      navigate('/financial/categories');
     }
   };
   
