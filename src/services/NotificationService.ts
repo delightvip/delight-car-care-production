@@ -1,38 +1,22 @@
 
-import { supabase, createLowStockFilter, rpcFunctions } from '@/integrations/supabase/client';
+import { supabase, lowStockQueries } from '@/integrations/supabase/client';
 
 // استدعاء بيانات المخزون المنخفض
 export async function fetchLowStockItems() {
   try {
     console.log("Fetching low stock items...");
     
-    // فحص المواد الأولية ذات المخزون المنخفض - updated query syntax
-    const rawMaterialsResponse = await supabase
-      .from('raw_materials')
-      .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lt('quantity', 'min_stock')
-      .gt('min_stock', 0);
+    // فحص المواد الأولية ذات المخزون المنخفض - using helper function
+    const rawMaterialsResponse = await lowStockQueries.rawMaterials();
     
-    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - updated query syntax
-    const semiFinishedResponse = await supabase
-      .from('semi_finished_products')
-      .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lt('quantity', 'min_stock')
-      .gt('min_stock', 0);
+    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - using helper function
+    const semiFinishedResponse = await lowStockQueries.semiFinishedProducts();
     
-    // فحص مستلزمات التعبئة ذات المخزون المنخفض - updated query syntax
-    const packagingResponse = await supabase
-      .from('packaging_materials')
-      .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lt('quantity', 'min_stock')
-      .gt('min_stock', 0);
+    // فحص مستلزمات التعبئة ذات المخزون المنخفض - using helper function
+    const packagingResponse = await lowStockQueries.packagingMaterials();
     
-    // فحص المنتجات النهائية ذات المخزون المنخفض - updated query syntax
-    const finishedResponse = await supabase
-      .from('finished_products')
-      .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lt('quantity', 'min_stock')
-      .gt('min_stock', 0);
+    // فحص المنتجات النهائية ذات المخزون المنخفض - using helper function
+    const finishedResponse = await lowStockQueries.finishedProducts();
     
     // تحقق من الأخطاء
     if (rawMaterialsResponse.error) {

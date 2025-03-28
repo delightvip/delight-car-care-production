@@ -46,3 +46,38 @@ export const rpcFunctions = {
     return column;
   }
 };
+
+// Helper functions for low stock queries to avoid TS errors and code duplication
+export const lowStockQueries = {
+  rawMaterials() {
+    return supabase
+      .from('raw_materials')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+  },
+  
+  semiFinishedProducts() {
+    return supabase
+      .from('semi_finished_products')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+  },
+  
+  packagingMaterials() {
+    return supabase
+      .from('packaging_materials')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+  },
+  
+  finishedProducts() {
+    return supabase
+      .from('finished_products')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+  }
+};
