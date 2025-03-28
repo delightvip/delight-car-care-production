@@ -81,34 +81,34 @@ const Index = () => {
     refetchInterval: 60000, 
   });
   
-  // Fetch low stock count with correct logic
+  // Fetch low stock count with correct query syntax
   const { data: lowStockCount } = useQuery({
     queryKey: ['lowStockCount'],
     queryFn: async () => {
       try {
-        // التحقق من مواد المخزون منخفضة الكمية
+        // التحقق من مواد المخزون منخفضة الكمية - fixed queries
         const rawMaterialsResponse = await supabase
           .from('raw_materials')
           .select('id')
-          .lte('quantity', 'min_stock')
+          .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
           .gt('min_stock', 0);
         
         const semiFinishedResponse = await supabase
           .from('semi_finished_products')
           .select('id')
-          .lte('quantity', 'min_stock')
+          .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
           .gt('min_stock', 0);
         
         const packagingResponse = await supabase
           .from('packaging_materials')
           .select('id')
-          .lte('quantity', 'min_stock')
+          .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
           .gt('min_stock', 0);
         
         const finishedResponse = await supabase
           .from('finished_products')
           .select('id')
-          .lte('quantity', 'min_stock')
+          .lt('quantity', supabase.rpc('coalesce_numeric', { value: 'min_stock' }))
           .gt('min_stock', 0);
         
         const totalCount = 
