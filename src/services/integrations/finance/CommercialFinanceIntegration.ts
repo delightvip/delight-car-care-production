@@ -1,7 +1,6 @@
 
 import { FinanceIntegrationBase } from './FinanceIntegrationBase';
 import { supabase } from '@/integrations/supabase/client';
-import InventoryService from '@/services/inventory/InventoryService';
 import { toast } from 'sonner';
 
 /**
@@ -9,11 +8,9 @@ import { toast } from 'sonner';
  */
 export class CommercialFinanceIntegration extends FinanceIntegrationBase {
   private static instance: CommercialFinanceIntegration;
-  private inventoryService: InventoryService;
   
   private constructor() {
     super();
-    this.inventoryService = InventoryService.getInstance();
   }
 
   public static getInstance(): CommercialFinanceIntegration {
