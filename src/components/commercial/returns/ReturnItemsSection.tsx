@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,7 +18,7 @@ interface ReturnItemsSectionProps {
   onQuantityChange: (itemId: string, quantity: number) => void;
 }
 
-const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({ items, onQuantityChange }) => {
+export const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({ items, onQuantityChange }) => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
   useEffect(() => {
