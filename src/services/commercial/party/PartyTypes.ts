@@ -43,7 +43,7 @@ export interface LedgerEntry {
   credit: number;
   balance_after: number;
   created_at: string;
-  notes?: string;
+  notes: string; // Making this required since we always set a default value
   description?: string;
 }
 
