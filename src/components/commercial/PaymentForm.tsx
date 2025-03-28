@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Payment } from '@/services/CommercialTypes';
+import { Payment } from '@/services/commercial/CommercialTypes';
 import { Party } from '@/services/PartyService';
 import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';

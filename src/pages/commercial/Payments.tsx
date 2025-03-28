@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import PaymentService from '@/services/commercial/PaymentService';
+import PaymentService from '@/services/commercial/payment/PaymentService';
 import PaymentProcessingService from '@/services/commercial/PaymentProcessingService';
 import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,8 @@ import { PaymentForm } from '@/components/commercial/PaymentForm';
 import PaymentsList from '@/components/commercial/PaymentsList';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { Payment } from '@/services/commercial/CommercialTypes';
+import InvoiceService from '@/services/commercial/InvoiceService';
 
 const Payments = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -46,6 +49,7 @@ const Payments = () => {
   const paymentService = PaymentService.getInstance();
   const paymentProcessingService = PaymentProcessingService.getInstance();
   const partyService = PartyService.getInstance();
+  const invoiceService = InvoiceService.getInstance();
   
   const { data: payments, isLoading: isLoadingPayments, error: paymentsError, refetch } = useQuery({
     queryKey: ['payments'],
@@ -62,7 +66,7 @@ const Payments = () => {
   
   const { data: invoices, isLoading: isLoadingInvoices } = useQuery({
     queryKey: ['invoices'],
-    queryFn: () => paymentService.getInvoices(),
+    queryFn: () => invoiceService.getInvoices(),
   });
   
   useEffect(() => {
@@ -92,7 +96,7 @@ const Payments = () => {
   
   const handleCreatePayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
     try {
-      const result = await paymentProcessingService.recordPayment(paymentData);
+      const result = await paymentService.recordPayment(paymentData);
       
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['parties'] });
@@ -109,7 +113,7 @@ const Payments = () => {
     if (!selectedPayment) return;
     
     try {
-      const success = await paymentProcessingService.updatePayment(selectedPayment.id, paymentData);
+      const success = await paymentService.updatePayment(selectedPayment.id, paymentData);
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['payments'] });
         setIsEditDialogOpen(false);
@@ -135,7 +139,7 @@ const Payments = () => {
     if (!selectedPayment) return;
     
     try {
-      const success = await paymentProcessingService.deletePayment(selectedPayment.id);
+      const success = await paymentService.deletePayment(selectedPayment.id);
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['payments'] });
         setIsDeleteDialogOpen(false);
@@ -156,7 +160,7 @@ const Payments = () => {
     if (!selectedPayment) return;
     
     try {
-      const success = await paymentProcessingService.confirmPayment(selectedPayment.id);
+      const success = await paymentService.confirmPayment(selectedPayment.id);
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['payments'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
@@ -178,7 +182,7 @@ const Payments = () => {
     if (!selectedPayment) return;
     
     try {
-      const success = await paymentProcessingService.cancelPayment(selectedPayment.id);
+      const success = await paymentService.cancelPayment(selectedPayment.id);
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['payments'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });

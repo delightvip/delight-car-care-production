@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { format } from 'date-fns';
-import { Payment } from '@/services/CommercialTypes';
+import { Payment } from '@/services/commercial/CommercialTypes';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
