@@ -28,7 +28,7 @@ export interface LedgerEntry {
   credit: number;
   balance_after: number;
   created_at: string;
-  notes: string;
+  notes: string;  // Making notes non-optional to match usage
   description?: string;
 }
 

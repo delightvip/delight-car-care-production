@@ -24,6 +24,17 @@ export class InvoiceProcessor {
   }
   
   /**
+   * تحديث عنصر في المخزون
+   */
+  private async updateInventoryItem(
+    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+    itemId: number,
+    quantity: number
+  ): Promise<boolean> {
+    return this.inventoryService.updateItemQuantity(itemType, itemId, quantity, "invoice");
+  }
+  
+  /**
    * تأكيد فاتورة
    * @param invoiceId معرف الفاتورة
    */
@@ -36,7 +47,8 @@ export class InvoiceProcessor {
             .from('invoices')
             .select(`
               *,
-              invoice_items (*)
+              invoice_items (*),
+              parties (name)
             `)
             .eq('id', invoiceId)
             .single();
@@ -97,26 +109,21 @@ export class InvoiceProcessor {
               date: invoice.date,
               debit,
               credit,
-              notes: `فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} رقم ${invoiceId}`
+              notes: `فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} رقم ${invoiceId}`,
+              description: `فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'}`
             });
           }
           
           // 5. إذا كانت الفاتورة نقدية، سجل معاملة مالية وتحديث الخزينة
           if (invoice.status === 'paid') {
-            const categoryId = invoice.invoice_type === 'sale' 
-              ? "5f5b3ce0-1e87-4654-afef-c9cab5d59ef4" // معرف فئة المبيعات
-              : "f8dcea05-c2e8-4bef-8ca4-a73473e23e34"; // معرف فئة المشتريات
-              
-            await this.financeIntegration.recordFinancialTransaction({
-              type: invoice.invoice_type === 'sale' ? 'income' : 'expense',
-              amount: invoice.total_amount,
-              payment_method: 'cash', // يمكن إضافة حقل طريقة الدفع في الفاتورة مستقبلاً
-              category_id: categoryId,
-              reference_id: invoiceId,
-              reference_type: invoice.invoice_type,
-              date: invoice.date,
-              notes: `فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} نقدية رقم ${invoiceId}`
-            });
+            await this.financeIntegration.recordInvoicePayment(
+              invoiceId,
+              invoice.invoice_type === 'sale' ? 'sale' : 'purchase',
+              invoice.total_amount,
+              'cash', // يمكن إضافة حقل طريقة الدفع في الفاتورة مستقبلاً
+              invoice.date,
+              invoice.parties?.name
+            );
           }
           
           toast.success(`تم تأكيد الفاتورة بنجاح`);
@@ -142,7 +149,8 @@ export class InvoiceProcessor {
             .from('invoices')
             .select(`
               *,
-              invoice_items (*)
+              invoice_items (*),
+              parties (name)
             `)
             .eq('id', invoiceId)
             .single();
@@ -196,26 +204,30 @@ export class InvoiceProcessor {
               credit = 0;
             }
             
-            await this.ledgerService.addLedgerEntry({
+            await this.financeIntegration.recordLedgerEntry({
               party_id: invoice.party_id,
               transaction_id: invoiceId,
               transaction_type: `cancel_${invoice.invoice_type}`,
               date: new Date().toISOString().split('T')[0],
               debit,
               credit,
-              notes: `إلغاء فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} رقم ${invoiceId}`
+              notes: `إلغاء فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} رقم ${invoiceId}`,
+              description: `إلغاء فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'}`
             });
           }
           
           // 5. إذا كانت الفاتورة نقدية، إلغاء المعاملة المالية وتحديث الخزينة
           if (invoice.status === 'paid') {
-            // عكس تأثير المعاملة على الخزينة
-            await this.financeIntegration.updateBalance(
-              invoice.invoice_type === 'sale' ? -invoice.total_amount : invoice.total_amount,
-              'cash' // يمكن إضافة حقل طريقة الدفع في الفاتورة مستقبلاً
+            const currentDate = new Date().toISOString().split('T')[0];
+            // عكس تأثير المعاملة على الخزينة/النظام المالي
+            await this.financeIntegration.recordInvoicePayment(
+              invoiceId,
+              invoice.invoice_type === 'sale' ? 'purchase' : 'sale', // عكس نوع الفاتورة
+              invoice.total_amount,
+              'cash',
+              currentDate,
+              invoice.parties?.name
             );
-            
-            // يمكن إضافة منطق لإلغاء المعاملة المالية المرتبطة بالفاتورة
           }
           
           toast.success(`تم إلغاء الفاتورة بنجاح`);
@@ -242,127 +254,78 @@ export class InvoiceProcessor {
           .select('*')
           .eq('id', invoiceId)
           .single();
-          
+        
         if (invoiceError) throw invoiceError;
         
-        // 2. Get all payments for this invoice
-        const { data: payments, error: paymentsError } = await supabase
-          .from('payments')
-          .select('amount')
-          .eq('related_invoice_id', invoiceId)
-          .eq('payment_status', 'confirmed');
-          
-        if (paymentsError) throw paymentsError;
+        // 2. Update invoice status based on payment
+        let newStatus = invoice.status;
         
-        // 3. Calculate total paid amount
-        const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0) + paymentAmount;
-        
-        // 4. Determine new status
-        let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
-        
-        if (totalPaid >= invoice.total_amount) {
+        if (paymentAmount >= invoice.total_amount) {
           newStatus = 'paid';
-        } else if (totalPaid > 0) {
-          newStatus = 'partial';
+        } else if (paymentAmount > 0) {
+          newStatus = 'partially_paid';
         }
         
-        // 5. Update invoice status
+        // 3. Update the invoice status
         const { error: updateError } = await supabase
           .from('invoices')
           .update({ status: newStatus })
           .eq('id', invoiceId);
-          
+        
         if (updateError) throw updateError;
       },
       "updateInvoiceStatusAfterPayment",
-      "حدث خطأ أثناء تحديث حالة الفاتورة بعد الدفع",
-      undefined
-    ) as Promise<void>;
+      "حدث خطأ أثناء تحديث حالة الفاتورة بعد الدفع"
+    );
   }
   
   /**
-   * عكس تحديث حالة الفاتورة بعد إلغاء دفعة
+   * عكس تأثير الدفعة على حالة الفاتورة
    * @param invoiceId معرف الفاتورة
    * @param paymentAmount مبلغ الدفعة
    */
   public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
     return ErrorHandler.wrapOperation(
       async () => {
-        // 1. Get invoice data
+        // 1. Get invoice data including remaining payments
         const { data: invoice, error: invoiceError } = await supabase
           .from('invoices')
-          .select('*')
+          .select(`
+            *,
+            payments!payments_related_invoice_id_fkey (
+              amount,
+              payment_status
+            )
+          `)
           .eq('id', invoiceId)
           .single();
-          
+        
         if (invoiceError) throw invoiceError;
         
-        // 2. Get all payments for this invoice
-        const { data: payments, error: paymentsError } = await supabase
-          .from('payments')
-          .select('amount')
-          .eq('related_invoice_id', invoiceId)
-          .eq('payment_status', 'confirmed');
-          
-        if (paymentsError) throw paymentsError;
+        // 2. Calculate total confirmed payments excluding the cancelled payment
+        const remainingPayments = (invoice.payments || [])
+          .filter(p => p.payment_status === 'confirmed')
+          .reduce((sum, payment) => sum + payment.amount, 0);
         
-        // 3. Calculate total paid amount
-        const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0) - paymentAmount;
+        // 3. Update invoice status based on remaining payments
+        let newStatus = 'confirmed';
         
-        // 4. Determine new status
-        let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
-        
-        if (totalPaid >= invoice.total_amount) {
+        if (remainingPayments >= invoice.total_amount) {
           newStatus = 'paid';
-        } else if (totalPaid > 0) {
-          newStatus = 'partial';
+        } else if (remainingPayments > 0) {
+          newStatus = 'partially_paid';
         }
         
-        // 5. Update invoice status
+        // 4. Update the invoice status
         const { error: updateError } = await supabase
           .from('invoices')
           .update({ status: newStatus })
           .eq('id', invoiceId);
-          
+        
         if (updateError) throw updateError;
       },
       "reverseInvoiceStatusAfterPaymentCancellation",
-      "حدث خطأ أثناء عكس حالة الفاتورة بعد إلغاء الدفع",
-      undefined
-    ) as Promise<void>;
-  }
-  
-  /**
-   * تحديث عنصر المخزون
-   * @param itemType نوع العنصر
-   * @param itemId معرف العنصر
-   * @param quantity الكمية (موجبة للإضافة، سالبة للخصم)
-   */
-  private async updateInventoryItem(
-    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
-    itemId: number,
-    quantity: number
-  ): Promise<void> {
-    try {
-      switch (itemType) {
-        case "raw_materials":
-          await this.inventoryService.updateRawMaterial(itemId, { quantity });
-          break;
-        case "packaging_materials":
-          await this.inventoryService.updatePackagingMaterial(itemId, { quantity });
-          break;
-        case "semi_finished_products":
-          await this.inventoryService.updateSemiFinishedProduct(itemId, { quantity });
-          break;
-        case "finished_products":
-          await this.inventoryService.updateFinishedProduct(itemId, { quantity });
-          break;
-        default:
-          throw new Error(`نوع عنصر غير معروف: ${itemType}`);
-      }
-    } catch (error) {
-      console.error(`Error updating inventory item (${itemType}, ${itemId}):`, error);
-      throw error;
-    }
+      "حدث خطأ أثناء تحديث حالة الفاتورة بعد إلغاء الدفع"
+    );
   }
 }

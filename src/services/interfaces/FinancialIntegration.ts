@@ -24,6 +24,7 @@ export interface FinancialIntegration {
     date: string;
     debit: number;
     credit: number;
-    notes?: string;
+    notes: string;
+    description?: string;
   }): Promise<boolean>;
 }

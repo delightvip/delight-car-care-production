@@ -17,7 +17,8 @@ export interface LedgerEntryData {
   date: string;
   debit: number;
   credit: number;
-  notes?: string;
+  notes: string; // Making notes non-optional to match implementation
+  description?: string; // Adding description as optional
 }
 
 export interface BalanceUpdateData {

@@ -79,7 +79,12 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
    * @param ledgerEntry بيانات القيد
    */
   public async recordLedgerEntry(ledgerEntry: LedgerEntryData): Promise<boolean> {
-    return this.ledgerIntegrationService.recordLedgerEntry(ledgerEntry);
+    // Make sure notes is always defined to match our updated interface
+    const entryWithNotes = {
+      ...ledgerEntry,
+      notes: ledgerEntry.notes || ''
+    };
+    return this.ledgerIntegrationService.recordLedgerEntry(entryWithNotes);
   }
   
   /**
@@ -89,6 +94,80 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
    */
   public async updateBalance(amount: number, paymentMethod: 'cash' | 'bank' | 'other'): Promise<boolean> {
     return this.financialTransactionService.updateBalance(amount, paymentMethod);
+  }
+
+  /**
+   * تسجيل مدفوعات الفاتورة في النظام المالي
+   * @param invoiceId معرف الفاتورة
+   * @param invoiceType نوع الفاتورة (مبيعات/مشتريات)
+   * @param amount المبلغ
+   * @param paymentMethod طريقة الدفع
+   * @param date تاريخ الدفع
+   * @param partyName اسم الطرف (العميل/المورد)
+   */
+  public async recordInvoicePayment(
+    invoiceId: string, 
+    invoiceType: 'sale' | 'purchase', 
+    amount: number, 
+    paymentMethod: string, 
+    date: string,
+    partyName?: string
+  ): Promise<boolean> {
+    const categoryId = invoiceType === 'sale' ? 
+      '5f5b3ce0-1e87-4654-afef-c9cab5d59ef4' : // فئة التحصيلات/المبيعات
+      'f8dcea05-c2e8-4bef-8ca4-a73473e23e34';  // فئة المدفوعات/المشتريات
+    
+    return this.recordFinancialTransaction({
+      type: invoiceType === 'sale' ? 'income' : 'expense',
+      amount: amount,
+      payment_method: this.convertPaymentMethod(paymentMethod),
+      category_id: categoryId,
+      reference_id: invoiceId,
+      reference_type: invoiceType,
+      date: date,
+      notes: `فاتورة ${invoiceType === 'sale' ? 'مبيعات' : 'مشتريات'} - ${partyName || ''}`
+    });
+  }
+
+  /**
+   * تسجيل حركة سداد للطرف التجاري في دفتر الحسابات
+   */
+  public async recordPartyPayment(
+    partyId: string,
+    paymentId: string,
+    paymentType: 'collection' | 'disbursement',
+    amount: number,
+    date: string,
+    notes: string = ''
+  ): Promise<boolean> {
+    // تحديد النوع (مدين/دائن) بناءً على نوع الدفعة
+    const isDebit = paymentType === 'disbursement';
+    
+    return this.recordLedgerEntry({
+      party_id: partyId,
+      transaction_id: paymentId,
+      transaction_type: `payment_${paymentType}`,
+      date: date,
+      debit: isDebit ? amount : 0,
+      credit: !isDebit ? amount : 0,
+      notes: notes,
+      description: paymentType === 'collection' ? 'تحصيل دفعة' : 'تسديد دفعة'
+    });
+  }
+
+  /**
+   * تحويل طريقة الدفع إلى النوع المتوافق مع النظام المالي
+   */
+  private convertPaymentMethod(method: string): 'cash' | 'bank' | 'other' {
+    switch (method) {
+      case 'cash':
+        return 'cash';
+      case 'bank_transfer':
+      case 'check':
+        return 'bank';
+      default:
+        return 'other';
+    }
   }
 }
 

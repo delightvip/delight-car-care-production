@@ -27,7 +27,13 @@ export class LedgerIntegrationService {
    */
   public async recordLedgerEntry(ledgerEntry: LedgerEntryData): Promise<boolean> {
     try {
-      return await this.ledgerService.addLedgerEntry(ledgerEntry);
+      // Make sure notes is always defined
+      const entryData = {
+        ...ledgerEntry,
+        notes: ledgerEntry.notes || '', // Ensure notes is never undefined
+      };
+      
+      return await this.ledgerService.addLedgerEntry(entryData);
     } catch (error) {
       console.error('Error recording ledger entry:', error);
       toast.error('حدث خطأ أثناء تسجيل معاملة في دفتر الحسابات');
