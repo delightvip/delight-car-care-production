@@ -55,7 +55,6 @@ const Returns = () => {
   const queryClient = useQueryClient();
   const commercialService = CommercialService.getInstance();
   
-  // fetch returns data
   const { data: returns, isLoading, error, refetch } = useQuery({
     queryKey: ['returns'],
     queryFn: async () => {
@@ -69,7 +68,6 @@ const Returns = () => {
     },
   });
 
-  // filter returns based on active tab and search query
   const filteredReturns = React.useMemo(() => {
     if (!returns) return [];
     
@@ -90,20 +88,17 @@ const Returns = () => {
     return filtered;
   }, [returns, activeTab, searchQuery]);
 
-  // handle creating a new return
   const handleCreateReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
     try {
       setIsProcessing(true);
       console.log('Creating return with data:', returnData);
       
-      // create return in draft status
       const result = await commercialService.createReturn({
         ...returnData,
         payment_status: 'draft'
       });
       
       if (result) {
-        // refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         toast.success('تم إنشاء المرتجع بنجاح');
         setIsAddDialogOpen(false);
@@ -118,7 +113,6 @@ const Returns = () => {
     }
   };
 
-  // handle confirming a return
   const handleConfirmReturn = async () => {
     if (!selectedReturnId) return;
     
@@ -127,7 +121,6 @@ const Returns = () => {
       const success = await commercialService.confirmReturn(selectedReturnId);
       
       if (success) {
-        // refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -147,7 +140,6 @@ const Returns = () => {
     }
   };
 
-  // handle cancelling a return
   const handleCancelReturn = async () => {
     if (!selectedReturnId) return;
     
@@ -156,7 +148,6 @@ const Returns = () => {
       const success = await commercialService.cancelReturn(selectedReturnId);
       
       if (success) {
-        // refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -176,7 +167,6 @@ const Returns = () => {
     }
   };
 
-  // handle deleting a return
   const handleDeleteReturn = async () => {
     if (!selectedReturnId) return;
     
@@ -185,7 +175,6 @@ const Returns = () => {
       const success = await commercialService.deleteReturn(selectedReturnId);
       
       if (success) {
-        // refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         toast.success('تم حذف المرتجع بنجاح');
       } else {
@@ -202,12 +191,11 @@ const Returns = () => {
     }
   };
 
-  // view return details
   const handleViewDetails = async (returnId: string) => {
     try {
       const returnData = await commercialService.getReturnById(returnId);
       if (returnData) {
-        setViewingReturn(returnData as Return); // Add type assertion here
+        setViewingReturn(returnData as Return);
         setSelectedReturnId(returnId);
         setIsDetailsOpen(true);
       } else {
@@ -219,8 +207,7 @@ const Returns = () => {
     }
   };
 
-  // export data to CSV
-  const exportToCsv = async () => { // Make this async
+  const exportToCsv = async (): Promise<void> => {
     try {
       if (!filteredReturns.length) {
         toast.error('لا توجد بيانات للتصدير');
@@ -249,8 +236,7 @@ const Returns = () => {
     }
   };
 
-  // refresh data
-  const handleRefresh = async () => { // Make this async
+  const handleRefresh = async (): Promise<void> => {
     try {
       await refetch();
       toast.success('تم تحديث البيانات بنجاح');
@@ -260,7 +246,6 @@ const Returns = () => {
     }
   };
 
-  // loading state
   if (isLoading) {
     return (
       <PageTransition>
@@ -279,7 +264,6 @@ const Returns = () => {
     );
   }
 
-  // error state
   if (error) {
     return (
       <PageTransition>
@@ -437,7 +421,6 @@ const Returns = () => {
         </Card>
       </div>
 
-      {/* Dialog for adding new return */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => !isProcessing && setIsAddDialogOpen(open)}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -451,7 +434,6 @@ const Returns = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Return details dialog */}
       {viewingReturn && (
         <ReturnDetailsDialog
           open={isDetailsOpen}
@@ -488,7 +470,6 @@ const Returns = () => {
         />
       )}
 
-      {/* Confirm return dialog */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={(open) => !isProcessing && setIsConfirmDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -506,7 +487,6 @@ const Returns = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cancel return dialog */}
       <AlertDialog open={isCancelDialogOpen} onOpenChange={(open) => !isProcessing && setIsCancelDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -524,7 +504,6 @@ const Returns = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete return dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => !isProcessing && setIsDeleteDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
