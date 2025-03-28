@@ -177,7 +177,7 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
     itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products"
   ): Promise<number> {
     try {
-      let tableName: string;
+      let tableName: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
       
       switch (itemType) {
         case "raw_materials":
