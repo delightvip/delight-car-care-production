@@ -12,6 +12,7 @@ interface ReturnFormInvoiceFieldProps {
   isLoadingInvoices: boolean;
   loadingInvoiceItems: boolean;
   onInvoiceChange: (invoiceId: string) => void;
+  required?: boolean;
 }
 
 export default function ReturnFormInvoiceField({ 
@@ -19,7 +20,8 @@ export default function ReturnFormInvoiceField({
   filteredInvoices, 
   isLoadingInvoices, 
   loadingInvoiceItems, 
-  onInvoiceChange 
+  onInvoiceChange,
+  required = false
 }: ReturnFormInvoiceFieldProps) {
   return (
     <FormField
@@ -27,10 +29,12 @@ export default function ReturnFormInvoiceField({
       name="invoice_id"
       render={({ field }) => (
         <FormItem>
-          <FormLabel>رقم الفاتورة</FormLabel>
+          <FormLabel className={required ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>
+            رقم الفاتورة
+          </FormLabel>
           <Select 
             onValueChange={onInvoiceChange} 
-            value={field.value || "no_invoice"}
+            value={field.value || ""}
             disabled={isLoadingInvoices || loadingInvoiceItems}
           >
             <FormControl>
@@ -46,7 +50,6 @@ export default function ReturnFormInvoiceField({
               </SelectTrigger>
             </FormControl>
             <SelectContent>
-              <SelectItem value="no_invoice">بدون فاتورة</SelectItem>
               {filteredInvoices.map((invoice) => (
                 <SelectItem key={invoice.id} value={invoice.id}>
                   {`${invoice.id.substring(0, 8)}... - ${invoice.party_name || 'غير محدد'} - ${invoice.total_amount}`}

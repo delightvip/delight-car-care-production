@@ -456,7 +456,7 @@ const Returns = () => {
           isProcessing={isProcessing}
           onConfirm={
             viewingReturn.payment_status === 'draft' 
-              ? async () => {
+              ? () => {
                   setIsDetailsOpen(false);
                   setSelectedReturnId(viewingReturn.id);
                   setIsConfirmDialogOpen(true);
@@ -465,7 +465,7 @@ const Returns = () => {
           }
           onCancel={
             viewingReturn.payment_status === 'confirmed'
-              ? async () => {
+              ? () => {
                   setIsDetailsOpen(false);
                   setSelectedReturnId(viewingReturn.id);
                   setIsCancelDialogOpen(true);
@@ -474,7 +474,7 @@ const Returns = () => {
           }
           onDelete={
             viewingReturn.payment_status === 'draft'
-              ? async () => {
+              ? () => {
                   setIsDetailsOpen(false);
                   setSelectedReturnId(viewingReturn.id);
                   setIsDeleteDialogOpen(true);

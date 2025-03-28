@@ -4,11 +4,11 @@ import { z } from 'zod';
 // Schema for returns form validation
 export const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
-  invoice_id: z.string().optional(),
-  party_id: z.string().optional(), // Added party_id field
+  invoice_id: z.string(),
+  party_id: z.string().optional(),
   date: z.date(),
   notes: z.string().optional(),
-  amount: z.number().optional(), // Added amount field
+  amount: z.number().optional(),
   items: z.array(
     z.object({
       item_id: z.number(),
@@ -45,7 +45,7 @@ export interface ReturnItem {
 // Return interface
 export interface Return {
   id: string;
-  invoice_id?: string;
+  invoice_id: string;
   party_id?: string;
   party_name?: string;
   date: string;
