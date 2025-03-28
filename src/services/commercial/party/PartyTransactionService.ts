@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { Transaction } from './PartyTypes';
+import { Transaction, LedgerEntry } from './PartyTypes';
 import { toast } from 'sonner';
 
 /**
@@ -37,7 +37,7 @@ export class PartyTransactionService {
         party_id: item.party_id,
         transaction_date: item.date,
         type: item.transaction_type,
-        description: item.description || '',
+        description: item.transaction_type || '', // Use transaction_type if no description
         reference: item.transaction_id,
         debit: item.debit || 0,
         credit: item.credit || 0,
@@ -56,7 +56,7 @@ export class PartyTransactionService {
    * الحصول على قيود سجل الحساب
    * @param partyId معرف الطرف
    */
-  public async getLedgerEntries(partyId: string): Promise<any[]> {
+  public async getLedgerEntries(partyId: string): Promise<LedgerEntry[]> {
     try {
       const { data, error } = await supabase
         .from('ledger')
@@ -76,6 +76,7 @@ export class PartyTransactionService {
         credit: entry.credit,
         balance_after: entry.balance_after,
         created_at: entry.created_at,
+        description: this.getTransactionDescription(entry.transaction_type),
         notes: ''
       }));
       

@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Party, Transaction } from './PartyTypes';
 import { toast } from "sonner";
@@ -131,7 +130,9 @@ export class PartyDataAccess {
           email: party.email,
           address: party.address,
           opening_balance: party.opening_balance || 0,
-          balance_type: party.balance_type || 'debit'
+          balance_type: party.balance_type || 'debit',
+          notes: party.notes,
+          code: party.code
         })
         .select()
         .single();

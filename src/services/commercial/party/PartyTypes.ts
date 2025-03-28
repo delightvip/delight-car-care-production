@@ -34,12 +34,16 @@ export interface Transaction {
 }
 
 export interface LedgerEntry {
+  id: string;
   party_id: string;
   transaction_id: string;
   transaction_type: string;
   date: string;
   debit: number;
   credit: number;
+  balance_after: number;
+  created_at: string;
   notes?: string;
-  balance_after?: number;
+  description?: string;
 }
+
