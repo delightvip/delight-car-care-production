@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Payment } from '@/services/CommercialTypes';
 import { toast } from 'sonner';
@@ -36,10 +35,10 @@ class PaymentDataAccess {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status || 'draft',
+        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled' || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -75,10 +74,10 @@ class PaymentDataAccess {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status || 'draft',
+        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled' || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -116,10 +115,10 @@ class PaymentDataAccess {
         party_name: data.parties?.name,
         date: data.date,
         amount: data.amount,
-        payment_type: data.payment_type,
-        method: data.method,
+        payment_type: data.payment_type as 'collection' | 'disbursement',
+        method: data.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: data.related_invoice_id,
-        payment_status: data.payment_status || 'draft',
+        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled' || 'draft',
         notes: data.notes,
         created_at: data.created_at
       };
@@ -170,10 +169,10 @@ class PaymentDataAccess {
         party_name: party?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
-        payment_status: paymentStatus,
+        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: payment.notes,
         created_at: payment.created_at
       };
