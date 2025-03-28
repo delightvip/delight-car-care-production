@@ -160,8 +160,8 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
                       <AccordionTrigger className="py-2">
                         <div className="flex justify-between items-center w-full pr-2">
                           <div className="flex items-center">
-                            <Badge variant={formattedTx.typeClass} className="mr-2">
-                              {formattedTx.type}
+                            <Badge variant="info">
+                              {transaction.reference_type}: {transaction.reference_id}
                             </Badge>
                             <span>{formattedTx.date}</span>
                           </div>

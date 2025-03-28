@@ -62,7 +62,7 @@ class FinancialTransactionService {
       
       return data.map(item => ({
         id: item.id,
-        date: item.date,
+        date: item.date instanceof Date ? format(item.date, 'yyyy-MM-dd') : item.date,
         amount: item.amount,
         type: item.type as 'income' | 'expense',
         category_id: item.category_id,
@@ -105,7 +105,7 @@ class FinancialTransactionService {
       
       return {
         id: data.id,
-        date: data.date,
+        date: data.date instanceof Date ? format(data.date, 'yyyy-MM-dd') : data.date,
         amount: data.amount,
         type: data.type as 'income' | 'expense',
         category_id: data.category_id,
@@ -129,7 +129,7 @@ class FinancialTransactionService {
    */
   public async createTransaction(transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>): Promise<Transaction | null> {
     try {
-      // تنسيق التاريخ إذا كان كائن Date
+      // تنسيق التاريخ إذا كا�� كائن Date
       const formattedDate = transactionData.date instanceof Date
         ? format(transactionData.date, 'yyyy-MM-dd')
         : transactionData.date;

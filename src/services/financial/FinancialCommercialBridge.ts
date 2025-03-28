@@ -1,23 +1,17 @@
-
-import { Payment, Invoice, Return } from '@/services/commercial/CommercialTypes';
-import FinancialTransactionService from './FinancialTransactionService';
-import FinancialCategoryService from './FinancialCategoryService';
-import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Transaction } from "./FinancialTypes";
+import { format } from 'date-fns';
 
 /**
- * خدمة ربط بين النظام المالي ونظام المعاملات التجارية
- * تتولى تحويل المعاملات التجارية إلى معاملات مالية
+ * خدمة للربط بين المعاملات المالية والمعاملات التجارية (فواتير، مدفوعات)
+ * تعالج هذه الخدمة إنشاء المعاملات المالية المرتبطة تلقائيًا عند تأكيد الفواتير والمدفوعات التجارية،
+ * بالإضافة إلى معالجة إلغاء هذه المعاملات عند إلغاء الفواتير والمدفوعات.
  */
 class FinancialCommercialBridge {
   private static instance: FinancialCommercialBridge;
-  private transactionService: FinancialTransactionService;
-  private categoryService: FinancialCategoryService;
   
-  private constructor() {
-    this.transactionService = FinancialTransactionService.getInstance();
-    this.categoryService = FinancialCategoryService.getInstance();
-  }
+  private constructor() {}
   
   public static getInstance(): FinancialCommercialBridge {
     if (!FinancialCommercialBridge.instance) {
@@ -27,93 +21,83 @@ class FinancialCommercialBridge {
   }
   
   /**
-   * تحويل فاتورة تجارية إلى معاملة مالية
+   * معالجة تأكيد فاتورة تجارية
+   * عند تأكيد فاتورة، يتم إنشاء معاملة مالية مقابلة (إيراد)
    */
-  public async handleInvoiceConfirmation(invoice: Invoice): Promise<boolean> {
+  public async handleInvoiceConfirmation(invoice: any): Promise<boolean> {
     try {
-      // تحديد نوع المعاملة المالية (إيراد للمبيعات، مصروف للمشتريات)
-      const transactionType: 'income' | 'expense' = invoice.invoice_type === 'sale' ? 'income' : 'expense';
+      const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
+        type: 'income',
+        amount: invoice.total_amount,
+        category_id: 'c69949b5-2969-4984-9f99-93a377fca8ff', // فئة "إيرادات المبيعات"
+        date: invoice.invoice_date,
+        payment_method: invoice.payment_method,
+        notes: `فاتورة مبيعات رقم ${invoice.invoice_number} للعميل ${invoice.party_name}`,
+        reference_id: invoice.id,
+        reference_type: 'invoice'
+      };
       
-      // تحديد نوع المعاملة التجارية
-      const commercialType = invoice.invoice_type === 'sale' ? 'sale_invoice' : 'purchase_invoice';
+      const { data: transaction, error: transactionError } = await supabase
+        .from('financial_transactions')
+        .insert(transactionData)
+        .select()
+        .single();
       
-      // الحصول على الفئة المناسبة
-      const category = await this.categoryService.getDefaultCategoryForCommercialType(commercialType);
-      
-      if (!category) {
-        console.error('No suitable category found for invoice type:', invoice.invoice_type);
-        return false;
+      if (transactionError) {
+        throw transactionError;
       }
       
-      // إنشاء معاملة مالية
-      const transaction = await this.transactionService.createTransactionFromCommercial(
-        invoice.total_amount,
-        transactionType,
-        category.id,
-        'cash', // افتراضي، يمكن تحديثه لاحقًا
-        invoice.id,
-        commercialType,
-        `فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} رقم: ${invoice.id.substring(0, 8)}`,
-        new Date(invoice.date)
-      );
-      
-      return !!transaction;
+      toast.success(`تم تسجيل إيراد فاتورة رقم ${invoice.invoice_number} تلقائيًا`);
+      return true;
     } catch (error) {
       console.error('Error handling invoice confirmation:', error);
-      toast.error('حدث خطأ أثناء تحويل الفاتورة إلى معاملة مالية');
+      toast.error('حدث خطأ أثناء تسجيل إيراد الفاتورة');
       return false;
     }
   }
   
   /**
-   * تحويل دفعة تجارية إلى معاملة مالية
+   * معالجة تأكيد دفعة تجارية
+   * عند تأكيد دفعة، يتم إنشاء معاملة مالية مقابلة (إيراد أو مصروف حسب نوع الدفعة)
    */
-  public async handlePaymentConfirmation(payment: Payment): Promise<boolean> {
+  public async handlePaymentConfirmation(payment: any): Promise<boolean> {
     try {
-      // تحديد نوع المعاملة المالية (إيراد للتحصيل، مصروف للصرف)
-      const transactionType: 'income' | 'expense' = payment.payment_type === 'collection' ? 'income' : 'expense';
+      const transactionType = payment.type === 'receipt' ? 'income' : 'expense';
+      const categoryId = payment.type === 'receipt' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181'; // فئة "إيرادات المبيعات" أو "مدفوعات الموردين"
       
-      // تحديد نوع المعاملة التجارية
-      const commercialType = payment.payment_type === 'collection' ? 'payment_collection' : 'payment_disbursement';
+      const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
+        type: transactionType,
+        amount: payment.amount,
+        category_id: categoryId,
+        date: payment.payment_date,
+        payment_method: payment.payment_method,
+        notes: `دفعة ${payment.type === 'receipt' ? 'مستلمة' : 'مدفوعة'} رقم ${payment.payment_number} من/إلى ${payment.party_name}`,
+        reference_id: payment.id,
+        reference_type: 'payment'
+      };
       
-      // تحديد طريقة الدفع
-      let paymentMethod = 'cash';
-      if (payment.method === 'bank_transfer') {
-        paymentMethod = 'bank';
-      } else if (payment.method === 'check') {
-        paymentMethod = 'bank'; // نفترض أن الشيكات تدخل في الحساب البنكي
+      const { data: transaction, error: transactionError } = await supabase
+        .from('financial_transactions')
+        .insert(transactionData)
+        .select()
+        .single();
+      
+      if (transactionError) {
+        throw transactionError;
       }
       
-      // الحصول على الفئة المناسبة
-      const category = await this.categoryService.getDefaultCategoryForCommercialType(commercialType);
-      
-      if (!category) {
-        console.error('No suitable category found for payment type:', payment.payment_type);
-        return false;
-      }
-      
-      // إنشاء معاملة مالية
-      const transaction = await this.transactionService.createTransactionFromCommercial(
-        payment.amount,
-        transactionType,
-        category.id,
-        paymentMethod,
-        payment.id,
-        commercialType,
-        `${payment.payment_type === 'collection' ? 'تحصيل' : 'صرف'} دفعة من ${payment.party_name || 'طرف تجاري'}`,
-        new Date(payment.date)
-      );
-      
-      return !!transaction;
+      toast.success(`تم تسجيل معاملة دفعة رقم ${payment.payment_number} تلقائيًا`);
+      return true;
     } catch (error) {
       console.error('Error handling payment confirmation:', error);
-      toast.error('حدث خطأ أثناء تحويل الدفعة إلى معاملة مالية');
+      toast.error('حدث خطأ أثناء تسجيل معاملة الدفعة');
       return false;
     }
   }
   
   /**
-   * تحويل إلغاء فاتورة أو دفعة إلى معاملة مالية عكسية
+   * معالجة إلغاء معاملة تجارية (فاتورة أو دفعة)
+   * عند إلغاء فاتورة أو دفعة، يتم عكس المعاملة المالية المرتبطة بها
    */
   public async handleCommercialCancellation(
     id: string,
@@ -124,56 +108,64 @@ class FinancialCommercialBridge {
     date?: string
   ): Promise<boolean> {
     try {
-      // تحديد نوع المعاملة المالية (نعكس نوع المعاملة الأصلية)
-      let transactionType: 'income' | 'expense';
-      let categoryComType: string;
+      // 1. البحث عن المعاملة المالية المرتبطة
+      const { data: linkedTransactions, error: findError } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .eq('reference_id', id)
+        .eq('reference_type', type);
       
-      if (type === 'invoice') {
-        if (commercialType === 'sale') {
-          transactionType = 'expense'; // عكس الإيراد الأصلي
-          categoryComType = 'purchase_invoice'; // نستخدم فئة المشتريات للعكس
-        } else {
-          transactionType = 'income'; // عكس المصروف الأصلي
-          categoryComType = 'sale_invoice'; // نستخدم فئة المبيعات للعكس
-        }
-      } else { // payment
-        if (commercialType === 'collection') {
-          transactionType = 'expense'; // عكس الإيراد الأصلي
-          categoryComType = 'payment_disbursement';
-        } else {
-          transactionType = 'income'; // عكس المصروف الأصلي
-          categoryComType = 'payment_collection';
-        }
+      if (findError) {
+        throw findError;
       }
       
-      // الحصول على الفئة المناسبة
-      const category = await this.categoryService.getDefaultCategoryForCommercialType(categoryComType);
+      if (!linkedTransactions || linkedTransactions.length === 0) {
+        toast.warn(`لم يتم العثور على أي معاملات مالية مرتبطة ب${commercialType} رقم ${id}`);
+        return true; // لا يوجد خطأ، ولكن لا توجد معاملات مرتبطة
+      }
       
-      if (!category) {
-        console.error('No suitable category found for cancellation type:', categoryComType);
+      // نفترض وجود معاملة واحدة فقط مرتبطة
+      const transaction = linkedTransactions[0];
+      
+      // 2. إنشاء معاملة عكسية
+      const reverseTransactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
+        type: transaction.type === 'income' ? 'expense' : 'income',
+        amount: amount,
+        category_id: transaction.category_id,
+        date: date || format(new Date(), 'yyyy-MM-dd'), // Use the provided date or current date
+        payment_method: transaction.payment_method,
+        notes: `عكس ${transaction.type === 'income' ? 'إيراد' : 'مصروف'} ${commercialType} ملغاة رقم ${id} ${partyName ? 'لـ/من ' + partyName : ''}`,
+        reference_id: id,
+        reference_type: `reverse_${type}` // نوع مرجعي يشير إلى أنها معاملة عكسية
+      };
+      
+      const { data: reverseTransaction, error: reverseError } = await supabase
+        .from('financial_transactions')
+        .insert(reverseTransactionData)
+        .select()
+        .single();
+      
+      if (reverseError) {
+        throw reverseError;
+      }
+      
+      // 3. حذف المعاملة الأصلية (اختياري)
+      const { error: deleteError } = await supabase
+        .from('financial_transactions')
+        .delete()
+        .eq('id', transaction.id);
+      
+      if (deleteError) {
+        console.error(`Error deleting original transaction ${transaction.id}:`, deleteError);
+        toast.error(`حدث خطأ أثناء حذف المعاملة الأصلية رقم ${transaction.id}`);
         return false;
       }
       
-      // إنشاء معاملة مالية عكسية
-      const notes = type === 'invoice'
-        ? `إلغاء فاتورة ${commercialType === 'sale' ? 'مبيعات' : 'مشتريات'} رقم: ${id.substring(0, 8)}`
-        : `إلغاء ${commercialType === 'collection' ? 'تحصيل' : 'صرف'} دفعة من ${partyName || 'طرف تجاري'}`;
-      
-      const transaction = await this.transactionService.createTransactionFromCommercial(
-        amount,
-        transactionType,
-        category.id,
-        'cash', // نستخدم نفس طريقة الدفع، لكن يمكن تحسينها لاحقًا
-        id,
-        `cancel_${type}_${commercialType}`,
-        notes,
-        date ? new Date(date) : new Date()
-      );
-      
-      return !!transaction;
+      toast.success(`تم تسجيل معاملة عكسية ل${commercialType} ملغاة رقم ${id}`);
+      return true;
     } catch (error) {
-      console.error('Error handling commercial cancellation:', error);
-      toast.error('حدث خطأ أثناء تحويل إلغاء المعاملة التجارية إلى معاملة مالية');
+      console.error(`Error handling ${commercialType} cancellation:`, error);
+      toast.error(`حدث خطأ أثناء معالجة إلغاء ${commercialType} رقم ${id}`);
       return false;
     }
   }
@@ -181,38 +173,21 @@ class FinancialCommercialBridge {
   /**
    * البحث عن المعاملات المالية المرتبطة بمعاملة تجارية
    */
-  public async findLinkedFinancialTransactions(
-    commercialId: string
-  ): Promise<any[]> {
+  public async findLinkedFinancialTransactions(commercialId: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
         .from('financial_transactions')
-        .select(`
-          *,
-          financial_categories (name, type)
-        `)
-        .eq('reference_id', commercialId)
-        .order('date');
+        .select('*')
+        .or(`reference_id.eq.${commercialId},reference_type.eq.${commercialId}`);
       
       if (error) {
         throw error;
       }
       
-      return data.map(item => ({
-        id: item.id,
-        date: item.date,
-        amount: item.amount,
-        type: item.type,
-        category_id: item.category_id,
-        category_name: item.financial_categories?.name || '',
-        category_type: item.financial_categories?.type || item.type,
-        payment_method: item.payment_method,
-        reference_id: item.reference_id,
-        reference_type: item.reference_type,
-        notes: item.notes
-      }));
+      return data || [];
     } catch (error) {
       console.error('Error finding linked financial transactions:', error);
+      toast.error('حدث خطأ أثناء البحث عن المعاملات المالية المرتبطة');
       return [];
     }
   }
