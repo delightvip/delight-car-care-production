@@ -1,16 +1,18 @@
-
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 interface SidebarContextType {
   isOpen: boolean;
   isMobile: boolean;
   openMobile: boolean;
-  isExpanded: boolean; // Added isExpanded property
+  isExpanded: boolean;
   setOpenMobile: (open: boolean) => void;
   toggleSidebar: () => void;
+  isPinned: boolean;
+  togglePin: () => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | null>(null);
@@ -29,19 +31,25 @@ interface SidebarProviderProps {
 
 export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) => {
   const isMobile = useIsMobile();
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useLocalStorage('sidebar-open', true);
   const [openMobile, setOpenMobile] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true); // Added state for isExpanded
+  const [isExpanded, setIsExpanded] = useLocalStorage('sidebar-expanded', true);
+  const [isPinned, setPinned] = useLocalStorage('sidebar-pinned', false);
 
   const toggleSidebar = useCallback(() => {
     if (isMobile) {
       setOpenMobile((open) => !open);
     } else {
-      setIsOpen((open) => !open);
-      setIsExpanded((expanded) => !expanded); // Toggle isExpanded when sidebar is toggled
+      setIsOpen((prevOpen) => !prevOpen);
+      setIsExpanded((prevExpanded) => !prevExpanded);
     }
-  }, [isMobile]);
+  }, [isMobile, setIsOpen, setIsExpanded]);
 
+  const togglePin = useCallback(() => {
+    setPinned((prevPinned) => !prevPinned);
+  }, [setPinned]);
+
+  // Keyboard shortcut handler
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'b' && (event.metaKey || event.ctrlKey)) {
@@ -60,9 +68,11 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) =>
         isOpen,
         isMobile,
         openMobile,
-        isExpanded, // Provide isExpanded to the context
+        isExpanded,
         setOpenMobile,
         toggleSidebar,
+        isPinned,
+        togglePin,
       }}
     >
       {children}

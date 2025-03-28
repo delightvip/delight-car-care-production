@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useSidebar } from './SidebarContext';
@@ -6,9 +5,10 @@ import ModernSidebar from './ModernSidebar';
 import Navbar from './Navbar';
 import { useTheme } from '@/components/theme-provider';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import { motion } from 'framer-motion';
 
 export const Layout = () => {
-  const { isOpen } = useSidebar();
+  const { isExpanded, isMobile } = useSidebar();
   const { theme } = useTheme();
   const [rtl] = useLocalStorage('rtl-mode', true);
   
@@ -29,14 +29,25 @@ export const Layout = () => {
   }, [theme]);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background overflow-hidden">
       <ModernSidebar />
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out`}>
+      <motion.div 
+        className="flex-1 flex flex-col min-h-screen"
+        initial={false}
+        animate={{
+          marginRight: !isMobile && isExpanded ? '16rem' : '4rem',
+        }}
+        transition={{ 
+          type: "spring", 
+          stiffness: 300, 
+          damping: 30 
+        }}
+      >
         <Navbar />
         <main className="flex-1 container mx-auto px-4 pt-20 pb-6">
           <Outlet />
         </main>
-      </div>
+      </motion.div>
     </div>
   );
 };

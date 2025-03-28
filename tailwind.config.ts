@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -77,8 +76,12 @@ export default {
           foreground: 'hsl(var(--sidebar-foreground))',
           primary: 'hsl(var(--sidebar-primary))',
           'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+          'primary-muted': 'hsl(var(--sidebar-primary) / 0.7)',
           accent: 'hsl(var(--sidebar-accent))',
           'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+          'success-muted': 'hsl(var(--success) / 0.7)',
+          'destructive-muted': 'hsl(var(--destructive) / 0.7)',
+          'warning-muted': 'hsl(var(--warning) / 0.7)',
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))'
         }
@@ -138,8 +141,8 @@ export default {
           '50%': { transform: 'translateY(-5px)' }
         },
         'pulse': {
-          '0%, 100%': { opacity: 1 },
-          '50%': { opacity: 0.7 }
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.7' }
         }
       },
       animation: {

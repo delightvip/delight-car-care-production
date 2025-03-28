@@ -1,26 +1,39 @@
-
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { ModeToggle } from '@/components/mode-toggle';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { SidebarTrigger } from "@/components/layout/SidebarContext";
-import { Settings, BellRing, AlertTriangle, RefreshCw } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
-import { useNotifications } from '@/components/notifications/NotificationProvider';
-import NotificationPanel from '@/components/notifications/NotificationPanel';
-import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { SidebarTrigger, useSidebar } from "@/components/layout/SidebarContext";
+import { Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import NavbarRefreshButton from './navbar/NavbarRefreshButton';
 import NavbarLowStockAlert from './navbar/NavbarLowStockAlert';
 import NavbarBranding from './navbar/NavbarBranding';
+import NotificationPanel from '@/components/notifications/NotificationPanel';
+import { cn } from '@/lib/utils';
 
 const Navbar = () => {
-  const { unreadCount } = useNotifications();
+  const { isExpanded, isMobile } = useSidebar();
   
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 z-20 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border px-4">
+    <motion.header 
+      className={cn(
+        "fixed top-0 h-16 z-20 flex items-center justify-between",
+        "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+        "border-b border-border px-4",
+        "transition-all duration-300"
+      )}
+      initial={false}
+      animate={{
+        right: !isMobile && isExpanded ? '16rem' : '4rem',
+        left: 0
+      }}
+      transition={{ 
+        type: 'spring',
+        stiffness: 300,
+        damping: 30
+      }}
+    >
       <div className="flex items-center gap-3">
         <SidebarTrigger className="md:hidden" />
         <NavbarBranding />
@@ -47,7 +60,7 @@ const Navbar = () => {
         
         <ModeToggle />
       </div>
-    </header>
+    </motion.header>
   );
 };
 
