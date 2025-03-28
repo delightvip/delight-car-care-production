@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import FinancialService, { Category } from '@/services/financial/FinancialService';
 import { ArrowLeft, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Define schema for form validation
 const categorySchema = z.object({
@@ -90,20 +91,36 @@ const CategoryForm: React.FC = () => {
   const onSubmit = async (data: CategoryFormValues) => {
     setSubmitting(true);
     
-    let success = false;
-    
-    if (isEditing && id) {
-      const result = await financialService.updateCategory(id, data as Omit<Category, 'id' | 'created_at'>);
-      success = !!result;
-    } else {
-      const result = await financialService.createCategory(data as Omit<Category, 'id' | 'created_at'>);
-      success = !!result;
-    }
-    
-    setSubmitting(false);
-    
-    if (success) {
-      navigate('/financial/categories');
+    try {
+      let success = false;
+      
+      // Ensure that data has required fields with proper types
+      const categoryData: Omit<Category, 'id' | 'created_at'> = {
+        name: data.name,
+        type: data.type,
+        description: data.description || ''
+      };
+      
+      if (isEditing && id) {
+        const result = await financialService.updateCategory(id, categoryData);
+        success = !!result;
+      } else {
+        const result = await financialService.createCategory(categoryData);
+        success = !!result;
+      }
+      
+      setSubmitting(false);
+      
+      if (success) {
+        toast.success(isEditing ? 'تم تحديث الفئة بنجاح' : 'تم إنشاء الفئة بنجاح');
+        navigate('/financial/categories');
+      } else {
+        toast.error('حدث خطأ أثناء حفظ البيانات');
+      }
+    } catch (error) {
+      console.error('حدث خطأ:', error);
+      toast.error('حدث خطأ أثناء حفظ البيانات');
+      setSubmitting(false);
     }
   };
   

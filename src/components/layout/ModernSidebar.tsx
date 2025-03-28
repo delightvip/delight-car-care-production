@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -20,7 +19,11 @@ import {
   BoxIcon,
   ArrowLeftRight,
   Truck,
-  AlertTriangle
+  AlertTriangle,
+  CreditCard,
+  DollarSign,
+  PieChart,
+  Tags
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarContext';
@@ -210,6 +213,7 @@ const ModernSidebar: React.FC = () => {
         </SidebarGroup>
 
         <SidebarGroup title="المعاملات التجارية" icon={ShoppingCart} defaultOpen={false}>
+          <SidebarItem to="/commercial" icon={LayoutDashboard} title="لوحة التحكم التجارية" />
           <SidebarItem to="/commercial/parties" icon={Users} title="العملاء والموردين" />
           <SidebarItem to="/commercial/invoices" icon={Receipt} title="الفواتير" />
           <SidebarItem to="/commercial/payments" icon={Wallet} title="المدفوعات" />
@@ -218,8 +222,14 @@ const ModernSidebar: React.FC = () => {
           <SidebarItem to="/commercial/purchase-orders" icon={Truck} title="أوامر الشراء" />
         </SidebarGroup>
 
+        <SidebarGroup title="الإدارة المالية" icon={DollarSign} defaultOpen={false}>
+          <SidebarItem to="/financial" icon={LayoutDashboard} title="لوحة التحكم المالية" />
+          <SidebarItem to="/financial/transactions/new" icon={CreditCard} title="معاملة جديدة" />
+          <SidebarItem to="/financial/categories" icon={Tags} title="فئات المعاملات" />
+        </SidebarGroup>
+
         <SidebarGroup title="التحليلات" icon={BarChart3} defaultOpen={false}>
-          <SidebarItem to="/analytics" icon={BarChart3} title="التقارير والإحصائيات" />
+          <SidebarItem to="/analytics" icon={PieChart} title="التقارير والإحصائيات" />
         </SidebarGroup>
 
         <div className="pt-4 mt-4 border-t border-border">
