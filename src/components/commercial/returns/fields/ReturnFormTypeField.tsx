@@ -3,14 +3,14 @@ import React from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { UseFormReturn } from 'react-hook-form';
-import { ReturnFormValues } from './ReturnFormTypes';
+import { ReturnFormValues } from '@/types/returns';
 
-interface ReturnFormHeaderProps {
+interface ReturnFormTypeFieldProps {
   form: UseFormReturn<ReturnFormValues>;
   onReturnTypeChange: (value: string) => void;
 }
 
-export function ReturnFormHeader({ form, onReturnTypeChange }: ReturnFormHeaderProps) {
+export default function ReturnFormTypeField({ form, onReturnTypeChange }: ReturnFormTypeFieldProps) {
   return (
     <FormField
       control={form.control}
@@ -22,8 +22,9 @@ export function ReturnFormHeader({ form, onReturnTypeChange }: ReturnFormHeaderP
             onValueChange={(value) => {
               field.onChange(value);
               onReturnTypeChange(value);
-            }} 
+            }}
             defaultValue={field.value}
+            value={field.value}
           >
             <FormControl>
               <SelectTrigger>

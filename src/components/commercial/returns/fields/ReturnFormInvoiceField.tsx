@@ -4,30 +4,30 @@ import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessa
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
-import { ReturnFormValues } from './ReturnFormTypes';
+import { ReturnFormValues } from '@/types/returns';
 
-interface ReturnFormInvoiceProps {
+interface ReturnFormInvoiceFieldProps {
   form: UseFormReturn<ReturnFormValues>;
+  filteredInvoices: any[];
   isLoadingInvoices: boolean;
   loadingInvoiceItems: boolean;
-  filteredInvoices: any[];
   onInvoiceChange: (invoiceId: string) => void;
 }
 
-export function ReturnFormInvoice({ 
+export default function ReturnFormInvoiceField({ 
   form, 
+  filteredInvoices, 
   isLoadingInvoices, 
   loadingInvoiceItems, 
-  filteredInvoices, 
   onInvoiceChange 
-}: ReturnFormInvoiceProps) {
+}: ReturnFormInvoiceFieldProps) {
   return (
     <FormField
       control={form.control}
       name="invoice_id"
       render={({ field }) => (
         <FormItem>
-          <FormLabel>رقم الفاتورة (اختياري)</FormLabel>
+          <FormLabel>رقم الفاتورة</FormLabel>
           <Select 
             onValueChange={onInvoiceChange} 
             value={field.value || "no_invoice"}
@@ -55,7 +55,7 @@ export function ReturnFormInvoice({
             </SelectContent>
           </Select>
           <FormDescription>
-            يمكنك ربط المرتجع بفاتورة محددة لتسهيل عملية إرجاع الأصناف
+            اختر الفاتورة المرتبطة بالمرتجع لجلب أصنافها تلقائيًا
           </FormDescription>
           <FormMessage />
         </FormItem>

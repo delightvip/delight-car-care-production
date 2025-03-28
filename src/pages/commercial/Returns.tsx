@@ -1,43 +1,67 @@
 
 import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
+import { 
+  PlusCircle, 
+  Search, 
+  FileDown, 
+  RefreshCw, 
+  CheckCircle, 
+  XCircle
+} from 'lucide-react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import CommercialService, { Return } from '@/services/CommercialService';
-import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, FileDown, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { ReturnsForm } from '@/components/commercial/ReturnsForm';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+import ReturnForm from '@/components/commercial/returns/ReturnForm';
+import { ReturnDetailsDialog } from '@/components/commercial/returns/ReturnDetailsDialog';
+import CommercialService from '@/services/CommercialService';
+import { Return } from '@/types/returns';
 
 const Returns = () => {
   const [activeTab, setActiveTab] = useState('all');
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedReturnId, setSelectedReturnId] = useState<string | null>(null);
+  const [viewingReturn, setViewingReturn] = useState<Return | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const queryClient = useQueryClient();
-  
   const commercialService = CommercialService.getInstance();
   
+  // fetch returns data
   const { data: returns, isLoading, error, refetch } = useQuery({
     queryKey: ['returns'],
     queryFn: async () => {
-      console.log('Fetching returns...');
       try {
         const result = await commercialService.getReturns();
-        console.log('Returns fetched:', result);
         return result;
       } catch (err) {
         console.error('Error fetching returns:', err);
@@ -45,12 +69,8 @@ const Returns = () => {
       }
     },
   });
-  
-  const { data: parties } = useQuery({
-    queryKey: ['parties'],
-    queryFn: () => PartyService.getInstance().getParties(),
-  });
 
+  // filter returns based on active tab and search query
   const filteredReturns = React.useMemo(() => {
     if (!returns) return [];
     
@@ -71,252 +91,172 @@ const Returns = () => {
     return filtered;
   }, [returns, activeTab, searchQuery]);
 
+  // handle creating a new return
   const handleCreateReturn = async (returnData: Omit<Return, 'id' | 'created_at'>) => {
     try {
       setIsProcessing(true);
       console.log('Creating return with data:', returnData);
       
-      // تأكد من وجود party_id للمرتجع إذا كان مرتبط بفاتورة
-      if (!returnData.party_id && returnData.invoice_id) {
-        // استخراج الطرف من الفاتورة المرتبطة
-        const invoice = await commercialService.getInvoiceById(returnData.invoice_id);
-        if (invoice) {
-          returnData.party_id = invoice.party_id;
-        }
-      }
-      
-      // Use setTimeout to prevent UI freezing
-      const createReturnPromise = new Promise<Return | null>(async (resolve) => {
-        try {
-          // تعيين حالة المرتجع للتأكيد تلقائياً كمسودة أولاً
-          const result = await commercialService.createReturn({
-            ...returnData,
-            payment_status: 'draft'
-          });
-          
-          console.log('Return creation result:', result);
-          resolve(result);
-        } catch (error) {
-          console.error('Error in return creation:', error);
-          resolve(null);
-        }
+      // create return in draft status
+      const result = await commercialService.createReturn({
+        ...returnData,
+        payment_status: 'draft'
       });
-      
-      const result = await createReturnPromise;
       
       if (result) {
-        // تأكيد المرتجع تلقائياً بعد إنشائه
-        console.log('Auto confirming return:', result.id);
-        
-        // Use setTimeout for async operation
-        setTimeout(async () => {
-          try {
-            const confirmed = await commercialService.confirmReturn(result.id);
-            console.log('Return confirm result:', confirmed);
-            
-            // تحديث البيانات
-            queryClient.invalidateQueries({ queryKey: ['returns'] });
-            queryClient.invalidateQueries({ queryKey: ['parties'] });
-            queryClient.invalidateQueries({ queryKey: ['inventory'] });
-            queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
-            queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
-            queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
-            queryClient.invalidateQueries({ queryKey: ['finished_products'] });
-          } catch (confirmError) {
-            console.error('Error confirming return:', confirmError);
-          }
-        }, 500);
-        
-        toast({
-          title: "نجاح",
-          description: "تم إنشاء المرتجع وتأكيده بنجاح",
-          variant: "default"
-        });
-        
+        // refresh data
+        queryClient.invalidateQueries({ queryKey: ['returns'] });
+        toast.success('تم إنشاء المرتجع بنجاح');
         setIsAddDialogOpen(false);
       } else {
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء إنشاء المرتجع",
-          variant: "destructive"
-        });
+        toast.error('حدث خطأ أثناء إنشاء المرتجع');
       }
     } catch (error) {
-      console.error('Error handling return creation:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إنشاء المرتجع",
-        variant: "destructive"
-      });
+      console.error('Error creating return:', error);
+      toast.error('حدث خطأ أثناء إنشاء المرتجع');
     } finally {
       setIsProcessing(false);
     }
   };
 
+  // handle confirming a return
   const handleConfirmReturn = async () => {
     if (!selectedReturnId) return;
     
     try {
       setIsProcessing(true);
-      console.log('Confirming return:', selectedReturnId);
-      
-      // Use setTimeout to prevent UI freezing
-      const confirmPromise = new Promise<boolean>(async (resolve) => {
-        try {
-          const success = await commercialService.confirmReturn(selectedReturnId);
-          resolve(success);
-        } catch (error) {
-          console.error('Error in confirm promise:', error);
-          resolve(false);
-        }
-      });
-      
-      const success = await confirmPromise;
+      const success = await commercialService.confirmReturn(selectedReturnId);
       
       if (success) {
-        // تحديث البيانات
+        // refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
-        queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
-        queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
-        queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
-        queryClient.invalidateQueries({ queryKey: ['finished_products'] });
         
-        toast({
-          title: "نجاح",
-          description: "تم تأكيد المرتجع بنجاح",
-          variant: "default"
-        });
+        toast.success('تم تأكيد المرتجع بنجاح');
       } else {
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تأكيد المرتجع",
-          variant: "destructive"
-        });
+        toast.error('حدث خطأ أثناء تأكيد المرتجع');
       }
     } catch (error) {
       console.error('Error confirming return:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تأكيد المرتجع",
-        variant: "destructive"
-      });
+      toast.error('حدث خطأ أثناء تأكيد المرتجع');
     } finally {
       setIsConfirmDialogOpen(false);
       setSelectedReturnId(null);
       setIsProcessing(false);
+      setIsDetailsOpen(false);
     }
   };
 
+  // handle cancelling a return
   const handleCancelReturn = async () => {
     if (!selectedReturnId) return;
     
     try {
       setIsProcessing(true);
-      console.log('Cancelling return:', selectedReturnId);
-      
-      // Use setTimeout to prevent UI freezing
-      const cancelPromise = new Promise<boolean>(async (resolve) => {
-        try {
-          const success = await commercialService.cancelReturn(selectedReturnId);
-          resolve(success);
-        } catch (error) {
-          console.error('Error in cancel promise:', error);
-          resolve(false);
-        }
-      });
-      
-      const success = await cancelPromise;
+      const success = await commercialService.cancelReturn(selectedReturnId);
       
       if (success) {
-        // تحديث البيانات
+        // refresh data
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
-        queryClient.invalidateQueries({ queryKey: ['raw_materials'] });
-        queryClient.invalidateQueries({ queryKey: ['packaging_materials'] });
-        queryClient.invalidateQueries({ queryKey: ['semi_finished_products'] });
-        queryClient.invalidateQueries({ queryKey: ['finished_products'] });
         
-        toast({
-          title: "نجاح",
-          description: "تم إلغاء المرتجع بنجاح",
-          variant: "default"
-        });
+        toast.success('تم إلغاء المرتجع بنجاح');
       } else {
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء إلغاء المرتجع",
-          variant: "destructive"
-        });
+        toast.error('حدث خطأ أثناء إلغاء المرتجع');
       }
     } catch (error) {
       console.error('Error cancelling return:', error);
-      toast({
-        title: "خطأ", 
-        description: "حدث خطأ أثناء إلغاء المرتجع",
-        variant: "destructive"
-      });
+      toast.error('حدث خطأ أثناء إلغاء المرتجع');
     } finally {
       setIsCancelDialogOpen(false);
       setSelectedReturnId(null);
       setIsProcessing(false);
+      setIsDetailsOpen(false);
     }
   };
 
-  const handleConfirmClick = (id: string) => {
-    setSelectedReturnId(id);
-    setIsConfirmDialogOpen(true);
+  // handle deleting a return
+  const handleDeleteReturn = async () => {
+    if (!selectedReturnId) return;
+    
+    try {
+      setIsProcessing(true);
+      const success = await commercialService.deleteReturn(selectedReturnId);
+      
+      if (success) {
+        // refresh data
+        queryClient.invalidateQueries({ queryKey: ['returns'] });
+        toast.success('تم حذف المرتجع بنجاح');
+      } else {
+        toast.error('حدث خطأ أثناء حذف المرتجع');
+      }
+    } catch (error) {
+      console.error('Error deleting return:', error);
+      toast.error('حدث خطأ أثناء حذف المرتجع');
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setSelectedReturnId(null);
+      setIsProcessing(false);
+      setIsDetailsOpen(false);
+    }
   };
 
-  const handleCancelClick = (id: string) => {
-    setSelectedReturnId(id);
-    setIsCancelDialogOpen(true);
+  // view return details
+  const handleViewDetails = async (returnId: string) => {
+    try {
+      const returnData = await commercialService.getReturnById(returnId);
+      if (returnData) {
+        setViewingReturn(returnData);
+        setSelectedReturnId(returnId);
+        setIsDetailsOpen(true);
+      } else {
+        toast.error('لم يتم العثور على بيانات المرتجع');
+      }
+    } catch (error) {
+      console.error('Error fetching return details:', error);
+      toast.error('حدث خطأ أثناء جلب بيانات المرتجع');
+    }
   };
 
+  // export data to CSV
   const exportToCsv = () => {
     if (!filteredReturns.length) {
-      toast({
-        title: "خطأ",
-        description: "لا توجد بيانات للتصدير",
-        variant: "destructive"
-      });
+      toast.error('لا توجد بيانات للتصدير');
       return;
     }
     
     const csvContent = 'ID,النوع,الطرف,التاريخ,المبلغ,الفاتورة المرتبطة,الحالة\n' +
-      filteredReturns.map(returnItem => `"${returnItem.id}","${returnItem.return_type === 'sales_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}","${returnItem.party_name || ''}","${returnItem.date}","${returnItem.amount}","${returnItem.invoice_id || ''}","${returnItem.payment_status}"`).join('\n');
+      filteredReturns.map(returnItem => 
+        `"${returnItem.id}","${returnItem.return_type === 'sales_return' ? 'مرتجع مبيعات' : 'مرتجع مشتريات'}","${returnItem.party_name || ''}","${returnItem.date}","${returnItem.amount}","${returnItem.invoice_id || ''}","${
+          returnItem.payment_status === 'confirmed' ? 'مؤكد' : 
+          returnItem.payment_status === 'cancelled' ? 'ملغي' : 'مسودة'
+        }"`
+      ).join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `المرتجعات-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute('download', `returns-${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // وظيفة إعادة تحميل البيانات
+  // refresh data
   const handleRefresh = async () => {
     try {
       await refetch();
-      toast({
-        title: "نجاح",
-        description: "تم تحديث البيانات بنجاح",
-        variant: "default"
-      });
+      toast.success('تم تحديث البيانات بنجاح');
     } catch (error) {
       console.error('Error refreshing data:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تحديث البيانات",
-        variant: "destructive"
-      });
+      toast.error('حدث خطأ أثناء تحديث البيانات');
     }
   };
 
+  // loading state
   if (isLoading) {
     return (
       <PageTransition>
@@ -335,6 +275,7 @@ const Returns = () => {
     );
   }
 
+  // error state
   if (error) {
     return (
       <PageTransition>
@@ -417,7 +358,7 @@ const Returns = () => {
               <TableBody>
                 {filteredReturns.length > 0 ? (
                   filteredReturns.map((returnItem) => (
-                    <TableRow key={returnItem.id}>
+                    <TableRow key={returnItem.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleViewDetails(returnItem.id)}>
                       <TableCell className="text-right">
                         {format(new Date(returnItem.date), 'yyyy-MM-dd')}
                       </TableCell>
@@ -434,7 +375,7 @@ const Returns = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         {returnItem.payment_status === 'confirmed' ? (
-                          <Badge variant="default" className="bg-green-500">مؤكد</Badge>
+                          <Badge className="bg-green-500">مؤكد</Badge>
                         ) : returnItem.payment_status === 'cancelled' ? (
                           <Badge variant="destructive">ملغي</Badge>
                         ) : (
@@ -442,12 +383,17 @@ const Returns = () => {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
+                        <div className="flex justify-end space-x-2 rtl:space-x-reverse" onClick={(e) => e.stopPropagation()}>
                           {returnItem.payment_status === 'draft' && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleConfirmClick(returnItem.id)}
+                              className="text-green-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedReturnId(returnItem.id);
+                                setIsConfirmDialogOpen(true);
+                              }}
                               disabled={isProcessing}
                             >
                               <CheckCircle className="h-4 w-4 ml-1" />
@@ -458,7 +404,12 @@ const Returns = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleCancelClick(returnItem.id)}
+                              className="text-red-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedReturnId(returnItem.id);
+                                setIsCancelDialogOpen(true);
+                              }}
                               disabled={isProcessing}
                             >
                               <XCircle className="h-4 w-4 ml-1" />
@@ -484,15 +435,56 @@ const Returns = () => {
 
       {/* Dialog for adding new return */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => !isProcessing && setIsAddDialogOpen(open)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>إضافة مرتجع جديد</DialogTitle>
           </DialogHeader>
-          <ReturnsForm onSubmit={handleCreateReturn} />
+          <ReturnForm 
+            onSubmit={handleCreateReturn} 
+            isSubmitting={isProcessing}
+            onCancel={() => setIsAddDialogOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 
-      {/* Dialog for confirming return */}
+      {/* Return details dialog */}
+      {viewingReturn && (
+        <ReturnDetailsDialog
+          open={isDetailsOpen}
+          onOpenChange={setIsDetailsOpen}
+          returnData={viewingReturn}
+          isProcessing={isProcessing}
+          onConfirm={
+            viewingReturn.payment_status === 'draft' 
+              ? () => {
+                  setIsDetailsOpen(false);
+                  setSelectedReturnId(viewingReturn.id);
+                  setIsConfirmDialogOpen(true);
+                }
+              : undefined
+          }
+          onCancel={
+            viewingReturn.payment_status === 'confirmed'
+              ? () => {
+                  setIsDetailsOpen(false);
+                  setSelectedReturnId(viewingReturn.id);
+                  setIsCancelDialogOpen(true);
+                }
+              : undefined
+          }
+          onDelete={
+            viewingReturn.payment_status === 'draft'
+              ? () => {
+                  setIsDetailsOpen(false);
+                  setSelectedReturnId(viewingReturn.id);
+                  setIsDeleteDialogOpen(true);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {/* Confirm return dialog */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={(open) => !isProcessing && setIsConfirmDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -503,21 +495,14 @@ const Returns = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isProcessing}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmReturn} disabled={isProcessing}>
-              {isProcessing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  جاري التأكيد...
-                </>
-              ) : (
-                <>تأكيد</>
-              )}
+            <AlertDialogAction onClick={handleConfirmReturn} disabled={isProcessing} className="bg-green-600 hover:bg-green-700">
+              تأكيد
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog for cancelling return */}
+      {/* Cancel return dialog */}
       <AlertDialog open={isCancelDialogOpen} onOpenChange={(open) => !isProcessing && setIsCancelDialogOpen(open)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -528,19 +513,26 @@ const Returns = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isProcessing}>تراجع</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-red-500 hover:bg-red-600"
-              onClick={handleCancelReturn}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  جاري الإلغاء...
-                </>
-              ) : (
-                <>تأكيد الإلغاء</>
-              )}
+            <AlertDialogAction onClick={handleCancelReturn} disabled={isProcessing} className="bg-red-600 hover:bg-red-700">
+              إلغاء المرتجع
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete return dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => !isProcessing && setIsDeleteDialogOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف المرتجع</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من رغبتك في حذف هذا المرتجع؟ لا يمكن التراجع عن هذه العملية.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessing}>تراجع</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteReturn} disabled={isProcessing} className="bg-red-600 hover:bg-red-700">
+              حذف المرتجع
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

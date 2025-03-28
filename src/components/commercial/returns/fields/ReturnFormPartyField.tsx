@@ -3,21 +3,21 @@ import React from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { UseFormReturn } from 'react-hook-form';
-import { ReturnFormValues } from './ReturnFormTypes';
+import { ReturnFormValues } from '@/types/returns';
 
-interface ReturnFormPartyProps {
+interface ReturnFormPartyFieldProps {
   form: UseFormReturn<ReturnFormValues>;
   returnType: string;
   filteredParties: any[];
   onPartyChange: (partyId: string) => void;
 }
 
-export function ReturnFormParty({ 
+export default function ReturnFormPartyField({ 
   form, 
   returnType, 
   filteredParties, 
   onPartyChange 
-}: ReturnFormPartyProps) {
+}: ReturnFormPartyFieldProps) {
   return (
     <FormField
       control={form.control}
@@ -26,7 +26,7 @@ export function ReturnFormParty({
         <FormItem>
           <FormLabel>{returnType === 'sales_return' ? 'العميل' : 'المورد'}</FormLabel>
           <Select 
-            onValueChange={onPartyChange} 
+            onValueChange={onPartyChange}
             value={field.value || "no_party"}
           >
             <FormControl>

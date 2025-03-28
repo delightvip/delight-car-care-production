@@ -1,279 +1,502 @@
 
-import { Return } from '@/services/CommercialTypes';
-import { ReturnEntity } from './ReturnEntity';
-import { ReturnProcessor } from './ReturnProcessor';
-import { toast } from '@/hooks/use-toast';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Return, ReturnItem } from "@/types/returns";
+import { format } from "date-fns";
+import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
+import InventoryService from "@/services/InventoryService";
 
-// خدمة المرتجعات الرئيسية
-export class ReturnService {
-  private static instance: ReturnService | null = null;
-  private returnProcessor: ReturnProcessor;
-  
+/**
+ * خدمة إدارة المرتجعات
+ * تتيح عمليات الإنشاء والتعديل والحذف للمرتجعات مع المحافظة على تحديث المخزون والدفاتر المالية
+ */
+class ReturnService {
+  private static instance: ReturnService;
+  private financialBridge: FinancialCommercialBridge;
+  private inventoryService: InventoryService;
+
   private constructor() {
-    this.returnProcessor = new ReturnProcessor();
+    this.financialBridge = FinancialCommercialBridge.getInstance();
+    this.inventoryService = InventoryService.getInstance();
   }
-  
+
   public static getInstance(): ReturnService {
     if (!ReturnService.instance) {
       ReturnService.instance = new ReturnService();
     }
     return ReturnService.instance;
   }
-  
+
+  /**
+   * جلب جميع المرتجعات
+   */
   public async getReturns(): Promise<Return[]> {
     try {
-      const returns = await ReturnEntity.fetchAll();
-      return returns;
+      // استعلام جلب المرتجعات مع أسماء الأطراف
+      let { data: returns, error } = await supabase
+        .from('returns')
+        .select(`
+          *,
+          parties:party_id (name)
+        `)
+        .order('date', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // تنسيق البيانات
+      const formattedReturns = returns?.map(ret => ({
+        ...ret,
+        party_name: ret.parties?.name || 'غير محدد'
+      })) || [];
+
+      return formattedReturns;
     } catch (error) {
-      console.error('Error in getReturns:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب المرتجعات",
-        variant: "destructive"
-      });
+      console.error('Error fetching returns:', error);
+      toast.error('حدث خطأ أثناء جلب المرتجعات');
       return [];
     }
   }
-  
+
+  /**
+   * جلب مرتجع محدد بواسطة المعرف مع أصنافه
+   */
   public async getReturnById(id: string): Promise<Return | null> {
     try {
-      const returnData = await ReturnEntity.fetchById(id);
-      return returnData;
+      // استعلام جلب المرتجع مع اسم الطرف
+      let { data: returnData, error } = await supabase
+        .from('returns')
+        .select(`
+          *,
+          parties:party_id (name)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!returnData) {
+        return null;
+      }
+
+      // جلب أصناف المرتجع
+      const { data: returnItems, error: itemsError } = await supabase
+        .from('return_items')
+        .select('*')
+        .eq('return_id', id);
+
+      if (itemsError) {
+        throw itemsError;
+      }
+
+      // تنسيق البيانات النهائية
+      const formattedReturn: Return = {
+        ...returnData,
+        party_name: returnData.parties?.name || 'غير محدد',
+        items: returnItems || []
+      };
+
+      return formattedReturn;
     } catch (error) {
-      console.error(`Error in getReturnById(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء جلب بيانات المرتجع",
-        variant: "destructive"
-      });
+      console.error(`Error fetching return with ID ${id}:`, error);
+      toast.error('حدث خطأ أثناء جلب بيانات المرتجع');
       return null;
     }
   }
-  
+
+  /**
+   * إنشاء مرتجع جديد
+   */
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      console.log('Creating return:', returnData);
-      
-      if (!returnData.items || returnData.items.length === 0) {
-        toast({
-          title: "خطأ",
-          description: "يجب إضافة صنف واحد على الأقل إلى المرتجع",
-          variant: "destructive"
-        });
-        return null;
-      }
-      
+      // التأكد من تنسيق التاريخ بشكل صحيح
+      const formattedDate = typeof returnData.date === 'object' 
+        ? format(new Date(returnData.date as any), 'yyyy-MM-dd')
+        : returnData.date;
+
       // إنشاء المرتجع في قاعدة البيانات
-      const returnRecord = await ReturnEntity.create(returnData);
-      
-      if (!returnRecord) {
-        console.error('Failed to create return');
-        toast({
-          title: "خطأ",
-          description: "فشل إنشاء المرتجع",
-          variant: "destructive"
-        });
-        return null;
+      const { data: newReturn, error } = await supabase
+        .from('returns')
+        .insert({
+          return_type: returnData.return_type,
+          invoice_id: returnData.invoice_id,
+          party_id: returnData.party_id,
+          date: formattedDate,
+          amount: returnData.amount,
+          payment_status: 'draft',
+          notes: returnData.notes
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
       }
-      
-      console.log('Return created successfully:', returnRecord.id);
-      
-      // إذا كانت حالة المرتجع هي "confirmed"، قم بتأكيده تلقائياً (بشكل غير متزامن)
-      if (returnRecord && returnData.payment_status === 'confirmed') {
-        // تجنب تجمد الواجهة باستخدام وعد
-        this.processReturnConfirmation(returnRecord.id);
+
+      // إضافة أصناف المرتجع
+      if (returnData.items && returnData.items.length > 0) {
+        const selectedItems = returnData.items.filter(item => item.quantity > 0);
+        
+        const formattedItems = selectedItems.map(item => ({
+          return_id: newReturn.id,
+          item_id: item.item_id,
+          item_type: item.item_type,
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total: item.quantity * item.unit_price
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('return_items')
+          .insert(formattedItems);
+
+        if (itemsError) {
+          throw itemsError;
+        }
       }
-      
-      toast({
-        title: "نجاح",
-        description: "تم إنشاء المرتجع بنجاح",
-        variant: "default"
-      });
-      
-      return returnRecord;
+
+      toast.success('تم إنشاء المرتجع بنجاح');
+      return newReturn;
     } catch (error) {
       console.error('Error creating return:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إنشاء المرتجع",
-        variant: "destructive"
-      });
+      toast.error('حدث خطأ أثناء إنشاء المرتجع');
       return null;
     }
   }
-  
-  // معالجة تأكيد المرتجع في الخلفية لمنع تجمد الواجهة
-  private processReturnConfirmation(returnId: string): void {
-    this.confirmReturn(returnId).then(success => {
-      console.log('Auto-confirmation result:', success);
-    }).catch(err => {
-      console.error('Error in auto-confirmation:', err);
-    });
-  }
-  
+
+  /**
+   * تحديث مرتجع موجود
+   */
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
-      const success = await ReturnEntity.update(id, returnData);
+      // التأكد من تنسيق التاريخ
+      let updateData: any = { ...returnData };
       
-      if (success) {
-        toast({
-          title: "نجاح", 
-          description: "تم تحديث المرتجع بنجاح",
-          variant: "default"
-        });
-      } else {
-        toast({
-          title: "خطأ",
-          description: "فشل تحديث المرتجع",
-          variant: "destructive"
-        });
+      if (returnData.date) {
+        updateData.date = typeof returnData.date === 'object' 
+          ? format(new Date(returnData.date as any), 'yyyy-MM-dd')
+          : returnData.date;
       }
-      
-      return success;
+
+      // تحديث بيانات المرتجع
+      const { error } = await supabase
+        .from('returns')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      // تحديث أصناف المرتجع إذا كانت موجودة
+      if (returnData.items && returnData.items.length > 0) {
+        // حذف جميع الأصناف الحالية
+        const { error: deleteError } = await supabase
+          .from('return_items')
+          .delete()
+          .eq('return_id', id);
+
+        if (deleteError) {
+          throw deleteError;
+        }
+
+        // إضافة الأصناف الجديدة
+        const selectedItems = returnData.items.filter(item => item.quantity > 0);
+        
+        if (selectedItems.length > 0) {
+          const formattedItems = selectedItems.map(item => ({
+            return_id: id,
+            item_id: item.item_id,
+            item_type: item.item_type,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.quantity * item.unit_price
+          }));
+
+          const { error: insertError } = await supabase
+            .from('return_items')
+            .insert(formattedItems);
+
+          if (insertError) {
+            throw insertError;
+          }
+        }
+      }
+
+      toast.success('تم تحديث المرتجع بنجاح');
+      return true;
     } catch (error) {
-      console.error(`Error in updateReturn(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تحديث المرتجع",
-        variant: "destructive"
-      });
+      console.error(`Error updating return ${id}:`, error);
+      toast.error('حدث خطأ أثناء تحديث المرتجع');
       return false;
     }
   }
-  
+
+  /**
+   * تأكيد مرتجع (تحديث المخزون والحسابات)
+   */
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      console.log('Starting return confirmation for:', returnId);
+      // 1. جلب بيانات المرتجع كاملة
+      const returnData = await this.getReturnById(returnId);
       
-      // استخدام معالج المرتجعات لتنفيذ التأكيد بدون تجميد الواجهة
-      const confirmPromise = this.returnProcessor.confirmReturn(returnId);
-      
-      // عرض رسالة مبدئية للمستخدم
-      toast({
-        title: "جاري التنفيذ",
-        description: "جاري تأكيد المرتجع...",
-        variant: "default"
-      });
-      
-      // تنفيذ العملية في الخلفية
-      confirmPromise.then(result => {
-        if (result) {
-          console.log('Return confirmation succeeded for:', returnId);
-          toast({
-            title: "نجاح",
-            description: "تم تأكيد المرتجع بنجاح",
-            variant: "default"
-          });
+      if (!returnData || !returnData.items || returnData.items.length === 0) {
+        toast.error('لا توجد بيانات كافية لتأكيد المرتجع');
+        return false;
+      }
+
+      // 2. تحديث حالة المرتجع إلى مؤكد
+      const { error: updateError } = await supabase
+        .from('returns')
+        .update({ payment_status: 'confirmed' })
+        .eq('id', returnId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // 3. تحديث المخزون بناءً على نوع المرتجع
+      for (const item of returnData.items) {
+        if (returnData.return_type === 'sales_return') {
+          // مرتجع مبيعات: إضافة الكميات للمخزون (العميل أعاد البضاعة)
+          await this.inventoryService.increaseItemQuantity(
+            item.item_type,
+            item.item_id,
+            item.quantity,
+            `مرتجع مبيعات #${returnId.substring(0, 8)}`
+          );
         } else {
-          console.log('Return confirmation failed for:', returnId);
-          toast({
-            title: "خطأ",
-            description: "فشل تأكيد المرتجع",
-            variant: "destructive"
-          });
+          // مرتجع مشتريات: خصم الكميات من المخزون (إعادة بضاعة للمورد)
+          await this.inventoryService.decreaseItemQuantity(
+            item.item_type,
+            item.item_id,
+            item.quantity,
+            `مرتجع مشتريات #${returnId.substring(0, 8)}`
+          );
         }
-      }).catch(error => {
-        console.error(`Error in confirmReturn(${returnId}):`, error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تأكيد المرتجع",
-          variant: "destructive"
-        });
+      }
+
+      // 4. تسجيل المعاملة المالية المقابلة
+      // - مرتجع مبيعات = مصروف (خصم من الخزينة)
+      // - مرتجع مشتريات = إيراد (إضافة للخزينة)
+      const financialType = returnData.return_type === 'sales_return' ? 'expense' : 'income';
+      const invoiceOrParty = returnData.invoice_id || '';
+      const partyName = returnData.party_name || '';
+      const note = returnData.return_type === 'sales_return' 
+        ? `مرتجع مبيعات من ${partyName}` 
+        : `مرتجع مشتريات إلى ${partyName}`;
+
+      // استخدام جسر الربط المالي
+      await this.financialBridge.handleReturnConfirmation({
+        id: returnId,
+        return_type: returnData.return_type,
+        amount: returnData.amount,
+        date: returnData.date,
+        party_id: returnData.party_id,
+        party_name: returnData.party_name,
+        invoice_id: returnData.invoice_id,
+        notes: note
       });
-      
-      // إرجاع true لإخبار الواجهة أن العملية بدأت
+
+      toast.success('تم تأكيد المرتجع وتحديث المخزون والحسابات');
       return true;
     } catch (error) {
-      console.error(`Error starting confirmReturn(${returnId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء بدء عملية تأكيد المرتجع",
-        variant: "destructive"
-      });
+      console.error(`Error confirming return ${returnId}:`, error);
+      toast.error('حدث خطأ أثناء تأكيد المرتجع');
       return false;
     }
   }
-  
+
+  /**
+   * إلغاء مرتجع (عكس تأثيره على المخزون والحسابات)
+   */
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      console.log('Starting return cancellation for:', returnId);
+      // 1. جلب بيانات المرتجع كاملة
+      const returnData = await this.getReturnById(returnId);
       
-      // استخدام معالج المرتجعات لتنفيذ الإلغاء بدون تجميد الواجهة
-      const cancelPromise = this.returnProcessor.cancelReturn(returnId);
-      
-      // عرض رسالة مبدئية للمستخدم
-      toast({
-        title: "جاري التنفيذ",
-        description: "جاري إلغاء المرتجع...",
-        variant: "default"
-      });
-      
-      // تنفيذ العملية في الخلفية
-      cancelPromise.then(result => {
-        if (result) {
-          console.log('Return cancellation succeeded for:', returnId);
-          toast({
-            title: "نجاح",
-            description: "تم إلغاء المرتجع بنجاح",
-            variant: "default"
-          });
-        } else {
-          console.log('Return cancellation failed for:', returnId);
-          toast({
-            title: "خطأ",
-            description: "فشل إلغاء المرتجع",
-            variant: "destructive"
-          });
+      if (!returnData) {
+        toast.error('لا توجد بيانات كافية لإلغاء المرتجع');
+        return false;
+      }
+
+      // 2. التحقق من أن المرتجع مؤكد وليس ملغي بالفعل
+      if (returnData.payment_status !== 'confirmed') {
+        toast.error('لا يمكن إلغاء مرتجع غير مؤكد');
+        return false;
+      }
+
+      // 3. تحديث حالة المرتجع إلى ملغي
+      const { error: updateError } = await supabase
+        .from('returns')
+        .update({ payment_status: 'cancelled' })
+        .eq('id', returnId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // 4. عكس تأثير المرتجع على المخزون
+      if (returnData.items && returnData.items.length > 0) {
+        for (const item of returnData.items) {
+          if (returnData.return_type === 'sales_return') {
+            // إلغاء مرتجع مبيعات: خصم الكميات من المخزون (عكس الإضافة السابقة)
+            await this.inventoryService.decreaseItemQuantity(
+              item.item_type,
+              item.item_id,
+              item.quantity,
+              `إلغاء مرتجع مبيعات #${returnId.substring(0, 8)}`
+            );
+          } else {
+            // إلغاء مرتجع مشتريات: إضافة الكميات للمخزون (عكس الخصم السابق)
+            await this.inventoryService.increaseItemQuantity(
+              item.item_type,
+              item.item_id,
+              item.quantity,
+              `إلغاء مرتجع مشتريات #${returnId.substring(0, 8)}`
+            );
+          }
         }
-      }).catch(error => {
-        console.error(`Error in cancelReturn(${returnId}):`, error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء إلغاء المرتجع",
-          variant: "destructive"
-        });
+      }
+
+      // 5. عكس المعاملة المالية
+      await this.financialBridge.handleReturnCancellation({
+        id: returnId,
+        return_type: returnData.return_type,
+        amount: returnData.amount,
+        date: returnData.date,
+        party_id: returnData.party_id,
+        party_name: returnData.party_name
       });
-      
-      // إرجاع true لإخبار الواجهة أن العملية بدأت
+
+      toast.success('تم إلغاء المرتجع وعكس تأثيره على المخزون والحسابات');
       return true;
     } catch (error) {
-      console.error(`Error starting cancelReturn(${returnId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء بدء عملية إلغاء المرتجع",
-        variant: "destructive"
-      });
+      console.error(`Error cancelling return ${returnId}:`, error);
+      toast.error('حدث خطأ أثناء إلغاء المرتجع');
       return false;
     }
   }
-  
+
+  /**
+   * حذف مرتجع
+   */
   public async deleteReturn(id: string): Promise<boolean> {
     try {
-      const success = await ReturnEntity.delete(id);
-      
-      if (success) {
-        toast({
-          title: "نجاح",
-          description: "تم حذف المرتجع بنجاح",
-          variant: "default" 
-        });
-      } else {
-        toast({
-          title: "خطأ",
-          description: "فشل حذف المرتجع",
-          variant: "destructive"
-        });
+      // 1. التحقق من حالة المرتجع
+      const { data: returnData, error: checkError } = await supabase
+        .from('returns')
+        .select('payment_status')
+        .eq('id', id)
+        .single();
+
+      if (checkError) {
+        throw checkError;
       }
-      
-      return success;
+
+      // 2. لا يمكن حذف مرتجع مؤكد، يجب إلغاؤه أولاً
+      if (returnData.payment_status === 'confirmed') {
+        toast.error('لا يمكن حذف مرتجع مؤكد. يرجى إلغائه أولاً ثم حذفه');
+        return false;
+      }
+
+      // 3. حذف أصناف المرتجع أولاً
+      const { error: itemsError } = await supabase
+        .from('return_items')
+        .delete()
+        .eq('return_id', id);
+
+      if (itemsError) {
+        throw itemsError;
+      }
+
+      // 4. حذف المرتجع نفسه
+      const { error: deleteError } = await supabase
+        .from('returns')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      toast.success('تم حذف المرتجع بنجاح');
+      return true;
     } catch (error) {
-      console.error(`Error in deleteReturn(${id}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء حذف المرتجع",
-        variant: "destructive"
-        });
+      console.error(`Error deleting return ${id}:`, error);
+      toast.error('حدث خطأ أثناء حذف المرتجع');
       return false;
+    }
+  }
+
+  /**
+   * جلب المرتجعات حسب الطرف
+   */
+  public async getReturnsByParty(partyId: string): Promise<Return[]> {
+    try {
+      // استعلام جلب المرتجعات حسب الطرف المحدد
+      let { data: returns, error } = await supabase
+        .from('returns')
+        .select(`
+          *,
+          parties:party_id (name)
+        `)
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // تنسيق البيانات
+      const formattedReturns = returns?.map(ret => ({
+        ...ret,
+        party_name: ret.parties?.name || 'غير محدد'
+      })) || [];
+
+      return formattedReturns;
+    } catch (error) {
+      console.error(`Error fetching returns for party ${partyId}:`, error);
+      toast.error('حدث خطأ أثناء جلب المرتجعات');
+      return [];
+    }
+  }
+
+  /**
+   * جلب المرتجعات حسب الفاتورة
+   */
+  public async getReturnsByInvoice(invoiceId: string): Promise<Return[]> {
+    try {
+      // استعلام جلب المرتجعات حسب الفاتورة المحددة
+      let { data: returns, error } = await supabase
+        .from('returns')
+        .select(`
+          *,
+          parties:party_id (name)
+        `)
+        .eq('invoice_id', invoiceId)
+        .order('date', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // تنسيق البيانات
+      const formattedReturns = returns?.map(ret => ({
+        ...ret,
+        party_name: ret.parties?.name || 'غير محدد'
+      })) || [];
+
+      return formattedReturns;
+    } catch (error) {
+      console.error(`Error fetching returns for invoice ${invoiceId}:`, error);
+      toast.error('حدث خطأ أثناء جلب المرتجعات');
+      return [];
     }
   }
 }
