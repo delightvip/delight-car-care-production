@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface InventoryDistributionData {
@@ -69,4 +68,22 @@ export async function fetchInventoryDistributionData(): Promise<InventoryDistrib
   }
 }
 
-export const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1'];
+export const CHART_COLORS = [
+  '#3B82F6', // Azul - Material prima
+  '#10B981', // Verde - Productos semiacabados
+  '#F59E0B', // Ámbar - Material de embalaje
+  '#6366F1'  // Índigo - Productos acabados
+];
+
+// Colores mejorados para el modo oscuro
+export const DARK_CHART_COLORS = [
+  '#60A5FA', // Azul más claro
+  '#34D399', // Verde más claro
+  '#FBBF24', // Ámbar más claro
+  '#818CF8'  // Índigo más claro
+];
+
+// Función auxiliar para obtener los colores basados en el tema
+export function getThemeColors(isDarkMode: boolean = false): string[] {
+  return isDarkMode ? DARK_CHART_COLORS : CHART_COLORS;
+}

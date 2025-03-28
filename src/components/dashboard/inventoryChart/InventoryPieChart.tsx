@@ -1,8 +1,8 @@
-
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { InventoryDistributionData, CHART_COLORS } from './InventoryChartUtils';
+import { InventoryDistributionData, CHART_COLORS, getThemeColors } from './InventoryChartUtils';
 import { motion } from 'framer-motion';
+import { useTheme } from '@/components/theme-provider';
 
 interface InventoryPieChartProps {
   data: InventoryDistributionData[];
@@ -13,6 +13,10 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
   data,
   height = '16rem',
 }) => {
+  const { theme } = useTheme();
+  const isDarkMode = theme === 'dark';
+  const colors = getThemeColors(isDarkMode);
+  
   // Calculate the total to derive percentages
   const total = data?.reduce((sum, item) => sum + (item?.value || 0), 0) || 0;
   
@@ -95,7 +99,7 @@ const InventoryPieChart: React.FC<InventoryPieChartProps> = ({
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={CHART_COLORS[index % CHART_COLORS.length]}
+                fill={colors[index % colors.length]}
               />
             ))}
           </Pie>

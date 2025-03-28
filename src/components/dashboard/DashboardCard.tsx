@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -33,27 +32,27 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   alert
 }) => {
   const colorClasses = {
-    primary: 'bg-blue-50 text-blue-600 border-blue-100',
-    secondary: 'bg-purple-50 text-purple-600 border-purple-100',
-    success: 'bg-green-50 text-green-600 border-green-100',
-    warning: 'bg-amber-50 text-amber-600 border-amber-100',
-    danger: 'bg-red-50 text-red-600 border-red-100',
-    info: 'bg-sky-50 text-sky-600 border-sky-100',
+    primary: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
+    secondary: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800',
+    success: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800',
+    warning: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+    danger: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800',
+    info: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800',
   };
   
   const iconColorClasses = {
-    primary: 'bg-blue-100 text-blue-600',
-    secondary: 'bg-purple-100 text-purple-600',
-    success: 'bg-green-100 text-green-600',
-    warning: 'bg-amber-100 text-amber-600',
-    danger: 'bg-red-100 text-red-600',
-    info: 'bg-sky-100 text-sky-600',
+    primary: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+    secondary: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
+    success: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+    warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+    danger: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
+    info: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
   };
   
   const trendColorClasses = {
-    positive: 'text-green-600 flex items-center',
-    negative: 'text-red-600 flex items-center',
-    neutral: 'text-gray-600 flex items-center',
+    positive: 'text-green-700 dark:text-green-400 flex items-center font-medium',
+    negative: 'text-red-700 dark:text-red-400 flex items-center font-medium',
+    neutral: 'text-gray-700 dark:text-gray-400 flex items-center font-medium',
   };
   
   const cardContent = (
@@ -93,17 +92,17 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
       </div>
       
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-1">{title}</h3>
-        <div className="text-3xl font-bold">{value}</div>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-50 mb-1">{title}</h3>
+        <div className="text-3xl font-bold text-gray-900 dark:text-white">{value}</div>
         
         {description && (
-          <div className="mt-2 text-sm text-gray-500">
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
             {description}
           </div>
         )}
         
         {trend && !description && (
-          <div className="mt-2 text-sm text-gray-500">
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
             {trend.label}
           </div>
         )}
