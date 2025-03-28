@@ -1,13 +1,12 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Payment } from '@/services/CommercialTypes';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { toast } from "sonner";
-import { ErrorHandler } from '@/utils/errorHandler';
-import PartyService from '@/services/PartyService';
+import PartyService from '../party/PartyService';
 
 /**
- * فئة للتعامل مع بيانات المدفوعات في قاعدة البيانات
+ * وصول البيانات للمدفوعات
  */
 class PaymentDataAccess {
   private partyService: PartyService;
@@ -15,7 +14,7 @@ class PaymentDataAccess {
   constructor() {
     this.partyService = PartyService.getInstance();
   }
-  
+
   /**
    * الحصول على جميع المدفوعات
    */
@@ -37,10 +36,10 @@ class PaymentDataAccess {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type as "collection" | "disbursement",
-        method: payment.method as "cash" | "check" | "bank_transfer" | "other",
+        payment_type: payment.payment_type,
+        method: payment.method,
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled" || 'draft',
+        payment_status: payment.payment_status || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -76,10 +75,10 @@ class PaymentDataAccess {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type as "collection" | "disbursement",
-        method: payment.method as "cash" | "check" | "bank_transfer" | "other",
+        payment_type: payment.payment_type,
+        method: payment.method,
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled" || 'draft',
+        payment_status: payment.payment_status || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -91,23 +90,25 @@ class PaymentDataAccess {
       return [];
     }
   }
-  
+
   /**
    * الحصول على دفعة بواسطة المعرف
-   * @param id معرف الدفعة
+   * @param paymentId معرف الدفعة
    */
-  public async getPaymentById(id: string): Promise<Payment | null> {
+  public async getPaymentById(paymentId: string): Promise<Payment | null> {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('payments')
         .select(`
           *,
           parties (name)
         `)
-        .eq('id', id)
-        .single();
+        .eq('id', paymentId)
+        .maybeSingle();
       
       if (error) throw error;
+      
+      if (!data) return null;
       
       return {
         id: data.id,
@@ -115,19 +116,20 @@ class PaymentDataAccess {
         party_name: data.parties?.name,
         date: data.date,
         amount: data.amount,
-        payment_type: data.payment_type as "collection" | "disbursement",
-        method: data.method as "cash" | "check" | "bank_transfer" | "other",
+        payment_type: data.payment_type,
+        method: data.method,
         related_invoice_id: data.related_invoice_id,
-        payment_status: data.payment_status as "draft" | "confirmed" | "cancelled" || 'draft',
+        payment_status: data.payment_status || 'draft',
         notes: data.notes,
         created_at: data.created_at
       };
     } catch (error) {
-      console.error(`Error fetching payment ${id}:`, error);
+      console.error(`Error fetching payment ${paymentId}:`, error);
+      toast.error('حدث خطأ أثناء جلب بيانات المدفوعات');
       return null;
     }
   }
-  
+
   /**
    * تسجيل دفعة جديدة
    * @param paymentData بيانات الدفعة
@@ -168,19 +170,20 @@ class PaymentDataAccess {
         party_name: party?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type as "collection" | "disbursement",
-        method: payment.method as "cash" | "check" | "bank_transfer" | "other",
+        payment_type: payment.payment_type,
+        method: payment.method,
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status as "draft" | "confirmed" | "cancelled",
+        payment_status: paymentStatus,
         notes: payment.notes,
         created_at: payment.created_at
       };
     } catch (error) {
       console.error('Error recording payment:', error);
-      throw error; // رمي الخطأ للتعامل معه في الدالة التي تستدعي هذه الدالة
+      toast.error('حدث خطأ أثناء تسجيل المعاملة');
+      return null;
     }
   }
-  
+
   /**
    * تحديث حالة الدفعة
    * @param id معرف الدفعة
@@ -197,59 +200,61 @@ class PaymentDataAccess {
       
       return true;
     } catch (error) {
-      console.error(`Error updating payment status ${id}:`, error);
-      throw error;
+      console.error(`Error updating payment status for ${id}:`, error);
+      toast.error('حدث خطأ أثناء تحديث حالة المعاملة');
+      return false;
     }
   }
-  
+
   /**
-   * تحديث بيانات دفعة
+   * تحديث دفعة
    * @param id معرف الدفعة
    * @param paymentData بيانات الدفعة المحدثة
    */
-  public async updatePayment(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {
-    return ErrorHandler.wrapOperation(
-      async () => {
-        const { data: payment, error: fetchError } = await supabase
-          .from('payments')
-          .select('payment_status')
-          .eq('id', id)
-          .single();
+  public async updatePayment(id: string, paymentData: Partial<Omit<Payment, 'id' | 'created_at'>>): Promise<boolean> {
+    try {
+      const { data: payment, error: fetchError } = await supabase
+        .from('payments')
+        .select('payment_status')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      if (payment.payment_status !== 'draft') {
+        toast.error('يمكن تعديل المدفوعات في حالة المسودة فقط');
+        return false;
+      }
+      
+      // Format date if it's a Date object
+      const formattedDate = paymentData.date && typeof paymentData.date === 'object' ? 
+        format(paymentData.date, 'yyyy-MM-dd') : 
+        paymentData.date;
         
-        if (fetchError) throw fetchError;
-        
-        if (payment.payment_status !== 'draft') {
-          toast.error('يمكن تعديل المدفوعات في حالة المسودة فقط');
-          return false;
-        }
-        
-        // Format date if it's a Date object
-        const formattedDate = typeof paymentData.date === 'object' ? 
-          format(paymentData.date, 'yyyy-MM-dd') : 
-          paymentData.date;
-          
-        const { error } = await supabase
-          .from('payments')
-          .update({
-            party_id: paymentData.party_id,
-            date: formattedDate,
-            amount: paymentData.amount,
-            payment_type: paymentData.payment_type,
-            method: paymentData.method,
-            related_invoice_id: paymentData.related_invoice_id,
-            notes: paymentData.notes
-          })
-          .eq('id', id);
-        
-        if (error) throw error;
-        
-        toast.success('تم تحديث المعاملة بنجاح');
-        return true;
-      },
-      "updatePayment",
-      "حدث خطأ أثناء تحديث المعاملة",
-      false
-    ) as Promise<boolean>;
+      const updateData: any = {};
+      
+      if (paymentData.party_id) updateData.party_id = paymentData.party_id;
+      if (formattedDate) updateData.date = formattedDate;
+      if (paymentData.amount) updateData.amount = paymentData.amount;
+      if (paymentData.payment_type) updateData.payment_type = paymentData.payment_type;
+      if (paymentData.method) updateData.method = paymentData.method;
+      if (paymentData.related_invoice_id !== undefined) updateData.related_invoice_id = paymentData.related_invoice_id;
+      if (paymentData.notes !== undefined) updateData.notes = paymentData.notes;
+      
+      const { error } = await supabase
+        .from('payments')
+        .update(updateData)
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast.success('تم تحديث المعاملة بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      toast.error('حدث خطأ أثناء تحديث المعاملة');
+      return false;
+    }
   }
   
   /**
@@ -257,35 +262,34 @@ class PaymentDataAccess {
    * @param id معرف الدفعة
    */
   public async deletePayment(id: string): Promise<boolean> {
-    return ErrorHandler.wrapOperation(
-      async () => {
-        const { data: payment, error: fetchError } = await supabase
-          .from('payments')
-          .select('payment_status')
-          .eq('id', id)
-          .single();
-        
-        if (fetchError) throw fetchError;
-        
-        if (payment.payment_status !== 'draft') {
-          toast.error('يمكن حذف المدفوعات في حالة المسودة فقط');
-          return false;
-        }
-        
-        const { error } = await supabase
-          .from('payments')
-          .delete()
-          .eq('id', id);
-        
-        if (error) throw error;
-        
-        toast.success('تم حذف المعاملة بنجاح');
-        return true;
-      },
-      "deletePayment",
-      "حدث خطأ أثناء حذف المعاملة",
-      false
-    ) as Promise<boolean>;
+    try {
+      const { data: payment, error: fetchError } = await supabase
+        .from('payments')
+        .select('payment_status')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      if (payment.payment_status !== 'draft') {
+        toast.error('يمكن حذف المدفوعات في حالة المسودة فقط');
+        return false;
+      }
+      
+      const { error } = await supabase
+        .from('payments')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast.success('تم حذف المعاملة بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast.error('حدث خطأ أثناء حذف المعاملة');
+      return false;
+    }
   }
 }
 
