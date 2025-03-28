@@ -2,6 +2,8 @@
 import { FinanceIntegrationBase } from './FinanceIntegrationBase';
 import TransactionService from '@/services/financial/TransactionService';
 import { FinancialTransaction } from '@/services/interfaces/FinancialIntegration';
+import LedgerService from '@/services/commercial/ledger/LedgerService';
+import ProfitCalculationService from './ProfitCalculationService';
 
 /**
  * تكامل وحدة المبيعات والمشتريات مع النظام المالي
@@ -9,10 +11,14 @@ import { FinancialTransaction } from '@/services/interfaces/FinancialIntegration
 export class CommercialFinanceIntegration extends FinanceIntegrationBase {
   private static instance: CommercialFinanceIntegration;
   private transactionService: TransactionService;
+  private profitCalculationService: ProfitCalculationService;
+  private ledgerService: LedgerService;
   
   private constructor() {
     super();
     this.transactionService = TransactionService.getInstance();
+    this.profitCalculationService = ProfitCalculationService.getInstance();
+    this.ledgerService = LedgerService.getInstance();
   }
 
   public static getInstance(): CommercialFinanceIntegration {
@@ -64,6 +70,43 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
         return 'other';
     }
   }
-}
 
-// Add FinancialTransaction interface to the financial interfaces file if needed
+  /**
+   * حساب الأرباح من فاتورة مبيعات
+   * @param invoiceId معرف الفاتورة
+   * @param itemsData بيانات عناصر الفاتورة
+   */
+  public async calculateInvoiceProfit(
+    invoiceId: string,
+    itemsData: Array<{
+      item_id: number;
+      item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
+      quantity: number;
+      unit_price: number;
+      cost_price?: number;
+    }>
+  ): Promise<{ totalCost: number; totalPrice: number; profit: number; profitMargin: number; }> {
+    return this.profitCalculationService.calculateInvoiceProfit(invoiceId, itemsData);
+  }
+
+  /**
+   * تسجيل معاملة في سجل الحساب
+   * @param ledgerEntry بيانات القيد
+   */
+  public async recordLedgerEntry(ledgerEntry: {
+    party_id: string;
+    transaction_id: string;
+    transaction_type: string;
+    date: string;
+    debit: number;
+    credit: number;
+    notes?: string;
+  }): Promise<boolean> {
+    try {
+      return await this.ledgerService.addLedgerEntry(ledgerEntry);
+    } catch (error) {
+      console.error('Error recording ledger entry:', error);
+      return false;
+    }
+  }
+}

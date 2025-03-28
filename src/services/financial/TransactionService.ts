@@ -145,7 +145,7 @@ class TransactionService {
         // First reverse the original transaction effect on balance
         await this.updateBalance(
           originalTransaction.type === 'income' ? -originalTransaction.amount : originalTransaction.amount,
-          originalTransaction.payment_method
+          this.normalizePaymentMethod(originalTransaction.payment_method)
         );
         
         // Then apply the new transaction effect
@@ -155,7 +155,7 @@ class TransactionService {
         
         await this.updateBalance(
           type === 'income' ? amount : -amount,
-          method
+          this.normalizePaymentMethod(method)
         );
       }
       
@@ -193,7 +193,7 @@ class TransactionService {
       // Reverse the transaction effect on balance
       await this.updateBalance(
         transaction.type === 'income' ? -transaction.amount : transaction.amount,
-        transaction.payment_method
+        this.normalizePaymentMethod(transaction.payment_method)
       );
       
       toast.success('تم حذف المعاملة المالية بنجاح');
@@ -268,6 +268,17 @@ class TransactionService {
       toast.error('حدث خطأ أثناء تحديث رصيد الخزينة');
       return false;
     }
+  }
+  
+  /**
+   * تحويل نوع طريقة الدفع إلى الأنواع المقبولة للخزينة
+   * @param method طريقة الدفع
+   * @returns طريقة الدفع المحولة
+   */
+  private normalizePaymentMethod(method: string): 'cash' | 'bank' | 'other' {
+    if (method === 'cash') return 'cash';
+    if (method === 'bank' || method === 'bank_transfer' || method === 'check') return 'bank';
+    return 'other';
   }
   
   /**
