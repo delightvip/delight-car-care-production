@@ -47,3 +47,18 @@ export interface LedgerEntry {
   description?: string;
 }
 
+// Database response interface to match the exact structure returned by Supabase
+export interface PartyDBResponse {
+  id: string;
+  name: string;
+  type: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  opening_balance: number;
+  balance_type: string;
+  created_at: string;
+  notes?: string | null;
+  code?: string | null;
+  party_balances: { balance: number }[];
+}

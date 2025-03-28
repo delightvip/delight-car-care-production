@@ -1,5 +1,6 @@
+
 import { supabase } from '@/integrations/supabase/client';
-import { Party, Transaction } from './PartyTypes';
+import { Party, Transaction, PartyDBResponse } from './PartyTypes';
 import { toast } from "sonner";
 
 /**
@@ -21,7 +22,7 @@ export class PartyDataAccess {
       
       if (error) throw error;
       
-      return data.map(party => ({
+      return data.map((party: PartyDBResponse) => ({
         id: party.id,
         name: party.name,
         type: party.type as 'customer' | 'supplier' | 'other',
@@ -58,19 +59,21 @@ export class PartyDataAccess {
       
       if (error) throw error;
       
+      const party = data as unknown as PartyDBResponse;
+      
       return {
-        id: data.id,
-        name: data.name,
-        type: data.type as 'customer' | 'supplier' | 'other',
-        phone: data.phone || '',
-        email: data.email || '',
-        address: data.address || '',
-        opening_balance: data.opening_balance || 0,
-        balance_type: data.balance_type as 'credit' | 'debit',
-        balance: data.party_balances[0]?.balance || 0,
-        created_at: data.created_at,
-        notes: data.notes || '',
-        code: data.code || ''
+        id: party.id,
+        name: party.name,
+        type: party.type as 'customer' | 'supplier' | 'other',
+        phone: party.phone || '',
+        email: party.email || '',
+        address: party.address || '',
+        opening_balance: party.opening_balance || 0,
+        balance_type: party.balance_type as 'credit' | 'debit',
+        balance: party.party_balances[0]?.balance || 0,
+        created_at: party.created_at,
+        notes: party.notes || '',
+        code: party.code || ''
       };
     } catch (error) {
       console.error(`Error fetching party with id ${id}:`, error);
@@ -95,7 +98,7 @@ export class PartyDataAccess {
       
       if (error) throw error;
       
-      return data.map(party => ({
+      return data.map((party: PartyDBResponse) => ({
         id: party.id,
         name: party.name,
         type: party.type as 'customer' | 'supplier' | 'other',
@@ -152,19 +155,21 @@ export class PartyDataAccess {
       
       if (balanceError) throw balanceError;
       
+      const fullParty = partyWithBalance as unknown as PartyDBResponse;
+      
       return {
-        id: partyWithBalance.id,
-        name: partyWithBalance.name,
-        type: partyWithBalance.type as 'customer' | 'supplier' | 'other',
-        phone: partyWithBalance.phone || '',
-        email: partyWithBalance.email || '',
-        address: partyWithBalance.address || '',
-        opening_balance: partyWithBalance.opening_balance || 0,
-        balance_type: partyWithBalance.balance_type as 'credit' | 'debit',
-        balance: partyWithBalance.party_balances[0]?.balance || 0,
-        created_at: partyWithBalance.created_at,
-        notes: partyWithBalance.notes || '',
-        code: partyWithBalance.code || ''
+        id: fullParty.id,
+        name: fullParty.name,
+        type: fullParty.type as 'customer' | 'supplier' | 'other',
+        phone: fullParty.phone || '',
+        email: fullParty.email || '',
+        address: fullParty.address || '',
+        opening_balance: fullParty.opening_balance || 0,
+        balance_type: fullParty.balance_type as 'credit' | 'debit',
+        balance: fullParty.party_balances[0]?.balance || 0,
+        created_at: fullParty.created_at,
+        notes: fullParty.notes || '',
+        code: fullParty.code || ''
       };
     } catch (error) {
       console.error('Error adding party:', error);
