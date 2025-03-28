@@ -20,6 +20,7 @@ class ReturnService extends BaseCommercialService {
   
   public async getReturns(): Promise<Return[]> {
     try {
+      console.log("Fetching all returns");
       // Get all returns with party details
       let { data, error } = await this.supabase
         .from('returns')
@@ -29,7 +30,10 @@ class ReturnService extends BaseCommercialService {
         `)
         .order('date', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching returns:", error);
+        throw error;
+      }
       
       // Map the data to our Return type with party name
       const returnsWithParties = data.map(returnData => ({
@@ -76,6 +80,7 @@ class ReturnService extends BaseCommercialService {
   
   public async getReturnById(id: string): Promise<Return | null> {
     try {
+      console.log(`Fetching return with ID: ${id}`);
       const { data: returnData, error: returnError } = await this.supabase
         .from('returns')
         .select(`
@@ -85,14 +90,20 @@ class ReturnService extends BaseCommercialService {
         .eq('id', id)
         .single();
       
-      if (returnError) throw returnError;
+      if (returnError) {
+        console.error(`Error fetching return with ID ${id}:`, returnError);
+        throw returnError;
+      }
       
       const { data: items, error: itemsError } = await this.supabase
         .from('return_items')
         .select('*')
         .eq('return_id', id);
       
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error(`Error fetching items for return ${id}:`, itemsError);
+        throw itemsError;
+      }
       
       return {
         id: returnData.id,
@@ -116,6 +127,8 @@ class ReturnService extends BaseCommercialService {
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
+      console.log("Creating return with data:", returnData);
+      
       // Format date if it's a Date object
       const formattedDate = typeof returnData.date === 'object' ? 
         format(returnData.date, 'yyyy-MM-dd') : 
@@ -136,11 +149,24 @@ class ReturnService extends BaseCommercialService {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error creating return:", error);
+        throw error;
+      }
+      
+      console.log("Return created with ID:", returnRecord.id);
       
       // If there are items for this return, insert them
       if (returnData.items && returnData.items.length > 0) {
-        const returnItems = returnData.items.map(item => ({
+        // Filter items that are actually being returned (quantity > 0)
+        const validItems = returnData.items.filter(item => item.quantity > 0);
+        
+        if (validItems.length === 0) {
+          console.error("No valid items with quantity > 0");
+          throw new Error("يجب اختيار صنف واحد على الأقل وتحديد كمية له");
+        }
+        
+        const returnItems = validItems.map(item => ({
           return_id: returnRecord.id,
           item_id: item.item_id,
           item_type: item.item_type,
@@ -150,11 +176,19 @@ class ReturnService extends BaseCommercialService {
           total: item.quantity * item.unit_price
         }));
         
+        console.log("Inserting return items:", returnItems);
+        
         const { error: itemsError } = await this.supabase
           .from('return_items')
           .insert(returnItems);
         
-        if (itemsError) throw itemsError;
+        if (itemsError) {
+          console.error("Error inserting return items:", itemsError);
+          throw itemsError;
+        }
+      } else {
+        console.error("No items provided for return");
+        throw new Error("يجب إضافة صنف واحد على الأقل للمرتجع");
       }
       
       // Get party details for response
@@ -174,17 +208,19 @@ class ReturnService extends BaseCommercialService {
         payment_status: returnRecord.payment_status,
         notes: returnData.notes,
         created_at: returnRecord.created_at,
-        items: returnData.items
+        items: returnData.items.filter(item => item.quantity > 0)
       };
     } catch (error) {
       console.error('Error creating return:', error);
-      toast.error('حدث خطأ أثناء إنشاء المرتجع');
+      toast.error('حدث خطأ أثناء إنشاء المرتجع: ' + (error as Error).message);
       return null;
     }
   }
   
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
+      console.log(`Updating return ${id} with data:`, returnData);
+      
       const { error } = await this.supabase
         .from('returns')
         .update({
@@ -198,7 +234,10 @@ class ReturnService extends BaseCommercialService {
         })
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        console.error(`Error updating return ${id}:`, error);
+        throw error;
+      }
       
       toast.success('تم تحديث المرتجع بنجاح');
       return true;
@@ -217,15 +256,24 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
+      console.log(`Confirming return ${returnId}:`, returnData);
+      
       if (returnData.payment_status === 'confirmed') {
         toast.info('المرتجع مؤكد بالفعل');
         return true;
+      }
+      
+      // Check if there are items
+      if (!returnData.items || returnData.items.length === 0) {
+        toast.error('لا توجد أصناف في المرتجع');
+        return false;
       }
       
       // Update inventory based on return type
       if (returnData.return_type === 'sales_return') {
         // Increase inventory for sales returns
         for (const item of returnData.items || []) {
+          console.log(`Increasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
           switch (item.item_type) {
             case 'raw_materials':
               await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
@@ -256,6 +304,7 @@ class ReturnService extends BaseCommercialService {
       } else if (returnData.return_type === 'purchase_return') {
         // Decrease inventory for purchase returns
         for (const item of returnData.items || []) {
+          console.log(`Decreasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
           switch (item.item_type) {
             case 'raw_materials':
               await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
@@ -291,7 +340,10 @@ class ReturnService extends BaseCommercialService {
         .update({ payment_status: 'confirmed' })
         .eq('id', returnId);
       
-      if (error) throw error;
+      if (error) {
+        console.error(`Error updating return status ${returnId}:`, error);
+        throw error;
+      }
       
       toast.success('تم تأكيد المرتجع بنجاح');
       return true;
@@ -310,6 +362,8 @@ class ReturnService extends BaseCommercialService {
         return false;
       }
       
+      console.log(`Cancelling return ${returnId}:`, returnData);
+      
       if (returnData.payment_status !== 'confirmed') {
         toast.error('يمكن إلغاء المرتجعات المؤكدة فقط');
         return false;
@@ -319,6 +373,7 @@ class ReturnService extends BaseCommercialService {
       if (returnData.return_type === 'sales_return') {
         // Decrease inventory for cancelled sales returns
         for (const item of returnData.items || []) {
+          console.log(`Decreasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
           switch (item.item_type) {
             case 'raw_materials':
               await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
@@ -349,6 +404,7 @@ class ReturnService extends BaseCommercialService {
       } else if (returnData.return_type === 'purchase_return') {
         // Increase inventory for cancelled purchase returns
         for (const item of returnData.items || []) {
+          console.log(`Increasing inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
           switch (item.item_type) {
             case 'raw_materials':
               await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
@@ -384,7 +440,10 @@ class ReturnService extends BaseCommercialService {
         .update({ payment_status: 'cancelled' })
         .eq('id', returnId);
       
-      if (error) throw error;
+      if (error) {
+        console.error(`Error updating return status ${returnId}:`, error);
+        throw error;
+      }
       
       toast.success('تم إلغاء المرتجع بنجاح');
       return true;
@@ -397,6 +456,8 @@ class ReturnService extends BaseCommercialService {
   
   public async deleteReturn(id: string): Promise<boolean> {
     try {
+      console.log(`Deleting return ${id}`);
+      
       // Check if the return is in draft state
       const { data, error: fetchError } = await this.supabase
         .from('returns')
@@ -404,7 +465,10 @@ class ReturnService extends BaseCommercialService {
         .eq('id', id)
         .single();
       
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error(`Error fetching return status ${id}:`, fetchError);
+        throw fetchError;
+      }
       
       if (data.payment_status !== 'draft') {
         toast.error('يمكن حذف المرتجعات في حالة المسودة فقط');
@@ -417,7 +481,10 @@ class ReturnService extends BaseCommercialService {
         .delete()
         .eq('return_id', id);
       
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error(`Error deleting return items for ${id}:`, itemsError);
+        throw itemsError;
+      }
       
       // Delete the return
       const { error } = await this.supabase
@@ -425,7 +492,10 @@ class ReturnService extends BaseCommercialService {
         .delete()
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        console.error(`Error deleting return ${id}:`, error);
+        throw error;
+      }
       
       toast.success('تم حذف المرتجع بنجاح');
       return true;
