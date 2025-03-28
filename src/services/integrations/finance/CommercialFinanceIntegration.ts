@@ -39,9 +39,9 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
         .from('party_balances')
         .select('balance')
         .eq('party_id', ledgerEntry.party_id)
-        .single();
+        .maybeSingle();
 
-      if (balanceError && balanceError.code !== 'PGRST116') {
+      if (balanceError) {
         console.error('Error fetching party balance:', balanceError);
         return false;
       }
@@ -200,7 +200,7 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
         .from(tableName)
         .select('unit_cost')
         .eq('id', itemId)
-        .single();
+        .maybeSingle();
         
       if (error) {
         console.error(`Error fetching ${itemType} cost:`, error);
@@ -214,3 +214,5 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
     }
   }
 }
+
+export default CommercialFinanceIntegration;
