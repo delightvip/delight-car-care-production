@@ -48,8 +48,10 @@ export function ReturnForm({
   const defaultValues: Partial<ReturnFormValues> = {
     return_type: initialData?.return_type || 'sales_return',
     invoice_id: initialData?.invoice_id,
+    party_id: initialData?.party_id,
     date: initialData?.date ? new Date(initialData.date) : new Date(),
     notes: initialData?.notes || '',
+    amount: initialData?.amount || 0,
     items: initialData?.items?.map(item => ({
       item_id: item.item_id,
       item_type: item.item_type,
@@ -110,7 +112,9 @@ export function ReturnForm({
     setSelectedInvoice(invoiceId === 'no_invoice' ? null : invoiceId);
     
     if (invoiceId === 'no_invoice') {
-      form.setValue('party_id', undefined);
+      // Use form.setValue for party_id to fix TypeScript error
+      const defaultPartyValue = undefined;
+      form.setValue('party_id', defaultPartyValue);
       form.setValue('items', []);
       return;
     }
@@ -120,7 +124,11 @@ export function ReturnForm({
       const invoice = await commercialService.getInvoiceById(invoiceId);
       
       if (invoice) {
-        form.setValue('party_id', invoice.party_id);
+        // Use form.setValue for party_id to fix TypeScript error
+        const partyId = invoice.party_id;
+        if (partyId) {
+          form.setValue('party_id', partyId);
+        }
         
         if (invoice.items && invoice.items.length > 0) {
           const returnItems = invoice.items.map(item => ({
@@ -152,7 +160,8 @@ export function ReturnForm({
 
   // معالجة تغيير الطرف المحدد
   const handlePartyChange = (partyId: string) => {
-    form.setValue('party_id', partyId === 'no_party' ? undefined : partyId);
+    const formattedPartyId = partyId === 'no_party' ? undefined : partyId;
+    form.setValue('party_id', formattedPartyId);
   };
 
   // حساب المبلغ الإجمالي للمرتجع
@@ -169,8 +178,10 @@ export function ReturnForm({
         return sum;
       }, 0);
       
+      // Fix: Use the proper field name as defined in the schema
       form.setValue('amount', total);
     } else {
+      // Fix: Use the proper field name as defined in the schema
       form.setValue('amount', 0);
     }
   };
@@ -274,9 +285,9 @@ export function ReturnForm({
     const returnData: Omit<Return, 'id' | 'created_at'> = {
       return_type: values.return_type,
       invoice_id: values.invoice_id,
-      party_id: values.invoice_id ? undefined : form.getValues('party_id'),
+      party_id: values.party_id,
       date: format(values.date, 'yyyy-MM-dd'),
-      amount: values.items.reduce((sum, item) => sum + (item.selected ? item.quantity * item.unit_price : 0), 0),
+      amount: values.amount || values.items.reduce((sum, item) => sum + (item.selected ? item.quantity * item.unit_price : 0), 0),
       notes: values.notes,
       payment_status: 'draft',
       items: selectedItems.map(item => ({
@@ -330,6 +341,7 @@ export function ReturnForm({
                 form={form} 
                 onReturnTypeChange={(type) => {
                   form.setValue('invoice_id', undefined);
+                  // Fix: Use undefined instead of a string value
                   form.setValue('party_id', undefined);
                   form.setValue('items', []);
                   setSelectedInvoice(null);

@@ -5,8 +5,10 @@ import { z } from 'zod';
 export const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
   invoice_id: z.string().optional(),
+  party_id: z.string().optional(), // Added party_id field
   date: z.date(),
   notes: z.string().optional(),
+  amount: z.number().optional(), // Added amount field
   items: z.array(
     z.object({
       item_id: z.number(),

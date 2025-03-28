@@ -48,10 +48,14 @@ class ReturnService {
       // تنسيق البيانات
       const formattedReturns = returns?.map(ret => ({
         ...ret,
-        party_name: ret.parties?.name || 'غير محدد'
+        party_name: ret.parties?.name || 'غير محدد',
+        // Ensure return_type is properly cast to the expected union type
+        return_type: ret.return_type as 'sales_return' | 'purchase_return',
+        // Ensure payment_status is properly cast to the expected union type
+        payment_status: ret.payment_status as 'draft' | 'confirmed' | 'cancelled'
       })) || [];
 
-      return formattedReturns;
+      return formattedReturns as Return[];
     } catch (error) {
       console.error('Error fetching returns:', error);
       toast.error('حدث خطأ أثناء جلب المرتجعات');
@@ -92,11 +96,19 @@ class ReturnService {
         throw itemsError;
       }
 
+      // Map item_type to the proper type
+      const typedItems = returnItems?.map(item => ({
+        ...item,
+        item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products"
+      })) || [];
+
       // تنسيق البيانات النهائية
       const formattedReturn: Return = {
         ...returnData,
         party_name: returnData.parties?.name || 'غير محدد',
-        items: returnItems || []
+        items: typedItems as ReturnItem[],
+        return_type: returnData.return_type as 'sales_return' | 'purchase_return',
+        payment_status: returnData.payment_status as 'draft' | 'confirmed' | 'cancelled'
       };
 
       return formattedReturn;
@@ -160,7 +172,14 @@ class ReturnService {
       }
 
       toast.success('تم إنشاء المرتجع بنجاح');
-      return newReturn;
+      
+      // Return the created return with proper type casting
+      return {
+        ...newReturn,
+        return_type: newReturn.return_type as 'sales_return' | 'purchase_return',
+        payment_status: newReturn.payment_status as 'draft' | 'confirmed' | 'cancelled',
+        party_name: returnData.party_name
+      } as Return;
     } catch (error) {
       console.error('Error creating return:', error);
       toast.error('حدث خطأ أثناء إنشاء المرتجع');
@@ -264,26 +283,40 @@ class ReturnService {
       for (const item of returnData.items) {
         if (returnData.return_type === 'sales_return') {
           // مرتجع مبيعات: إضافة الكميات للمخزون (العميل أعاد البضاعة)
-          await this.inventoryService.increaseItemQuantity(
-            item.item_type,
-            item.item_id,
-            item.quantity,
-            `مرتجع مبيعات #${returnId.substring(0, 8)}`
-          );
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
+              break;
+          }
         } else {
           // مرتجع مشتريات: خصم الكميات من المخزون (إعادة بضاعة للمورد)
-          await this.inventoryService.decreaseItemQuantity(
-            item.item_type,
-            item.item_id,
-            item.quantity,
-            `مرتجع مشتريات #${returnId.substring(0, 8)}`
-          );
+          switch (item.item_type) {
+            case 'raw_materials':
+              await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
+              break;
+            case 'packaging_materials':
+              await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
+              break;
+            case 'semi_finished_products':
+              await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
+              break;
+            case 'finished_products':
+              await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
+              break;
+          }
         }
       }
 
       // 4. تسجيل المعاملة المالية المقابلة
-      // - مرتجع مبيعات = مصروف (خصم من الخزينة)
-      // - مرتجع مشتريات = إيراد (إضافة للخزينة)
       const financialType = returnData.return_type === 'sales_return' ? 'expense' : 'income';
       const invoiceOrParty = returnData.invoice_id || '';
       const partyName = returnData.party_name || '';
@@ -346,20 +379,36 @@ class ReturnService {
         for (const item of returnData.items) {
           if (returnData.return_type === 'sales_return') {
             // إلغاء مرتجع مبيعات: خصم الكميات من المخزون (عكس الإضافة السابقة)
-            await this.inventoryService.decreaseItemQuantity(
-              item.item_type,
-              item.item_id,
-              item.quantity,
-              `إلغاء مرتجع مبيعات #${returnId.substring(0, 8)}`
-            );
+            switch (item.item_type) {
+              case 'raw_materials':
+                await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -Number(item.quantity) });
+                break;
+              case 'packaging_materials':
+                await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -Number(item.quantity) });
+                break;
+              case 'semi_finished_products':
+                await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
+                break;
+              case 'finished_products':
+                await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -Number(item.quantity) });
+                break;
+            }
           } else {
             // إلغاء مرتجع مشتريات: إضافة الكميات للمخزون (عكس الخصم السابق)
-            await this.inventoryService.increaseItemQuantity(
-              item.item_type,
-              item.item_id,
-              item.quantity,
-              `إلغاء مرتجع مشتريات #${returnId.substring(0, 8)}`
-            );
+            switch (item.item_type) {
+              case 'raw_materials':
+                await this.inventoryService.updateRawMaterial(item.item_id, { quantity: Number(item.quantity) });
+                break;
+              case 'packaging_materials':
+                await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: Number(item.quantity) });
+                break;
+              case 'semi_finished_products':
+                await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
+                break;
+              case 'finished_products':
+                await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: Number(item.quantity) });
+                break;
+            }
           }
         }
       }
@@ -456,10 +505,12 @@ class ReturnService {
       // تنسيق البيانات
       const formattedReturns = returns?.map(ret => ({
         ...ret,
-        party_name: ret.parties?.name || 'غير محدد'
+        party_name: ret.parties?.name || 'غير محدد',
+        return_type: ret.return_type as 'sales_return' | 'purchase_return',
+        payment_status: ret.payment_status as 'draft' | 'confirmed' | 'cancelled'
       })) || [];
 
-      return formattedReturns;
+      return formattedReturns as Return[];
     } catch (error) {
       console.error(`Error fetching returns for party ${partyId}:`, error);
       toast.error('حدث خطأ أثناء جلب المرتجعات');
@@ -489,10 +540,12 @@ class ReturnService {
       // تنسيق البيانات
       const formattedReturns = returns?.map(ret => ({
         ...ret,
-        party_name: ret.parties?.name || 'غير محدد'
+        party_name: ret.parties?.name || 'غير محدد',
+        return_type: ret.return_type as 'sales_return' | 'purchase_return',
+        payment_status: ret.payment_status as 'draft' | 'confirmed' | 'cancelled'
       })) || [];
 
-      return formattedReturns;
+      return formattedReturns as Return[];
     } catch (error) {
       console.error(`Error fetching returns for invoice ${invoiceId}:`, error);
       toast.error('حدث خطأ أثناء جلب المرتجعات');
