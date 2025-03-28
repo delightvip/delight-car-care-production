@@ -1,4 +1,3 @@
-
 import { Invoice } from '@/services/CommercialTypes';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -6,7 +5,7 @@ import { OperationLocks, runAsyncOperation } from '@/utils/asyncUtils';
 import { ErrorHandler } from '@/utils/errorHandler';
 import InventoryService from '@/services/InventoryService';
 import LedgerService from '../ledger/LedgerService';
-import CommercialFinanceIntegration from '@/services/integrations/CommercialFinanceIntegration';
+import { CommercialFinanceIntegration } from '@/services/integrations/finance/CommercialFinanceIntegration';
 
 /**
  * معالج الفواتير
@@ -90,7 +89,7 @@ export class InvoiceProcessor {
               credit = invoice.total_amount;
             }
             
-            await this.ledgerService.addLedgerEntry({
+            await this.financeIntegration.recordLedgerEntry({
               party_id: invoice.party_id,
               transaction_id: invoiceId,
               transaction_type: invoice.invoice_type,
@@ -104,8 +103,8 @@ export class InvoiceProcessor {
           // 5. إذا كانت الفاتورة نقدية، سجل معاملة مالية وتحديث الخزينة
           if (invoice.status === 'paid') {
             const categoryId = invoice.invoice_type === 'sale' 
-              ? "sales-category-id" // يجب استبداله بمعرف فئة المبيعات الفعلي
-              : "purchases-category-id"; // يجب استبداله بمعرف فئة المشتريات الفعلي
+              ? "5f5b3ce0-1e87-4654-afef-c9cab5d59ef4" // معرف فئة المبيعات
+              : "f8dcea05-c2e8-4bef-8ca4-a73473e23e34"; // معرف فئة المشتريات
               
             await this.financeIntegration.recordFinancialTransaction({
               type: invoice.invoice_type === 'sale' ? 'income' : 'expense',
@@ -117,12 +116,6 @@ export class InvoiceProcessor {
               date: invoice.date,
               notes: `فاتورة ${invoice.invoice_type === 'sale' ? 'مبيعات' : 'مشتريات'} نقدية رقم ${invoiceId}`
             });
-            
-            // تحديث رصيد الخزينة
-            await this.financeIntegration.updateBalance(
-              invoice.invoice_type === 'sale' ? invoice.total_amount : -invoice.total_amount,
-              'cash' // يمكن إضافة حقل طريقة الدفع في الفاتورة مستقبلاً
-            );
           }
           
           toast.success(`تم تأكيد الفاتورة بنجاح`);

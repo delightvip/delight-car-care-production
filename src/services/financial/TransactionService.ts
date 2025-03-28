@@ -81,7 +81,7 @@ class TransactionService {
       // Update cash or bank balance based on transaction type
       await this.updateBalance(
         transactionData.type === 'income' ? transactionData.amount : -transactionData.amount,
-        transactionData.payment_method
+        this.normalizePaymentMethod(transactionData.payment_method)
       );
       
       // Get category name for response

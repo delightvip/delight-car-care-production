@@ -4,6 +4,7 @@ import TransactionService from '@/services/financial/TransactionService';
 import { FinancialTransaction } from '@/services/interfaces/FinancialIntegration';
 import LedgerService from '@/services/commercial/ledger/LedgerService';
 import ProfitCalculationService from './ProfitCalculationService';
+import { toast } from 'sonner';
 
 /**
  * تكامل وحدة المبيعات والمشتريات مع النظام المالي
@@ -51,6 +52,7 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
       return true;
     } catch (error) {
       console.error('Error recording financial transaction:', error);
+      toast.error('حدث خطأ أثناء تسجيل المعاملة المالية');
       return false;
     }
   }
@@ -106,7 +108,10 @@ export class CommercialFinanceIntegration extends FinanceIntegrationBase {
       return await this.ledgerService.addLedgerEntry(ledgerEntry);
     } catch (error) {
       console.error('Error recording ledger entry:', error);
+      toast.error('حدث خطأ أثناء تسجيل معاملة في دفتر الحسابات');
       return false;
     }
   }
 }
+
+export default CommercialFinanceIntegration;
