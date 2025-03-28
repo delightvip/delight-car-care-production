@@ -56,7 +56,7 @@ export const ReturnActionDialogs: React.FC<ReturnActionDialogsProps> = ({
           isProcessing={isProcessing}
           onConfirm={
             viewingReturn.payment_status === 'draft' 
-              ? () => {
+              ? async () => {
                   setIsDetailsOpen(false);
                   setIsConfirmDialogOpen(true);
                 }
@@ -64,7 +64,7 @@ export const ReturnActionDialogs: React.FC<ReturnActionDialogsProps> = ({
           }
           onCancel={
             viewingReturn.payment_status === 'confirmed'
-              ? () => {
+              ? async () => {
                   setIsDetailsOpen(false);
                   setIsCancelDialogOpen(true);
                 }
@@ -72,7 +72,7 @@ export const ReturnActionDialogs: React.FC<ReturnActionDialogsProps> = ({
           }
           onDelete={
             viewingReturn.payment_status === 'draft'
-              ? () => {
+              ? async () => {
                   setIsDetailsOpen(false);
                   setIsDeleteDialogOpen(true);
                 }

@@ -30,7 +30,6 @@ export const useReturnActions = () => {
       if (result) {
         queryClient.invalidateQueries({ queryKey: ['returns'] });
         toast.success('تم إنشاء المرتجع بنجاح');
-        return result;
       } else {
         toast.error('حدث خطأ أثناء إنشاء المرتجع');
         throw new Error('فشل إنشاء المرتجع');
