@@ -1,21 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Transaction, Category } from '@/services/financial/FinancialService';
-import FinancialService from '@/services/financial/FinancialService';
-import { toast } from 'sonner';
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -23,278 +21,283 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft } from 'lucide-react';
+import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery } from '@tanstack/react-query';
+import FinancialService from '@/services/financial/FinancialService';
+import { Category, Transaction } from '@/services/financial/FinancialTypes';
+import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import { Spinner } from '@/components/ui/spinner';
+import { toast } from 'sonner';
 
-type TransactionFormData = Omit<Transaction, 'id' | 'created_at' | 'category_name'>;
+const transactionFormSchema = z.object({
+  type: z.enum(["income", "expense"], {
+    required_error: "الرجاء اختيار نوع المعاملة",
+  }),
+  category_id: z.string({
+    required_error: "الرجاء اختيار فئة المعاملة",
+  }),
+  date: z.date({
+    required_error: "الرجاء تحديد تاريخ المعاملة",
+  }),
+  amount: z.coerce.number({
+    required_error: "الرجاء إدخال المبلغ",
+    invalid_type_error: "الرجاء إدخال قيمة صحيحة",
+  }).positive({ message: "يجب أن يكون المبلغ أكبر من صفر" }),
+  payment_method: z.enum(["cash", "bank", "other"], {
+    required_error: "الرجاء اختيار طريقة الدفع",
+  }),
+  notes: z.string().optional(),
+});
 
-const TransactionForm: React.FC = () => {
+type TransactionFormValues = z.infer<typeof transactionFormSchema>;
+
+interface TransactionFormProps {
+  initialData?: Partial<Transaction>;
+  isEditing?: boolean;
+  onSuccessfulSubmit?: () => void;
+}
+
+const TransactionForm: React.FC<TransactionFormProps> = ({ 
+  initialData, 
+  isEditing = false,
+  onSuccessfulSubmit
+}) => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const isEditMode = !!id;
-  
-  const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [date, setDate] = useState<Date>(new Date());
-  
   const financialService = FinancialService.getInstance();
+  const [transactionType, setTransactionType] = useState<'income' | 'expense'>(initialData?.type || 'income');
   
-  const { register, handleSubmit, setValue, watch, formState: { errors }, reset } = useForm<TransactionFormData>({
-    defaultValues: {
-      type: 'income',
-      payment_method: 'cash'
-    }
+  // استعلام للحصول على الفئات المالية
+  const { data: categories, isLoading: isLoadingCategories } = useQuery({
+    queryKey: ['categories', transactionType],
+    queryFn: () => financialService.getCategories(transactionType),
   });
   
-  const transactionType = watch('type');
+  // تكوين نموذج المعاملة
+  const form = useForm<TransactionFormValues>({
+    resolver: zodResolver(transactionFormSchema),
+    defaultValues: {
+      type: (initialData?.type as 'income' | 'expense') || 'income',
+      category_id: initialData?.category_id || '',
+      date: initialData?.date ? new Date(initialData.date) : new Date(),
+      amount: initialData?.amount || 0,
+      payment_method: (initialData?.payment_method as 'cash' | 'bank' | 'other') || 'cash',
+      notes: initialData?.notes || '',
+    },
+  });
   
+  // تحديث نوع المعاملة عند تغييره
   useEffect(() => {
-    loadCategories();
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'type' && value.type) {
+        setTransactionType(value.type as 'income' | 'expense');
+      }
+    });
     
-    if (isEditMode) {
-      loadTransaction();
-    }
-  }, [isEditMode, id]);
+    return () => subscription.unsubscribe();
+  }, [form]);
   
-  const loadCategories = async () => {
+  // معالجة تقديم النموذج
+  const onSubmit = async (data: TransactionFormValues) => {
     try {
-      const data = await financialService.getCategories();
-      setCategories(data);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-      toast.error('حدث خطأ أثناء تحميل فئات المعاملات');
-    }
-  };
-  
-  const loadTransaction = async () => {
-    if (!id) return;
-    
-    setLoading(true);
-    try {
-      const transactions = await financialService.getTransactions();
-      const transaction = transactions.find(t => t.id === id);
+      let result;
       
-      if (transaction) {
-        reset({
-          date: transaction.date,
-          type: transaction.type,
-          category_id: transaction.category_id,
-          amount: transaction.amount,
-          payment_method: transaction.payment_method,
-          notes: transaction.notes || '',
-          reference_id: transaction.reference_id,
-          reference_type: transaction.reference_type
-        });
-        
-        setDate(new Date(transaction.date));
-      } else {
-        toast.error('المعاملة غير موجودة');
-        navigate('/financial');
-      }
-    } catch (error) {
-      console.error('Error loading transaction:', error);
-      toast.error('حدث خطأ أثناء تحميل المعاملة');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const onSubmit = async (data: TransactionFormData) => {
-    setLoading(true);
-    
-    try {
-      if (isEditMode) {
-        if (!id) return;
-        
-        const updated = await financialService.updateTransaction(id, data);
-        if (updated) {
-          toast.success('تم تحديث المعاملة بنجاح');
-          navigate('/financial');
-        } else {
-          toast.error('حدث خطأ أثناء تحديث المعاملة');
+      if (isEditing && initialData?.id) {
+        // تحديث معاملة موجودة
+        result = await financialService.updateTransaction(initialData.id, data);
+        if (result) {
+          toast.success('تم تحديث المعاملة المالية بنجاح');
+          if (onSuccessfulSubmit) {
+            onSuccessfulSubmit();
+          } else {
+            navigate('/financial');
+          }
         }
       } else {
-        const created = await financialService.createTransaction(data);
-        if (created) {
-          toast.success('تم إنشاء المعاملة بنجاح');
-          navigate('/financial');
-        } else {
-          toast.error('حدث خطأ أثناء إنشاء المعاملة');
+        // إنشاء معاملة جديدة
+        result = await financialService.createTransaction(data);
+        if (result) {
+          toast.success('تم إنشاء المعاملة المالية بنجاح');
+          form.reset();
+          if (onSuccessfulSubmit) {
+            onSuccessfulSubmit();
+          }
         }
       }
     } catch (error) {
-      console.error('Error saving transaction:', error);
-      toast.error('حدث خطأ أثناء حفظ المعاملة');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const handleDateChange = (newDate: Date | undefined) => {
-    if (newDate) {
-      setDate(newDate);
-      setValue('date', format(newDate, 'yyyy-MM-dd'));
+      console.error('Error submitting transaction:', error);
+      toast.error('حدث خطأ أثناء حفظ المعاملة المالية');
     }
   };
   
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex justify-between items-center mb-6">
-        <Button variant="outline" onClick={() => navigate('/financial')}>
-          <ArrowLeft className="h-4 w-4 ml-2" />
-          العودة للوحة التحكم
-        </Button>
-      </div>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>{isEditMode ? 'تعديل معاملة مالية' : 'إضافة معاملة مالية جديدة'}</CardTitle>
-          <CardDescription>
-            {isEditMode 
-              ? 'قم بتعديل بيانات المعاملة المالية' 
-              : 'قم بإدخال بيانات المعاملة المالية الجديدة'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="type">نوع المعاملة</Label>
-                  <Select 
-                    defaultValue={transactionType} 
-                    onValueChange={(value) => setValue('type', value as 'income' | 'expense')}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر نوع المعاملة" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="income">إيراد</SelectItem>
-                      <SelectItem value="expense">مصروف</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="category_id">الفئة</Label>
-                  <Select 
-                    defaultValue="" 
-                    onValueChange={(value) => setValue('category_id', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر الفئة" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories
-                        .filter(category => category.type === transactionType)
-                        .map(category => (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>{isEditing ? 'تعديل المعاملة المالية' : 'تسجيل معاملة مالية جديدة'}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>نوع المعاملة</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر نوع المعاملة" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="income">إيراد</SelectItem>
+                        <SelectItem value="expense">مصروف</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      حدد ما إذا كانت هذه المعاملة إيرادًا أو مصروفًا
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>التاريخ</FormLabel>
+                    <DatePicker
+                      selected={field.value}
+                      onSelect={field.onChange}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="category_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>الفئة</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          {isLoadingCategories ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SelectValue placeholder="اختر فئة المعاملة" />
+                          )}
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {categories?.map((category: Category) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}
                           </SelectItem>
                         ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.category_id && (
-                    <p className="text-red-500 text-sm">يجب اختيار الفئة</p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="amount">المبلغ</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="أدخل المبلغ"
-                    {...register('amount', { 
-                      required: true, 
-                      valueAsNumber: true,
-                      min: 0.01 
-                    })}
-                  />
-                  {errors.amount && (
-                    <p className="text-red-500 text-sm">يجب إدخال مبلغ صحيح</p>
-                  )}
-                </div>
-              </div>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      اختر الفئة المناسبة للمعاملة المالية
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">التاريخ</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-right font-normal",
-                          !date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="ml-2 h-4 w-4" />
-                        {date ? format(date, 'PPP', { locale: ar }) : "اختر التاريخ"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={handleDateChange}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <input 
-                    type="hidden" 
-                    {...register('date', { required: true })}
-                    value={format(date, 'yyyy-MM-dd')}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="payment_method">طريقة الدفع</Label>
-                  <Select 
-                    defaultValue="cash" 
-                    onValueChange={(value) => setValue('payment_method', value as 'cash' | 'bank' | 'other')}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر طريقة الدفع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">نقدي</SelectItem>
-                      <SelectItem value="bank">بنك</SelectItem>
-                      <SelectItem value="other">أخرى</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="notes">ملاحظات</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="أدخل ملاحظات إضافية"
-                    {...register('notes')}
-                  />
-                </div>
-              </div>
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>المبلغ</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" placeholder="أدخل المبلغ" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      أدخل مبلغ المعاملة بالجنيه المصري
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="payment_method"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>طريقة الدفع</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر طريقة الدفع" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="cash">نقدي</SelectItem>
+                        <SelectItem value="bank">بنكي</SelectItem>
+                        <SelectItem value="other">أخرى</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      حدد طريقة الدفع لهذه المعاملة
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             
-            <div className="flex justify-end space-x-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => navigate('/financial')}
-                disabled={loading}
-              >
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ملاحظات (اختياري)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="أدخل أي ملاحظات إضافية" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    يمكنك إضافة أي معلومات إضافية عن المعاملة هنا
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <CardFooter className="px-0 pt-6 flex justify-between">
+              <Button variant="outline" type="button" onClick={() => navigate('/financial')}>
                 إلغاء
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'جاري الحفظ...' : isEditMode ? 'تحديث المعاملة' : 'إضافة المعاملة'}
+              <Button type="submit">
+                {isEditing ? 'تحديث المعاملة' : 'تسجيل المعاملة'}
               </Button>
-            </div>
+            </CardFooter>
           </form>
-        </CardContent>
-      </Card>
-    </div>
+        </Form>
+      </CardContent>
+    </Card>
   );
 };
 
