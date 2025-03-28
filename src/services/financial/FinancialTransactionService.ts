@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Transaction } from "./FinancialTypes";
@@ -62,7 +63,7 @@ class FinancialTransactionService {
       
       return data.map(item => ({
         id: item.id,
-        date: item.date instanceof Date ? format(item.date, 'yyyy-MM-dd') : item.date,
+        date: typeof item.date === 'string' ? item.date : format(new Date(item.date), 'yyyy-MM-dd'),
         amount: item.amount,
         type: item.type as 'income' | 'expense',
         category_id: item.category_id,
@@ -105,7 +106,7 @@ class FinancialTransactionService {
       
       return {
         id: data.id,
-        date: data.date instanceof Date ? format(data.date, 'yyyy-MM-dd') : data.date,
+        date: typeof data.date === 'string' ? data.date : format(new Date(data.date), 'yyyy-MM-dd'),
         amount: data.amount,
         type: data.type as 'income' | 'expense',
         category_id: data.category_id,
@@ -129,8 +130,8 @@ class FinancialTransactionService {
    */
   public async createTransaction(transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>): Promise<Transaction | null> {
     try {
-      // تنسيق التاريخ إذا كا�� كائن Date
-      const formattedDate = transactionData.date instanceof Date
+      // تنسيق التاريخ إذا كان كائن Date
+      const formattedDate = typeof transactionData.date === 'object' && transactionData.date instanceof Date
         ? format(transactionData.date, 'yyyy-MM-dd')
         : transactionData.date;
         
@@ -204,7 +205,7 @@ class FinancialTransactionService {
       }
       
       // تنسيق التاريخ إذا كان كائن Date
-      const formattedDate = transactionData.date instanceof Date
+      const formattedDate = typeof transactionData.date === 'object' && transactionData.date instanceof Date
         ? format(transactionData.date, 'yyyy-MM-dd')
         : transactionData.date;
         
@@ -324,7 +325,7 @@ class FinancialTransactionService {
       // تحديث الرصيد
       const { error } = await supabase
         .from('financial_balance')
-        .update({ [balanceField]: newBalance, last_updated: new Date() })
+        .update({ [balanceField]: newBalance, last_updated: format(new Date(), 'yyyy-MM-dd') })
         .eq('id', '1');
       
       if (error) {
@@ -366,7 +367,7 @@ class FinancialTransactionService {
       // تحديث الرصيد
       const { error } = await supabase
         .from('financial_balance')
-        .update({ [balanceField]: newBalance, last_updated: new Date() })
+        .update({ [balanceField]: newBalance, last_updated: format(new Date(), 'yyyy-MM-dd') })
         .eq('id', '1');
       
       if (error) {

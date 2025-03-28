@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Transaction } from "./FinancialTypes";
@@ -26,11 +27,15 @@ class FinancialCommercialBridge {
    */
   public async handleInvoiceConfirmation(invoice: any): Promise<boolean> {
     try {
+      const formattedDate = typeof invoice.invoice_date === 'object' && invoice.invoice_date instanceof Date 
+        ? format(invoice.invoice_date, 'yyyy-MM-dd')
+        : invoice.invoice_date;
+
       const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
         type: 'income',
         amount: invoice.total_amount,
         category_id: 'c69949b5-2969-4984-9f99-93a377fca8ff', // فئة "إيرادات المبيعات"
-        date: invoice.invoice_date,
+        date: formattedDate,
         payment_method: invoice.payment_method,
         notes: `فاتورة مبيعات رقم ${invoice.invoice_number} للعميل ${invoice.party_name}`,
         reference_id: invoice.id,
@@ -65,11 +70,15 @@ class FinancialCommercialBridge {
       const transactionType = payment.type === 'receipt' ? 'income' : 'expense';
       const categoryId = payment.type === 'receipt' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181'; // فئة "إيرادات المبيعات" أو "مدفوعات الموردين"
       
+      const formattedDate = typeof payment.payment_date === 'object' && payment.payment_date instanceof Date 
+        ? format(payment.payment_date, 'yyyy-MM-dd')
+        : payment.payment_date;
+
       const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
         type: transactionType,
         amount: payment.amount,
         category_id: categoryId,
-        date: payment.payment_date,
+        date: formattedDate,
         payment_method: payment.payment_method,
         notes: `دفعة ${payment.type === 'receipt' ? 'مستلمة' : 'مدفوعة'} رقم ${payment.payment_number} من/إلى ${payment.party_name}`,
         reference_id: payment.id,
@@ -120,7 +129,7 @@ class FinancialCommercialBridge {
       }
       
       if (!linkedTransactions || linkedTransactions.length === 0) {
-        toast.warn(`لم يتم العثور على أي معاملات مالية مرتبطة ب${commercialType} رقم ${id}`);
+        toast.error(`لم يتم العثور على أي معاملات مالية مرتبطة ب${commercialType} رقم ${id}`);
         return true; // لا يوجد خطأ، ولكن لا توجد معاملات مرتبطة
       }
       
@@ -128,11 +137,14 @@ class FinancialCommercialBridge {
       const transaction = linkedTransactions[0];
       
       // 2. إنشاء معاملة عكسية
+      const currentDate = format(new Date(), 'yyyy-MM-dd');
+      const transactionDate = date || currentDate;
+
       const reverseTransactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
         type: transaction.type === 'income' ? 'expense' : 'income',
         amount: amount,
         category_id: transaction.category_id,
-        date: date || format(new Date(), 'yyyy-MM-dd'), // Use the provided date or current date
+        date: transactionDate,
         payment_method: transaction.payment_method,
         notes: `عكس ${transaction.type === 'income' ? 'إيراد' : 'مصروف'} ${commercialType} ملغاة رقم ${id} ${partyName ? 'لـ/من ' + partyName : ''}`,
         reference_id: id,

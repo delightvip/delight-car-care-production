@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -160,7 +161,7 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
                       <AccordionTrigger className="py-2">
                         <div className="flex justify-between items-center w-full pr-2">
                           <div className="flex items-center">
-                            <Badge variant="info">
+                            <Badge variant="default">
                               {transaction.reference_type}: {transaction.reference_id}
                             </Badge>
                             <span>{formattedTx.date}</span>
