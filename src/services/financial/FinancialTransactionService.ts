@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Transaction } from "./FinancialTypes";
@@ -131,8 +130,8 @@ class FinancialTransactionService {
   public async createTransaction(transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>): Promise<Transaction | null> {
     try {
       // تنسيق التاريخ إذا كان كائن Date
-      const formattedDate = typeof transactionData.date === 'object' && transactionData.date instanceof Date
-        ? format(transactionData.date, 'yyyy-MM-dd')
+      const formattedDate = typeof transactionData.date === 'object' 
+        ? format(new Date(transactionData.date as any), 'yyyy-MM-dd')
         : transactionData.date;
         
       const { data, error } = await supabase
@@ -205,8 +204,8 @@ class FinancialTransactionService {
       }
       
       // تنسيق التاريخ إذا كان كائن Date
-      const formattedDate = typeof transactionData.date === 'object' && transactionData.date instanceof Date
-        ? format(transactionData.date, 'yyyy-MM-dd')
+      const formattedDate = typeof transactionData.date === 'object' 
+        ? format(new Date(transactionData.date as any), 'yyyy-MM-dd')
         : transactionData.date;
         
       const { error } = await supabase

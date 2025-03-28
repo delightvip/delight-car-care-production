@@ -15,7 +15,7 @@ export interface Category {
  */
 export interface Transaction {
   id: string;
-  date: string; // Changed from string | Date to just string for consistency
+  date: string; // Always use string for dates for consistency
   amount: number;
   type: 'income' | 'expense';
   category_id: string;

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -100,11 +101,12 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
       let result;
       
       if (isEditing && initialData?.id) {
+        // تحديث معاملة موجودة
         const updateData: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>> = {
           type: data.type,
           amount: data.amount,
           category_id: data.category_id,
-          date: data.date,
+          date: format(data.date, 'yyyy-MM-dd'), // Convert Date to string format
           payment_method: data.payment_method,
           notes: data.notes
         };
@@ -119,11 +121,12 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
           }
         }
       } else {
+        // إنشاء معاملة جديدة
         const newTransaction: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
           type: data.type,
           amount: data.amount,
           category_id: data.category_id,
-          date: data.date,
+          date: format(data.date, 'yyyy-MM-dd'), // Convert Date to string format
           payment_method: data.payment_method,
           notes: data.notes || '',
           reference_id: undefined,

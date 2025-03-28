@@ -27,7 +27,7 @@ class FinancialCommercialBridge {
    */
   public async handleInvoiceConfirmation(invoice: any): Promise<boolean> {
     try {
-      const formattedDate = typeof invoice.invoice_date === 'object' && invoice.invoice_date instanceof Date 
+      const formattedDate = typeof invoice.invoice_date === 'object' && invoice.invoice_date
         ? format(invoice.invoice_date, 'yyyy-MM-dd')
         : invoice.invoice_date;
 
@@ -70,7 +70,7 @@ class FinancialCommercialBridge {
       const transactionType = payment.type === 'receipt' ? 'income' : 'expense';
       const categoryId = payment.type === 'receipt' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181'; // فئة "إيرادات المبيعات" أو "مدفوعات الموردين"
       
-      const formattedDate = typeof payment.payment_date === 'object' && payment.payment_date instanceof Date 
+      const formattedDate = typeof payment.payment_date === 'object' && payment.payment_date
         ? format(payment.payment_date, 'yyyy-MM-dd')
         : payment.payment_date;
 
