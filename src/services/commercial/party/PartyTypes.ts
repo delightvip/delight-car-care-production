@@ -58,7 +58,7 @@ export interface PartyDBResponse {
   opening_balance: number;
   balance_type: string;
   created_at: string;
-  notes?: string | null;
-  code?: string | null;
+  notes: string | null;
+  code: string | null;
   party_balances: { balance: number }[];
 }

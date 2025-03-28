@@ -1,4 +1,3 @@
-
 import BaseCommercialService from '../BaseCommercialService';
 import { Payment } from '../../CommercialTypes';
 import { toast } from "sonner";
@@ -7,12 +6,13 @@ import InvoiceService from '../invoice/InvoiceService';
 import { ErrorHandler } from '@/utils/errorHandler';
 import PaymentDataAccess from './PaymentDataAccess';
 import PaymentValidator from './PaymentValidator';
-import { CommercialFinanceIntegration } from '@/services/integrations/finance/CommercialFinanceIntegration';
+import { CommercialFinanceIntegration } from '@/services/integrations/CommercialFinanceIntegration';
 
 /**
  * خدمة إدارة المدفوعات والتحصيلات
  */
 class PaymentService extends BaseCommercialService {
+  
   private static instance: PaymentService;
   private invoiceService: InvoiceService;
   private dataAccess: PaymentDataAccess;

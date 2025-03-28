@@ -43,7 +43,8 @@ export class PartyTransactionService {
         credit: item.credit || 0,
         balance: item.balance_after,
         created_at: item.created_at,
-        transaction_type: item.transaction_type
+        transaction_type: item.transaction_type,
+        transaction_id: item.transaction_id
       }));
     } catch (error) {
       console.error('Error fetching party transactions:', error);
@@ -77,7 +78,7 @@ export class PartyTransactionService {
         balance_after: entry.balance_after,
         created_at: entry.created_at,
         description: this.getTransactionDescription(entry.transaction_type),
-        notes: ''
+        notes: entry.notes || ''
       }));
       
       return ledgerEntries;
@@ -100,7 +101,13 @@ export class PartyTransactionService {
       'payment_made': 'دفعة مدفوعة',
       'sales_return': 'مرتجع مبيعات',
       'purchase_return': 'مرتجع مشتريات',
-      'opening_balance': 'رصيد افتتاحي'
+      'opening_balance': 'رصيد افتتاحي',
+      'cancel_sale_invoice': 'إلغاء فاتورة مبيعات',
+      'cancel_purchase_invoice': 'إلغاء فاتورة مشتريات',
+      'cancel_payment_received': 'إلغاء دفعة مستلمة',
+      'cancel_payment_made': 'إلغاء دفعة مدفوعة',
+      'cancel_sales_return': 'إلغاء مرتجع مبيعات',
+      'cancel_purchase_return': 'إلغاء مرتجع مشتريات'
     };
     
     return descriptions[transaction_type] || transaction_type;

@@ -1,3 +1,4 @@
+
 import { Invoice } from '@/services/CommercialTypes';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -5,7 +6,7 @@ import { OperationLocks, runAsyncOperation } from '@/utils/asyncUtils';
 import { ErrorHandler } from '@/utils/errorHandler';
 import InventoryService from '@/services/InventoryService';
 import LedgerService from '../ledger/LedgerService';
-import { CommercialFinanceIntegration } from '@/services/integrations/finance/CommercialFinanceIntegration';
+import { CommercialFinanceIntegration } from '@/services/integrations/CommercialFinanceIntegration';
 
 /**
  * معالج الفواتير
