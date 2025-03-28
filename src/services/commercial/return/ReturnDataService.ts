@@ -98,10 +98,20 @@ export class ReturnDataService {
    */
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      // التحقق من البيانات قبل الإنشاء
+      // التحقق من البيانات قبل الإنشاء وإظهار رسالة خطأ محددة
       if (!this.validateReturnData(returnData)) {
-        throw new Error("البيانات غير مكتملة أو غير صالحة");
+        console.error("Validation failed for return data:", returnData);
+        toast.error("فشل التحقق من البيانات، يرجى التأكد من إدخال جميع البيانات المطلوبة");
+        return null;
       }
+
+      console.log("Creating return with data:", {
+        return_type: returnData.return_type,
+        invoice_id: returnData.invoice_id,
+        party_id: returnData.party_id,
+        date: returnData.date,
+        amount: returnData.amount
+      });
 
       // إنشاء المرتجع في قاعدة البيانات
       const { data: newReturn, error } = await supabase
@@ -120,7 +130,20 @@ export class ReturnDataService {
 
       if (error) {
         console.error("Error creating return:", error);
-        throw error;
+        if (error.code === '23503') {
+          toast.error("فشل إنشاء المرتجع: رقم الفاتورة أو العميل/المورد غير صحيح");
+        } else if (error.code === '23502') {
+          toast.error("فشل إنشاء المرتجع: بعض البيانات المطلوبة مفقودة");
+        } else {
+          toast.error(`فشل إنشاء المرتجع: ${error.message || 'خطأ في قاعدة البيانات'}`);
+        }
+        return null;
+      }
+
+      if (!newReturn) {
+        console.error("No return data received after insert");
+        toast.error("فشل إنشاء المرتجع: لم يتم استلام بيانات من قاعدة البيانات");
+        return null;
       }
 
       // إضافة أصناف المرتجع
@@ -128,7 +151,11 @@ export class ReturnDataService {
         const selectedItems = returnData.items.filter(item => item.quantity > 0);
         
         if (selectedItems.length === 0) {
-          throw new Error("لا يوجد أصناف محددة للمرتجع");
+          console.error("No items selected with quantity > 0");
+          toast.error("لا يوجد أصناف محددة للمرتجع بكمية صالحة");
+          // حذف المرتجع الذي تم إنشاؤه حيث لا توجد أصناف
+          await this.deleteReturn(newReturn.id);
+          return null;
         }
         
         const formattedItems = selectedItems.map(item => ({
@@ -137,23 +164,33 @@ export class ReturnDataService {
           item_type: item.item_type,
           item_name: item.item_name,
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
+          unit_price: item.unit_price
+          // حذف حقل total لأنه يتم حسابه تلقائيًا في قاعدة البيانات
         }));
+
+        console.log("Inserting return items:", formattedItems.length);
 
         const { error: itemsError } = await supabase
           .from('return_items')
           .insert(formattedItems);
 
         if (itemsError) {
+          console.error("Error inserting return items:", itemsError);
           // إذا فشل إدخال الأصناف، نحذف المرتجع الذي تم إنشاؤه
           await this.deleteReturn(newReturn.id);
-          throw itemsError;
+          if (itemsError.code === '23503') {
+            toast.error("فشل إنشاء المرتجع: بعض أرقام الأصناف غير صحيحة");
+          } else {
+            toast.error(`فشل إنشاء المرتجع: خطأ في الأصناف - ${itemsError.message || 'خطأ في قاعدة البيانات'}`);
+          }
+          return null;
         }
       }
 
       // سجل العملية في سجل الأحداث
       await this.logReturnAction(newReturn.id, "create", returnData.return_type);
+      
+      toast.success("تم إنشاء المرتجع بنجاح");
       
       // Return the created return with proper type casting
       return {
@@ -163,9 +200,10 @@ export class ReturnDataService {
         party_name: returnData.party_name,
         items: returnData.items?.filter(item => item.quantity > 0)
       } as Return;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating return:', error);
-      throw error;
+      toast.error(`حدث خطأ أثناء إنشاء المرتجع: ${error.message || 'خطأ غير معروف'}`);
+      return null;
     }
   }
 
@@ -214,8 +252,8 @@ export class ReturnDataService {
             item_type: item.item_type,
             item_name: item.item_name,
             quantity: item.quantity,
-            unit_price: item.unit_price,
-            total: item.quantity * item.unit_price
+            unit_price: item.unit_price
+            // حذف حقل total لأنه يتم حسابه تلقائيًا في قاعدة البيانات
           }));
 
           const { error: insertError } = await supabase

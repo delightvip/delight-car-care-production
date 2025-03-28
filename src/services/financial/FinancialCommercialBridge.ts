@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Transaction } from "./FinancialTypes";
@@ -114,12 +113,26 @@ class FinancialCommercialBridge {
       const isSalesReturn = returnData.return_type === 'sales_return';
       const transactionType = isSalesReturn ? 'expense' : 'income';
       
-      // فئات المعاملات المالية
-      // مرتجعات مبيعات = مصروفات مرتجعات مبيعات
-      // مرتجعات مشتريات = إيرادات مرتجعات مشتريات
-      const categoryId = isSalesReturn 
-        ? '2f7d9e5a-9c1d-4b5e-8f7c-3a2b7e8d9c1d' // فئة مصروفات مرتجعات المبيعات - تحتاج لتعديل للقيمة الصحيحة
-        : '3e8c7f6d-5b2a-4c9e-9f8b-2d3e7c9f8b2d'; // فئة إيرادات مرتجعات المشتريات - تحتاج لتعديل للقيمة الصحيحة
+      // البحث عن فئة مالية صالحة حسب النوع بدلاً من استخدام معرفات ثابتة
+      const { data: categories, error: categoriesError } = await supabase
+        .from('financial_categories')
+        .select('id')
+        .eq('type', transactionType)
+        .limit(1);
+      
+      if (categoriesError) {
+        console.error("Error fetching financial categories:", categoriesError);
+        throw new Error("فشل في العثور على فئة مالية مناسبة للمرتجع");
+      }
+      
+      if (!categories || categories.length === 0) {
+        console.error("No financial categories found for type:", transactionType);
+        throw new Error(`لا توجد فئات مالية من نوع ${transactionType === 'income' ? 'الإيرادات' : 'المصروفات'}`);
+      }
+      
+      // استخدام أول فئة مالية صالحة
+      const categoryId = categories[0].id;
+      console.log(`Using financial category: ${categoryId} for ${transactionType} transaction`);
       
       // 2. إنشاء المعاملة المالية
       const formattedDate = typeof returnData.date === 'object' 

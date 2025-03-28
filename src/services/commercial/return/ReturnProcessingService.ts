@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
@@ -129,8 +128,11 @@ export class ReturnProcessingService {
    */
   private async updateInventory(returnData: Return, action: 'confirm' | 'cancel' | 'reverse_confirm' | 'reverse_cancel'): Promise<void> {
     if (!returnData.items || returnData.items.length === 0) {
+      console.log("No items to update inventory");
       return;
     }
+
+    console.log(`Processing ${returnData.items.length} items for inventory update`, returnData.items);
 
     for (const item of returnData.items) {
       // تحديد نوع العملية بناءً على نوع المرتجع والعملية المطلوبة
@@ -148,20 +150,42 @@ export class ReturnProcessingService {
         }
       }
 
-      console.log(`${shouldIncrease ? 'Increasing' : 'Decreasing'} inventory for item ${item.item_id} (${item.item_type}) by ${item.quantity}`);
+      // تأكد من أن item_id هو رقم
+      const itemId = Number(item.item_id);
+      // تأكد من أن الكمية هي رقم إيجابي
+      const quantity = Math.max(0, Number(item.quantity));
+
+      if (isNaN(itemId) || itemId <= 0) {
+        console.error(`Invalid item_id: ${item.item_id}, skipping inventory update`);
+        continue;
+      }
+
+      if (isNaN(quantity) || quantity <= 0) {
+        console.error(`Invalid quantity: ${item.quantity}, skipping inventory update`);
+        continue;
+      }
+
+      console.log(`${shouldIncrease ? 'Increasing' : 'Decreasing'} inventory for item ${itemId} (${item.item_type}) by ${quantity}`);
       
-      if (shouldIncrease) {
-        await returnInventoryService.increaseItemQuantity(
-          item.item_type,
-          item.item_id,
-          item.quantity
-        );
-      } else {
-        await returnInventoryService.decreaseItemQuantity(
-          item.item_type,
-          item.item_id,
-          item.quantity
-        );
+      try {
+        if (shouldIncrease) {
+          const result = await returnInventoryService.increaseItemQuantity(
+            item.item_type,
+            itemId,
+            quantity
+          );
+          console.log(`Inventory increase result: ${result ? 'Success' : 'Failed'}`);
+        } else {
+          const result = await returnInventoryService.decreaseItemQuantity(
+            item.item_type,
+            itemId,
+            quantity
+          );
+          console.log(`Inventory decrease result: ${result ? 'Success' : 'Failed'}`);
+        }
+      } catch (error) {
+        console.error(`Error updating inventory for item ${itemId}:`, error);
+        throw new Error(`فشل تحديث المخزون للصنف: ${item.item_name}`);
       }
     }
   }

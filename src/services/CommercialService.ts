@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { 
@@ -34,11 +33,16 @@ class CommercialService {
   }
   
   // Lazy getter for returnService to avoid circular dependencies
-  private getReturnService() {
+  private async getReturnService() {
     if (!returnServiceInstance) {
-      // Import dynamically to avoid circular dependencies at startup
-      const ReturnService = require('./commercial/return/ReturnService').default;
-      returnServiceInstance = ReturnService.getInstance();
+      try {
+        // Import dynamically using dynamic import instead of require
+        const ReturnServiceModule = await import('./commercial/return/ReturnService');
+        returnServiceInstance = ReturnServiceModule.default.getInstance();
+      } catch (error) {
+        console.error('Error importing ReturnService:', error);
+        throw error;
+      }
     }
     return returnServiceInstance;
   }
@@ -348,7 +352,8 @@ class CommercialService {
   // Return methods
   public async getReturns(): Promise<Return[]> {
     try {
-      return await this.getReturnService().getReturns();
+      const returnService = await this.getReturnService();
+      return await returnService.getReturns();
     } catch (error) {
       console.error('Error in getReturns:', error);
       toast({
@@ -362,7 +367,8 @@ class CommercialService {
   
   public async getReturnById(id: string): Promise<Return | null> {
     try {
-      return await this.getReturnService().getReturnById(id);
+      const returnService = await this.getReturnService();
+      return await returnService.getReturnById(id);
     } catch (error) {
       console.error(`Error in getReturnById(${id}):`, error);
       toast({
@@ -376,7 +382,8 @@ class CommercialService {
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      return await this.getReturnService().createReturn(returnData);
+      const returnService = await this.getReturnService();
+      return await returnService.createReturn(returnData);
     } catch (error) {
       console.error('Error in createReturn:', error);
       toast({
@@ -390,7 +397,8 @@ class CommercialService {
   
   public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
     try {
-      return await this.getReturnService().updateReturn(id, returnData);
+      const returnService = await this.getReturnService();
+      return await returnService.updateReturn(id, returnData);
     } catch (error) {
       console.error(`Error in updateReturn(${id}):`, error);
       toast({
@@ -404,7 +412,8 @@ class CommercialService {
   
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      return await this.getReturnService().confirmReturn(returnId);
+      const returnService = await this.getReturnService();
+      return await returnService.confirmReturn(returnId);
     } catch (error) {
       console.error(`Error in confirmReturn(${returnId}):`, error);
       toast({
@@ -418,7 +427,8 @@ class CommercialService {
   
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      return await this.getReturnService().cancelReturn(returnId);
+      const returnService = await this.getReturnService();
+      return await returnService.cancelReturn(returnId);
     } catch (error) {
       console.error(`Error in cancelReturn(${returnId}):`, error);
       toast({
@@ -432,7 +442,8 @@ class CommercialService {
   
   public async deleteReturn(id: string): Promise<boolean> {
     try {
-      return await this.getReturnService().deleteReturn(id);
+      const returnService = await this.getReturnService();
+      return await returnService.deleteReturn(id);
     } catch (error) {
       console.error(`Error in deleteReturn(${id}):`, error);
       toast({
