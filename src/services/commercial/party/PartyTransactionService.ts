@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { Transaction, LedgerEntry } from './PartyTypes';
+import { Transaction, LedgerEntry, TransactionDescriptions } from './PartyTransactionTypes';
 import { toast } from 'sonner';
 
 /**
@@ -8,8 +8,26 @@ import { toast } from 'sonner';
  */
 export class PartyTransactionService {
   private static instance: PartyTransactionService;
+  private transactionDescriptions: TransactionDescriptions;
   
-  private constructor() {}
+  private constructor() {
+    // تعريف أوصاف أنواع المعاملات
+    this.transactionDescriptions = {
+      'sale_invoice': 'فاتورة مبيعات',
+      'purchase_invoice': 'فاتورة مشتريات',
+      'payment_received': 'دفعة مستلمة',
+      'payment_made': 'دفعة مدفوعة',
+      'sales_return': 'مرتجع مبيعات',
+      'purchase_return': 'مرتجع مشتريات',
+      'opening_balance': 'رصيد افتتاحي',
+      'cancel_sale_invoice': 'إلغاء فاتورة مبيعات',
+      'cancel_purchase_invoice': 'إلغاء فاتورة مشتريات',
+      'cancel_payment_received': 'إلغاء دفعة مستلمة',
+      'cancel_payment_made': 'إلغاء دفعة مدفوعة',
+      'cancel_sales_return': 'إلغاء مرتجع مبيعات',
+      'cancel_purchase_return': 'إلغاء مرتجع مشتريات'
+    };
+  }
   
   public static getInstance(): PartyTransactionService {
     if (!PartyTransactionService.instance) {
@@ -37,7 +55,7 @@ export class PartyTransactionService {
         party_id: item.party_id,
         transaction_date: item.date,
         type: item.transaction_type,
-        description: item.transaction_type || '', // Use transaction_type if no description
+        description: item.transaction_type || '',
         reference: item.transaction_id,
         debit: item.debit || 0,
         credit: item.credit || 0,
@@ -95,23 +113,7 @@ export class PartyTransactionService {
    * @param transaction_type نوع المعاملة
    */
   public getTransactionDescription(transaction_type: string): string {
-    const descriptions: { [key: string]: string } = {
-      'sale_invoice': 'فاتورة مبيعات',
-      'purchase_invoice': 'فاتورة مشتريات',
-      'payment_received': 'دفعة مستلمة',
-      'payment_made': 'دفعة مدفوعة',
-      'sales_return': 'مرتجع مبيعات',
-      'purchase_return': 'مرتجع مشتريات',
-      'opening_balance': 'رصيد افتتاحي',
-      'cancel_sale_invoice': 'إلغاء فاتورة مبيعات',
-      'cancel_purchase_invoice': 'إلغاء فاتورة مشتريات',
-      'cancel_payment_received': 'إلغاء دفعة مستلمة',
-      'cancel_payment_made': 'إلغاء دفعة مدفوعة',
-      'cancel_sales_return': 'إلغاء مرتجع مبيعات',
-      'cancel_purchase_return': 'إلغاء مرتجع مشتريات'
-    };
-    
-    return descriptions[transaction_type] || transaction_type;
+    return this.transactionDescriptions[transaction_type] || transaction_type;
   }
 }
 
