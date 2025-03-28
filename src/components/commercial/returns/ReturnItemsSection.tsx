@@ -43,7 +43,8 @@ export const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
 
   useEffect(() => {
     // Initialize selectedItems with all item IDs when the component mounts
-    setSelectedItems(items.map(item => item.id || item.item_id.toString()));
+    // Using item_id instead of id since that's what our type has
+    setSelectedItems(items.map(item => item.item_id?.toString() || ''));
   }, [items]);
 
   const isItemSelected = (itemId: string) => selectedItems.includes(itemId);
@@ -110,7 +111,7 @@ export const ReturnItemsSection: React.FC<ReturnItemsSectionProps> = ({
               <div key={index} className="mb-4 flex items-center space-x-4">
                 <Checkbox 
                   checked={item.selected} 
-                  onCheckedChange={(checked) => handleToggleItemSelection(item.id || item.item_id.toString(), Boolean(checked), index)}
+                  onCheckedChange={(checked) => handleToggleItemSelection(item.item_id?.toString() || '', Boolean(checked), index)}
                   aria-label="Select row"
                 />
                 <div className="grid gap-1.5 grow">

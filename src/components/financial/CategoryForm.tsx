@@ -93,9 +93,10 @@ const CategoryForm: React.FC = () => {
     let success = false;
     
     if (isEditing && id) {
-      success = await financialService.updateCategory(id, data);
+      const result = await financialService.updateCategory(id, data as Omit<Category, 'id' | 'created_at'>);
+      success = !!result;
     } else {
-      const result = await financialService.createCategory(data);
+      const result = await financialService.createCategory(data as Omit<Category, 'id' | 'created_at'>);
       success = !!result;
     }
     
