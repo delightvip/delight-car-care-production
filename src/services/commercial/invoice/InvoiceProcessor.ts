@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
@@ -131,6 +130,9 @@ export class InvoiceProcessor {
         for (const item of invoiceData.items || []) {
           let currentItem = null;
           let currentQuantity = 0;
+          let currentUnitCost = 0;
+          let newQuantity = 0;
+          let newUnitCost = 0;
           
           // الحصول على الكمية الحالية في المخزون
           switch (item.item_type) {
@@ -143,8 +145,18 @@ export class InvoiceProcessor {
               
               currentItem = rawMaterial;
               currentQuantity = rawMaterial?.quantity || 0;
+              currentUnitCost = rawMaterial?.unit_cost || 0;
+              
+              // حساب متوسط التكلفة الموزون
+              newQuantity = currentQuantity + Number(item.quantity);
+              newUnitCost = this.calculateWeightedAverage(
+                currentQuantity, currentUnitCost,
+                Number(item.quantity), Number(item.unit_price)
+              );
+              
               await this.inventoryService.updateRawMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
+                quantity: newQuantity,
+                unit_cost: newUnitCost
               });
               break;
             case 'packaging_materials':
@@ -156,8 +168,18 @@ export class InvoiceProcessor {
               
               currentItem = packagingMaterial;
               currentQuantity = packagingMaterial?.quantity || 0;
+              currentUnitCost = packagingMaterial?.unit_cost || 0;
+              
+              // حساب متوسط التكلفة الموزون
+              newQuantity = currentQuantity + Number(item.quantity);
+              newUnitCost = this.calculateWeightedAverage(
+                currentQuantity, currentUnitCost,
+                Number(item.quantity), Number(item.unit_price)
+              );
+              
               await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
+                quantity: newQuantity,
+                unit_cost: newUnitCost
               });
               break;
             case 'semi_finished_products':
@@ -169,8 +191,18 @@ export class InvoiceProcessor {
               
               currentItem = semiFinished;
               currentQuantity = semiFinished?.quantity || 0;
+              currentUnitCost = semiFinished?.unit_cost || 0;
+              
+              // حساب متوسط التكلفة الموزون
+              newQuantity = currentQuantity + Number(item.quantity);
+              newUnitCost = this.calculateWeightedAverage(
+                currentQuantity, currentUnitCost,
+                Number(item.quantity), Number(item.unit_price)
+              );
+              
               await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
+                quantity: newQuantity,
+                unit_cost: newUnitCost
               });
               break;
             case 'finished_products':
@@ -182,8 +214,18 @@ export class InvoiceProcessor {
               
               currentItem = finishedProduct;
               currentQuantity = finishedProduct?.quantity || 0;
+              currentUnitCost = finishedProduct?.unit_cost || 0;
+              
+              // حساب متوسط التكلفة الموزون
+              newQuantity = currentQuantity + Number(item.quantity);
+              newUnitCost = this.calculateWeightedAverage(
+                currentQuantity, currentUnitCost,
+                Number(item.quantity), Number(item.unit_price)
+              );
+              
               await this.inventoryService.updateFinishedProduct(item.item_id, { 
-                quantity: currentQuantity + Number(item.quantity) 
+                quantity: newQuantity,
+                unit_cost: newUnitCost
               });
               break;
           }
@@ -486,5 +528,16 @@ export class InvoiceProcessor {
     } catch (error) {
       console.error('Error reversing invoice status:', error);
     }
+  }
+  
+  private calculateWeightedAverage(
+    currentQuantity: number,
+    currentUnitCost: number,
+    newQuantity: number,
+    newUnitCost: number
+  ): number {
+    const totalCost = (currentQuantity * currentUnitCost) + (newQuantity * newUnitCost);
+    const totalQuantity = currentQuantity + newQuantity;
+    return totalCost / totalQuantity;
   }
 }
