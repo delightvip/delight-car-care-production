@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -104,6 +103,10 @@ const FinishedProducts = () => {
     quantity: 0,
     minStock: 0
   });
+  
+  // إضافة حالة للتصفية حسب حالة المخزون
+  const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
+  
   const [selectedSemiFinished, setSelectedSemiFinished] = useState('');
   const [semiFinishedQuantity, setSemiFinishedQuantity] = useState(0);
   const [selectedPackaging, setSelectedPackaging] = useState('');
@@ -197,6 +200,20 @@ const FinishedProducts = () => {
       return productsWithComponents.filter(product => product !== null) as FinishedProduct[];
     }
   });
+  
+  // تطبيق الفلتر على البيانات
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    
+    switch (filterType) {
+      case 'low-stock':
+        return products.filter(item => item.quantity <= item.minStock * 1.2);
+      case 'high-value':
+        return [...products].sort((a, b) => b.totalValue - a.totalValue);
+      default:
+        return products;
+    }
+  }, [products, filterType]);
   
   // استعلام للحصول على المنتجات النصف مصنعة
   const { 
@@ -597,7 +614,34 @@ const FinishedProducts = () => {
     { 
       key: 'quantity', 
       title: 'الكمية',
-      render: (value: number, record: any) => `${value} ${record.unit}`
+      render: (value: number, record: any) => (
+        <div className="flex items-center">
+          <div className="flex items-center gap-2 min-w-[120px]">
+            <div 
+              className={`w-3 h-3 rounded-full ${
+                value <= record.minStock ? 'bg-red-500' : 
+                value <= record.minStock * 1.5 ? 'bg-amber-500' : 
+                'bg-green-500'
+              }`} 
+            />
+            <div className="relative w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`absolute top-0 left-0 h-full rounded-full ${
+                  value <= record.minStock ? 'bg-red-500' : 
+                  value <= record.minStock * 1.5 ? 'bg-amber-500' : 
+                  'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.round((value / (record.minStock * 2)) * 100))}%` }}
+              ></div>
+            </div>
+            <span className={`font-medium ${
+              value <= record.minStock ? 'text-red-700' : 
+              value <= record.minStock * 1.5 ? 'text-amber-700' : 
+              'text-green-700'
+            }`}>{value} {record.unit}</span>
+          </div>
+        </div>
+      )
     },
     { 
       key: 'minStock', 
@@ -657,209 +701,221 @@ const FinishedProducts = () => {
             <h1 className="text-3xl font-bold tracking-tight">المنتجات النهائية</h1>
             <p className="text-muted-foreground mt-1">إدارة المنتجات النهائية الجاهزة للبيع</p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus size={18} className="mr-2" />
-                إضافة منتج
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>إضافة منتج نهائي جديد</DialogTitle>
-                <DialogDescription>
-                  أدخل بيانات المنتج النهائي الجديد. سيتم إنشاء كود فريد للمنتج تلقائيًا.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">اسم المنتج</Label>
-                  <Input
-                    id="name"
-                    value={newProduct.name}
-                    onChange={e => setNewProduct({...newProduct, name: e.target.value})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="unit">وحدة القياس</Label>
-                  <Select 
-                    value={newProduct.unit} 
-                    onValueChange={value => setNewProduct({...newProduct, unit: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر وحدة القياس" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units.map(unit => (
-                        <SelectItem key={unit} value={unit}>
-                          {unit}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="quantity">الكمية</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={newProduct.quantity}
-                    onChange={e => setNewProduct({...newProduct, quantity: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="minStock">الحد الأدنى للمخزون</Label>
-                  <Input
-                    id="minStock"
-                    type="number"
-                    value={newProduct.minStock}
-                    onChange={e => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
-                  />
-                </div>
-                
-                <div className="border-t pt-4">
-                  <Label className="mb-2 block">المنتج النصف مصنع</Label>
-                  <div className="flex gap-2 mb-4">
+          <div className="flex gap-2">
+            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="تصفية المنتجات" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المنتجات</SelectItem>
+                <SelectItem value="low-stock">المخزون المنخفض</SelectItem>
+                <SelectItem value="high-value">الأعلى قيمة</SelectItem>
+              </SelectContent>
+            </Select>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus size={18} className="mr-2" />
+                  إضافة منتج
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>إضافة منتج نهائي جديد</DialogTitle>
+                  <DialogDescription>
+                    أدخل بيانات المنتج النهائي الجديد. سيتم إنشاء كود فريد للمنتج تلقائيًا.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">اسم المنتج</Label>
+                    <Input
+                      id="name"
+                      value={newProduct.name}
+                      onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="unit">وحدة القياس</Label>
                     <Select 
-                      value={selectedSemiFinished} 
-                      onValueChange={setSelectedSemiFinished}
-                      disabled={isLoadingSemi}
+                      value={newProduct.unit} 
+                      onValueChange={value => setNewProduct({...newProduct, unit: value})}
                     >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="اختر منتج" />
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر وحدة القياس" />
                       </SelectTrigger>
                       <SelectContent>
-                        {semiFinishedProducts.map(product => (
-                          <SelectItem key={product.code} value={product.code}>
-                            {product.name}
+                        {units.map(unit => (
+                          <SelectItem key={unit} value={unit}>
+                            {unit}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <div className="w-24 flex">
-                      <Input
-                        type="number"
-                        value={semiFinishedQuantity}
-                        onChange={e => setSemiFinishedQuantity(Number(e.target.value))}
-                        min={0.01}
-                        step={0.01}
-                      />
-                    </div>
-                    <Button 
-                      type="button" 
-                      onClick={handleAddSemiFinished}
-                      disabled={isLoadingSemi}
-                    >
-                      إضافة
-                    </Button>
                   </div>
-                </div>
-                
-                <div className="border-t pt-4">
-                  <Label className="mb-2 block">مستلزمات التعبئة</Label>
-                  <div className="flex gap-2 mb-4">
-                    <Select 
-                      value={selectedPackaging} 
-                      onValueChange={setSelectedPackaging}
-                      disabled={isLoadingPackaging}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="اختر مستلزم" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {packagingMaterials.map(material => (
-                          <SelectItem key={material.code} value={material.code}>
-                            {material.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="w-24 flex">
-                      <Input
-                        type="number"
-                        value={packagingQuantity}
-                        onChange={e => setPackagingQuantity(Number(e.target.value))}
-                        min={1}
-                      />
-                    </div>
-                    <Button 
-                      type="button" 
-                      onClick={handleAddPackaging}
-                      disabled={isLoadingPackaging}
-                    >
-                      إضافة
-                    </Button>
+                  <div className="grid gap-2">
+                    <Label htmlFor="quantity">الكمية</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      value={newProduct.quantity}
+                      onChange={e => setNewProduct({...newProduct, quantity: Number(e.target.value)})}
+                    />
                   </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm font-medium mb-2">
-                    المكونات المضافة
-                    {newProduct.components.length > 0 && (
-                      <span className="text-muted-foreground mr-2">
-                        (التكلفة التقديرية: {Math.round(calculateUnitCost(newProduct.components) * 100) / 100} ج.م)
-                      </span>
-                    )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="minStock">الحد الأدنى للمخزون</Label>
+                    <Input
+                      id="minStock"
+                      type="number"
+                      value={newProduct.minStock}
+                      onChange={e => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
+                    />
                   </div>
                   
-                  {newProduct.components.length > 0 ? (
-                    <div className="space-y-2">
-                      {newProduct.components.map((component, index) => (
-                        <div key={`${component.code}-${index}`} className="flex items-center justify-between p-2 border rounded-md">
-                          <div>
-                            <div className="font-medium">{component.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {component.quantity} {component.unit} | 
-                              <Badge 
-                                variant="outline" 
-                                className="ml-2"
-                              >
-                                {component.type === 'semi' ? 'نصف مصنع' : 'مستلزم تعبئة'}
-                              </Badge>
+                  <div className="border-t pt-4">
+                    <Label className="mb-2 block">المنتج النصف مصنع</Label>
+                    <div className="flex gap-2 mb-4">
+                      <Select 
+                        value={selectedSemiFinished} 
+                        onValueChange={setSelectedSemiFinished}
+                        disabled={isLoadingSemi}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="اختر منتج" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {semiFinishedProducts.map(product => (
+                            <SelectItem key={product.code} value={product.code}>
+                              {product.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="w-24 flex">
+                        <Input
+                          type="number"
+                          value={semiFinishedQuantity}
+                          onChange={e => setSemiFinishedQuantity(Number(e.target.value))}
+                          min={0.01}
+                          step={0.01}
+                        />
+                      </div>
+                      <Button 
+                        type="button" 
+                        onClick={handleAddSemiFinished}
+                        disabled={isLoadingSemi}
+                      >
+                        إضافة
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <Label className="mb-2 block">مستلزمات التعبئة</Label>
+                    <div className="flex gap-2 mb-4">
+                      <Select 
+                        value={selectedPackaging} 
+                        onValueChange={setSelectedPackaging}
+                        disabled={isLoadingPackaging}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="اختر مستلزم" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {packagingMaterials.map(material => (
+                            <SelectItem key={material.code} value={material.code}>
+                              {material.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="w-24 flex">
+                        <Input
+                          type="number"
+                          value={packagingQuantity}
+                          onChange={e => setPackagingQuantity(Number(e.target.value))}
+                          min={1}
+                        />
+                      </div>
+                      <Button 
+                        type="button" 
+                        onClick={handleAddPackaging}
+                        disabled={isLoadingPackaging}
+                      >
+                        إضافة
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm font-medium mb-2">
+                      المكونات المضافة
+                      {newProduct.components.length > 0 && (
+                        <span className="text-muted-foreground mr-2">
+                          (التكلفة التقديرية: {Math.round(calculateUnitCost(newProduct.components) * 100) / 100} ج.م)
+                        </span>
+                      )}
+                    </div>
+                    
+                    {newProduct.components.length > 0 ? (
+                      <div className="space-y-2">
+                        {newProduct.components.map((component, index) => (
+                          <div key={`${component.code}-${index}`} className="flex items-center justify-between p-2 border rounded-md">
+                            <div>
+                              <div className="font-medium">{component.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {component.quantity} {component.unit} | 
+                                <Badge 
+                                  variant="outline" 
+                                  className="ml-2"
+                                >
+                                  {component.type === 'semi' ? 'نصف مصنع' : 'مستلزم تعبئة'}
+                                </Badge>
+                              </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveComponent(index)}
+                            >
+                              <X size={16} />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveComponent(index)}
-                          >
-                            <X size={16} />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground">
-                      لم تتم إضافة مكونات بعد
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        لم تتم إضافة مكونات بعد
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  إلغاء
-                </Button>
-                <Button 
-                  onClick={handleAddProduct}
-                  disabled={createProductMutation.isPending}
-                >
-                  {createProductMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      جاري الإضافة...
-                    </>
-                  ) : (
-                    'إضافة'
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    إلغاء
+                  </Button>
+                  <Button 
+                    onClick={handleAddProduct}
+                    disabled={createProductMutation.isPending}
+                  >
+                    {createProductMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        جاري الإضافة...
+                      </>
+                    ) : (
+                      'إضافة'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
         
         <DataTableWithLoading
           columns={columns}
-          data={products}
+          data={filteredProducts}
           searchable
           searchKeys={['code', 'name']}
           actions={renderActions}

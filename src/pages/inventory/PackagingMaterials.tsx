@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTable from '@/components/ui/DataTable';
@@ -41,6 +41,9 @@ const PackagingMaterials = () => {
     minStock: 0
   });
   
+  // إضافة حالة للتصفية حسب حالة المخزون
+  const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value' | 'high-importance'>('all');
+  
   const queryClient = useQueryClient();
   
   const { data: packagingMaterials, isLoading, error } = useQuery({
@@ -68,6 +71,22 @@ const PackagingMaterials = () => {
       }));
     }
   });
+  
+  // تطبيق الفلتر على البيانات
+  const filteredMaterials = useMemo(() => {
+    if (!packagingMaterials) return [];
+    
+    switch (filterType) {
+      case 'low-stock':
+        return packagingMaterials.filter(item => item.quantity <= item.minStock * 1.2);
+      case 'high-value':
+        return [...packagingMaterials].sort((a, b) => b.totalValue - a.totalValue);
+      case 'high-importance':
+        return [...packagingMaterials].sort((a, b) => b.importance - a.importance);
+      default:
+        return packagingMaterials;
+    }
+  }, [packagingMaterials, filterType]);
   
   const addMutation = useMutation({
     mutationFn: async (newItem: any) => {
@@ -202,7 +221,34 @@ const PackagingMaterials = () => {
     { 
       key: 'quantity', 
       title: 'الكمية',
-      render: (value: number, record: any) => `${value} ${record.unit}`
+      render: (value: number, record: any) => (
+        <div className="flex items-center">
+          <div className="flex items-center gap-2 min-w-[120px]">
+            <div 
+              className={`w-3 h-3 rounded-full ${
+                value <= record.minStock ? 'bg-red-500' : 
+                value <= record.minStock * 1.5 ? 'bg-amber-500' : 
+                'bg-green-500'
+              }`} 
+            />
+            <div className="relative w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`absolute top-0 left-0 h-full rounded-full ${
+                  value <= record.minStock ? 'bg-red-500' : 
+                  value <= record.minStock * 1.5 ? 'bg-amber-500' : 
+                  'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.round((value / (record.minStock * 2)) * 100))}%` }}
+              ></div>
+            </div>
+            <span className={`font-medium ${
+              value <= record.minStock ? 'text-red-700' : 
+              value <= record.minStock * 1.5 ? 'text-amber-700' : 
+              'text-green-700'
+            }`}>{value} {record.unit}</span>
+          </div>
+        </div>
+      )
     },
     { 
       key: 'minStock', 
@@ -263,85 +309,98 @@ const PackagingMaterials = () => {
             <h1 className="text-3xl font-bold tracking-tight">مستلزمات التعبئة</h1>
             <p className="text-muted-foreground mt-1">إدارة مستلزمات التعبئة والتغليف</p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus size={18} className="mr-2" />
-                إضافة مستلزم
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>إضافة مستلزم تعبئة جديد</DialogTitle>
-                <DialogDescription>
-                  أدخل بيانات مستلزم التعبئة الجديد. سيتم إنشاء كود فريد للمستلزم تلقائيًا.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">اسم المستلزم</Label>
-                  <Input
-                    id="name"
-                    value={newMaterial.name}
-                    onChange={e => setNewMaterial({...newMaterial, name: e.target.value})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="unit">وحدة القياس</Label>
-                  <Select 
-                    value={newMaterial.unit} 
-                    onValueChange={value => setNewMaterial({...newMaterial, unit: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر وحدة القياس" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units.map(unit => (
-                        <SelectItem key={unit} value={unit}>
-                          {unit}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="price">سعر الوحدة</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    value={newMaterial.price}
-                    onChange={e => setNewMaterial({...newMaterial, price: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="quantity">الكمية</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={newMaterial.quantity}
-                    onChange={e => setNewMaterial({...newMaterial, quantity: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="minStock">الحد الأدنى للمخزون</Label>
-                  <Input
-                    id="minStock"
-                    type="number"
-                    value={newMaterial.minStock}
-                    onChange={e => setNewMaterial({...newMaterial, minStock: Number(e.target.value)})}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  إلغاء
+          <div className="flex gap-2">
+            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="تصفية المستلزمات" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المستلزمات</SelectItem>
+                <SelectItem value="low-stock">المخزون المنخفض</SelectItem>
+                <SelectItem value="high-value">الأعلى قيمة</SelectItem>
+                <SelectItem value="high-importance">الأكثر أهمية</SelectItem>
+              </SelectContent>
+            </Select>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus size={18} className="mr-2" />
+                  إضافة مستلزم
                 </Button>
-                <Button onClick={handleAddMaterial} disabled={addMutation.isPending}>
-                  {addMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>إضافة مستلزم تعبئة جديد</DialogTitle>
+                  <DialogDescription>
+                    أدخل بيانات مستلزم التعبئة الجديد. سيتم إنشاء كود فريد للمستلزم تلقائيًا.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">اسم المستلزم</Label>
+                    <Input
+                      id="name"
+                      value={newMaterial.name}
+                      onChange={e => setNewMaterial({...newMaterial, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="unit">وحدة القياس</Label>
+                    <Select 
+                      value={newMaterial.unit} 
+                      onValueChange={value => setNewMaterial({...newMaterial, unit: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر وحدة القياس" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {units.map(unit => (
+                          <SelectItem key={unit} value={unit}>
+                            {unit}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="price">سعر الوحدة</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      value={newMaterial.price}
+                      onChange={e => setNewMaterial({...newMaterial, price: Number(e.target.value)})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="quantity">الكمية</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      value={newMaterial.quantity}
+                      onChange={e => setNewMaterial({...newMaterial, quantity: Number(e.target.value)})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="minStock">الحد الأدنى للمخزون</Label>
+                    <Input
+                      id="minStock"
+                      type="number"
+                      value={newMaterial.minStock}
+                      onChange={e => setNewMaterial({...newMaterial, minStock: Number(e.target.value)})}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    إلغاء
+                  </Button>
+                  <Button onClick={handleAddMaterial} disabled={addMutation.isPending}>
+                    {addMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
         
         {isLoading ? (
@@ -355,7 +414,7 @@ const PackagingMaterials = () => {
         ) : (
           <DataTable
             columns={columns}
-            data={packagingMaterials || []}
+            data={filteredMaterials || []}
             searchable
             searchKeys={['code', 'name']}
             actions={renderActions}

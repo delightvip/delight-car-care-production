@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -227,7 +227,34 @@ const SemiFinishedProducts = () => {
     { 
       key: 'quantity', 
       title: 'الكمية',
-      render: (value: number, record: any) => `${value} ${record.unit}`
+      render: (value: number, record: any) => (
+        <div className="flex items-center">
+          <div className="flex items-center gap-2 min-w-[120px]">
+            <div 
+              className={`w-3 h-3 rounded-full ${
+                value <= record.minStock ? 'bg-red-500' : 
+                value <= record.minStock * 1.5 ? 'bg-amber-500' : 
+                'bg-green-500'
+              }`} 
+            />
+            <div className="relative w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`absolute top-0 left-0 h-full rounded-full ${
+                  value <= record.minStock ? 'bg-red-500' : 
+                  value <= record.minStock * 1.5 ? 'bg-amber-500' : 
+                  'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.round((value / (record.minStock * 2)) * 100))}%` }}
+              ></div>
+            </div>
+            <span className={`font-medium ${
+              value <= record.minStock ? 'text-red-700' : 
+              value <= record.minStock * 1.5 ? 'text-amber-700' : 
+              'text-green-700'
+            }`}>{value} {record.unit}</span>
+          </div>
+        </div>
+      )
     },
     { 
       key: 'unitCost', 
