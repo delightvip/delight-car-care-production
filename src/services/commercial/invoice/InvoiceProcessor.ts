@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
@@ -141,22 +142,22 @@ export class InvoiceProcessor {
     switch (itemType) {
       case 'raw_materials':
         return await this.inventoryService.updateRawMaterial(itemId, { 
-          quantity: item => item.quantity - quantity 
+          quantity: (item: any) => item.quantity - quantity 
         });
       
       case 'packaging_materials':
         return await this.inventoryService.updatePackagingMaterial(itemId, { 
-          quantity: item => item.quantity - quantity 
+          quantity: (item: any) => item.quantity - quantity 
         });
       
       case 'semi_finished_products':
         return await this.inventoryService.updateSemiFinishedProduct(itemId, { 
-          quantity: item => item.quantity - quantity 
+          quantity: (item: any) => item.quantity - quantity 
         });
       
       case 'finished_products':
         return await this.inventoryService.updateFinishedProduct(itemId, { 
-          quantity: item => item.quantity - quantity 
+          quantity: (item: any) => item.quantity - quantity 
         });
       
       default:
@@ -185,30 +186,35 @@ export class InvoiceProcessor {
     itemId: number, 
     quantity: number
   ): Promise<boolean> {
-    switch (itemType) {
-      case 'raw_materials':
-        return await this.inventoryService.updateRawMaterial(itemId, { 
-          quantity: item => item.quantity + quantity 
-        });
-      
-      case 'packaging_materials':
-        return await this.inventoryService.updatePackagingMaterial(itemId, { 
-          quantity: item => item.quantity + quantity 
-        });
-      
-      case 'semi_finished_products':
-        return await this.inventoryService.updateSemiFinishedProduct(itemId, { 
-          quantity: item => item.quantity + quantity 
-        });
-      
-      case 'finished_products':
-        return await this.inventoryService.updateFinishedProduct(itemId, { 
-          quantity: item => item.quantity + quantity 
-        });
-      
-      default:
-        console.warn(`Unknown item type: ${itemType}`);
-        return false;
+    try {
+      switch (itemType) {
+        case 'raw_materials':
+          return await this.inventoryService.updateRawMaterial(itemId, { 
+            quantity: (item: any) => item.quantity + quantity 
+          });
+        
+        case 'packaging_materials':
+          return await this.inventoryService.updatePackagingMaterial(itemId, { 
+            quantity: (item: any) => item.quantity + quantity 
+          });
+        
+        case 'semi_finished_products':
+          return await this.inventoryService.updateSemiFinishedProduct(itemId, { 
+            quantity: (item: any) => item.quantity + quantity 
+          });
+        
+        case 'finished_products':
+          return await this.inventoryService.updateFinishedProduct(itemId, { 
+            quantity: (item: any) => item.quantity + quantity 
+          });
+        
+        default:
+          console.warn(`Unknown item type: ${itemType}`);
+          return false;
+      }
+    } catch (error) {
+      console.error(`Error updating quantity for ${itemType} with ID ${itemId}:`, error);
+      return false;
     }
   }
   

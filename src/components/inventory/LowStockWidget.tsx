@@ -98,7 +98,7 @@ export const LowStockWidget: React.FC<LowStockWidgetProps> = ({ limit = 5 }) => 
             <TableHeader>
               <TableRow>
                 <TableHead>الصنف</TableHead>
-                <TableHead className="text-center">الكمية</TableHead>
+                <TableHead className="text-center">الكمية الحالية</TableHead>
                 <TableHead className="text-center">الحد الأدنى</TableHead>
                 <TableHead className="text-center">الحالة</TableHead>
               </TableRow>

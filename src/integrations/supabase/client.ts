@@ -55,7 +55,7 @@ export const lowStockQueries = {
       .from('raw_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
       .gt('min_stock', 0) // لديها حد أدنى محدد
-      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
+      .lte('quantity', supabase.sql(`min_stock`));
   },
   
   semiFinishedProducts() {
@@ -63,7 +63,7 @@ export const lowStockQueries = {
       .from('semi_finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
       .gt('min_stock', 0)
-      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
+      .lte('quantity', supabase.sql(`min_stock`));
   },
   
   packagingMaterials() {
@@ -71,7 +71,7 @@ export const lowStockQueries = {
       .from('packaging_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
       .gt('min_stock', 0)
-      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
+      .lte('quantity', supabase.sql(`min_stock`));
   },
   
   finishedProducts() {
@@ -79,6 +79,6 @@ export const lowStockQueries = {
       .from('finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
       .gt('min_stock', 0)
-      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
+      .lte('quantity', supabase.sql(`min_stock`));
   }
 };
