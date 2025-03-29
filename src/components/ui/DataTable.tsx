@@ -1,13 +1,13 @@
-
 import React, { useState } from 'react';
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search } from 'lucide-react';
+import { Search, ArrowDown, ArrowUp } from 'lucide-react';
 
 interface Column {
   key: string;
   title: string;
   render?: (value: any, record: any) => React.ReactNode;
+  sortable?: boolean;
 }
 
 interface DataTableProps {
@@ -20,6 +20,8 @@ interface DataTableProps {
   actions?: (record: any) => React.ReactNode;
   searchPlaceholder?: string;
   noDataMessage?: string;
+  onSort?: (key: string) => void;
+  sortConfig?: { key: string; direction: 'asc' | 'desc' } | null;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -31,7 +33,9 @@ const DataTable: React.FC<DataTableProps> = ({
   itemsPerPage = 10,
   actions,
   searchPlaceholder = "بحث...",
-  noDataMessage = "لا توجد بيانات للعرض"
+  noDataMessage = "لا توجد بيانات للعرض",
+  onSort,
+  sortConfig,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,7 +79,21 @@ const DataTable: React.FC<DataTableProps> = ({
             <TableRow>
               {columns.map((column) => (
                 <TableHead key={column.key} className="bg-muted">
-                  {column.title}
+                  <div className="flex items-center">
+                    {column.title}
+                    {column.sortable && (
+                      <div className="ml-1 flex flex-col">
+                        <ArrowUp
+                          onClick={() => onSort?.(column.key)}
+                          className={`h-4 w-4 cursor-pointer ${sortConfig?.key === column.key && sortConfig?.direction === 'asc' ? 'text-primary' : 'text-muted-foreground'}`}
+                        />
+                        <ArrowDown
+                          onClick={() => onSort?.(column.key)}
+                          className={`h-4 w-4 cursor-pointer ${sortConfig?.key === column.key && sortConfig?.direction === 'desc' ? 'text-primary' : 'text-muted-foreground'}`}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </TableHead>
               ))}
               {actions && <TableHead className="bg-muted">الإجراءات</TableHead>}
