@@ -138,9 +138,11 @@ export const LowStockWidget: React.FC<LowStockWidgetProps> = ({ limit = 5 }) => 
                         <Progress 
                           value={percentage} 
                           className="h-2"
-                          indicatorClassName={percentage <= 30 ? "bg-red-600" : 
-                                            percentage <= 60 ? "bg-amber-600" : 
-                                            "bg-green-600"}
+                          indicatorClassName={
+                            percentage <= 30 ? "bg-red-600" : 
+                            percentage <= 60 ? "bg-amber-600" : 
+                            "bg-green-600"
+                          }
                         />
                       </div>
                     </TableCell>

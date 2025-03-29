@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
@@ -141,23 +140,23 @@ export class InvoiceProcessor {
     
     switch (itemType) {
       case 'raw_materials':
-        return this.inventoryService.updateRawMaterial(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) - quantity 
+        return await this.inventoryService.updateRawMaterial(itemId, { 
+          quantity: item => item.quantity - quantity 
         });
       
       case 'packaging_materials':
-        return this.inventoryService.updatePackagingMaterial(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) - quantity 
+        return await this.inventoryService.updatePackagingMaterial(itemId, { 
+          quantity: item => item.quantity - quantity 
         });
       
       case 'semi_finished_products':
-        return this.inventoryService.updateSemiFinishedProduct(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) - quantity 
+        return await this.inventoryService.updateSemiFinishedProduct(itemId, { 
+          quantity: item => item.quantity - quantity 
         });
       
       case 'finished_products':
-        return this.inventoryService.updateFinishedProduct(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) - quantity 
+        return await this.inventoryService.updateFinishedProduct(itemId, { 
+          quantity: item => item.quantity - quantity 
         });
       
       default:
@@ -188,23 +187,23 @@ export class InvoiceProcessor {
   ): Promise<boolean> {
     switch (itemType) {
       case 'raw_materials':
-        return this.inventoryService.updateRawMaterial(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) + quantity 
+        return await this.inventoryService.updateRawMaterial(itemId, { 
+          quantity: item => item.quantity + quantity 
         });
       
       case 'packaging_materials':
-        return this.inventoryService.updatePackagingMaterial(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) + quantity 
+        return await this.inventoryService.updatePackagingMaterial(itemId, { 
+          quantity: item => item.quantity + quantity 
         });
       
       case 'semi_finished_products':
-        return this.inventoryService.updateSemiFinishedProduct(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) + quantity 
+        return await this.inventoryService.updateSemiFinishedProduct(itemId, { 
+          quantity: item => item.quantity + quantity 
         });
       
       case 'finished_products':
-        return this.inventoryService.updateFinishedProduct(itemId, { 
-          quantity: supabase.rpc('coalesce_numeric', { col: 'quantity' }) + quantity 
+        return await this.inventoryService.updateFinishedProduct(itemId, { 
+          quantity: item => item.quantity + quantity 
         });
       
       default:
@@ -276,9 +275,9 @@ export class InvoiceProcessor {
         await this.partyService.updatePartyBalance(
           invoice.party_id,
           invoice.total_amount,
-          isCredit, // sale => دائن (عكس)، purchase => مدين (عكس)
-          isCredit ? 'إلغاء فاتورة مبيعات' : 'إلغاء فاتورة مشتريات',
-          isCredit ? 'cancel_invoice_sale' : 'cancel_invoice_purchase',
+          isCredit, // purchase => استلام دفعة (دائن)، sale => تسديد دفعة (مدين)
+          isCredit ? 'إلغاء فاتورة مشتريات' : 'إلغاء فاتورة مبيعات',
+          isCredit ? 'cancel_invoice_purchase' : 'cancel_invoice_sale',
           invoiceId
         );
         

@@ -6,17 +6,33 @@ export async function fetchLowStockItems() {
   try {
     console.log("Fetching low stock items...");
     
-    // فحص المواد الأولية ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
-    const rawMaterialsResponse = await lowStockQueries.rawMaterials();
+    // فحص المواد الأولية ذات المخزون المنخفض
+    const rawMaterialsResponse = await supabase
+      .from('raw_materials')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
+      .gt('min_stock', 0) // فقط العناصر التي لها حد أدنى محدد
+      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
     
-    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
-    const semiFinishedResponse = await lowStockQueries.semiFinishedProducts();
+    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض
+    const semiFinishedResponse = await supabase
+      .from('semi_finished_products')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .gt('min_stock', 0)
+      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
     
-    // فحص مستلزمات التعبئة ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
-    const packagingResponse = await lowStockQueries.packagingMaterials();
+    // فحص مستلزمات التعبئة ذات المخزون المنخفض
+    const packagingResponse = await supabase
+      .from('packaging_materials')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
+      .gt('min_stock', 0)
+      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
     
-    // فحص المنتجات النهائية ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
-    const finishedResponse = await lowStockQueries.finishedProducts();
+    // فحص المنتجات النهائية ذات المخزون المنخفض
+    const finishedResponse = await supabase
+      .from('finished_products')
+      .select('id, name, quantity, min_stock, code, unit, unit_cost')
+      .gt('min_stock', 0)
+      .lte('quantity', supabase.rpc('coalesce_numeric', { col: 'min_stock' }) as any);
     
     // تحقق من الأخطاء
     if (rawMaterialsResponse.error) {
