@@ -6,16 +6,16 @@ export async function fetchLowStockItems() {
   try {
     console.log("Fetching low stock items...");
     
-    // فحص المواد الأولية ذات المخزون المنخفض - using helper function
+    // فحص المواد الأولية ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
     const rawMaterialsResponse = await lowStockQueries.rawMaterials();
     
-    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - using helper function
+    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
     const semiFinishedResponse = await lowStockQueries.semiFinishedProducts();
     
-    // فحص مستلزمات التعبئة ذات المخزون المنخفض - using helper function
+    // فحص مستلزمات التعبئة ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
     const packagingResponse = await lowStockQueries.packagingMaterials();
     
-    // فحص المنتجات النهائية ذات المخزون المنخفض - using helper function
+    // فحص المنتجات النهائية ذات المخزون المنخفض - استخدام lowStockQueries المحسنة
     const finishedResponse = await lowStockQueries.finishedProducts();
     
     // تحقق من الأخطاء
@@ -101,4 +101,19 @@ export function getItemTypeBgColor(type: string) {
   };
   
   return colors[type as keyof typeof colors] || colors.default;
+}
+
+// حساب نسبة المخزون المنخفض
+export function calculateStockPercentage(currentStock: number, minStock: number) {
+  if (minStock <= 0) return 100; // لتجنب القسمة على صفر
+  
+  const percentage = (currentStock / minStock) * 100;
+  return Math.min(Math.max(0, percentage), 100); // تقييد النسبة بين 0 و 100
+}
+
+// الحصول على حالة المخزون بناءً على النسبة
+export function getStockStatus(percentage: number) {
+  if (percentage <= 30) return { label: 'حرج', color: 'bg-red-100 text-red-800' };
+  if (percentage <= 60) return { label: 'منخفض', color: 'bg-amber-100 text-amber-800' };
+  return { label: 'مقبول', color: 'bg-green-100 text-green-800' };
 }
