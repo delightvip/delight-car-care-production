@@ -2,14 +2,20 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
+interface ChartData {
+  name: string;
+  value: number;
+  percentage: string;
+}
+
 interface UsageChartContentProps {
-  chartData: any[];
+  chartData: ChartData[];
 }
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b', '#10b981', '#6366f1', '#84cc16'];
 
 const UsageChartContent: React.FC<UsageChartContentProps> = ({ chartData }) => {
-  if (chartData.length === 0) {
+  if (!chartData || chartData.length === 0) {
     return (
       <div className="text-center text-muted-foreground h-full flex flex-col justify-center items-center">
         <p>لا توجد بيانات عن استهلاك هذا الصنف خلال الفترة المحددة</p>
@@ -48,7 +54,10 @@ const UsageChartContent: React.FC<UsageChartContentProps> = ({ chartData }) => {
           ))}
         </Pie>
         <Tooltip 
-          formatter={(value, name, props) => [`${value} (${props.payload.percentage}%)`, name]}
+          formatter={(value, name, props) => {
+            const payload = props.payload;
+            return [`${value} (${payload ? payload.percentage : '0%'})`, name];
+          }}
           contentStyle={{ direction: 'rtl', textAlign: 'right' }}
         />
         <Legend 

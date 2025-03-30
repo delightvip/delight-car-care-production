@@ -1,7 +1,7 @@
 
 import React from 'react';
 import {
-  BarChart,
+  ComposedChart,
   Bar,
   XAxis,
   YAxis,
@@ -9,17 +9,24 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Line,
-  ComposedChart
+  Line
 } from 'recharts';
 
+interface ChartDataItem {
+  period: string;
+  periodFormatted: string;
+  in: number;
+  out: number;
+  balance: number;
+}
+
 interface MovementChartContentProps {
-  chartData: any[];
+  chartData: ChartDataItem[];
   itemUnit: string;
 }
 
 const MovementChartContent: React.FC<MovementChartContentProps> = ({ chartData, itemUnit }) => {
-  if (chartData.length === 0) {
+  if (!chartData || chartData.length === 0) {
     return (
       <div className="flex flex-col h-full justify-center items-center">
         <div className="text-lg font-medium">بيانات الرسم البياني</div>

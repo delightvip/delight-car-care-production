@@ -1,28 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { FileDown, BarChart3, PieChart, ActivitySquare, Download, Calendar } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Download } from 'lucide-react';
+import ReportFilterCard from '@/components/inventory/reports/ReportFilterCard';
+import ReportInfoCard from '@/components/inventory/reports/ReportInfoCard';
+import ReportContent from '@/components/inventory/reports/ReportContent';
 
-type ItemType = 'raw' | 'semi' | 'packaging' | 'finished';
-
-interface ItemCategory {
+export interface ItemCategory {
   id: string;
   name: string;
-  type: ItemType;
+  type: 'raw' | 'semi' | 'packaging' | 'finished';
   itemCount: number;
 }
 
-interface InventoryItem {
+export interface InventoryItem {
   id: string;
   code: string;
   name: string;
@@ -63,7 +59,7 @@ const InventoryReports = () => {
         result.push({
           id: type.id,
           name: type.name,
-          type: type.id as ItemType,
+          type: type.id as ItemCategory['type'],
           itemCount: count || 0
         });
       }
@@ -143,96 +139,6 @@ const InventoryReports = () => {
       toast.success("تم تحضير التقرير بنجاح، جاري التنزيل");
     }, 1500);
   };
-
-  const renderReport = () => {
-    if (!selectedItem || !selectedCategory) {
-      return (
-        <div className="p-8 text-center text-muted-foreground">
-          يرجى اختيار صنف للعرض
-        </div>
-      );
-    }
-    
-    if (isLoadingItemDetails) {
-      return (
-        <div className="p-8 space-y-4">
-          <Skeleton className="h-[300px] w-full" />
-        </div>
-      );
-    }
-    
-    const InventoryMovementChart = React.lazy(() => import('@/components/inventory/reports/InventoryMovementChart'));
-    const InventoryUsageChart = React.lazy(() => import('@/components/inventory/reports/InventoryUsageChart'));
-    const InventorySummaryStats = React.lazy(() => import('@/components/inventory/reports/InventorySummaryStats'));
-    
-    return (
-      <React.Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
-        <div className="space-y-6">
-          <InventorySummaryStats 
-            itemId={selectedItem} 
-            itemType={selectedCategory} 
-          />
-          
-          <Tabs defaultValue={reportType} value={reportType} onValueChange={setReportType} className="w-full">
-            <div className="flex justify-between items-center mb-4">
-              <TabsList className="grid grid-cols-2 w-[400px]">
-                <TabsTrigger value="movement" className="flex items-center gap-2">
-                  <ActivitySquare size={16} />
-                  <span>حركة المخزون</span>
-                </TabsTrigger>
-                <TabsTrigger value="usage" className="flex items-center gap-2">
-                  <PieChart size={16} />
-                  <span>توزيع الاستهلاك</span>
-                </TabsTrigger>
-              </TabsList>
-              
-              <div className="flex items-center gap-2">
-                <Calendar size={16} className="text-muted-foreground" />
-                <Select value={timeRange} onValueChange={setTimeRange}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="اختر الفترة الزمنية" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="week">أسبوع</SelectItem>
-                    <SelectItem value="month">شهر</SelectItem>
-                    <SelectItem value="quarter">ربع سنوي</SelectItem>
-                    <SelectItem value="year">سنوي</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <Card className="border-border/40">
-              <CardContent className="p-4">
-                <TabsContent value="movement" className="mt-0">
-                  <div className="h-[400px]">
-                    <InventoryMovementChart 
-                      itemId={selectedItem} 
-                      itemType={selectedCategory} 
-                      timeRange={timeRange} 
-                      itemName={selectedItemDetails?.name || ''} 
-                      itemUnit={selectedItemDetails?.unit || ''}
-                    />
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="usage" className="mt-0">
-                  <div className="h-[400px]">
-                    <InventoryUsageChart 
-                      itemId={selectedItem} 
-                      itemType={selectedCategory} 
-                      timeRange={timeRange} 
-                      itemName={selectedItemDetails?.name || ''}
-                    />
-                  </div>
-                </TabsContent>
-              </CardContent>
-            </Card>
-          </Tabs>
-        </div>
-      </React.Suspense>
-    );
-  };
   
   return (
     <PageTransition>
@@ -253,102 +159,35 @@ const InventoryReports = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-border/40 bg-card/60 backdrop-blur-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">نوع الصنف</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select 
-                value={selectedCategory} 
-                onValueChange={setSelectedCategory}
-                disabled={isItemReport}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر نوع المخزون" />
-                </SelectTrigger>
-                <SelectContent>
-                  {isLoadingCategories ? (
-                    <div className="p-2">
-                      <Skeleton className="h-8 w-full" />
-                    </div>
-                  ) : (
-                    categories?.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name} ({category.itemCount})
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
+          <ReportFilterCard
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            selectedItem={selectedItem}
+            setSelectedItem={setSelectedItem}
+            categories={categories}
+            items={items}
+            isLoadingCategories={isLoadingCategories}
+            isLoadingItems={isLoadingItems}
+            isItemReport={isItemReport}
+          />
           
-          <Card className="border-border/40 bg-card/60 backdrop-blur-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">الصنف</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select 
-                value={selectedItem || ''} 
-                onValueChange={setSelectedItem}
-                disabled={isItemReport}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر الصنف" />
-                </SelectTrigger>
-                <SelectContent>
-                  {isLoadingItems ? (
-                    <div className="p-2">
-                      <Skeleton className="h-8 w-full" />
-                    </div>
-                  ) : items?.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      لا توجد أصناف
-                    </SelectItem>
-                  ) : (
-                    items?.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} ({item.code})
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-          
-          <Card className="border-border/40 bg-card/60 backdrop-blur-sm col-span-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">معلومات التقرير</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-between items-center">
-                {selectedItemDetails ? (
-                  <div>
-                    <p className="font-medium">{selectedItemDetails.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      كود: {selectedItemDetails.code} | الوحدة: {selectedItemDetails.unit}
-                    </p>
-                  </div>
-                ) : (
-                  <Skeleton className="h-10 w-[200px]" />
-                )}
-                
-                <div className="flex gap-4 items-center">
-                  <div className="text-sm text-right">
-                    <span className="block font-medium">آخر تحديث:</span>
-                    <span className="block text-muted-foreground">
-                      {new Date().toLocaleDateString('ar-EG')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ReportInfoCard
+            selectedItemDetails={selectedItemDetails}
+            isLoadingItemDetails={isLoadingItemDetails}
+          />
         </div>
         
         <div className="bg-muted/30 rounded-lg p-6 border border-border/40 shadow-sm">
-          {renderReport()}
+          <ReportContent
+            selectedItem={selectedItem}
+            selectedCategory={selectedCategory}
+            isLoadingItemDetails={isLoadingItemDetails}
+            selectedItemDetails={selectedItemDetails}
+            reportType={reportType}
+            setReportType={setReportType}
+            timeRange={timeRange}
+            setTimeRange={setTimeRange}
+          />
         </div>
       </div>
     </PageTransition>
