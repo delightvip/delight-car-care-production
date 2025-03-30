@@ -1,81 +1,73 @@
 
 import React from 'react';
-import DataTable from './DataTable';
-import { Skeleton } from './skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
+import DataTable from '@/components/ui/data-table';
+import { Column } from '@/components/ui/data-table/types';
 
-export interface DataTableWithLoadingProps {
-  columns: {
-    key: string;
-    title: string;
-    render?: (value: any, record: any) => any;
-    sortable?: boolean;
-    width?: string;
-    minWidth?: string;
-  }[];
+interface DataTableWithLoadingProps {
+  isLoading: boolean;
+  columns: Column[];
   data: any[];
   searchable?: boolean;
   searchKeys?: string[];
+  pagination?: boolean;
+  itemsPerPage?: number;
   actions?: (record: any) => React.ReactNode;
-  isLoading?: boolean;
   searchPlaceholder?: string;
   noDataMessage?: string;
   onSort?: (key: string) => void;
   sortConfig?: { key: string; direction: 'asc' | 'desc' } | null;
-  className?: string;
   stickyHeader?: boolean;
+  containerClassName?: string;
+  className?: string;
 }
 
-const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({ 
-  columns, 
-  data, 
-  searchable = true, 
-  searchKeys, 
+export function DataTableWithLoading({
+  isLoading,
+  columns,
+  data,
+  searchable = true,
+  searchKeys = [],
+  pagination = true,
+  itemsPerPage = 10,
   actions,
-  isLoading = false,
-  searchPlaceholder = "بحث...",
-  noDataMessage = "لا توجد بيانات لعرضها.",
+  searchPlaceholder,
+  noDataMessage,
   onSort,
   sortConfig,
-  className = "",
-  stickyHeader = true
-}) => {
-  // تحسين: إضافة خاصية stickyHeader للتحكم بثبات الرأس
+  stickyHeader = true,
+  containerClassName,
+  className,
+}: DataTableWithLoadingProps) {
   if (isLoading) {
     return (
-      <div className={`space-y-4 ${className}`}>
-        {searchable && (
-          <div className="mb-4">
-            <Skeleton className="h-10 w-full max-w-sm" />
-          </div>
-        )}
-        <div className="rounded-md border data-table-container">
-          <div className="p-4">
-            <div className="space-y-3">
-              {Array(5).fill(0).map((_, idx) => (
-                <Skeleton key={idx} className="h-16 w-full" />
-              ))}
-            </div>
-          </div>
-        </div>
+      <div className="space-y-3">
+        {Array(5).fill(0).map((_, index) => (
+          <Skeleton 
+            key={index} 
+            className="h-12 w-full"
+          />
+        ))}
       </div>
     );
   }
 
   return (
-    <DataTable 
-      columns={columns} 
-      data={data || []} 
-      searchable={searchable} 
-      searchKeys={searchKeys} 
-      actions={actions} 
+    <DataTable
+      columns={columns}
+      data={data}
+      searchable={searchable}
+      searchKeys={searchKeys}
+      pagination={pagination}
+      itemsPerPage={itemsPerPage}
+      actions={actions}
       searchPlaceholder={searchPlaceholder}
       noDataMessage={noDataMessage}
       onSort={onSort}
       sortConfig={sortConfig}
-      className={className}
       stickyHeader={stickyHeader}
+      containerClassName={containerClassName}
+      className={className}
     />
   );
-};
-
-export default DataTableWithLoading;
+}

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
-import DataTable from '@/components/ui/DataTable';
+import DataTable from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -688,7 +688,7 @@ const RawMaterials = () => {
             {currentMaterial && (
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-code">الكود</Label>
+                  <Label htmlFor="edit-code">��لكود</Label>
                   <Input
                     id="edit-code"
                     value={currentMaterial.code}
@@ -718,7 +718,6 @@ const RawMaterials = () => {
                           {unit}
                         </SelectItem>
                       ))}
-
                     </SelectContent>
                   </Select>
                 </div>
