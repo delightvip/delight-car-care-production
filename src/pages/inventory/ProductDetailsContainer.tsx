@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -24,6 +25,7 @@ const ProductDetailsContainer = () => {
   const navigate = useNavigate();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
+  // Convert string id to number
   const numericId = id ? parseInt(id, 10) : 0;
   
   const productTitle: Record<string, string> = {
@@ -45,6 +47,7 @@ const ProductDetailsContainer = () => {
   const { data: product, isLoading, error, refetch } = useQuery({
     queryKey: ['product', tableName, id],
     queryFn: async () => {
+      // Use type assertion with "as any" for dynamic table selection
       const { data, error } = await supabase
         .from(tableName as any)
         .select('*')
@@ -72,10 +75,12 @@ const ProductDetailsContainer = () => {
     enabled: !!id && !!tableName
   });
   
+  // Fetch related products based on product type
   const { data: relatedProducts } = useQuery({
     queryKey: ['related-products', tableName, id],
     queryFn: async () => {
       if (tableName === 'raw_materials') {
+        // Find semi-finished products that use this raw material
         const { data: semiFinished, error: semiError } = await supabase
           .from('semi_finished_ingredients')
           .select('semi_finished_id, percentage, semi_finished_products(name)')
@@ -83,13 +88,7 @@ const ProductDetailsContainer = () => {
         
         if (semiError) throw semiError;
         
-        const typedSemiFinished = semiFinished as unknown as Array<{
-          semi_finished_id: number;
-          percentage: number;
-          semi_finished_products: { name: string };
-        }>;
-        
-        return typedSemiFinished.map(item => ({
+        return semiFinished.map(item => ({
           id: item.semi_finished_id,
           name: item.semi_finished_products?.name || 'منتج غير معروف',
           type: 'semi_finished_products',
@@ -97,6 +96,7 @@ const ProductDetailsContainer = () => {
         }));
       } 
       else if (tableName === 'packaging_materials') {
+        // Find finished products that use this packaging material
         const { data: finished, error: finishedError } = await supabase
           .from('finished_product_packaging')
           .select('finished_product_id, quantity, finished_products(name)')
@@ -104,13 +104,7 @@ const ProductDetailsContainer = () => {
         
         if (finishedError) throw finishedError;
         
-        const typedFinished = finished as unknown as Array<{
-          finished_product_id: number;
-          quantity: number;
-          finished_products: { name: string };
-        }>;
-        
-        return typedFinished.map(item => ({
+        return finished.map(item => ({
           id: item.finished_product_id,
           name: item.finished_products?.name || 'منتج غير معروف',
           type: 'finished_products',
@@ -118,6 +112,7 @@ const ProductDetailsContainer = () => {
         }));
       }
       else if (tableName === 'semi_finished_products') {
+        // Get raw materials that are ingredients of this semi-finished product
         const { data: ingredients, error: ingredientsError } = await supabase
           .from('semi_finished_ingredients')
           .select('raw_material_id, percentage, raw_materials(name)')
@@ -125,13 +120,7 @@ const ProductDetailsContainer = () => {
         
         if (ingredientsError) throw ingredientsError;
         
-        const typedIngredients = ingredients as unknown as Array<{
-          raw_material_id: number;
-          percentage: number;
-          raw_materials: { name: string };
-        }>;
-        
-        return typedIngredients.map(item => ({
+        return ingredients.map(item => ({
           id: item.raw_material_id,
           name: item.raw_materials?.name || 'مادة غير معروفة',
           type: 'raw_materials',
@@ -139,6 +128,7 @@ const ProductDetailsContainer = () => {
         }));
       }
       else if (tableName === 'finished_products') {
+        // Get semi-finished product and packaging materials used in this product
         const { data: semi, error: semiError } = await supabase
           .from('finished_products')
           .select('semi_finished_id, semi_finished_quantity, semi_finished_products(name)')
@@ -154,31 +144,19 @@ const ProductDetailsContainer = () => {
         
         if (packagingError) throw packagingError;
         
-        const typedSemi = semi as unknown as {
-          semi_finished_id: number;
-          semi_finished_quantity: number;
-          semi_finished_products: { name: string };
-        };
-        
-        const typedPackaging = packaging as unknown as Array<{
-          packaging_material_id: number;
-          quantity: number;
-          packaging_materials: { name: string };
-        }>;
-        
         const result = [];
         
-        if (typedSemi && typedSemi.semi_finished_id) {
+        if (semi && semi.semi_finished_id) {
           result.push({
-            id: typedSemi.semi_finished_id,
-            name: typedSemi.semi_finished_products?.name || 'منتج نصف مصنع غير معروف',
+            id: semi.semi_finished_id,
+            name: semi.semi_finished_products?.name || 'منتج نصف مصنع غير معروف',
             type: 'semi_finished_products',
-            quantity: typedSemi.semi_finished_quantity
+            quantity: semi.semi_finished_quantity
           });
         }
         
-        if (typedPackaging && typedPackaging.length > 0) {
-          typedPackaging.forEach(item => {
+        if (packaging && packaging.length > 0) {
+          packaging.forEach(item => {
             result.push({
               id: item.packaging_material_id,
               name: item.packaging_materials?.name || 'مادة تغليف غير معروفة',
@@ -199,6 +177,7 @@ const ProductDetailsContainer = () => {
   const { data: usageStats } = useQuery({
     queryKey: ['product-usage', tableName, id],
     queryFn: async () => {
+      // Get inventory movement history aggregated by month
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       
@@ -212,6 +191,7 @@ const ProductDetailsContainer = () => {
       
       if (error) throw error;
       
+      // Group data by month
       const monthMap = new Map();
       const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
       
@@ -225,6 +205,7 @@ const ProductDetailsContainer = () => {
         
         const entry = monthMap.get(monthName);
         
+        // Add to usage only if it's outgoing movement ('out')
         if (movement.movement_type === 'out') {
           entry.amount += Math.abs(Number(movement.quantity));
         }
@@ -280,6 +261,8 @@ const ProductDetailsContainer = () => {
     );
   }
   
+  // Type assertion to ensure the product has the properties we need
+  // Here we safely cast to the interface we need
   interface ProductType {
     id: number;
     name: string;
@@ -291,6 +274,7 @@ const ProductDetailsContainer = () => {
     unit: string;
   }
   
+  // Use safe type assertion with a runtime check for required properties
   const hasRequiredProperties = (obj: any): obj is ProductType => {
     return obj && 
       typeof obj.id === 'number' && 

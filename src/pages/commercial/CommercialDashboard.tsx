@@ -64,20 +64,14 @@ const CommercialDashboard = () => {
         
         if (error) throw error;
         
-        // Properly type the query result
-        const typedData = data as unknown as Array<{
-          balance: number;
-          parties: { id: string; name: string; type: string; };
-        }>;
-        
-        return typedData
+        return data
           .filter(item => item.parties.type === 'customer')
           .map(item => ({
             id: item.parties.id,
             name: item.parties.name,
             type: item.parties.type,
             balance: Math.abs(item.balance)
-          })) as Party[];
+          }));
       } catch (error) {
         console.error('Error fetching top customers:', error);
         return [];
@@ -107,18 +101,7 @@ const CommercialDashboard = () => {
         
         if (error) throw error;
         
-        // Properly type the query result
-        const typedData = data as unknown as Array<{
-          id: string;
-          invoice_type: string;
-          party_id: string;
-          parties: { name: string };
-          date: string;
-          total_amount: number;
-          status: string;
-        }>;
-        
-        return typedData.map(invoice => ({
+        return data.map(invoice => ({
           id: invoice.id,
           invoice_type: invoice.invoice_type,
           party_id: invoice.party_id,
@@ -126,7 +109,7 @@ const CommercialDashboard = () => {
           date: invoice.date,
           total_amount: invoice.total_amount,
           status: invoice.status
-        })) as Invoice[];
+        }));
       } catch (error) {
         console.error('Error fetching recent invoices:', error);
         return [];
@@ -155,24 +138,14 @@ const CommercialDashboard = () => {
         
         if (error) throw error;
         
-        // Properly type the query result
-        const typedData = data as unknown as Array<{
-          id: string;
-          payment_type: string;
-          party_id: string;
-          parties: { name: string };
-          date: string;
-          amount: number;
-        }>;
-        
-        return typedData.map(payment => ({
+        return data.map(payment => ({
           id: payment.id,
-          payment_type: payment.payment_type as 'collection' | 'disbursement',
+          payment_type: payment.payment_type,
           party_id: payment.party_id,
           party_name: payment.parties.name,
           date: payment.date,
           amount: payment.amount
-        })) as Payment[];
+        }));
       } catch (error) {
         console.error('Error fetching recent payments:', error);
         return [];
@@ -205,23 +178,14 @@ const CommercialDashboard = () => {
         
         if (error) throw error;
         
-        const typedData = data as unknown as Array<{
-          id: string;
-          invoice_type: string;
-          party_id: string;
-          parties: { name: string };
-          date: string;
-          total_amount: number;
-        }>;
-        
-        return typedData.map(invoice => ({
+        return data.map(invoice => ({
           id: invoice.id,
           invoice_type: invoice.invoice_type,
           party_id: invoice.party_id,
           party_name: invoice.parties.name,
           date: invoice.date,
           total_amount: invoice.total_amount
-        })) as Invoice[];
+        }));
       } catch (error) {
         console.error('Error fetching overdue invoices:', error);
         return [];

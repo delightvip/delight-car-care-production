@@ -1,11 +1,12 @@
 
 import React from 'react';
+import TransactionForm from '@/components/financial/TransactionForm';
+import { Card, CardContent } from '@/components/ui/card';
 
 const TransactionPage: React.FC = () => {
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">المعاملات المالية</h1>
-      <p className="mt-4">صفحة المعاملات المالية - صفحة مؤقتة.</p>
+    <div className="container mx-auto">
+      <TransactionForm />
     </div>
   );
 };

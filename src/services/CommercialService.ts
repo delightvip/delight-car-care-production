@@ -9,11 +9,13 @@ import {
   LedgerEntry 
 } from "./CommercialTypes";
 
+// Import other service classes
 import InvoiceService from './commercial/invoice/InvoiceService';
 import PaymentService from './commercial/payment/PaymentService';
 import LedgerService from './commercial/ledger/LedgerService';
 import { format } from "date-fns";
 
+// ReturnService will be imported lazily to avoid circular dependencies
 let returnServiceInstance: any = null;
 
 class CommercialService {
@@ -30,9 +32,11 @@ class CommercialService {
     // Don't initialize returnService here to avoid circular dependencies
   }
   
+  // Lazy getter for returnService to avoid circular dependencies
   private async getReturnService() {
     if (!returnServiceInstance) {
       try {
+        // Import dynamically using dynamic import instead of require
         const ReturnServiceModule = await import('./commercial/return/ReturnService');
         returnServiceInstance = ReturnServiceModule.default.getInstance();
       } catch (error) {
@@ -50,6 +54,7 @@ class CommercialService {
     return CommercialService.instance;
   }
   
+  // Invoice methods
   public async getInvoices(): Promise<Invoice[]> {
     try {
       return await this.invoiceService.getInvoices();
@@ -115,7 +120,11 @@ class CommercialService {
   
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد تأكيد الفاتورة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const confirmPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.invoiceService.confirmInvoice(invoiceId);
@@ -141,7 +150,11 @@ class CommercialService {
   
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد إلغاء الفاتورة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const cancelPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.invoiceService.cancelInvoice(invoiceId);
@@ -205,6 +218,7 @@ class CommercialService {
     }
   }
   
+  // Payment methods
   public async getPayments(): Promise<Payment[]> {
     try {
       return await this.paymentService.getPayments();
@@ -221,10 +235,14 @@ class CommercialService {
   
   public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
     try {
-      const payments = await PaymentService.getInstance().getPaymentsByParty(partyId);
-      return payments as unknown as Payment[];
+      return await this.paymentService.getPaymentsByParty(partyId);
     } catch (error) {
-      console.error("Error getting payments by party:", error);
+      console.error(`Error in getPaymentsByParty(${partyId}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء جلب مدفوعات الطرف",
+        variant: "destructive"
+      });
       return [];
     }
   }
@@ -245,7 +263,11 @@ class CommercialService {
   
   public async confirmPayment(paymentId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد تأكيد الدفعة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const confirmPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.paymentService.confirmPayment(paymentId);
@@ -271,7 +293,11 @@ class CommercialService {
   
   public async cancelPayment(paymentId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد إلغاء الدفعة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const cancelPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.paymentService.cancelPayment(paymentId);
@@ -323,6 +349,7 @@ class CommercialService {
     }
   }
   
+  // Return methods
   public async getReturns(): Promise<Return[]> {
     try {
       const returnService = await this.getReturnService();
@@ -428,6 +455,7 @@ class CommercialService {
     }
   }
   
+  // Ledger methods
   public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
     try {
       return await this.ledgerService.getLedgerEntries(partyId, startDate, endDate);
@@ -457,6 +485,7 @@ class CommercialService {
   }
 }
 
+// Re-export the CommercialTypes so they can be imported from this module as well
 export type { 
   Invoice, 
   InvoiceItem, 
@@ -467,3 +496,4 @@ export type {
 };
 
 export default CommercialService;
+

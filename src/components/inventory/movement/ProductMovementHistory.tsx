@@ -24,13 +24,12 @@ const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId,
   const { data: movements, isLoading, error, refetch } = useQuery({
     queryKey: ['movements', itemType, itemId],
     queryFn: async () => {
-      // Use the rpcFunctions to get inventory movements
+      // استخدام وظيفة قاعدة البيانات الجديدة للحصول على حركات المخزون
       const { data, error } = await rpcFunctions.getInventoryMovementsByItem(itemId, itemType);
       
       if (error) throw error;
-      
-      // Explicitly type the data as InventoryMovement[]
-      return (data || []) as unknown as InventoryMovement[];
+      // تحويل البيانات صراحةً إلى نوع InventoryMovement المطلوب
+      return data as InventoryMovement[];
     }
   });
   

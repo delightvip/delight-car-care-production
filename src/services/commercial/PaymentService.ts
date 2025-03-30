@@ -1,6 +1,5 @@
-
 import BaseCommercialService from './BaseCommercialService';
-import { Payment } from '../CommercialTypes';
+import { Payment } from './CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
 import InvoiceService from './InvoiceService';
@@ -33,19 +32,16 @@ class PaymentService extends BaseCommercialService {
       
       if (error) throw error;
       
-      // Make sure to properly type the data
-      const typedData = data as any[];
-      
-      const paymentsWithParties = typedData.map(payment => ({
+      const paymentsWithParties = data.map(payment => ({
         id: payment.id,
         party_id: payment.party_id,
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type as 'collection' | 'disbursement',
-        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
+        payment_type: payment.payment_type,
+        method: payment.method,
         related_invoice_id: payment.related_invoice_id,
-        payment_status: (payment.payment_status || 'draft') as 'draft' | 'confirmed' | 'cancelled',
+        payment_status: payment.payment_status || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -71,19 +67,16 @@ class PaymentService extends BaseCommercialService {
       
       if (error) throw error;
       
-      // Make sure to properly type the data
-      const typedData = data as any[];
-      
-      const paymentsWithParties = typedData.map(payment => ({
+      const paymentsWithParties = data.map(payment => ({
         id: payment.id,
         party_id: payment.party_id,
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type as 'collection' | 'disbursement',
-        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        payment_status: (payment.payment_status || 'draft') as 'draft' | 'confirmed' | 'cancelled',
+        payment_type: payment.payment_type,
+        method: payment.method,
         related_invoice_id: payment.related_invoice_id,
+        payment_status: payment.payment_status || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -104,7 +97,7 @@ class PaymentService extends BaseCommercialService {
         paymentData.date;
         
       // Set default payment status to draft
-      const paymentStatus = paymentData.payment_status || 'draft' as 'draft' | 'confirmed' | 'cancelled';
+      const paymentStatus = paymentData.payment_status || 'draft';
       
       const { data: payment, error } = await this.supabase
         .from('payments')
@@ -134,8 +127,8 @@ class PaymentService extends BaseCommercialService {
         party_name: party?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type as 'collection' | 'disbursement',
-        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
+        payment_type: payment.payment_type,
+        method: payment.method,
         related_invoice_id: payment.related_invoice_id,
         payment_status: paymentStatus,
         notes: payment.notes,
@@ -146,31 +139,6 @@ class PaymentService extends BaseCommercialService {
       toast.error('حدث خطأ أثناء تسجيل المعاملة');
       return null;
     }
-  }
-  
-  // Add methods needed for CommercialService
-  public async confirmPayment(paymentId: string): Promise<boolean> {
-    // Placeholder implementation
-    console.log(`Confirming payment: ${paymentId}`);
-    return true;
-  }
-
-  public async cancelPayment(paymentId: string): Promise<boolean> {
-    // Placeholder implementation
-    console.log(`Cancelling payment: ${paymentId}`);
-    return true;
-  }
-
-  public async updatePayment(id: string, paymentData: Partial<Payment>): Promise<boolean> {
-    // Placeholder implementation
-    console.log(`Updating payment: ${id}`);
-    return true;
-  }
-
-  public async deletePayment(id: string): Promise<boolean> {
-    // Placeholder implementation
-    console.log(`Deleting payment: ${id}`);
-    return true;
   }
 }
 
