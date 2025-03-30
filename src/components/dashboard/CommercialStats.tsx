@@ -52,16 +52,25 @@ export function CommercialStats() {
         // Get party balances
         const { data: partyBalances, error: balancesError } = await supabase
           .from('party_balances')
-          .select('balance, parties!inner(type)');
+          .select(`
+            balance, 
+            parties!inner(type)
+          `);
           
         if (balancesError) throw balancesError;
         
+        // Fix: Properly type and cast the data to access the nested properties
+        const typedPartyBalances = partyBalances as unknown as Array<{
+          balance: number;
+          parties: { type: string };
+        }>;
+        
         // Calculate receivables and payables
-        const receivables = partyBalances
+        const receivables = typedPartyBalances
           .filter(item => item.parties.type === 'customer' && item.balance < 0)
           .reduce((sum, item) => sum + Math.abs(item.balance), 0);
           
-        const payables = partyBalances
+        const payables = typedPartyBalances
           .filter(item => item.parties.type === 'supplier' && item.balance > 0)
           .reduce((sum, item) => sum + item.balance, 0);
           

@@ -44,7 +44,18 @@ export async function fetchInventoryMovements(): Promise<InventoryMovement[]> {
 
     // Add raw materials consumption (out movements)
     if (rawMaterialsIn) {
-      for (const item of rawMaterialsIn) {
+      // Type casting for proper property access
+      const typedRawMaterialsIn = rawMaterialsIn as unknown as Array<{
+        id: number;
+        raw_material_name: string;
+        required_quantity: number;
+        production_order: {
+          date: string;
+          code: string;
+        };
+      }>;
+      
+      for (const item of typedRawMaterialsIn) {
         if (item.production_order) {
           movements.push({
             id: item.id,

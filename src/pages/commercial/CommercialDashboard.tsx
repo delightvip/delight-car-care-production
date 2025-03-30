@@ -64,7 +64,13 @@ const CommercialDashboard = () => {
         
         if (error) throw error;
         
-        return data
+        // Properly type the query result
+        const typedData = data as unknown as Array<{
+          balance: number;
+          parties: { id: string; name: string; type: string; };
+        }>;
+        
+        return typedData
           .filter(item => item.parties.type === 'customer')
           .map(item => ({
             id: item.parties.id,
@@ -101,7 +107,18 @@ const CommercialDashboard = () => {
         
         if (error) throw error;
         
-        return data.map(invoice => ({
+        // Properly type the query result
+        const typedData = data as unknown as Array<{
+          id: string;
+          invoice_type: string;
+          party_id: string;
+          parties: { name: string };
+          date: string;
+          total_amount: number;
+          status: string;
+        }>;
+        
+        return typedData.map(invoice => ({
           id: invoice.id,
           invoice_type: invoice.invoice_type,
           party_id: invoice.party_id,
@@ -138,7 +155,17 @@ const CommercialDashboard = () => {
         
         if (error) throw error;
         
-        return data.map(payment => ({
+        // Properly type the query result
+        const typedData = data as unknown as Array<{
+          id: string;
+          payment_type: string;
+          party_id: string;
+          parties: { name: string };
+          date: string;
+          amount: number;
+        }>;
+        
+        return typedData.map(payment => ({
           id: payment.id,
           payment_type: payment.payment_type,
           party_id: payment.party_id,

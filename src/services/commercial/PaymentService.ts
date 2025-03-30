@@ -33,7 +33,10 @@ class PaymentService extends BaseCommercialService {
       
       if (error) throw error;
       
-      const paymentsWithParties = data.map(payment => ({
+      // Make sure to properly type the data
+      const typedData = data as any[];
+      
+      const paymentsWithParties = typedData.map(payment => ({
         id: payment.id,
         party_id: payment.party_id,
         party_name: payment.parties?.name,
@@ -68,7 +71,10 @@ class PaymentService extends BaseCommercialService {
       
       if (error) throw error;
       
-      const paymentsWithParties = data.map(payment => ({
+      // Make sure to properly type the data
+      const typedData = data as any[];
+      
+      const paymentsWithParties = typedData.map(payment => ({
         id: payment.id,
         party_id: payment.party_id,
         party_name: payment.parties?.name,

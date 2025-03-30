@@ -11,3 +11,77 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true
   }
 });
+
+// RPC functions - these are placeholders for the database functions
+export const rpcFunctions = {
+  getInventoryMovementsByItem: async (itemId: string, itemType: string) => {
+    const { data, error } = await supabase
+      .from('inventory_movements')
+      .select(`
+        *,
+        users (name)
+      `)
+      .eq('item_id', itemId)
+      .eq('item_type', itemType)
+      .order('created_at', { ascending: false });
+    
+    return { data, error };
+  }
+};
+
+// Low stock queries - these are placeholders for the database functions
+export const lowStockQueries = {
+  // Function to fetch all low stock items
+  getAllLowStockItems: async () => {
+    try {
+      // For now, we'll just use a simple query to get all items with quantity < min_stock
+      // In a real implementation, this would use the database function
+      const { data, error } = await supabase
+        .rpc('get_all_low_stock_items');
+      
+      if (error) throw error;
+      
+      return { data, error: null };
+    } catch (error) {
+      console.error("Error getting low stock items:", error);
+      return { data: [], error };
+    }
+  },
+  // Fallback individual queries
+  rawMaterials: async () => {
+    const { data, error } = await supabase
+      .from('raw_materials')
+      .select('*')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+    
+    return { data, error };
+  },
+  semiFinishedProducts: async () => {
+    const { data, error } = await supabase
+      .from('semi_finished_products')
+      .select('*')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+    
+    return { data, error };
+  },
+  packagingMaterials: async () => {
+    const { data, error } = await supabase
+      .from('packaging_materials')
+      .select('*')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+    
+    return { data, error };
+  },
+  finishedProducts: async () => {
+    const { data, error } = await supabase
+      .from('finished_products')
+      .select('*')
+      .lt('quantity', 'min_stock')
+      .gt('min_stock', 0);
+    
+    return { data, error };
+  }
+};
