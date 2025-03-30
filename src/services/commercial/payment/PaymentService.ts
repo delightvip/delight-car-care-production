@@ -1,16 +1,18 @@
 
-import { Payment } from '@/services/CommercialTypes';
-import { PaymentEntity } from './PaymentEntity';
-import { PaymentProcessor } from './PaymentProcessor';
-import { toast } from '@/hooks/use-toast';
+import { supabase } from "@/integrations/supabase/client";
+import { Payment } from "../CommercialTypes";
+import { toast } from "sonner";
+import FinancialPaymentBridge from "@/services/financial/FinancialPaymentBridge";
+import PartyService from "@/services/PartyService";
 
-// الخدمة الرئيسية للدفعات
-export class PaymentService {
-  private static instance: PaymentService | null = null;
-  private paymentProcessor: PaymentProcessor;
+class PaymentService {
+  private static instance: PaymentService;
+  private financialBridge: FinancialPaymentBridge;
+  private partyService: PartyService;
   
   private constructor() {
-    this.paymentProcessor = new PaymentProcessor();
+    this.financialBridge = FinancialPaymentBridge.getInstance();
+    this.partyService = PartyService.getInstance();
   }
   
   public static getInstance(): PaymentService {
@@ -21,151 +23,264 @@ export class PaymentService {
   }
   
   public async getPayments(): Promise<Payment[]> {
-    return PaymentEntity.fetchAll();
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          parties (name)
+        `)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data.map(item => ({
+        id: item.id,
+        party_id: item.party_id,
+        party_name: item.parties?.name || 'غير معروف',
+        date: item.date,
+        amount: item.amount,
+        payment_type: item.payment_type,
+        method: item.method,
+        payment_status: item.payment_status,
+        related_invoice_id: item.related_invoice_id,
+        notes: item.notes,
+        created_at: item.created_at
+      }));
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      toast.error('حدث خطأ أثناء جلب المدفوعات');
+      return [];
+    }
   }
   
-  public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
-    return PaymentEntity.fetchByPartyId(partyId);
+  public async getPaymentById(id: string): Promise<Payment | null> {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          parties (name)
+        `)
+        .eq('id', id)
+        .single();
+      
+      if (error) throw error;
+      
+      return {
+        id: data.id,
+        party_id: data.party_id,
+        party_name: data.parties?.name || 'غير معروف',
+        date: data.date,
+        amount: data.amount,
+        payment_type: data.payment_type,
+        method: data.method,
+        payment_status: data.payment_status,
+        related_invoice_id: data.related_invoice_id,
+        notes: data.notes,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error(`Error fetching payment with id ${id}:`, error);
+      toast.error('حدث خطأ أثناء جلب بيانات المدفوعة');
+      return null;
+    }
   }
   
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
     try {
-      const payment = await PaymentEntity.create(paymentData);
+      const { data, error } = await supabase
+        .from('payments')
+        .insert({
+          party_id: paymentData.party_id,
+          date: paymentData.date,
+          amount: paymentData.amount,
+          payment_type: paymentData.payment_type,
+          method: paymentData.method,
+          payment_status: 'draft',
+          related_invoice_id: paymentData.related_invoice_id,
+          notes: paymentData.notes
+        })
+        .select()
+        .single();
       
-      if (payment) {
-        toast({
-          title: "نجاح",
-          description: "تم تسجيل المعاملة بنجاح",
-          variant: "default"
-        });
-        return payment;
-      }
+      if (error) throw error;
       
-      return null;
+      toast.success('تم تسجيل المدفوعة بنجاح');
+      return this.getPaymentById(data.id);
     } catch (error) {
       console.error('Error recording payment:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تسجيل المعاملة",
-        variant: "destructive"
-      });
+      toast.error('حدث خطأ أثناء تسجيل المدفوعة');
       return null;
     }
   }
   
-  public async confirmPayment(paymentId: string): Promise<boolean> {
+  public async confirmPayment(id: string): Promise<boolean> {
     try {
-      console.log('Starting payment confirmation for:', paymentId);
+      // Get payment data with party name
+      const payment = await this.getPaymentById(id);
       
-      // استخدام طريقة confirmPayment من paymentProcessor بدون انتظار
-      // سيتم تشغيلها في الخلفية وعدم تجميد الواجهة 
-      const confirmPromise = this.paymentProcessor.confirmPayment(paymentId);
+      if (!payment) {
+        toast.error('المدفوعة غير موجودة');
+        return false;
+      }
       
-      // عرض رسالة مبدئية للمستخدم
-      toast({
-        title: "جاري التنفيذ",
-        description: "جاري تأكيد المعاملة...",
-        variant: "default"
-      });
+      if (payment.payment_status === 'confirmed') {
+        toast.info('المدفوعة مؤكدة بالفعل');
+        return true;
+      }
       
-      // تنفيذ العملية في الخلفية
-      confirmPromise.then(result => {
-        if (result) {
-          console.log('Payment confirmation succeeded for:', paymentId);
-          toast({
-            title: "نجاح",
-            description: "تم تأكيد المعاملة بنجاح",
-            variant: "default"
-          });
-        } else {
-          console.log('Payment confirmation failed for:', paymentId);
-          toast({
-            title: "خطأ",
-            description: "فشل تأكيد المعاملة",
-            variant: "destructive"
-          });
-        }
-      }).catch(error => {
-        console.error(`Error in confirmPayment(${paymentId}):`, error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تأكيد المعاملة",
-          variant: "destructive"
-        });
-      });
+      // Update party balance
+      if (payment.party_id) {
+        const isCredit = payment.payment_type === 'collection';
+        
+        await this.partyService.updatePartyBalance(
+          payment.party_id,
+          payment.amount,
+          !isCredit, // مدين إذا كان disbursement، دائن إذا كان collection
+          isCredit ? 'تحصيل دفعة' : 'تسديد دفعة',
+          isCredit ? 'payment_collection' : 'payment_disbursement',
+          payment.id
+        );
+      }
       
-      // إرجاع true لإخبار الواجهة أن العملية بدأت
+      // Update financial balances via bridge
+      await this.financialBridge.handlePaymentConfirmation(payment);
+      
+      // Update payment status to confirmed
+      const { error: updateError } = await supabase
+        .from('payments')
+        .update({ payment_status: 'confirmed' })
+        .eq('id', id);
+      
+      if (updateError) throw updateError;
+      
+      toast.success('تم تأكيد المدفوعة بنجاح');
       return true;
     } catch (error) {
-      console.error(`Error starting confirmPayment(${paymentId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء بدء عملية تأكيد المعاملة",
-        variant: "destructive"
-      });
+      console.error('Error confirming payment:', error);
+      toast.error('حدث خطأ أثناء تأكيد المدفوعة');
       return false;
     }
   }
   
-  public async cancelPayment(paymentId: string): Promise<boolean> {
+  public async cancelPayment(id: string): Promise<boolean> {
     try {
-      console.log('Starting payment cancellation for:', paymentId);
+      // Get payment data with party name
+      const payment = await this.getPaymentById(id);
       
-      // استخدام طريقة cancelPayment من paymentProcessor بدون انتظار
-      const cancelPromise = this.paymentProcessor.cancelPayment(paymentId);
+      if (!payment) {
+        toast.error('المدفوعة غير موجودة');
+        return false;
+      }
       
-      // عرض رسالة مبدئية للمستخدم
-      toast({
-        title: "جاري التنفيذ",
-        description: "جاري إلغاء المعاملة...",
-        variant: "default"
-      });
+      if (payment.payment_status !== 'confirmed') {
+        toast.error('يمكن إلغاء المدفوعات المؤكدة فقط');
+        return false;
+      }
       
-      // تنفيذ العملية في الخلفية
-      cancelPromise.then(result => {
-        if (result) {
-          console.log('Payment cancellation succeeded for:', paymentId);
-          toast({
-            title: "نجاح",
-            description: "تم إلغاء المعاملة بنجاح",
-            variant: "default"
-          });
-        } else {
-          console.log('Payment cancellation failed for:', paymentId);
-          toast({
-            title: "خطأ",
-            description: "فشل إلغاء المعاملة",
-            variant: "destructive"
-          });
-        }
-      }).catch(error => {
-        console.error(`Error in cancelPayment(${paymentId}):`, error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء إلغاء المعاملة",
-          variant: "destructive"
-        });
-      });
+      // Reverse party balance update
+      if (payment.party_id) {
+        const isCredit = payment.payment_type === 'collection';
+        
+        await this.partyService.updatePartyBalance(
+          payment.party_id,
+          payment.amount,
+          isCredit, // عكس التأثير الأصلي
+          isCredit ? 'إلغاء تحصيل دفعة' : 'إلغاء تسديد دفعة',
+          isCredit ? 'cancel_payment_collection' : 'cancel_payment_disbursement',
+          payment.id
+        );
+      }
       
-      // إرجاع true لإخبار الواجهة أن العملية بدأت
+      // Update financial balances via bridge
+      await this.financialBridge.handlePaymentCancellation(payment);
+      
+      // Update payment status to cancelled
+      const { error: updateError } = await supabase
+        .from('payments')
+        .update({ payment_status: 'cancelled' })
+        .eq('id', id);
+      
+      if (updateError) throw updateError;
+      
+      toast.success('تم إلغاء المدفوعة بنجاح');
       return true;
     } catch (error) {
-      console.error(`Error starting cancelPayment(${paymentId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء بدء عملية إلغاء المعاملة",
-        variant: "destructive"
-      });
+      console.error('Error cancelling payment:', error);
+      toast.error('حدث خطأ أثناء إلغاء المدفوعة');
       return false;
     }
   }
   
   public async updatePayment(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {
-    return PaymentEntity.update(id, paymentData);
+    try {
+      const { data: payment, error: fetchError } = await supabase
+        .from('payments')
+        .select('payment_status')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      if (payment.payment_status !== 'draft') {
+        toast.error('يمكن تعديل المدفوعات في حالة المسودة فقط');
+        return false;
+      }
+      
+      const { error } = await supabase
+        .from('payments')
+        .update({
+          party_id: paymentData.party_id,
+          date: paymentData.date,
+          amount: paymentData.amount,
+          payment_type: paymentData.payment_type,
+          method: paymentData.method,
+          related_invoice_id: paymentData.related_invoice_id,
+          notes: paymentData.notes
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast.success('تم تحديث المدفوعة بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      toast.error('حدث خطأ أثناء تحديث المدفوعة');
+      return false;
+    }
   }
   
   public async deletePayment(id: string): Promise<boolean> {
-    return PaymentEntity.delete(id);
+    try {
+      const { data: payment, error: fetchError } = await supabase
+        .from('payments')
+        .select('payment_status')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      if (payment.payment_status !== 'draft') {
+        toast.error('يمكن حذف المدفوعات في حالة المسودة فقط');
+        return false;
+      }
+      
+      const { error } = await supabase
+        .from('payments')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast.success('تم حذف المدفوعة بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast.error('حدث خطأ أثناء حذف المدفوعة');
+      return false;
+    }
   }
 }
 

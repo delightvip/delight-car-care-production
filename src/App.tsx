@@ -1,116 +1,149 @@
-import { useState } from 'react';
-import './App.css';
-import { Route, Routes } from 'react-router-dom';
-import { Layout } from './components/layout/Layout';
-import { ThemeProvider } from './components/theme-provider';
-import NotificationProvider from './components/notifications/NotificationProvider';
-import { Toaster } from '@/components/ui/sonner';
 
-// Pages
-import Index from './pages/Index';
-import NotFound from './pages/NotFound';
-import Settings from './pages/Settings';
+import React, { Suspense } from 'react';
+import { useAuth } from './hooks/useAuth';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import AppLayout from './components/layout/AppLayout';
+import Loading from './components/ui/Loading';
+import LoginPage from './pages/auth/LoginPage';
 
-// Inventory Pages
-import InventoryRawMaterials from './pages/inventory/InventoryRawMaterials';
-import InventoryPackaging from './pages/inventory/InventoryPackaging';
-import InventorySemiFinished from './pages/inventory/InventorySemiFinished';
-import InventoryFinishedProducts from './pages/inventory/InventoryFinishedProducts';
-import LowStockItems from './pages/inventory/LowStockItems';
-import InventoryTracking from './pages/inventory/InventoryTracking';
-import ProductDetails from './pages/inventory/ProductDetails';
-import InventoryReports from './pages/inventory/InventoryReports';
+// Main pages
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const NoMatch = React.lazy(() => import('./pages/NoMatch'));
 
-// Production Pages
-import ProductionOrders from './pages/production/ProductionOrders';
-import ProductionPackaging from './pages/production/ProductionPackaging';
-import ProductionPlanning from './pages/production/ProductionPlanning';
+// Inventory pages
+const RawMaterials = React.lazy(() => import('./pages/inventory/RawMaterialsPage'));
+const SemiFinishedProducts = React.lazy(() => import('./pages/inventory/SemiFinishedPage'));
+const PackagingMaterials = React.lazy(() => import('./pages/inventory/PackagingMaterialsPage'));
+const FinishedProducts = React.lazy(() => import('./pages/inventory/FinishedProductsPage'));
+const InventoryReports = React.lazy(() => import('./pages/inventory/InventoryReportsPage'));
 
-// Commercial Pages
-import Parties from './pages/commercial/Parties';
-import PartyDetails from './pages/commercial/PartyDetails';
-import Invoices from './pages/commercial/Invoices';
-import InvoiceDetails from './pages/commercial/InvoiceDetails';
-import Payments from './pages/commercial/Payments';
-import Returns from './pages/commercial/Returns';
-import AccountStatements from './pages/commercial/AccountStatements';
-import CommercialDashboard from './pages/commercial/CommercialDashboard';
+// Production pages
+const ProductionOrders = React.lazy(() => import('./pages/production/ProductionOrdersPage'));
+const PackagingOrders = React.lazy(() => import('./pages/production/PackagingOrdersPage'));
 
-// Analytics
-import Analytics from './pages/Analytics';
-import InventoryDistributionPage from './pages/analytics/InventoryDistributionPage';
+// Commercial pages
+const Customers = React.lazy(() => import('./pages/commercial/Customers'));
+const Suppliers = React.lazy(() => import('./pages/commercial/Suppliers'));
+const Payments = React.lazy(() => import('./pages/commercial/Payments'));
+const Ledger = React.lazy(() => import('./pages/commercial/LedgerPage'));
 
-// Financial Pages
-import FinancialDashboard from './pages/financial/FinancialDashboard';
-import TransactionPage from './pages/financial/TransactionPage';
-import CategoriesPage from './pages/financial/CategoriesPage';
-import CategoryForm from './components/financial/CategoryForm';
-
-// Export the components for use in the main App.tsx
-export {
-  FinancialDashboard,
-  TransactionPage,
-  CategoriesPage,
-  CategoryForm
-};
+// Financial pages
+const TransactionPage = React.lazy(() => import('./pages/financial/TransactionPage'));
+const FinancialPaymentsPage = React.lazy(() => import('./pages/financial/FinancialPaymentsPage'));
 
 function App() {
+  const { authenticated, authLoading } = useAuth();
+
+  if (authLoading) {
+    return <Loading />;
+  }
+
   return (
-    <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-      <NotificationProvider>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            {/* Dashboard */}
-            <Route index element={<Index />} />
-            
-            {/* Inventory Routes */}
-            <Route path="inventory/raw-materials" element={<InventoryRawMaterials />} />
-            <Route path="inventory/packaging" element={<InventoryPackaging />} />
-            <Route path="inventory/semi-finished" element={<InventorySemiFinished />} />
-            <Route path="inventory/finished-products" element={<InventoryFinishedProducts />} />
-            <Route path="inventory/low-stock" element={<LowStockItems />} />
-            <Route path="inventory/tracking" element={<InventoryTracking />} />
-            <Route path="inventory/:type/:id" element={<ProductDetails />} />
-            <Route path="inventory/:type/:id/reports" element={<InventoryReports />} />
-            <Route path="inventory/reports" element={<InventoryReports />} />
-            
-            {/* Production Routes */}
-            <Route path="production/orders" element={<ProductionOrders />} />
-            <Route path="production/packaging" element={<ProductionPackaging />} />
-            <Route path="production/planning" element={<ProductionPlanning />} />
-            
-            {/* Commercial Routes */}
-            <Route path="commercial" element={<CommercialDashboard />} />
-            <Route path="commercial/parties" element={<Parties />} />
-            <Route path="commercial/parties/:id" element={<PartyDetails />} />
-            <Route path="commercial/invoices" element={<Invoices />} />
-            <Route path="commercial/invoices/:id" element={<InvoiceDetails />} />
-            <Route path="commercial/payments" element={<Payments />} />
-            <Route path="commercial/returns" element={<Returns />} />
-            <Route path="commercial/statements" element={<AccountStatements />} />
-            
-            {/* Analytics Routes */}
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
-            
-            {/* Financial Routes */}
-            <Route path="financial" element={<FinancialDashboard />} />
-            <Route path="financial/transactions/new" element={<TransactionPage />} />
-            <Route path="financial/transactions/edit/:id" element={<TransactionPage />} />
-            <Route path="financial/categories" element={<CategoriesPage />} />
-            <Route path="financial/categories/new" element={<CategoryForm />} />
-            <Route path="financial/categories/edit/:id" element={<CategoryForm />} />
-            
-            {/* Settings */}
-            <Route path="settings" element={<Settings />} />
-            
-            {/* 404 - Not Found */}
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-        <Toaster position="top-left" dir="rtl" />
-      </NotificationProvider>
-    </ThemeProvider>
+    <Router>
+      <Routes>
+        <Route path="/login" element={
+          authenticated ? <Navigate to="/" /> : <LoginPage />
+        } />
+        
+        <Route path="/" element={
+          authenticated ? <AppLayout /> : <Navigate to="/login" />
+        }>
+          <Route index element={
+            <Suspense fallback={<Loading />}>
+              <Dashboard />
+            </Suspense>
+          } />
+          
+          {/* Inventory routes */}
+          <Route path="inventory/raw-materials" element={
+            <Suspense fallback={<Loading />}>
+              <RawMaterials />
+            </Suspense>
+          } />
+          <Route path="inventory/semi-finished" element={
+            <Suspense fallback={<Loading />}>
+              <SemiFinishedProducts />
+            </Suspense>
+          } />
+          <Route path="inventory/packaging-materials" element={
+            <Suspense fallback={<Loading />}>
+              <PackagingMaterials />
+            </Suspense>
+          } />
+          <Route path="inventory/finished-products" element={
+            <Suspense fallback={<Loading />}>
+              <FinishedProducts />
+            </Suspense>
+          } />
+          <Route path="inventory/reports" element={
+            <Suspense fallback={<Loading />}>
+              <InventoryReports />
+            </Suspense>
+          } />
+          
+          {/* Production routes */}
+          <Route path="production/orders" element={
+            <Suspense fallback={<Loading />}>
+              <ProductionOrders />
+            </Suspense>
+          } />
+          <Route path="production/packaging" element={
+            <Suspense fallback={<Loading />}>
+              <PackagingOrders />
+            </Suspense>
+          } />
+          
+          {/* Commercial routes */}
+          <Route path="commercial/parties/customers" element={
+            <Suspense fallback={<Loading />}>
+              <Customers />
+            </Suspense>
+          } />
+          <Route path="commercial/parties/suppliers" element={
+            <Suspense fallback={<Loading />}>
+              <Suppliers />
+            </Suspense>
+          } />
+          <Route path="commercial/payments" element={
+            <Suspense fallback={<Loading />}>
+              <Payments />
+            </Suspense>
+          } />
+          <Route path="commercial/ledger" element={
+            <Suspense fallback={<Loading />}>
+              <Ledger />
+            </Suspense>
+          } />
+          
+          {/* Financial routes */}
+          <Route path="financial" element={
+            <Suspense fallback={<Loading />}>
+              <TransactionPage />
+            </Suspense>
+          } />
+          <Route path="financial/payments" element={
+            <Suspense fallback={<Loading />}>
+              <FinancialPaymentsPage />
+            </Suspense>
+          } />
+          
+          {/* Settings */}
+          <Route path="settings" element={
+            <Suspense fallback={<Loading />}>
+              <Settings />
+            </Suspense>
+          } />
+          
+          {/* 404 */}
+          <Route path="*" element={
+            <Suspense fallback={<Loading />}>
+              <NoMatch />
+            </Suspense>
+          } />
+        </Route>
+      </Routes>
+    </Router>
   );
 }
 
