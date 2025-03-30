@@ -1,185 +1,305 @@
 
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, ChevronLeft } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { InventorySummaryStats } from '@/components/inventory/reports/InventorySummaryStats';
-import { InventoryMovementChart } from '@/components/inventory/reports/InventoryMovementChart';
-import { InventoryUsageChart } from '@/components/inventory/reports/InventoryUsageChart';
-import { ProductMovementHistory } from '@/components/inventory/movement';
+import { FileDown, BarChart3, PieChart, ActivitySquare } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
-const InventoryReports: React.FC = () => {
-  const { type, id } = useParams<{ type: string; id: string }>();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = React.useState('overview');
+// Define item types for inventory
+type ItemType = 'raw' | 'semi' | 'packaging' | 'finished';
+
+// Define item category interface
+interface ItemCategory {
+  id: string;
+  name: string;
+  type: ItemType;
+  itemCount: number;
+}
+
+// Define item interface
+interface InventoryItem {
+  id: string;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
+const inventoryTables = [
+  { id: 'raw', name: 'المواد الخام', table: 'raw_materials' },
+  { id: 'semi', name: 'المنتجات النصف مصنعة', table: 'semi_finished_products' },
+  { id: 'packaging', name: 'مواد التعبئة', table: 'packaging_materials' },
+  { id: 'finished', name: 'المنتجات النهائية', table: 'finished_products' }
+];
+
+const InventoryReports = () => {
+  const [selectedCategory, setSelectedCategory] = useState<string>('raw');
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [reportType, setReportType] = useState<string>('movement');
+  const [timeRange, setTimeRange] = useState<string>('month');
   
-  const getTableNameFromType = (type: string | undefined): string => {
-    switch (type) {
-      case 'raw-materials':
-        return 'raw_materials';
-      case 'packaging':
-        return 'packaging_materials';
-      case 'semi-finished':
-        return 'semi_finished_products';
-      case 'finished-products':
-        return 'finished_products';
-      default:
-        return '';
-    }
-  };
-  
-  const tableName = getTableNameFromType(type);
-  
-  const { data: product, isLoading, error } = useQuery({
-    queryKey: ['inventory-item', tableName, id],
+  // Get item categories
+  const { data: categories, isLoading: isLoadingCategories } = useQuery({
+    queryKey: ['inventory-categories'],
     queryFn: async () => {
-      if (!tableName || !id) return null;
+      const result: ItemCategory[] = [];
       
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('id', id)
-        .single();
+      for (const type of inventoryTables) {
+        const { data, error } = await supabase
+          .from(type.table)
+          .select('count')
+          .count();
+          
+        if (error) throw error;
+        
+        result.push({
+          id: type.id,
+          name: type.name,
+          type: type.id as ItemType,
+          itemCount: data?.[0]?.count || 0
+        });
+      }
       
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tableName && !!id
+      return result;
+    }
   });
   
-  if (isLoading) {
-    return (
-      <PageTransition>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between pb-4">
-            <div className="space-y-1">
-              <div className="h-7 w-40 bg-muted animate-pulse rounded"></div>
-              <div className="h-5 w-60 bg-muted animate-pulse rounded"></div>
-            </div>
-          </div>
-        </div>
-      </PageTransition>
-    );
-  }
+  // Get items for selected category
+  const { data: items, isLoading: isLoadingItems } = useQuery({
+    queryKey: ['inventory-items', selectedCategory],
+    queryFn: async () => {
+      const selectedTable = inventoryTables.find(t => t.id === selectedCategory)?.table;
+      
+      if (!selectedTable) return [];
+      
+      const { data, error } = await supabase
+        .from(selectedTable)
+        .select('id, code, name, quantity, unit')
+        .order('name');
+        
+      if (error) throw error;
+      
+      return data as InventoryItem[];
+    },
+    enabled: !!selectedCategory
+  });
   
-  if (error || !product) {
-    return (
-      <PageTransition>
-        <div className="space-y-6">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              حدث خطأ أثناء تحميل بيانات المنتج. يرجى المحاولة مرة أخرى.
-            </AlertDescription>
-          </Alert>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span>العودة</span>
-          </Button>
+  // Get selected item details
+  const { data: selectedItemDetails, isLoading: isLoadingItemDetails } = useQuery({
+    queryKey: ['inventory-item-details', selectedCategory, selectedItem],
+    queryFn: async () => {
+      if (!selectedItem) return null;
+      
+      const selectedTable = inventoryTables.find(t => t.id === selectedCategory)?.table;
+      
+      if (!selectedTable) return null;
+      
+      const { data, error } = await supabase
+        .from(selectedTable)
+        .select('*')
+        .eq('id', selectedItem)
+        .single();
+        
+      if (error) throw error;
+      
+      return data as InventoryItem;
+    },
+    enabled: !!selectedItem
+  });
+  
+  // Set the first item as selected when items load
+  React.useEffect(() => {
+    if (items && items.length > 0 && !selectedItem) {
+      setSelectedItem(items[0].id);
+    }
+  }, [items, selectedItem]);
+
+  // Render appropriate report component based on selected report type
+  const renderReport = () => {
+    if (!selectedItem || !selectedCategory) {
+      return (
+        <div className="p-8 text-center text-muted-foreground">
+          يرجى اختيار صنف للعرض
         </div>
-      </PageTransition>
+      );
+    }
+    
+    if (isLoadingItemDetails) {
+      return (
+        <div className="p-8 space-y-4">
+          <Skeleton className="h-[300px] w-full" />
+        </div>
+      );
+    }
+    
+    // Import the report components dynamically to avoid circular dependencies
+    const InventoryMovementChart = React.lazy(() => import('@/components/inventory/reports/InventoryMovementChart'));
+    const InventoryUsageChart = React.lazy(() => import('@/components/inventory/reports/InventoryUsageChart'));
+    const InventorySummaryStats = React.lazy(() => import('@/components/inventory/reports/InventorySummaryStats'));
+    
+    return (
+      <React.Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+        <div className="space-y-6">
+          {/* Summary statistics */}
+          <InventorySummaryStats itemId={selectedItem} itemType={selectedCategory} />
+          
+          {/* Main report content */}
+          {reportType === 'movement' && (
+            <InventoryMovementChart 
+              itemId={selectedItem} 
+              itemType={selectedCategory} 
+              timeRange={timeRange} 
+              itemName={selectedItemDetails?.name || ''} 
+              itemUnit={selectedItemDetails?.unit || ''}
+            />
+          )}
+          
+          {reportType === 'usage' && (
+            <InventoryUsageChart 
+              itemId={selectedItem} 
+              itemType={selectedCategory} 
+              timeRange={timeRange} 
+              itemName={selectedItemDetails?.name || ''}
+            />
+          )}
+        </div>
+      </React.Suspense>
     );
-  }
+  };
   
   return (
     <PageTransition>
       <div className="space-y-6">
-        <div className="flex flex-col items-start pb-4">
-          <div className="flex w-full items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight mb-1">{product.name}</h1>
-              <p className="text-muted-foreground">
-                تقارير وإحصائيات المخزون | {product.code}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/inventory/${type}/${id}`)}
-              className="flex items-center gap-2"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span>العودة للتفاصيل</span>
-            </Button>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">تقارير المخزون</h1>
+            <p className="text-muted-foreground mt-1">تحليل وإحصائيات حركة المخزون</p>
           </div>
+          <Button variant="outline" className="gap-2">
+            <FileDown size={16} />
+            تصدير التقرير
+          </Button>
         </div>
         
-        <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full justify-start mb-6">
-            <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
-            <TabsTrigger value="movement">حركة المخزون</TabsTrigger>
-            <TabsTrigger value="usage">معدلات الاستهلاك</TabsTrigger>
-            <TabsTrigger value="history">سجل العمليات</TabsTrigger>
-          </TabsList>
+        {/* Filter and controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Category selection */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">نوع الصنف</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر نوع المخزون" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingCategories ? (
+                    <div className="p-2">
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : (
+                    categories?.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name} ({category.itemCount})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
           
-          <TabsContent value="overview" className="space-y-6">
-            <InventorySummaryStats itemId={id || ''} itemType={tableName} />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <InventoryMovementChart 
-                itemId={id || ''} 
-                itemType={tableName}
-                title="حركة المخزون (آخر 6 أشهر)"
-              />
-              <InventoryUsageChart 
-                itemId={id || ''} 
-                itemType={tableName}
-                title="معدل الاستهلاك الشهري"
-              />
-            </div>
-          </TabsContent>
+          {/* Item selection */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">الصنف</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedItem || ''} onValueChange={setSelectedItem}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر الصنف" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingItems ? (
+                    <div className="p-2">
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : items?.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      لا توجد أصناف
+                    </SelectItem>
+                  ) : (
+                    items?.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} ({item.code})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
           
-          <TabsContent value="movement" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>تحليل حركة المخزون</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <InventoryMovementChart 
-                  itemId={id || ''} 
-                  itemType={tableName}
-                  title={`حركة المخزون لـ ${product.name}`}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {/* Report type selection */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">نوع التقرير</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={reportType} onValueChange={setReportType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر نوع التقرير" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="movement">
+                    <div className="flex items-center gap-2">
+                      <ActivitySquare size={14} />
+                      <span>حركة المخزون</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="usage">
+                    <div className="flex items-center gap-2">
+                      <PieChart size={14} />
+                      <span>توزيع الاستهلاك</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
           
-          <TabsContent value="usage" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>معدلات الاستهلاك</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <InventoryUsageChart 
-                  itemId={id || ''} 
-                  itemType={tableName}
-                  title={`معدل استهلاك ${product.name}`}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="history" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>سجل العمليات الكامل</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <ProductMovementHistory itemId={id || ''} itemType={tableName} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+          {/* Time range selection */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">الفترة الزمنية</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر الفترة الزمنية" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">أسبوع</SelectItem>
+                  <SelectItem value="month">شهر</SelectItem>
+                  <SelectItem value="quarter">ربع سنوي</SelectItem>
+                  <SelectItem value="year">سنوي</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Report content */}
+        <div className="bg-muted/50 rounded-lg p-6 border">
+          {renderReport()}
+        </div>
       </div>
     </PageTransition>
   );

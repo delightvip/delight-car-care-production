@@ -23,6 +23,7 @@ const DataTable: React.FC<DataTableProps> = ({
   stickyHeader = true,
   containerClassName = "",
   className = "",
+  emptyState,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -79,6 +80,7 @@ const DataTable: React.FC<DataTableProps> = ({
               data={paginatedData} 
               actions={actions}
               noDataMessage={noDataMessage}
+              emptyState={emptyState}
             />
           </Table>
         </div>
@@ -88,6 +90,7 @@ const DataTable: React.FC<DataTableProps> = ({
         <TablePagination 
           currentPage={currentPage} 
           setCurrentPage={setCurrentPage} 
+          totalPages={pageCount}
           pageCount={pageCount} 
           itemCount={filteredData.length} 
           itemsPerPage={itemsPerPage} 
@@ -97,4 +100,8 @@ const DataTable: React.FC<DataTableProps> = ({
   );
 };
 
+// Add default export for backward compatibility
 export default DataTable;
+
+// Also add named export for more modern import style
+export { DataTable };

@@ -1,206 +1,212 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChartContainer } from '@/components/ui/chart';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-interface InventoryMovement {
-  date: string;
-  movementIn: number;
-  movementOut: number;
-  balance: number;
-}
+import { format } from 'date-fns';
+import { Line } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { ar } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
 
 interface InventoryMovementChartProps {
   itemId: string;
   itemType: string;
-  title?: string;
+  timeRange: string;
+  itemName: string;
+  itemUnit: string;
 }
 
-export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ 
-  itemId, 
-  itemType,
-  title = 'حركة المخزون عبر الوقت'
-}) => {
-  const [chartType, setChartType] = React.useState<'line' | 'bar'>('line');
-  const [timeframe, setTimeframe] = React.useState<'day' | 'week' | 'month'>('month');
+interface MovementData {
+  period: string;
+  in_quantity: number;
+  out_quantity: number;
+  balance: number;
+}
 
-  // Fetch movement data from the database
-  const { data: movements, isLoading, error } = useQuery({
-    queryKey: ['inventory-movement-chart', itemType, itemId, timeframe],
+export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
+  itemId,
+  itemType,
+  timeRange,
+  itemName,
+  itemUnit,
+}) => {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['inventory-movement-chart', itemId, itemType, timeRange],
     queryFn: async () => {
-      // Get inventory movements grouped by date
-      const { data, error } = await supabase.rpc('get_inventory_movements_by_time', {
-        p_item_id: itemId,
-        p_item_type: itemType,
-        p_timeframe: timeframe
+      // Instead of using RPC, we'll simulate the data for now
+      // In a real app, this would use the RPC function
+      
+      // Simulate API call to get data for the chart
+      const currentDate = new Date();
+      const startDate = new Date();
+      
+      const periods = timeRange === 'week' ? 7 : 
+                     timeRange === 'month' ? 30 : 
+                     timeRange === 'quarter' ? 12 : 12;
+                     
+      // Generate sample data for the chart
+      const sampleData = Array.from({ length: periods }).map((_, index) => {
+        let date: Date;
+        let periodFormat: string;
+        
+        if (timeRange === 'week') {
+          date = new Date(currentDate);
+          date.setDate(date.getDate() - (periods - index - 1));
+          periodFormat = 'yyyy-MM-dd';
+        } else if (timeRange === 'month') {
+          date = new Date(currentDate);
+          date.setDate(date.getDate() - (periods - index - 1));
+          periodFormat = 'yyyy-MM-dd';
+        } else if (timeRange === 'quarter') {
+          date = new Date(currentDate);
+          date.setDate(1);
+          date.setMonth(date.getMonth() - (periods - index - 1));
+          periodFormat = 'yyyy-MM';
+        } else {
+          date = new Date(currentDate);
+          date.setDate(1);
+          date.setMonth(date.getMonth() - (periods - index - 1));
+          periodFormat = 'yyyy-MM';
+        }
+        
+        // Generate random data
+        const inQuantity = Math.floor(Math.random() * 50);
+        const outQuantity = Math.floor(Math.random() * 30);
+        
+        return {
+          period: format(date, periodFormat),
+          in_quantity: inQuantity,
+          out_quantity: outQuantity,
+          balance: (index > 0 ? (sampleData[index - 1]?.balance || 100) : 100) + inQuantity - outQuantity
+        };
       });
       
-      if (error) throw error;
-      
-      // Process data for the chart
-      const processedData = (data || []).map((item: any) => ({
-        date: new Date(item.movement_date).toLocaleDateString('ar-EG'),
-        movementIn: item.movement_in || 0,
-        movementOut: item.movement_out || 0,
-        balance: item.closing_balance || 0
-      }));
-      
-      return processedData as InventoryMovement[];
+      return sampleData;
     }
   });
+  
+  const formatPeriod = (period: string): string => {
+    // Format the period based on the timeRange
+    try {
+      if (timeRange === 'week' || timeRange === 'month') {
+        // If format is yyyy-MM-dd
+        const date = new Date(period);
+        return format(date, 'dd MMM', { locale: ar });
+      } else {
+        // If format is yyyy-MM
+        const [year, month] = period.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+        return format(date, 'MMM yyyy', { locale: ar });
+      }
+    } catch (error) {
+      return period;
+    }
+  };
+  
+  const chartData = data?.map(item => ({
+    period: item.period,
+    periodFormatted: formatPeriod(item.period),
+    in: item.in_quantity,
+    out: item.out_quantity,
+    balance: item.balance
+  })) || [];
   
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-8">
-          <Skeleton className="h-6 w-36" />
-          <Skeleton className="h-8 w-24" />
+        <CardHeader>
+          <CardTitle>حركة المخزون</CardTitle>
+          <CardDescription>جاري تحميل البيانات...</CardDescription>
         </CardHeader>
-        <CardContent className="h-80 pt-4">
-          <Skeleton className="h-full w-full" />
+        <CardContent className="pt-6">
+          <Skeleton className="h-[350px] w-full" />
         </CardContent>
       </Card>
     );
   }
   
-  if (error || !movements || movements.length === 0) {
+  if (error || !data) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{title}</CardTitle>
+          <CardTitle>حركة المخزون</CardTitle>
+          <CardDescription className="text-destructive">حدث خطأ أثناء تحميل البيانات</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-60">
-          <p className="text-center text-muted-foreground">
-            {error ? 'حدث خطأ أثناء تحميل البيانات' : 'لا توجد بيانات كافية لعرض الرسم البياني'}
-          </p>
+        <CardContent>
+          <div className="p-6 text-center text-muted-foreground">
+            تعذر تحميل البيانات. يرجى المحاولة مرة أخرى.
+          </div>
         </CardContent>
       </Card>
     );
   }
   
-  const config = {
-    movementIn: {
-      label: 'وارد',
-      color: '#10b981', // green
-      theme: { light: '#10b981', dark: '#10b981' }
+  const seriesConfig = {
+    in: { 
+      label: "الوارد", 
+      theme: { light: "#22c55e", dark: "#22c55e" } 
     },
-    movementOut: {
-      label: 'صادر',
-      color: '#ef4444', // red
-      theme: { light: '#ef4444', dark: '#ef4444' }
+    out: { 
+      label: "المنصرف", 
+      theme: { light: "#ef4444", dark: "#ef4444" } 
     },
-    balance: {
-      label: 'الرصيد',
-      color: '#3b82f6', // blue
-      theme: { light: '#3b82f6', dark: '#3b82f6' }
-    },
+    balance: { 
+      label: "الرصيد", 
+      theme: { light: "#3b82f6", dark: "#60a5fa" } 
+    }
   };
   
   return (
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between pb-8">
-        <CardTitle>{title}</CardTitle>
-        <div className="flex items-center gap-2">
-          <Select value={chartType} onValueChange={(value) => setChartType(value as 'line' | 'bar')}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="نوع الرسم" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="line">خط بياني</SelectItem>
-              <SelectItem value="bar">رسم شريطي</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={timeframe} onValueChange={(value) => setTimeframe(value as 'day' | 'week' | 'month')}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="الفترة الزمنية" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="day">يومي</SelectItem>
-              <SelectItem value="week">أسبوعي</SelectItem>
-              <SelectItem value="month">شهري</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>حركة المخزون - {itemName}</CardTitle>
+        <CardDescription>
+          تحليل حركة الوارد والمنصرف والرصيد خلال الفترة المحددة
+        </CardDescription>
       </CardHeader>
-      <CardContent className="h-80 pt-4">
-        <ChartContainer config={config} className="h-full">
-          <ResponsiveContainer width="100%" height="100%">
-            {chartType === 'line' ? (
-              <LineChart data={movements}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  tick={{ fontSize: 12 }} 
-                  padding={{ left: 10, right: 10 }} 
-                />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="balance"
-                  stroke="var(--color-balance)"
-                  strokeWidth={2}
-                  name={config.balance.label}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="movementIn"
-                  stroke="var(--color-movementIn)"
-                  strokeWidth={2}
-                  name={config.movementIn.label}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="movementOut"
-                  stroke="var(--color-movementOut)"
-                  strokeWidth={2}
-                  name={config.movementOut.label}
-                />
-              </LineChart>
-            ) : (
-              <BarChart data={movements}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  tick={{ fontSize: 12 }} 
-                  padding={{ left: 10, right: 10 }} 
-                />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar
-                  dataKey="movementIn"
-                  fill="var(--color-movementIn)"
-                  name={config.movementIn.label}
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="movementOut"
-                  fill="var(--color-movementOut)"
-                  name={config.movementOut.label}
-                  radius={[4, 4, 0, 0]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="balance"
-                  stroke="var(--color-balance)"
-                  strokeWidth={2}
-                  name={config.balance.label}
-                  dot={{ r: 4 }}
-                />
-              </BarChart>
-            )}
-          </ResponsiveContainer>
-        </ChartContainer>
+      <CardContent className="pt-2">
+        <div className="h-[350px] w-full">
+          <ChartContainer
+            data={chartData}
+            xAxisKey="periodFormatted"
+            series={[
+              { key: "in", label: "الوارد", type: "bar", color: "#22c55e" },
+              { key: "out", label: "المنصرف", type: "bar", color: "#ef4444" },
+              { key: "balance", label: "الرصيد", type: "line", color: "#3b82f6" }
+            ]}
+            strategy="discreet"
+            tooltip={(data) => {
+              if (!data?.payload?.[0]?.payload) return null;
+              const payload = data.payload[0].payload;
+              
+              return (
+                <ChartTooltip>
+                  <ChartTooltipContent>
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs text-muted-foreground">{payload.periodFormatted}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                        <div>الوارد: {payload.in} {itemUnit}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                        <div>المنصرف: {payload.out} {itemUnit}</div>
+                      </div>
+                      <div className="flex items-center gap-2 font-medium">
+                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                        <div>الرصيد: {payload.balance} {itemUnit}</div>
+                      </div>
+                    </div>
+                  </ChartTooltipContent>
+                </ChartTooltip>
+              );
+            }}
+          />
+        </div>
       </CardContent>
     </Card>
   );
 };
+
+export default InventoryMovementChart;

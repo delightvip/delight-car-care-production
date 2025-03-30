@@ -1,35 +1,43 @@
 
 import React from 'react';
-import { TableBody as ShadcnTableBody, TableCell, TableRow } from "@/components/ui/table";
-import { Column } from './types';
+import { TableBody, TableCell, TableRow } from "@/components/ui/table";
 
 interface TableBodyProps {
-  columns: Column[];
+  columns: Array<{
+    key: string;
+    title: string;
+    render?: (value: any, record: any) => React.ReactNode;
+    sortable?: boolean;
+    width?: string;
+    minWidth?: string;
+  }>;
   data: any[];
   actions?: (record: any) => React.ReactNode;
-  noDataMessage: string;
+  noDataMessage?: string;
+  emptyState?: React.ReactNode;
 }
 
-const TableBodyComponent: React.FC<TableBodyProps> = ({ 
-  columns, 
-  data, 
-  actions, 
-  noDataMessage 
+const TableBodyComponent: React.FC<TableBodyProps> = ({
+  columns,
+  data,
+  actions,
+  noDataMessage = "لا توجد بيانات للعرض",
+  emptyState,
 }) => {
   if (data.length === 0) {
     return (
-      <ShadcnTableBody>
+      <TableBody>
         <TableRow>
           <TableCell colSpan={columns.length + (actions ? 1 : 0)} className="text-center py-8">
-            {noDataMessage}
+            {emptyState || noDataMessage}
           </TableCell>
         </TableRow>
-      </ShadcnTableBody>
+      </TableBody>
     );
   }
 
   return (
-    <ShadcnTableBody>
+    <TableBody>
       {data.map((record, index) => (
         <TableRow key={index} className="hover:bg-muted/50">
           {columns.map((column) => (
@@ -58,7 +66,7 @@ const TableBodyComponent: React.FC<TableBodyProps> = ({
           )}
         </TableRow>
       ))}
-    </ShadcnTableBody>
+    </TableBody>
   );
 };
 

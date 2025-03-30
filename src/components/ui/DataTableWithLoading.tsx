@@ -7,7 +7,8 @@ import { DataTableProps } from './data-table/types';
 interface DataTableWithLoadingProps extends DataTableProps {
   isLoading: boolean;
   loadingRowCount?: number;
-  className?: string; // Add className prop
+  className?: string;
+  emptyState?: React.ReactNode;
 }
 
 export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
@@ -89,11 +90,11 @@ export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
       pagination={pagination}
       emptyState={emptyState}
       stickyHeader={stickyHeader}
-      className={className} // Pass className prop
+      className={className}
       {...props}
     />
   );
 };
 
-// For backward compatibility
+// Export both named and default export for backward compatibility
 export default DataTableWithLoading;

@@ -1,11 +1,18 @@
 
+import { ReactNode } from "react";
+
 export interface Column {
   key: string;
   title: string;
-  render?: (value: any, record: any) => React.ReactNode;
+  render?: (value: any, record: any) => ReactNode;
   sortable?: boolean;
   width?: string;
   minWidth?: string;
+}
+
+export interface SortConfig {
+  key: string;
+  direction: 'asc' | 'desc';
 }
 
 export interface DataTableProps {
@@ -15,26 +22,13 @@ export interface DataTableProps {
   searchKeys?: string[];
   pagination?: boolean;
   itemsPerPage?: number;
-  actions?: (record: any) => React.ReactNode;
+  actions?: (record: any) => ReactNode;
   searchPlaceholder?: string;
   noDataMessage?: string;
   onSort?: (key: string) => void;
-  sortConfig?: { key: string; direction: 'asc' | 'desc' } | null;
+  sortConfig?: SortConfig | null;
   stickyHeader?: boolean;
   containerClassName?: string;
   className?: string;
-}
-
-export interface TableSearchProps {
-  searchTerm: string;
-  setSearchTerm: (term: string) => void;
-  placeholder: string;
-}
-
-export interface TablePaginationProps {
-  currentPage: number;
-  setCurrentPage: (page: number) => void;
-  pageCount: number;
-  itemCount: number;
-  itemsPerPage: number;
+  emptyState?: ReactNode;
 }

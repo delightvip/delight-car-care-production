@@ -12,12 +12,18 @@ interface TablePaginationProps {
   currentPage: number;
   totalPages: number;
   setCurrentPage: (page: number) => void;
+  pageCount?: number;
+  itemCount?: number;
+  itemsPerPage?: number;
 }
 
 export const TablePagination: React.FC<TablePaginationProps> = ({
   currentPage,
   totalPages,
   setCurrentPage,
+  pageCount,
+  itemCount,
+  itemsPerPage,
 }) => {
   if (totalPages <= 1) {
     return null;
@@ -40,10 +46,13 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
   };
 
   return (
-    <div className="flex items-center justify-between px-2">
-      <div className="text-sm text-muted-foreground">
-        الصفحة {currentPage} من {totalPages}
-      </div>
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 px-2">
+      {itemCount && itemsPerPage && (
+        <div className="text-sm text-muted-foreground">
+          عرض {Math.min(itemCount, (currentPage - 1) * itemsPerPage! + 1)} إلى{' '}
+          {Math.min(itemCount, currentPage * itemsPerPage!)} من أصل {itemCount} عنصر
+        </div>
+      )}
       <div className="flex items-center space-x-2 space-x-reverse rtl:space-x-reverse">
         <Button
           variant="outline"
@@ -81,3 +90,6 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
     </div>
   );
 };
+
+// Add default export for compatibility
+export default TablePagination;
