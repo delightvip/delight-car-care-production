@@ -29,13 +29,17 @@ export const Layout = () => {
   }, [theme]);
 
   return (
-    <div className="flex min-h-screen bg-background overflow-hidden">
+    <div className="flex min-h-screen bg-background">
+      {/* 
+        إزالة خاصية overflow-hidden من الحاوية الرئيسية
+        لمنع قص محتوى الصفحة على الشاشات الصغيرة
+      */}
       <ModernSidebar />
       <motion.div 
-        className="flex-1 flex flex-col min-h-screen"
+        className="flex-1 flex flex-col min-h-screen w-full relative"
         initial={false}
         animate={{
-          marginRight: !isMobile && isExpanded ? '16rem' : '4rem',
+          marginRight: !isMobile && isExpanded ? '16rem' : '4rem'
         }}
         transition={{ 
           type: "spring", 
@@ -44,8 +48,16 @@ export const Layout = () => {
         }}
       >
         <Navbar />
-        <main className="flex-1 container mx-auto px-4 pt-20 pb-6">
-          <Outlet />
+        <main className="flex-1 w-full h-full py-6 overflow-hidden">
+          {/* 
+            إضافة حاوية داخلية مع خصائص التمرير المناسبة
+            لإتاحة التمرير الأفقي والرأسي للمحتوى عند الحاجة
+          */}
+          <div className="container mx-auto px-4 pt-14 h-full overflow-x-auto overflow-y-auto">
+            <div className="min-w-fit pb-6"> 
+              <Outlet />
+            </div>
+          </div>
         </main>
       </motion.div>
     </div>

@@ -502,6 +502,8 @@ const ModernSidebar: React.FC = () => {
         className={cn(
           'bg-background border-l border-border h-screen flex flex-col fixed top-0 right-0 z-30',
           'will-change-transform',
+          // تحسين ظل القائمة لمنع ظهور المناطق المظلمة
+          'shadow-sm',
           'overflow-hidden'
         )}
       >
@@ -655,8 +657,9 @@ const ModernSidebar: React.FC = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.3 }}
-            className="hidden md:flex absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2"
+            transition={{ delay: 0.3, duration: 0.3 }}
+            // تعديل موضع الزر ليكون أقرب إلى القائمة وأكثر وضوحًا
+            className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-10"
           >
             <TooltipProvider>
               <Tooltip>

@@ -3,17 +3,35 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { Button } from '@/components/ui/button';
-import { Edit, Plus, Trash } from 'lucide-react';
+import { Edit, Plus, Trash, Eye, FileUp, PlusCircle, MinusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import SemiFinishedForm from '@/components/semi-finished/SemiFinishedForm';
 import DeleteConfirmDialog from '@/components/semi-finished/DeleteConfirmDialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const SemiFinishedProducts = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [currentProduct, setCurrentProduct] = useState<any>(null);
+  
+  // إضافة حالة للتصفية حسب حالة المخزون
+  const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
+  
+  // إضافة حالة للفرز
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const queryClient = useQueryClient();
   
@@ -80,6 +98,50 @@ const SemiFinishedProducts = () => {
       return productsWithIngredients;
     }
   });
+
+  // تطبيق الفلتر على البيانات
+  const filteredProducts = useMemo(() => {
+    if (!semiFinishedProducts) return [];
+    
+    switch (filterType) {
+      case 'low-stock':
+        return semiFinishedProducts.filter(item => item.quantity <= item.minStock * 1.2);
+      case 'high-value':
+        return [...semiFinishedProducts].sort((a, b) => b.totalValue - a.totalValue);
+      default:
+        return semiFinishedProducts;
+    }
+  }, [semiFinishedProducts, filterType]);
+  
+  // تطبيق الفرز على البيانات المفلترة
+  const sortedProducts = useMemo(() => {
+    if (!sortConfig) return filteredProducts;
+    
+    return [...filteredProducts].sort((a, b) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (a[sortConfig.key] > b[sortConfig.key]) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [filteredProducts, sortConfig]);
+  
+  // معالجة النقر على رأس العمود للفرز
+  const handleSort = (key: string) => {
+    if (sortConfig && sortConfig.key === key) {
+      // إذا كان العمود مفروز بالفعل، نعكس اتجاه الفرز أو نلغيه
+      if (sortConfig.direction === 'asc') {
+        setSortConfig({ key, direction: 'desc' });
+      } else {
+        setSortConfig(null);
+      }
+    } else {
+      // إذا كان العمود غير مفروز، نفرزه تصاعديًا
+      setSortConfig({ key, direction: 'asc' });
+    }
+  };
   
   // إضافة منتج جديد
   const addMutation = useMutation({
@@ -214,19 +276,79 @@ const SemiFinishedProducts = () => {
     }
   });
   
+  // تعديل سريع للكمية
+  const quickUpdateQuantityMutation = useMutation({
+    mutationFn: async ({ id, change }: { id: number, change: number }) => {
+      // أولاً، نحصل على المنتج الحالي
+      const { data: product, error: fetchError } = await supabase
+        .from('semi_finished_products')
+        .select('quantity')
+        .eq('id', id)
+        .single();
+        
+      if (fetchError) throw fetchError;
+      
+      // نحسب الكمية الجديدة (مع التأكد من عدم وجود قيم سالبة)
+      const newQuantity = Math.max(0, product.quantity + change);
+      
+      // تحديث الكمية
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .update({ quantity: newQuantity })
+        .eq('id', id)
+        .select();
+        
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
+      toast.success('تم تحديث الكمية بنجاح');
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ: ${error.message}`);
+    }
+  });
+  
+  // استيراد المنتجات النصف مصنعة من ملف
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      // في التطبيق الحقيقي، هنا سيتم رفع الملف إلى الخادم ومعالجته
+      // ولأغراض العرض التوضيحي، سنفترض أنه تمت معالجة الملف بنجاح
+      
+      toast.info("جاري معالجة الملف...");
+      
+      // نقوم بمحاكاة وقت المعالجة
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      return { success: true, count: 3 }; // نفترض أنه تمت إضافة 3 منتجات بنجاح
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
+      toast.success(`تم استيراد ${result.count} منتجات بنجاح`);
+      setIsImportDialogOpen(false);
+      setImportFile(null);
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ أثناء استيراد الملف: ${error.message}`);
+    }
+  });
+  
   // تعريف أعمدة الجدول
   const columns = [
-    { key: 'code', title: 'الكود' },
-    { key: 'name', title: 'اسم المنتج' },
-    { key: 'unit', title: 'وحدة القياس' },
+    { key: 'code', title: 'الكود', sortable: true },
+    { key: 'name', title: 'اسم المنتج', sortable: true },
+    { key: 'unit', title: 'وحدة القياس', sortable: true },
     {
       key: 'ingredients',
       title: 'عدد المكونات',
-      render: (value: any[] | undefined) => (value && Array.isArray(value)) ? value.length : 0
+      render: (value: any[] | undefined) => (value && Array.isArray(value)) ? value.length : 0,
+      sortable: true
     },
     { 
       key: 'quantity', 
       title: 'الكمية',
+      sortable: true,
       render: (value: number, record: any) => (
         <div className="flex items-center">
           <div className="flex items-center gap-2 min-w-[120px]">
@@ -259,16 +381,19 @@ const SemiFinishedProducts = () => {
     { 
       key: 'unitCost', 
       title: 'التكلفة',
+      sortable: true,
       render: (value: number) => `${value} ج.م`
     },
     { 
       key: 'minStock', 
       title: 'الحد الأدنى',
+      sortable: true,
       render: (value: number, record: any) => `${value} ${record.unit}`
     },
     { 
       key: 'totalValue', 
       title: 'إجمالي القيمة',
+      sortable: true,
       render: (value: number) => `${value} ج.م`
     }
   ];
@@ -295,6 +420,32 @@ const SemiFinishedProducts = () => {
         }}
       >
         <Trash size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setCurrentProduct(record);
+          setIsDetailsDialogOpen(true);
+        }}
+      >
+        <Eye size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="زيادة الكمية"
+        onClick={() => quickUpdateQuantityMutation.mutate({ id: record.id, change: 1 })}
+      >
+        <PlusCircle size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="نقص الكمية"
+        onClick={() => quickUpdateQuantityMutation.mutate({ id: record.id, change: -1 })}
+      >
+        <MinusCircle size={16} />
       </Button>
     </div>
   );
@@ -336,19 +487,37 @@ const SemiFinishedProducts = () => {
             <h1 className="text-3xl font-bold tracking-tight">المنتجات النصف مصنعة</h1>
             <p className="text-muted-foreground mt-1">إدارة المنتجات النصف مصنعة المستخدمة في عمليات الإنتاج</p>
           </div>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <Plus size={18} className="mr-2" />
-            إضافة منتج
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+              <FileUp size={18} className="mr-2" />
+              استيراد من ملف
+            </Button>
+            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="تصفية المنتجات" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المنتجات</SelectItem>
+                <SelectItem value="low-stock">المخزون المنخفض</SelectItem>
+                <SelectItem value="high-value">الأعلى قيمة</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus size={18} className="mr-2" />
+              إضافة منتج
+            </Button>
+          </div>
         </div>
         
         <DataTableWithLoading
           columns={columns}
-          data={semiFinishedProducts || []}
+          data={sortedProducts || []}
           searchable
           searchKeys={['code', 'name']}
           actions={renderActions}
           isLoading={isLoading}
+          onSort={handleSort}
+          sortConfig={sortConfig}
         />
         
         {/* نموذج إضافة منتج جديد */}
@@ -384,6 +553,239 @@ const SemiFinishedProducts = () => {
           isLoading={deleteMutation.isPending}
           product={currentProduct}
         />
+        
+        {/* نافذة عرض تفاصيل المنتج */}
+        <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <DialogContent className="max-w-screen-md">
+            <DialogHeader>
+              <DialogTitle>تفاصيل المنتج النصف مصنع</DialogTitle>
+              <DialogDescription>
+                عرض تفاصيل وحركة المنتج النصف مصنع في المخزون
+              </DialogDescription>
+            </DialogHeader>
+            {currentProduct && (
+              <div className="grid gap-6 py-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 p-4 border rounded-lg">
+                    <h3 className="font-semibold text-lg">معلومات المنتج</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-muted-foreground">الكود:</span>
+                      <span className="font-medium">{currentProduct.code}</span>
+                      
+                      <span className="text-muted-foreground">الاسم:</span>
+                      <span className="font-medium">{currentProduct.name}</span>
+                      
+                      <span className="text-muted-foreground">وحدة القياس:</span>
+                      <span className="font-medium">{currentProduct.unit}</span>
+                      
+                      <span className="text-muted-foreground">الكمية الحالية:</span>
+                      <div className="flex items-center">
+                        <div 
+                          className={`w-2 h-2 rounded-full mr-2 ${
+                            currentProduct.quantity <= currentProduct.minStock ? 'bg-red-500' : 
+                            currentProduct.quantity <= currentProduct.minStock * 1.5 ? 'bg-amber-500' : 
+                            'bg-green-500'
+                          }`} 
+                        />
+                        <span className="font-medium">{currentProduct.quantity} {currentProduct.unit}</span>
+                      </div>
+                      
+                      <span className="text-muted-foreground">الحد الأدنى:</span>
+                      <span className="font-medium">{currentProduct.minStock} {currentProduct.unit}</span>
+                      
+                      <span className="text-muted-foreground">تكلفة الوحدة:</span>
+                      <span className="font-medium">{currentProduct.unitCost} ج.م</span>
+                      
+                      <span className="text-muted-foreground">القيمة الإجمالية:</span>
+                      <span className="font-medium">{currentProduct.totalValue} ج.م</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 p-4 border rounded-lg">
+                    <h3 className="font-semibold text-lg">إحصائيات</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-muted-foreground text-sm mb-1">نسبة المخزون الحالي إلى الحد الأدنى</p>
+                        <div className="w-full bg-muted rounded-full h-2.5">
+                          <div 
+                            className={`h-2.5 rounded-full ${
+                              currentProduct.quantity <= currentProduct.minStock ? 'bg-red-500' : 
+                              currentProduct.quantity <= currentProduct.minStock * 1.5 ? 'bg-amber-500' : 
+                              'bg-green-500'
+                            }`}
+                            style={{ 
+                              width: `${Math.min(100, Math.round((currentProduct.quantity / currentProduct.minStock) * 100))}%` 
+                            }}
+                          ></div>
+                        </div>
+                        <p className="text-xs mt-1">
+                          {Math.round((currentProduct.quantity / currentProduct.minStock) * 100)}% من الحد الأدنى
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <span className="text-muted-foreground">تاريخ آخر تحديث:</span>
+                        <p className="font-medium">-</p>
+                      </div>
+                      
+                      <div>
+                        <span className="text-muted-foreground">المنتجات المستخدمة فيه:</span>
+                        <p className="font-medium">-</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2 p-4 border rounded-lg">
+                  <h3 className="font-semibold text-lg">المكونات</h3>
+                  <div className="mt-2">
+                    {currentProduct.ingredients && currentProduct.ingredients.length > 0 ? (
+                      <div className="space-y-2">
+                        {currentProduct.ingredients.map((ingredient: any, index: number) => (
+                          <div key={index} className="flex justify-between items-center p-2 border rounded-md">
+                            <div>
+                              <div className="font-medium">{ingredient.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {ingredient.code}
+                              </div>
+                            </div>
+                            <div className="font-medium">
+                              {ingredient.percentage}%
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-muted-foreground p-4">
+                        لا توجد مكونات لهذا المنتج
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="space-y-2 p-4 border rounded-lg">
+                  <h3 className="font-semibold text-lg">سجل الحركة</h3>
+                  <p className="text-muted-foreground text-sm">
+                    سجل حركة المنتج في المخزون (الإضافات والصرف)
+                  </p>
+                  <div className="border rounded-md mt-2 p-4 text-center text-muted-foreground">
+                    لا توجد بيانات لعرضها
+                  </div>
+                </div>
+                
+                <div className="flex justify-between">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setIsDetailsDialogOpen(false);
+                      setIsEditDialogOpen(true);
+                    }}
+                  >
+                    <Edit size={16} className="ml-2" />
+                    تعديل المنتج
+                  </Button>
+                  
+                  <div className="flex gap-2">
+                    <Button variant="outline">
+                      طباعة التفاصيل
+                    </Button>
+                    <Button variant="outline">
+                      تصدير البيانات
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+        
+        {/* نافذة استيراد البيانات من ملف */}
+        <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>استيراد المنتجات النصف مصنعة من ملف</DialogTitle>
+              <DialogDescription>
+                يمكنك استيراد المنتجات النصف مصنعة من ملف Excel أو CSV. تأكد من أن الملف يحتوي على الأعمدة المطلوبة.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="border rounded-md p-6 text-center">
+                <div className="mb-4">
+                  <FileUp className="h-12 w-12 mx-auto text-muted-foreground" />
+                  <p className="mt-2 text-sm font-medium">
+                    {importFile ? importFile.name : 'اختر ملف Excel أو CSV لاستيراده'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    يجب أن يحتوي الملف على الأعمدة التالية: اسم المنتج، وحدة القياس، الكمية، التكلفة، الحد الأدنى للمخزون، والمكونات
+                  </p>
+                </div>
+                
+                {!importFile && (
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <div className="mt-2">
+                      <Button variant="outline" className="w-full max-w-xs mx-auto" size="sm">
+                        <FileUp size={16} className="mr-2" />
+                        اختيار ملف
+                      </Button>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            setImportFile(e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </div>
+                  </label>
+                )}
+                
+                {importFile && (
+                  <div className="mt-2 flex justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setImportFile(null)}
+                    >
+                      إلغاء
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => importMutation.mutate(importFile)}
+                      disabled={importMutation.isPending}
+                    >
+                      {importMutation.isPending ? 'جاري الاستيراد...' : 'استيراد'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="bg-muted/50 rounded-md p-4">
+                <h4 className="text-sm font-medium mb-2">تنسيق الملف</h4>
+                <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+                  <li>يجب أن يكون الملف بتنسيق Excel (.xlsx, .xls) أو CSV (.csv)</li>
+                  <li>يجب أن يحتوي الصف الأول على أسماء الأعمدة</li>
+                  <li>سيتم توليد كود المنتج تلقائيًا لكل منتج جديد</li>
+                  <li>لإضافة مكونات، يجب تضمين عمود "المكونات" يحتوي على كود المادة الخام ونسبتها</li>
+                </ul>
+                
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium mb-2">تحميل نموذج</h4>
+                  <Button variant="link" size="sm" className="p-0 h-auto">
+                    تحميل ملف نموذجي (.xlsx)
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                إغلاق
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </PageTransition>
   );

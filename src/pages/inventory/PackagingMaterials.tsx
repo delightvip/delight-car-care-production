@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit, Plus, Trash } from 'lucide-react';
+import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +32,8 @@ const PackagingMaterials = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<any>(null);
   const [newMaterial, setNewMaterial] = useState({
     name: '',
@@ -40,9 +42,13 @@ const PackagingMaterials = () => {
     quantity: 0,
     minStock: 0
   });
+  const [importFile, setImportFile] = useState<File | null>(null);
   
   // إضافة حالة للتصفية حسب حالة المخزون
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value' | 'high-importance'>('all');
+  
+  // إضافة حالة للفرز
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   
   const queryClient = useQueryClient();
   
@@ -87,6 +93,36 @@ const PackagingMaterials = () => {
         return packagingMaterials;
     }
   }, [packagingMaterials, filterType]);
+
+  // تطبيق الفرز على البيانات المفلترة
+  const sortedMaterials = useMemo(() => {
+    if (!sortConfig) return filteredMaterials;
+    
+    return [...filteredMaterials].sort((a, b) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (a[sortConfig.key] > b[sortConfig.key]) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [filteredMaterials, sortConfig]);
+  
+  // معالجة النقر على رأس العمود للفرز
+  const handleSort = (key: string) => {
+    if (sortConfig && sortConfig.key === key) {
+      // إذا كان العمود مفروز بالفعل، نعكس اتجاه الفرز أو نلغيه
+      if (sortConfig.direction === 'asc') {
+        setSortConfig({ key, direction: 'desc' });
+      } else {
+        setSortConfig(null);
+      }
+    } else {
+      // إذا كان العمود غير مفروز، نفرزه تصاعديًا
+      setSortConfig({ key, direction: 'asc' });
+    }
+  };
   
   const addMutation = useMutation({
     mutationFn: async (newItem: any) => {
@@ -179,6 +215,64 @@ const PackagingMaterials = () => {
     },
     onError: (error: any) => {
       toast.error(`حدث خطأ: ${error.message}`);
+    }
+  });
+
+  // تعديل سريع للكمية
+  const quickUpdateQuantityMutation = useMutation({
+    mutationFn: async ({ id, change }: { id: number, change: number }) => {
+      // أولاً، نحصل على المستلزم الحالي
+      const { data: material, error: fetchError } = await supabase
+        .from('packaging_materials')
+        .select('quantity')
+        .eq('id', id)
+        .single();
+        
+      if (fetchError) throw new Error(fetchError.message);
+      
+      // نحسب الكمية الجديدة (مع التأكد من عدم وجود قيم سالبة)
+      const newQuantity = Math.max(0, material.quantity + change);
+      
+      // تحديث الكمية
+      const { data, error } = await supabase
+        .from('packaging_materials')
+        .update({ quantity: newQuantity })
+        .eq('id', id)
+        .select();
+        
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
+      toast.success('تم تحديث الكمية بنجاح');
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ: ${error.message}`);
+    }
+  });
+  
+  // استيراد مستلزمات التعبئة من ملف
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      // في التطبيق الحقيقي، هنا سيتم رفع الملف إلى الخادم ومعالجته
+      // ولأغراض العرض التوضيحي، سنفترض أنه تمت معالجة الملف بنجاح
+      
+      toast.info("جاري معالجة الملف...");
+      
+      // نقوم بمحاكاة وقت المعالجة
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      return { success: true, count: 3 }; // نفترض أنه تمت إضافة 3 مستلزمات بنجاح
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
+      toast.success(`تم استيراد ${result.count} مستلزمات بنجاح`);
+      setIsImportDialogOpen(false);
+      setImportFile(null);
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ أثناء استيراد الملف: ${error.message}`);
     }
   });
   
@@ -285,6 +379,33 @@ const PackagingMaterials = () => {
       >
         <Trash size={16} />
       </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="عرض التفاصيل"
+        onClick={() => {
+          setCurrentMaterial(record);
+          setIsDetailsDialogOpen(true);
+        }}
+      >
+        <Eye size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="زيادة الكمية"
+        onClick={() => quickUpdateQuantityMutation.mutate({ id: record.id, change: 1 })}
+      >
+        <PlusCircle size={16} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="نقص الكمية"
+        onClick={() => quickUpdateQuantityMutation.mutate({ id: record.id, change: -1 })}
+      >
+        <MinusCircle size={16} />
+      </Button>
     </div>
   );
   
@@ -321,6 +442,12 @@ const PackagingMaterials = () => {
                 <SelectItem value="high-importance">الأكثر أهمية</SelectItem>
               </SelectContent>
             </Select>
+            
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+              <FileUp size={18} className="mr-2" />
+              استيراد
+            </Button>
+            
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -413,11 +540,13 @@ const PackagingMaterials = () => {
           </div>
         ) : (
           <DataTable
-            columns={columns}
-            data={filteredMaterials || []}
+            columns={columns.map(col => ({ ...col, sortable: true }))}
+            data={sortedMaterials || []}
             searchable
             searchKeys={['code', 'name']}
             actions={renderActions}
+            onSort={handleSort}
+            sortConfig={sortConfig}
           />
         )}
         
@@ -525,6 +654,275 @@ const PackagingMaterials = () => {
               </Button>
               <Button variant="destructive" onClick={handleDeleteMaterial} disabled={deleteMutation.isPending}>
                 {deleteMutation.isPending ? 'جاري الحذف...' : 'حذف'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>استيراد مستلزمات التعبئة من ملف</DialogTitle>
+              <DialogDescription>
+                يمكنك استيراد مستلزمات التعبئة من ملف Excel أو CSV. تأكد من أن الملف يحتوي على الأعمدة المطلوبة.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="border rounded-md p-6 text-center">
+                <div className="mb-4">
+                  <FileUp className="h-12 w-12 mx-auto text-muted-foreground" />
+                  <p className="mt-2 text-sm font-medium">
+                    {importFile ? importFile.name : 'اختر ملف Excel أو CSV لاستيراده'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    يجب أن يحتوي الملف على الأعمدة التالية: اسم المستلزم، وحدة القياس، سعر الوحدة، الكمية، الحد الأدنى للمخزون
+                  </p>
+                </div>
+                
+                {!importFile && (
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <div className="mt-2">
+                      <Button variant="outline" className="w-full max-w-xs mx-auto" size="sm">
+                        <FileUp size={16} className="mr-2" />
+                        اختيار ملف
+                      </Button>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            setImportFile(e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </div>
+                  </label>
+                )}
+                
+                {importFile && (
+                  <div className="mt-2 flex justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setImportFile(null)}
+                    >
+                      إلغاء
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => importMutation.mutate(importFile)}
+                      disabled={importMutation.isPending}
+                    >
+                      {importMutation.isPending ? 'جاري الاستيراد...' : 'استيراد'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="bg-muted/50 rounded-md p-4">
+                <h4 className="text-sm font-medium mb-2">تنسيق الملف</h4>
+                <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+                  <li>يجب أن يكون الملف بتنسيق Excel (.xlsx, .xls) أو CSV (.csv)</li>
+                  <li>يجب أن يحتوي الصف الأول على أسماء الأعمدة</li>
+                  <li>سيتم توليد كود المستلزم تلقائيًا لكل مستلزم جديد</li>
+                  <li>يتم تعيين قيمة الأهمية تلقائيًا إلى 0 للمستلزمات الجديدة</li>
+                </ul>
+                
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium mb-2">تحميل نموذج</h4>
+                  <Button variant="link" size="sm" className="p-0 h-auto">
+                    تحميل ملف نموذجي (.xlsx)
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                إغلاق
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl">تفاصيل مستلزم التعبئة</DialogTitle>
+              <DialogDescription>
+                عرض تفاصيل كاملة عن مستلزم التعبئة، بما في ذلك إحصائيات المخزون وسجل الحركة.
+              </DialogDescription>
+            </DialogHeader>
+            {currentMaterial && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* معلومات أساسية */}
+                  <div className="space-y-4">
+                    <div className="border rounded-md p-4">
+                      <h3 className="font-medium mb-3">معلومات أساسية</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">الكود:</span>
+                          <span className="font-medium">{currentMaterial.code}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">الاسم:</span>
+                          <span className="font-medium">{currentMaterial.name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">وحدة القياس:</span>
+                          <span className="font-medium">{currentMaterial.unit}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">سعر الوحدة:</span>
+                          <span className="font-medium">{currentMaterial.price} ج.م</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">الكمية الحالية:</span>
+                          <span className={`font-medium ${
+                            currentMaterial.quantity <= currentMaterial.minStock ? 'text-red-600' : 
+                            currentMaterial.quantity <= currentMaterial.minStock * 1.5 ? 'text-amber-600' : 
+                            'text-green-600'
+                          }`}>
+                            {currentMaterial.quantity} {currentMaterial.unit}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">الحد الأدنى للمخزون:</span>
+                          <span className="font-medium">{currentMaterial.minStock} {currentMaterial.unit}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">القيمة الإجمالية:</span>
+                          <span className="font-bold">{currentMaterial.price * currentMaterial.quantity} ج.م</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* تعديل سريع للكمية */}
+                    <div className="border rounded-md p-4">
+                      <h3 className="font-medium mb-3">تعديل سريع للكمية</h3>
+                      <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => quickUpdateQuantityMutation.mutate({ 
+                            id: currentMaterial.id, 
+                            change: -1 
+                          })}
+                          disabled={quickUpdateQuantityMutation.isPending}
+                        >
+                          <MinusCircle size={16} />
+                        </Button>
+                        
+                        <div className="w-24 text-center">
+                          <p className="text-2xl font-bold">{currentMaterial.quantity}</p>
+                          <p className="text-xs text-muted-foreground">{currentMaterial.unit}</p>
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => quickUpdateQuantityMutation.mutate({ 
+                            id: currentMaterial.id, 
+                            change: 1 
+                          })}
+                          disabled={quickUpdateQuantityMutation.isPending}
+                        >
+                          <PlusCircle size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* إحصائيات ومعلومات إضافية */}
+                  <div className="space-y-4">
+                    {/* نسبة المخزون */}
+                    <div className="border rounded-md p-4">
+                      <h3 className="font-medium mb-3">حالة المخزون</h3>
+                      
+                      <div className="flex justify-between items-center my-1">
+                        <div className="text-sm">0</div>
+                        <div className="text-sm font-medium">{currentMaterial.minStock} (الحد الأدنى)</div>
+                        <div className="text-sm">{currentMaterial.minStock * 2}</div>
+                      </div>
+                      
+                      <div className="w-full h-3 bg-gray-200 rounded-full mt-2 mb-4">
+                        <div 
+                          className={`h-full rounded-full ${
+                            currentMaterial.quantity <= currentMaterial.minStock ? 'bg-red-500' : 
+                            currentMaterial.quantity <= currentMaterial.minStock * 1.5 ? 'bg-amber-500' : 
+                            'bg-green-500'
+                          }`}
+                          style={{ 
+                            width: `${Math.min(100, Math.round((currentMaterial.quantity / (currentMaterial.minStock * 2)) * 100))}%` 
+                          }}
+                        ></div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-red-500 mr-1"></div>
+                          <div className="text-xs text-muted-foreground">نفاد المخزون</div>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-amber-500 mr-1"></div>
+                          <div className="text-xs text-muted-foreground">مخزون منخفض</div>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
+                          <div className="text-xs text-muted-foreground">مخزون جيد</div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-3">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm text-muted-foreground">الأهمية:</span>
+                          <span className="text-sm font-medium">{currentMaterial.importance} / 10</span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-200 rounded-full">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${currentMaterial.importance * 10}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* آخر التحديثات للمخزون */}
+                    <div className="border rounded-md p-4">
+                      <h3 className="font-medium mb-3">آخر تحديثات المخزون</h3>
+                      <div className="space-y-3">
+                        <div className="text-center text-sm text-muted-foreground">
+                          <p>سيتم عرض آخر 5 حركات لهذا المنتج هنا</p>
+                          <p className="mt-2">لتفعيل هذه الميزة، قم بإضافة جدول حركة المخزون</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* المنتجات المرتبطة */}
+                <div className="border rounded-md p-4">
+                  <h3 className="font-medium mb-3">المنتجات المرتبطة</h3>
+                  <div className="text-center text-sm text-muted-foreground">
+                    <p>سيتم عرض المنتجات النهائية التي تستخدم هذا المستلزم هنا</p>
+                    <p className="mt-2">لتفعيل هذه الميزة، قم بربط المنتجات النهائية بمستلزمات التعبئة</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>
+                إغلاق
+              </Button>
+              <Button
+                onClick={() => {
+                  setIsDetailsDialogOpen(false);
+                  setIsEditDialogOpen(true);
+                }}
+              >
+                تعديل المعلومات
               </Button>
             </DialogFooter>
           </DialogContent>

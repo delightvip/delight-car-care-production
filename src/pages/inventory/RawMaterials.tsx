@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTable from '@/components/ui/DataTable';
@@ -21,14 +21,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit, Plus, Trash, Eye, FileUp, PlusCircle, MinusCircle } from 'lucide-react';
+import { Edit, Plus, Trash, Eye, FileUp, PlusCircle, MinusCircle, Filter, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSidebar } from '@/components/layout/SidebarContext';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const units = ['كجم', 'لتر', 'مللى', 'جم', 'علبة', 'قطعة', 'كرتونة'];
 
 const RawMaterials = () => {
+  // إضافة استخدام سياق القائمة الجانبية
+  const { isOpen: isSidebarOpen } = useSidebar();
+  
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -59,7 +77,6 @@ const RawMaterials = () => {
     mutationFn: async (file: File) => {
       // في التطبيق الحقيقي، هنا سيتم رفع الملف إلى الخادم ومعالجته
       // ولأغراض العرض التوضيحي، سنفترض أنه تمت معالجة الملف بنجاح
-      
       toast.info("جاري معالجة الملف...");
       
       // نقوم بمحاكاة وقت المعالجة
@@ -286,13 +303,14 @@ const RawMaterials = () => {
   
   // تعريف أعمدة الجدول
   const columns = [
-    { key: 'code', title: 'الكود', sortable: true },
-    { key: 'name', title: 'اسم المادة', sortable: true },
-    { key: 'unit', title: 'وحدة القياس', sortable: true },
+    { key: 'code', title: 'الكود', sortable: true, minWidth: '120px' },
+    { key: 'name', title: 'اسم المادة', sortable: true, minWidth: '200px' },
+    { key: 'unit', title: 'وحدة القياس', sortable: true, minWidth: '100px' },
     { 
       key: 'quantity', 
       title: 'الكمية',
       sortable: true,
+      minWidth: '180px',
       render: (value: number, record: any) => (
         <div className="flex items-center">
           <div className="flex items-center gap-2 min-w-[120px]">
@@ -326,19 +344,22 @@ const RawMaterials = () => {
       key: 'price', 
       title: 'السعر',
       sortable: true,
+      minWidth: '100px',
       render: (value: number) => `${value} ج.م`
     },
     { 
       key: 'minStock', 
       title: 'الحد الأدنى',
       sortable: true,
+      minWidth: '100px',
       render: (value: number, record: any) => `${value} ${record.unit}`
     },
-    { key: 'importance', title: 'الأهمية', sortable: true },
+    { key: 'importance', title: 'الأهمية', sortable: true, minWidth: '100px' },
     { 
       key: 'totalValue', 
       title: 'إجمالي القيمة',
       sortable: true,
+      minWidth: '120px',
       render: (value: number) => `${value} ج.م`
     }
   ];
@@ -395,6 +416,12 @@ const RawMaterials = () => {
     </div>
   );
   
+  // وظيفة للتحقق من تغير حالة القائمة الجانبية
+  useEffect(() => {
+    // يمكننا تطبيق تحسينات إضافية عند تغير حالة الشريط الجانبي
+    // على سبيل المثال تعديل حجم وتخطيط المكونات
+  }, [isSidebarOpen]);
+  
   // وظيفة للتعامل مع النقر على رأس العمود للفرز
   const handleSort = (key: string) => {
     if (sortConfig && sortConfig.key === key) {
@@ -440,28 +467,105 @@ const RawMaterials = () => {
   
   return (
     <PageTransition>
-      <div className="space-y-6">
+      <div className={`space-y-6 ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+        {/* إضافة بطاقة للملخص العام */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">إجمالي المواد</CardTitle>
+              <CardDescription>عدد المواد الأولية المسجلة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {isLoading ? <Skeleton className="h-8 w-16" /> : rawMaterials?.length || 0}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">المواد منخفضة المخزون</CardTitle>
+              <CardDescription>المواد التي تحتاج لإعادة تعبئة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">
+                {isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  rawMaterials?.filter(item => item.quantity <= item.minStock * 1.2).length || 0
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">إجمالي القيمة</CardTitle>
+              <CardDescription>القيمة الإجمالية للمخزون</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  `${rawMaterials?.reduce((sum, item) => sum + item.totalValue, 0).toLocaleString()} ج.م` || '0 ج.م'
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-sky-500/10 to-sky-500/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">متوسط المخزون</CardTitle>
+              <CardDescription>متوسط نسبة المخزون للحد الأدنى</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-sky-600">
+                {isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : rawMaterials?.length ? (
+                  `${Math.round(rawMaterials.reduce((sum, item) => 
+                    sum + (item.quantity / item.minStock * 100), 0) / rawMaterials.length)}%`
+                ) : '0%'}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المواد الأولية</h1>
             <p className="text-muted-foreground mt-1">إدارة المواد الأولية المستخدمة في عمليات الإنتاج</p>
           </div>
           <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-1">
+                  <Filter size={16} />
+                  تصفية
+                  <ChevronDown size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setFilterType('all')}>
+                  كل المواد
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFilterType('low-stock')}>
+                  المخزون المنخفض
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFilterType('high-value')}>
+                  الأعلى قيمة
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFilterType('high-importance')}>
+                  الأكثر أهمية
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <FileUp size={18} className="mr-2" />
-              استيراد من ملف
+              استيراد
             </Button>
-            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="تصفية المواد" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل المواد</SelectItem>
-                <SelectItem value="low-stock">المخزون المنخفض</SelectItem>
-                <SelectItem value="high-value">الأعلى قيمة</SelectItem>
-                <SelectItem value="high-importance">الأكثر أهمية</SelectItem>
-              </SelectContent>
-            </Select>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -553,15 +657,23 @@ const RawMaterials = () => {
             <Skeleton className="h-12 w-full" />
           </div>
         ) : (
-          <DataTable
-            columns={columns}
-            data={sortedMaterials || []}
-            searchable
-            searchKeys={['code', 'name']}
-            actions={renderActions}
-            onSort={handleSort}
-            sortConfig={sortConfig}
-          />
+          <Card>
+            <CardContent className="p-0 overflow-hidden">
+              <div className="relative w-full">
+                <DataTable
+                  columns={columns}
+                  data={sortedMaterials || []}
+                  searchable
+                  searchKeys={['code', 'name']}
+                  actions={renderActions}
+                  onSort={handleSort}
+                  sortConfig={sortConfig}
+                  stickyHeader={true}
+                  className="inventory-data-table"
+                />
+              </div>
+            </CardContent>
+          </Card>
         )}
         
         {/* نافذة تعديل المادة */}
@@ -606,6 +718,7 @@ const RawMaterials = () => {
                           {unit}
                         </SelectItem>
                       ))}
+
                     </SelectContent>
                   </Select>
                 </div>
@@ -693,12 +806,15 @@ const RawMaterials = () => {
                       <span className="text-muted-foreground">الكود:</span>
                       <span className="font-medium">{currentMaterial.code}</span>
                       
+
                       <span className="text-muted-foreground">الاسم:</span>
                       <span className="font-medium">{currentMaterial.name}</span>
                       
+
                       <span className="text-muted-foreground">وحدة القياس:</span>
                       <span className="font-medium">{currentMaterial.unit}</span>
                       
+
                       <span className="text-muted-foreground">الكمية الحالية:</span>
                       <div className="flex items-center">
                         <div 
@@ -711,15 +827,19 @@ const RawMaterials = () => {
                         <span className="font-medium">{currentMaterial.quantity} {currentMaterial.unit}</span>
                       </div>
                       
+
                       <span className="text-muted-foreground">الحد الأدنى:</span>
                       <span className="font-medium">{currentMaterial.minStock} {currentMaterial.unit}</span>
                       
+
                       <span className="text-muted-foreground">السعر:</span>
                       <span className="font-medium">{currentMaterial.price} ج.م</span>
                       
+
                       <span className="text-muted-foreground">القيمة الإجمالية:</span>
                       <span className="font-medium">{currentMaterial.totalValue} ج.م</span>
                       
+
                       <span className="text-muted-foreground">مستوى الأهمية:</span>
                       <span className="font-medium">
                         {currentMaterial.importance === 0 && "منخفض"}

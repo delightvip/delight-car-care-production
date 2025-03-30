@@ -1,5 +1,10 @@
+/* Tailwind CSS Directives - VS Code linting is disabled for these */
+/* postcss-custom-properties: true */
+/* stylelint-disable-next-line no-invalid-position-at-import-rule */
 @tailwind base;
+/* stylelint-disable-next-line no-invalid-position-at-import-rule */
 @tailwind components;
+/* stylelint-disable-next-line no-invalid-position-at-import-rule */
 @tailwind utilities;
 
 @layer base {
