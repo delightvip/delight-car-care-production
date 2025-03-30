@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { FileDown, BarChart3, PieChart, ActivitySquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useParams } from 'react-router-dom';
 
 // Define item types for inventory
 type ItemType = 'raw' | 'semi' | 'packaging' | 'finished';
@@ -39,8 +41,12 @@ const inventoryTables = [
 ];
 
 const InventoryReports = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('raw');
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  // Check if we're in item report mode or general report mode
+  const params = useParams<{ type?: string; id?: string }>();
+  const isItemReport = !!params.type && !!params.id;
+
+  const [selectedCategory, setSelectedCategory] = useState<string>(params.type || 'raw');
+  const [selectedItem, setSelectedItem] = useState<string | null>(params.id || null);
   const [reportType, setReportType] = useState<string>('movement');
   const [timeRange, setTimeRange] = useState<string>('month');
   
@@ -48,24 +54,24 @@ const InventoryReports = () => {
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['inventory-categories'],
     queryFn: async () => {
-      // Simulate fetching categories and counts
+      // Fetch categories and counts from database
       const result: ItemCategory[] = [];
       
       for (const type of inventoryTables) {
-        // Simulate counts with mock data instead of using potentially problematic Supabase queries
-        let count = 0;
-        switch(type.id) {
-          case 'raw': count = 12; break;
-          case 'semi': count = 8; break;
-          case 'packaging': count = 15; break;
-          case 'finished': count = 20; break;
+        // Get count of items in each category
+        const { count, error } = await supabase
+          .from(type.table)
+          .select('*', { count: 'exact', head: true });
+          
+        if (error) {
+          console.error(`Error fetching count for ${type.table}:`, error);
         }
           
         result.push({
           id: type.id,
           name: type.name,
           type: type.id as ItemType,
-          itemCount: count
+          itemCount: count || 0
         });
       }
       
@@ -77,44 +83,23 @@ const InventoryReports = () => {
   const { data: items, isLoading: isLoadingItems } = useQuery({
     queryKey: ['inventory-items', selectedCategory],
     queryFn: async () => {
-      // Simulate fetching items based on category
+      // Find the table name for the selected category
       const selectedTableInfo = inventoryTables.find(t => t.id === selectedCategory);
       
       if (!selectedTableInfo) return [];
       
-      // Sample data for each category
-      let sampleData: any[] = [];
-      
-      switch(selectedCategory) {
-        case 'raw':
-          sampleData = [
-            { id: '1', code: 'RM001', name: 'دقيق', quantity: 500, unit: 'كجم' },
-            { id: '2', code: 'RM002', name: 'سكر', quantity: 300, unit: 'كجم' },
-            { id: '3', code: 'RM003', name: 'زيت', quantity: 200, unit: 'لتر' }
-          ];
-          break;
-        case 'semi':
-          sampleData = [
-            { id: '1', code: 'SF001', name: 'عجين', quantity: 100, unit: 'كجم' },
-            { id: '2', code: 'SF002', name: 'حشو', quantity: 80, unit: 'كجم' }
-          ];
-          break;
-        case 'packaging':
-          sampleData = [
-            { id: '1', code: 'PK001', name: 'علب كرتون', quantity: 1000, unit: 'قطعة' },
-            { id: '2', code: 'PK002', name: 'أكياس بلاستيك', quantity: 2000, unit: 'قطعة' }
-          ];
-          break;
-        case 'finished':
-          sampleData = [
-            { id: '1', code: 'FP001', name: 'كيك شوكولاتة', quantity: 500, unit: 'قطعة' },
-            { id: '2', code: 'FP002', name: 'بسكويت', quantity: 800, unit: 'علبة' }
-          ];
-          break;
+      // Fetch items from the selected table
+      const { data, error } = await supabase
+        .from(selectedTableInfo.table)
+        .select('id, code, name, quantity, unit');
+        
+      if (error) {
+        console.error(`Error fetching items from ${selectedTableInfo.table}:`, error);
+        return [];
       }
         
       // Make sure all items have the correct types
-      return sampleData.map(item => ({
+      return data.map(item => ({
         id: String(item.id),
         code: String(item.code),
         name: String(item.name),
@@ -131,25 +116,37 @@ const InventoryReports = () => {
     queryFn: async () => {
       if (!selectedItem) return null;
       
-      // Find the item in our cached items data
-      const item = items?.find(i => i.id === selectedItem);
+      // Find the table name for the selected category
+      const selectedTableInfo = inventoryTables.find(t => t.id === selectedCategory);
       
-      if (!item) return null;
+      if (!selectedTableInfo) return null;
       
+      // Fetch the selected item from the selected table
+      const { data, error } = await supabase
+        .from(selectedTableInfo.table)
+        .select('id, code, name, quantity, unit')
+        .eq('id', selectedItem)
+        .single();
+        
+      if (error) {
+        console.error(`Error fetching item details:`, error);
+        return null;
+      }
+        
       // Ensure all properties have the correct types
       return {
-        id: String(item.id),
-        code: String(item.code),
-        name: String(item.name),
-        quantity: Number(item.quantity), // Ensure this is a number
-        unit: String(item.unit)
+        id: String(data.id),
+        code: String(data.code),
+        name: String(data.name),
+        quantity: Number(data.quantity),
+        unit: String(data.unit)
       } as InventoryItem;
     },
-    enabled: !!selectedItem && !!items?.length
+    enabled: !!selectedItem && !!selectedCategory
   });
   
   // Set the first item as selected when items load
-  React.useEffect(() => {
+  useEffect(() => {
     if (items && items.length > 0 && !selectedItem) {
       setSelectedItem(items[0].id);
     }
@@ -173,7 +170,7 @@ const InventoryReports = () => {
       );
     }
     
-    // Import the report components dynamically to avoid circular dependencies
+    // Import the report components
     const InventoryMovementChart = React.lazy(() => import('@/components/inventory/reports/InventoryMovementChart'));
     const InventoryUsageChart = React.lazy(() => import('@/components/inventory/reports/InventoryUsageChart'));
     const InventorySummaryStats = React.lazy(() => import('@/components/inventory/reports/InventorySummaryStats'));
@@ -230,7 +227,11 @@ const InventoryReports = () => {
               <CardTitle className="text-sm font-medium">نوع الصنف</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select 
+                value={selectedCategory} 
+                onValueChange={setSelectedCategory}
+                disabled={isItemReport}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="اختر نوع المخزون" />
                 </SelectTrigger>
@@ -257,7 +258,11 @@ const InventoryReports = () => {
               <CardTitle className="text-sm font-medium">الصنف</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedItem || ''} onValueChange={setSelectedItem}>
+              <Select 
+                value={selectedItem || ''} 
+                onValueChange={setSelectedItem}
+                disabled={isItemReport}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الصنف" />
                 </SelectTrigger>

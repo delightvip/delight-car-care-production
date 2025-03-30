@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -22,7 +21,8 @@ import {
   Wallet,
   DollarSign,
   PieChart,
-  Tags
+  Tags,
+  PresentationChart
 } from 'lucide-react';
 import { useSidebar } from './SidebarContext';
 
@@ -139,6 +139,12 @@ const Sidebar: React.FC = () => {
               icon={<ListChecks size={20} />} 
               label="تتبع المخزون" 
               active={pathname === '/inventory/tracking'}
+            />
+            <NavItem 
+              to="/inventory/reports" 
+              icon={<PresentationChart size={20} />} 
+              label="تقارير المخزون" 
+              active={pathname === '/inventory/reports' || pathname.includes('/inventory/reports')}
             />
           </NavGroup>
           

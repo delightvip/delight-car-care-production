@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import './App.css';
 import { Route, Routes } from 'react-router-dom';
@@ -73,6 +72,7 @@ function App() {
             <Route path="inventory/tracking" element={<InventoryTracking />} />
             <Route path="inventory/:type/:id" element={<ProductDetails />} />
             <Route path="inventory/:type/:id/reports" element={<InventoryReports />} />
+            <Route path="inventory/reports" element={<InventoryReports />} />
             
             {/* Production Routes */}
             <Route path="production/orders" element={<ProductionOrders />} />

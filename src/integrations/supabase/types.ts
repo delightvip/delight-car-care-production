@@ -1031,6 +1031,33 @@ export type Database = {
           user_name: string
         }[]
       }
+      get_inventory_movements_by_time: {
+        Args: {
+          p_item_id: string
+          p_item_type: string
+          p_period?: string
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: {
+          period: string
+          in_quantity: number
+          out_quantity: number
+          balance: number
+        }[]
+      }
+      get_inventory_usage_stats: {
+        Args: {
+          p_item_id: string
+          p_item_type: string
+          p_period?: string
+          p_limit?: number
+        }
+        Returns: {
+          category: string
+          usage_amount: number
+        }[]
+      }
     }
     Enums: {
       account_category:
