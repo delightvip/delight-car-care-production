@@ -1,9 +1,60 @@
+-- Function to get inventory summary statistics
+CREATE OR REPLACE FUNCTION get_inventory_summary_stats(
+  p_item_id TEXT,
+  p_item_type TEXT
+)
+RETURNS TABLE (
+  total_movements INT,
+  total_in NUMERIC,
+  total_out NUMERIC,
+  adjustments NUMERIC,
+  current_quantity NUMERIC
+) 
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_current_quantity NUMERIC;
+BEGIN
+  -- Get current quantity from the appropriate table
+  CASE p_item_type
+    WHEN 'raw' THEN
+      SELECT quantity INTO v_current_quantity 
+      FROM raw_materials 
+      WHERE id = p_item_id::integer;
+    WHEN 'semi' THEN
+      SELECT quantity INTO v_current_quantity 
+      FROM semi_finished_products 
+      WHERE id = p_item_id::integer;
+    WHEN 'packaging' THEN
+      SELECT quantity INTO v_current_quantity 
+      FROM packaging_materials 
+      WHERE id = p_item_id::integer;
+    WHEN 'finished' THEN
+      SELECT quantity INTO v_current_quantity 
+      FROM finished_products 
+      WHERE id = p_item_id::integer;
+    ELSE
+      v_current_quantity := 0;
+  END CASE;
+
+  RETURN QUERY
+  SELECT 
+    COUNT(*)::INT AS total_movements,
+    SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END) AS total_in,
+    SUM(CASE WHEN quantity < 0 THEN ABS(quantity) ELSE 0 END) AS total_out,
+    SUM(CASE WHEN reason = 'adjustment' THEN ABS(quantity) ELSE 0 END) AS adjustments,
+    COALESCE(v_current_quantity, 0) AS current_quantity
+  FROM inventory_movements
+  WHERE item_id = p_item_id
+  AND item_type = p_item_type;
+END;
+$$;
 
 -- Function to get inventory movements by time period
 CREATE OR REPLACE FUNCTION get_inventory_movements_by_time(
   p_item_id TEXT,
   p_item_type TEXT,
-  p_period TEXT DEFAULT 'month', -- 'day', 'week', 'month', 'year'
+  p_period TEXT DEFAULT 'month',
   p_start_date TIMESTAMPTZ DEFAULT NULL,
   p_end_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 )
@@ -96,57 +147,5 @@ BEGIN
   GROUP BY reason
   ORDER BY usage_amount DESC
   LIMIT p_limit;
-END;
-$$;
-
--- Function to get inventory summary statistics
-CREATE OR REPLACE FUNCTION get_inventory_summary_stats(
-  p_item_id TEXT,
-  p_item_type TEXT
-)
-RETURNS TABLE (
-  total_movements INT,
-  total_in NUMERIC,
-  total_out NUMERIC,
-  adjustments NUMERIC,
-  current_quantity NUMERIC
-) 
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_current_quantity NUMERIC;
-BEGIN
-  -- Get current quantity from the appropriate table
-  CASE p_item_type
-    WHEN 'raw' THEN
-      SELECT quantity INTO v_current_quantity 
-      FROM raw_materials 
-      WHERE id = p_item_id;
-    WHEN 'semi' THEN
-      SELECT quantity INTO v_current_quantity 
-      FROM semi_finished_products 
-      WHERE id = p_item_id;
-    WHEN 'packaging' THEN
-      SELECT quantity INTO v_current_quantity 
-      FROM packaging_materials 
-      WHERE id = p_item_id;
-    WHEN 'finished' THEN
-      SELECT quantity INTO v_current_quantity 
-      FROM finished_products 
-      WHERE id = p_item_id;
-    ELSE
-      v_current_quantity := 0;
-  END CASE;
-
-  RETURN QUERY
-  SELECT 
-    COUNT(*)::INT AS total_movements,
-    SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END) AS total_in,
-    SUM(CASE WHEN quantity < 0 THEN ABS(quantity) ELSE 0 END) AS total_out,
-    SUM(CASE WHEN reason = 'adjustment' THEN ABS(quantity) ELSE 0 END) AS adjustments,
-    COALESCE(v_current_quantity, 0) AS current_quantity
-  FROM inventory_movements
-  WHERE item_id = p_item_id
-  AND item_type = p_item_type;
 END;
 $$;
