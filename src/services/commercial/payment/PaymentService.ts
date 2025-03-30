@@ -106,9 +106,9 @@ class PaymentService {
         party_name: data.parties?.name || 'غير معروف',
         date: data.date,
         amount: data.amount,
-        payment_type: data.payment_type,
-        method: data.method,
-        payment_status: data.payment_status,
+        payment_type: data.payment_type as 'collection' | 'disbursement',
+        method: data.method as 'cash' | 'check' | 'bank_transfer' | 'other',
+        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled',
         related_invoice_id: data.related_invoice_id,
         notes: data.notes,
         created_at: data.created_at
