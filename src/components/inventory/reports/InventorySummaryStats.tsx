@@ -39,7 +39,14 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
         
         // The function returns an array with a single row, we need to extract it
         if (Array.isArray(data) && data.length > 0) {
-          return data[0] as SummaryStats;
+          // Make sure all numeric values have defaults to avoid undefined errors
+          return {
+            total_movements: data[0].total_movements || 0,
+            total_in: data[0].total_in || 0,
+            total_out: data[0].total_out || 0,
+            adjustments: data[0].adjustments || 0,
+            current_quantity: data[0].current_quantity || 0
+          } as SummaryStats;
         }
         
         // If no data is returned, provide default values
@@ -137,7 +144,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
                   {item.title}
                 </p>
                 <h3 className="text-2xl font-bold mt-1">
-                  {/* Add fallback in case value is undefined */}
+                  {/* Ensure the value is a number before calling toLocaleString */}
                   {typeof item.value === 'number' ? item.value.toLocaleString('ar-EG') : '0'}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">

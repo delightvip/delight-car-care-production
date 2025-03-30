@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,10 +11,8 @@ import { FileDown, BarChart3, PieChart, ActivitySquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useParams } from 'react-router-dom';
 
-// Define item types for inventory
 type ItemType = 'raw' | 'semi' | 'packaging' | 'finished';
 
-// Define item category interface
 interface ItemCategory {
   id: string;
   name: string;
@@ -23,7 +20,6 @@ interface ItemCategory {
   itemCount: number;
 }
 
-// Define item interface
 interface InventoryItem {
   id: string;
   code: string;
@@ -32,7 +28,6 @@ interface InventoryItem {
   unit: string;
 }
 
-// Define the inventory tables with their literal names to fix type issues
 const inventoryTables = [
   { id: 'raw', name: 'المواد الخام', table: 'raw_materials' as const },
   { id: 'semi', name: 'المنتجات النصف مصنعة', table: 'semi_finished_products' as const },
@@ -41,7 +36,6 @@ const inventoryTables = [
 ];
 
 const InventoryReports = () => {
-  // Check if we're in item report mode or general report mode
   const params = useParams<{ type?: string; id?: string }>();
   const isItemReport = !!params.type && !!params.id;
 
@@ -50,15 +44,12 @@ const InventoryReports = () => {
   const [reportType, setReportType] = useState<string>('movement');
   const [timeRange, setTimeRange] = useState<string>('month');
   
-  // Get item categories
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['inventory-categories'],
     queryFn: async () => {
-      // Fetch categories and counts from database
       const result: ItemCategory[] = [];
       
       for (const type of inventoryTables) {
-        // Get count of items in each category
         const { count, error } = await supabase
           .from(type.table)
           .select('*', { count: 'exact', head: true });
@@ -79,16 +70,13 @@ const InventoryReports = () => {
     }
   });
   
-  // Get items for selected category
   const { data: items, isLoading: isLoadingItems } = useQuery({
     queryKey: ['inventory-items', selectedCategory],
     queryFn: async () => {
-      // Find the table name for the selected category
       const selectedTableInfo = inventoryTables.find(t => t.id === selectedCategory);
       
       if (!selectedTableInfo) return [];
       
-      // Fetch items from the selected table
       const { data, error } = await supabase
         .from(selectedTableInfo.table)
         .select('id, code, name, quantity, unit');
@@ -98,7 +86,6 @@ const InventoryReports = () => {
         return [];
       }
         
-      // Make sure all items have the correct types
       return data.map(item => ({
         id: String(item.id),
         code: String(item.code),
@@ -110,18 +97,15 @@ const InventoryReports = () => {
     enabled: !!selectedCategory
   });
   
-  // Get selected item details
   const { data: selectedItemDetails, isLoading: isLoadingItemDetails } = useQuery({
     queryKey: ['inventory-item-details', selectedCategory, selectedItem],
     queryFn: async () => {
       if (!selectedItem) return null;
       
-      // Find the table name for the selected category
       const selectedTableInfo = inventoryTables.find(t => t.id === selectedCategory);
       
       if (!selectedTableInfo) return null;
       
-      // Fetch the selected item from the selected table
       const { data, error } = await supabase
         .from(selectedTableInfo.table)
         .select('id, code, name, quantity, unit')
@@ -133,7 +117,6 @@ const InventoryReports = () => {
         return null;
       }
         
-      // Ensure all properties have the correct types
       return {
         id: String(data.id),
         code: String(data.code),
@@ -145,14 +128,12 @@ const InventoryReports = () => {
     enabled: !!selectedItem && !!selectedCategory
   });
   
-  // Set the first item as selected when items load
   useEffect(() => {
     if (items && items.length > 0 && !selectedItem) {
       setSelectedItem(items[0].id);
     }
   }, [items, selectedItem]);
 
-  // Render appropriate report component based on selected report type
   const renderReport = () => {
     if (!selectedItem || !selectedCategory) {
       return (
@@ -170,7 +151,6 @@ const InventoryReports = () => {
       );
     }
     
-    // Import the report components
     const InventoryMovementChart = React.lazy(() => import('@/components/inventory/reports/InventoryMovementChart'));
     const InventoryUsageChart = React.lazy(() => import('@/components/inventory/reports/InventoryUsageChart'));
     const InventorySummaryStats = React.lazy(() => import('@/components/inventory/reports/InventorySummaryStats'));
@@ -178,13 +158,11 @@ const InventoryReports = () => {
     return (
       <React.Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
         <div className="space-y-6">
-          {/* Summary statistics */}
           <InventorySummaryStats 
             itemId={selectedItem} 
             itemType={selectedCategory} 
           />
           
-          {/* Main report content */}
           {reportType === 'movement' && (
             <InventoryMovementChart 
               itemId={selectedItem} 
@@ -222,9 +200,7 @@ const InventoryReports = () => {
           </Button>
         </div>
         
-        {/* Filter and controls */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Category selection */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">نوع الصنف</CardTitle>
@@ -255,7 +231,6 @@ const InventoryReports = () => {
             </CardContent>
           </Card>
           
-          {/* Item selection */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">الصنف</CardTitle>
@@ -290,7 +265,6 @@ const InventoryReports = () => {
             </CardContent>
           </Card>
           
-          {/* Report type selection */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">نوع التقرير</CardTitle>
@@ -318,7 +292,6 @@ const InventoryReports = () => {
             </CardContent>
           </Card>
           
-          {/* Time range selection */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">الفترة الزمنية</CardTitle>
@@ -339,7 +312,6 @@ const InventoryReports = () => {
           </Card>
         </div>
         
-        {/* Report content */}
         <div className="bg-muted/50 rounded-lg p-6 border">
           {renderReport()}
         </div>
