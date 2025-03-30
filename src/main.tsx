@@ -18,11 +18,13 @@ const queryClient = new QueryClient({
 })
 
 createRoot(document.getElementById("root")!).render(
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <SidebarProvider>
-        <App />
-      </SidebarProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+  <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <SidebarProvider>
+          <App />
+        </SidebarProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </BrowserRouter>
 );

@@ -1,11 +1,10 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Payment } from "../CommercialTypes";
 import { toast } from "sonner";
 import FinancialPaymentBridge from "@/services/financial/FinancialPaymentBridge";
 import PartyService from "@/services/PartyService";
 
-class PaymentService {
+export class PaymentService {
   private static instance: PaymentService;
   private financialBridge: FinancialPaymentBridge;
   private partyService: PartyService;
@@ -280,6 +279,38 @@ class PaymentService {
       console.error('Error deleting payment:', error);
       toast.error('حدث خطأ أثناء حذف المدفوعة');
       return false;
+    }
+  }
+
+  public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          parties(name)
+        `)
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+        
+      if (error) throw error;
+      
+      return (data || []).map(item => ({
+        id: item.id,
+        party_id: item.party_id,
+        party_name: item.parties?.name,
+        date: item.date,
+        amount: item.amount,
+        payment_type: item.payment_type as "collection" | "disbursement",
+        method: item.method as "cash" | "check" | "bank_transfer" | "other",
+        payment_status: item.payment_status as "draft" | "confirmed" | "cancelled",
+        related_invoice_id: item.related_invoice_id,
+        notes: item.notes,
+        created_at: item.created_at
+      }));
+    } catch (error) {
+      console.error("Error fetching payments by party:", error);
+      return [];
     }
   }
 }

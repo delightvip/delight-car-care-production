@@ -784,6 +784,90 @@ class InventoryService {
       return false;
     }
   }
+
+  public async getSemiFinishedProductById(id: string): Promise<SemiFinishedProduct | null> {
+    try {
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .select(`
+          *,
+          ingredients:semi_finished_ingredients (
+            id,
+            percentage,
+            raw_material:raw_materials (
+              id,
+              code,
+              name
+            )
+          )
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      const mappedIngredients = data.ingredients.map((ingredient: any) => ({
+        id: ingredient.id,
+        percentage: ingredient.percentage,
+        raw_material: {
+          id: ingredient.raw_material[0]?.id,
+          code: ingredient.raw_material[0]?.code,
+          name: ingredient.raw_material[0]?.name,
+        }
+      }));
+
+      return {
+        ...data,
+        ingredients: mappedIngredients
+      } as SemiFinishedProduct;
+    } catch (error) {
+      console.error(`Error fetching semi-finished product with ID ${id}:`, error);
+      return null;
+    }
+  }
+
+  public async getFinishedProductById(id: string): Promise<FinishedProduct | null> {
+    try {
+      const { data, error } = await supabase
+        .from('finished_products')
+        .select(`
+          *,
+          components:finished_product_components (
+            id,
+            quantity,
+            packaging:packaging_materials (
+              id,
+              code,
+              name
+            )
+          )
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      const mappedComponents = data.components.map((component: any) => ({
+        id: component.id,
+        quantity: component.quantity,
+        packaging: {
+          id: component.packaging[0]?.id,
+          code: component.packaging[0]?.code,
+          name: component.packaging[0]?.name,
+        }
+      }));
+
+      return {
+        ...data,
+        components: mappedComponents
+      } as FinishedProduct;
+    } catch (error) {
+      console.error(`Error fetching finished product with ID ${id}:`, error);
+      return null;
+    }
+  }
 }
 
 export default InventoryService;
