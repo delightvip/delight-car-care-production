@@ -4,42 +4,69 @@ import { supabase, lowStockQueries } from '@/integrations/supabase/client';
 // استدعاء بيانات المخزون المنخفض
 export async function fetchLowStockItems() {
   try {
-    console.log("Fetching low stock items...");
+    console.log("Fetching low stock items using optimized database function...");
     
-    // فحص المواد الأولية ذات المخزون المنخفض - using helper function
+    // استخدام الوظيفة الجديدة للحصول على جميع عناصر المخزون المنخفض في استدعاء واحد
+    const { data: lowStockItems, error } = await lowStockQueries.getAllLowStockItems();
+    
+    if (error) {
+      console.error("Error fetching low stock items:", error);
+      throw error;
+    }
+    
+    // حساب إحصائيات كل نوع من العناصر
+    const rawMaterialsCount = lowStockItems?.filter(item => item.type === 'raw')?.length || 0;
+    const semiFinishedCount = lowStockItems?.filter(item => item.type === 'semi')?.length || 0;
+    const packagingCount = lowStockItems?.filter(item => item.type === 'packaging')?.length || 0;
+    const finishedCount = lowStockItems?.filter(item => item.type === 'finished')?.length || 0;
+    
+    // إجمالي العناصر منخفضة المخزون
+    const totalCount = lowStockItems?.length || 0;
+    
+    console.log(`Total low stock items: ${totalCount} (Raw: ${rawMaterialsCount}, Semi: ${semiFinishedCount}, Packaging: ${packagingCount}, Finished: ${finishedCount})`);
+    
+    // إعادة تنظيم النتائج
+    return {
+      totalCount,
+      items: lowStockItems || [],
+      counts: {
+        rawMaterials: rawMaterialsCount,
+        semiFinished: semiFinishedCount,
+        packaging: packagingCount,
+        finished: finishedCount
+      }
+    };
+  } catch (error) {
+    console.error("خطأ في جلب عناصر المخزون المنخفض:", error);
+    
+    // في حال فشل الوظيفة الجديدة، نرجع إلى الطريقة القديمة كخطة بديلة
+    console.log("Falling back to original low stock query method...");
+    return fetchLowStockItemsOriginal();
+  }
+}
+
+// طريقة احتياطية تستخدم الاستدعاءات المنفصلة القديمة
+async function fetchLowStockItemsOriginal() {
+  try {
+    console.log("Using original low stock queries as fallback...");
+    
+    // فحص المواد الأولية ذات المخزون المنخفض 
     const rawMaterialsResponse = await lowStockQueries.rawMaterials();
     
-    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض - using helper function
+    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض 
     const semiFinishedResponse = await lowStockQueries.semiFinishedProducts();
     
-    // فحص مستلزمات التعبئة ذات المخزون المنخفض - using helper function
+    // فحص مستلزمات التعبئة ذات المخزون المنخفض 
     const packagingResponse = await lowStockQueries.packagingMaterials();
     
-    // فحص المنتجات النهائية ذات المخزون المنخفض - using helper function
+    // فحص المنتجات النهائية ذات المخزون المنخفض 
     const finishedResponse = await lowStockQueries.finishedProducts();
     
     // تحقق من الأخطاء
-    if (rawMaterialsResponse.error) {
-      console.error("Error fetching raw materials:", rawMaterialsResponse.error);
-      throw rawMaterialsResponse.error;
-    }
-    if (semiFinishedResponse.error) {
-      console.error("Error fetching semi-finished products:", semiFinishedResponse.error);
-      throw semiFinishedResponse.error;
-    }
-    if (packagingResponse.error) {
-      console.error("Error fetching packaging materials:", packagingResponse.error);
-      throw packagingResponse.error;
-    }
-    if (finishedResponse.error) {
-      console.error("Error fetching finished products:", finishedResponse.error);
-      throw finishedResponse.error;
-    }
-    
-    console.log("Raw materials low stock count:", rawMaterialsResponse.data?.length || 0);
-    console.log("Semi-finished low stock count:", semiFinishedResponse.data?.length || 0);
-    console.log("Packaging low stock count:", packagingResponse.data?.length || 0);
-    console.log("Finished products low stock count:", finishedResponse.data?.length || 0);
+    if (rawMaterialsResponse.error) throw rawMaterialsResponse.error;
+    if (semiFinishedResponse.error) throw semiFinishedResponse.error;
+    if (packagingResponse.error) throw packagingResponse.error;
+    if (finishedResponse.error) throw finishedResponse.error;
     
     // حساب إجمالي العناصر ذات المخزون المنخفض
     const rawMaterialsCount = rawMaterialsResponse.data?.length || 0;
@@ -72,7 +99,7 @@ export async function fetchLowStockItems() {
       }
     };
   } catch (error) {
-    console.error("خطأ في جلب عناصر المخزون المنخفض:", error);
+    console.error("خطأ في جلب عناصر المخزون المنخفض (طريقة احتياطية):", error);
     throw error;
   }
 }

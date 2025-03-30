@@ -11,14 +11,14 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-// Helper functions for low stock queries to avoid TS errors and code duplication
+// Helper functions for low stock queries - now using the database function
 export const lowStockQueries = {
   rawMaterials() {
-    // تحسين: استخدام استعلام مباشر لمقارنة الكمية بالحد الأدنى
+    // استخدام وظيفة الاستعلامات المحسنة
     return supabase
       .from('raw_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { p1: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
   },
   
@@ -26,7 +26,7 @@ export const lowStockQueries = {
     return supabase
       .from('semi_finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { p1: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
   },
   
@@ -34,7 +34,7 @@ export const lowStockQueries = {
     return supabase
       .from('packaging_materials')
       .select('id, name, quantity, min_stock, code, unit, unit_cost, importance')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { p1: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
   },
   
@@ -42,8 +42,13 @@ export const lowStockQueries = {
     return supabase
       .from('finished_products')
       .select('id, name, quantity, min_stock, code, unit, unit_cost')
-      .lt('quantity', supabase.rpc('coalesce_numeric', { p1: 'min_stock' }))
+      .lt('quantity', 'min_stock')
       .gt('min_stock', 0);
+  },
+
+  // استعلام موحد باستخدام الوظيفة الجديدة 
+  getAllLowStockItems() {
+    return supabase.rpc('get_all_low_stock_items');
   }
 };
 
@@ -65,6 +70,7 @@ export const rpcFunctions = {
       error: any;
     };
   },
+  
   async getMonthlyProductionStats() {
     return await supabase.functions.invoke('get_monthly_production_stats') as unknown as {
       data: { 
@@ -75,6 +81,15 @@ export const rpcFunctions = {
       error: any;
     };
   },
+  
+  // استخدام وظيفة جديدة للحصول على حركات المخزون
+  async getInventoryMovementsByItem(itemId: string, itemType: string) {
+    return await supabase.rpc('get_inventory_movements_by_item', {
+      p_item_id: itemId,
+      p_item_type: itemType
+    });
+  },
+
   // Helper function to replace coalesce_numeric RPC calls
   coalesceNumeric(column: string) {
     // This is a client-side helper method for querying columns when comparing to other columns

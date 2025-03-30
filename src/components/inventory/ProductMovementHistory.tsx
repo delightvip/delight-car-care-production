@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, rpcFunctions } from '@/integrations/supabase/client';
 import { 
   Table,
   TableBody,
@@ -24,22 +25,8 @@ const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId,
   const { data: movements, isLoading, error, refetch } = useQuery({
     queryKey: ['movements', itemType, itemId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('inventory_movements')
-        .select(`
-          id,
-          item_id,
-          item_type,
-          movement_type,
-          quantity,
-          balance_after,
-          reason,
-          created_at,
-          users (name)
-        `)
-        .eq('item_id', itemId)
-        .eq('item_type', itemType)
-        .order('created_at', { ascending: false });
+      // استخدام وظيفة قاعدة البيانات الجديدة للحصول على حركات المخزون
+      const { data, error } = await rpcFunctions.getInventoryMovementsByItem(itemId, itemType);
       
       if (error) throw error;
       return data as InventoryMovement[];
@@ -145,7 +132,7 @@ const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId,
                 <TableCell>{movement.balance_after}</TableCell>
                 <TableCell>{new Date(movement.created_at).toLocaleString('ar-EG')}</TableCell>
                 <TableCell>{movement.reason || '-'}</TableCell>
-                <TableCell>{movement.users?.name || 'النظام'}</TableCell>
+                <TableCell>{movement.user_name || 'النظام'}</TableCell>
               </TableRow>
             );
           })}

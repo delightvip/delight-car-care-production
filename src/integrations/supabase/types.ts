@@ -912,6 +912,27 @@ export type Database = {
         }
         Relationships: []
       }
+      users: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -926,6 +947,27 @@ export type Database = {
           p_notes?: string
         }
         Returns: undefined
+      }
+      coalesce_numeric: {
+        Args: {
+          p1: string
+        }
+        Returns: number
+      }
+      get_all_low_stock_items: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: number
+          code: string
+          name: string
+          quantity: number
+          min_stock: number
+          unit: string
+          unit_cost: number
+          importance: number
+          type: string
+          type_name: string
+        }[]
       }
       get_customer_payment_by_receipt: {
         Args: {
@@ -970,6 +1012,23 @@ export type Database = {
           credit: number
           balance: number
           created_at: string
+        }[]
+      }
+      get_inventory_movements_by_item: {
+        Args: {
+          p_item_id: string
+          p_item_type: string
+        }
+        Returns: {
+          id: string
+          item_id: string
+          item_type: string
+          movement_type: string
+          quantity: number
+          balance_after: number
+          reason: string
+          created_at: string
+          user_name: string
         }[]
       }
     }

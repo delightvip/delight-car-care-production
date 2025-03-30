@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { 
   Card, 
@@ -24,7 +23,7 @@ import {
   RefreshCcw 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { lowStockQueries } from '@/integrations/supabase/client';
+import { supabase, lowStockQueries } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +54,7 @@ export default function LowStockItems() {
     setError(null);
     
     try {
+      console.log("Loading low stock items page data...");
       const result = await fetchLowStockItems();
       
       setAllItems(result.items);
@@ -106,7 +106,7 @@ export default function LowStockItems() {
     let csvContent = "الكود,الاسم,الكمية الحالية,الحد الأدنى,الوحدة,النوع\n";
     
     items.forEach(item => {
-      csvContent += `${item.code},"${item.name}",${item.quantity},${item.min_stock},"${item.unit}","${item.typeName}"\n`;
+      csvContent += `${item.code},"${item.name}",${item.quantity},${item.min_stock},"${item.unit}","${item.type_name}"\n`;
     });
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -219,7 +219,7 @@ export default function LowStockItems() {
                             <div className="flex items-center justify-center">
                               <Badge variant="outline" className="flex items-center gap-1">
                                 {getItemTypeIcon(item.type)}
-                                {item.typeName}
+                                {item.type_name}
                               </Badge>
                             </div>
                           </TableCell>
