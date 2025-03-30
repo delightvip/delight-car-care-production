@@ -52,9 +52,11 @@ const InventoryReports = () => {
       const result: ItemCategory[] = [];
       
       for (const type of inventoryTables) {
-        // Using a type safe approach for Supabase queries
-        const { data, error, count } = await supabase
-          .from(type.table)
+        // Using type-safe approaches for Supabase queries
+        const tableInfo = type.table;
+        // We'll use a simpler approach to avoid type issues
+        const { count, error } = await supabase
+          .from(tableInfo)
           .select('*', { count: 'exact', head: true });
           
         if (error) throw error;
@@ -80,15 +82,22 @@ const InventoryReports = () => {
       if (!selectedTableInfo) return [];
       
       // Using the type-safe table name
+      const tableInfo = selectedTableInfo.table;
       const { data, error } = await supabase
-        .from(selectedTableInfo.table)
+        .from(tableInfo)
         .select('id, code, name, quantity, unit')
         .order('name');
         
       if (error) throw error;
       
-      // Cast the results to the expected type
-      return (data || []) as unknown as InventoryItem[];
+      // Cast the results to the expected type - we're being careful here
+      return (data || []).map(item => ({
+        id: String(item.id), // Convert ID to string to ensure consistent types
+        code: String(item.code),
+        name: String(item.name),
+        quantity: Number(item.quantity), // Make sure quantity is a number
+        unit: String(item.unit)
+      })) as InventoryItem[];
     },
     enabled: !!selectedCategory
   });
@@ -104,16 +113,23 @@ const InventoryReports = () => {
       if (!selectedTableInfo) return null;
       
       // Using the type-safe table name
+      const tableInfo = selectedTableInfo.table;
       const { data, error } = await supabase
-        .from(selectedTableInfo.table)
+        .from(tableInfo)
         .select('*')
         .eq('id', selectedItem)
         .single();
         
       if (error) throw error;
       
-      // Cast the result to the expected type
-      return data as unknown as InventoryItem;
+      // Explicitly convert and type data
+      return {
+        id: String(data.id),
+        code: String(data.code),
+        name: String(data.name),
+        quantity: Number(data.quantity), // Ensure this is a number
+        unit: String(data.unit)
+      } as InventoryItem;
     },
     enabled: !!selectedItem
   });

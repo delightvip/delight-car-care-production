@@ -6,6 +6,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 
 interface InventoryMovementChartProps {
   itemId: string;
@@ -76,7 +88,7 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
           period: format(date, periodFormat),
           in_quantity: inQuantity,
           out_quantity: outQuantity,
-          balance: (index > 0 ? (sampleData[index - 1]?.balance || 100) : 100) + inQuantity - outQuantity
+          balance: (index > 0 ? sampleData[index - 1]?.balance || 100 : 100) + inQuantity - outQuantity
         };
       });
       
@@ -140,21 +152,6 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
     );
   }
   
-  const seriesConfig = {
-    in: { 
-      label: "الوارد", 
-      theme: { light: "#22c55e", dark: "#22c55e" } 
-    },
-    out: { 
-      label: "المنصرف", 
-      theme: { light: "#ef4444", dark: "#ef4444" } 
-    },
-    balance: { 
-      label: "الرصيد", 
-      theme: { light: "#3b82f6", dark: "#60a5fa" } 
-    }
-  };
-  
   return (
     <Card>
       <CardHeader>
@@ -165,38 +162,62 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
       </CardHeader>
       <CardContent className="pt-2">
         <div className="h-[350px] w-full">
-          <div className="ChartContainer">
-            {chartData.length > 0 && (
-              <div 
-                className="w-full h-full"
-                style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  justifyContent: 'center', 
-                  alignItems: 'center' 
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
                 }}
               >
-                <div className="text-lg font-medium">بيانات الرسم البياني</div>
-                <div className="flex gap-6 my-4">
-                  <div className="flex gap-2 items-center">
-                    <div className="h-3 w-3 bg-green-500 rounded-full"></div>
-                    <div>الوارد</div>
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <div className="h-3 w-3 bg-red-500 rounded-full"></div>
-                    <div>المنصرف</div>
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
-                    <div>الرصيد</div>
-                  </div>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="periodFormatted" />
+                <YAxis />
+                <Tooltip 
+                  formatter={(value, name) => {
+                    const label = 
+                      name === 'in' ? 'الوارد' :
+                      name === 'out' ? 'المنصرف' : 'الرصيد';
+                    return [`${value} ${itemUnit}`, label];
+                  }}
+                  labelFormatter={(label) => `الفترة: ${label}`}
+                />
+                <Legend 
+                  formatter={(value) => {
+                    return value === 'in' ? 'الوارد' :
+                           value === 'out' ? 'المنصرف' : 'الرصيد';
+                  }}
+                />
+                <Bar dataKey="in" fill="#22c55e" name="in" />
+                <Bar dataKey="out" fill="#ef4444" name="out" />
+                <Line type="monotone" dataKey="balance" stroke="#3b82f6" name="balance" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex flex-col h-full justify-center items-center">
+              <div className="text-lg font-medium">بيانات الرسم البياني</div>
+              <div className="flex gap-6 my-4">
+                <div className="flex gap-2 items-center">
+                  <div className="h-3 w-3 bg-green-500 rounded-full"></div>
+                  <div>الوارد</div>
                 </div>
-                <div className="text-center text-sm text-muted-foreground">
-                  تم تحميل {chartData.length} سجل من البيانات لعرض حركة المخزون
+                <div className="flex gap-2 items-center">
+                  <div className="h-3 w-3 bg-red-500 rounded-full"></div>
+                  <div>المنصرف</div>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
+                  <div>الرصيد</div>
                 </div>
               </div>
-            )}
-          </div>
+              <div className="text-center text-sm text-muted-foreground">
+                لا توجد بيانات كافية لعرض الرسم البياني
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
