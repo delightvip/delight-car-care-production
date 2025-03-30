@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import './App.css';
 import { Route, Routes } from 'react-router-dom';
@@ -19,6 +20,7 @@ import InventoryFinishedProducts from './pages/inventory/InventoryFinishedProduc
 import LowStockItems from './pages/inventory/LowStockItems';
 import InventoryTracking from './pages/inventory/InventoryTracking';
 import ProductDetails from './pages/inventory/ProductDetails';
+import InventoryReports from './pages/inventory/InventoryReports';
 
 // Production Pages
 import ProductionOrders from './pages/production/ProductionOrders';
@@ -70,6 +72,7 @@ function App() {
             <Route path="inventory/low-stock" element={<LowStockItems />} />
             <Route path="inventory/tracking" element={<InventoryTracking />} />
             <Route path="inventory/:type/:id" element={<ProductDetails />} />
+            <Route path="inventory/:type/:id/reports" element={<InventoryReports />} />
             
             {/* Production Routes */}
             <Route path="production/orders" element={<ProductionOrders />} />

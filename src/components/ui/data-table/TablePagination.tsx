@@ -1,64 +1,83 @@
 
 import React from 'react';
-import { TablePaginationProps } from './types';
+import { Button } from '../button';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from 'lucide-react';
 
-const TablePagination: React.FC<TablePaginationProps> = ({ 
-  currentPage, 
-  setCurrentPage, 
-  pageCount, 
-  itemCount, 
-  itemsPerPage 
+interface TablePaginationProps {
+  currentPage: number;
+  totalPages: number;
+  setCurrentPage: (page: number) => void;
+}
+
+export const TablePagination: React.FC<TablePaginationProps> = ({
+  currentPage,
+  totalPages,
+  setCurrentPage,
 }) => {
-  if (pageCount <= 1) return null;
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  const goToFirstPage = () => {
+    setCurrentPage(1);
+  };
+
+  const goToPreviousPage = () => {
+    setCurrentPage(Math.max(1, currentPage - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(Math.min(totalPages, currentPage + 1));
+  };
+
+  const goToLastPage = () => {
+    setCurrentPage(totalPages);
+  };
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+    <div className="flex items-center justify-between px-2">
       <div className="text-sm text-muted-foreground">
-        عرض {Math.min(itemCount, (currentPage - 1) * itemsPerPage + 1)} إلى{' '}
-        {Math.min(itemCount, currentPage * itemsPerPage)} من أصل {itemCount} عنصر
+        الصفحة {currentPage} من {totalPages}
       </div>
-      <div className="flex space-x-2 rtl:space-x-reverse">
-        <button
-          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+      <div className="flex items-center space-x-2 space-x-reverse rtl:space-x-reverse">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToFirstPage}
           disabled={currentPage === 1}
-          className="px-3 py-1 rounded border bg-muted/50 disabled:opacity-50"
         >
-          السابق
-        </button>
-        {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
-          let pageNum;
-          if (pageCount <= 5) {
-            pageNum = i + 1;
-          } else if (currentPage <= 3) {
-            pageNum = i + 1;
-          } else if (currentPage >= pageCount - 2) {
-            pageNum = pageCount - 4 + i;
-          } else {
-            pageNum = currentPage - 2 + i;
-          }
-          
-          return (
-            <button
-              key={pageNum}
-              onClick={() => setCurrentPage(pageNum)}
-              className={`px-3 py-1 rounded border ${
-                currentPage === pageNum ? 'bg-primary text-primary-foreground' : 'bg-muted/50'
-              }`}
-            >
-              {pageNum}
-            </button>
-          );
-        })}
-        <button
-          onClick={() => setCurrentPage(prev => Math.min(prev + 1, pageCount))}
-          disabled={currentPage === pageCount}
-          className="px-3 py-1 rounded border bg-muted/50 disabled:opacity-50"
+          <ChevronsLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToPreviousPage}
+          disabled={currentPage === 1}
         >
-          التالي
-        </button>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToNextPage}
+          disabled={currentPage === totalPages}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToLastPage}
+          disabled={currentPage === totalPages}
+        >
+          <ChevronsRight className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
 };
-
-export default TablePagination;

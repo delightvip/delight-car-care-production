@@ -1,53 +1,80 @@
 
 import React from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
-import DataTable from '@/components/ui/data-table';
-import { Column } from '@/components/ui/data-table/types';
+import { Skeleton } from './skeleton';
+import DataTable from './data-table/DataTable';
+import { DataTableProps } from './data-table/types';
 
-interface DataTableWithLoadingProps {
+interface DataTableWithLoadingProps extends DataTableProps {
   isLoading: boolean;
-  columns: Column[];
-  data: any[];
-  searchable?: boolean;
-  searchKeys?: string[];
-  pagination?: boolean;
-  itemsPerPage?: number;
-  actions?: (record: any) => React.ReactNode;
-  searchPlaceholder?: string;
-  noDataMessage?: string;
-  onSort?: (key: string) => void;
-  sortConfig?: { key: string; direction: 'asc' | 'desc' } | null;
-  stickyHeader?: boolean;
-  containerClassName?: string;
-  className?: string;
+  loadingRowCount?: number;
+  className?: string; // Add className prop
 }
 
-export function DataTableWithLoading({
-  isLoading,
+export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
   columns,
   data,
-  searchable = true,
-  searchKeys = [],
-  pagination = true,
-  itemsPerPage = 10,
+  isLoading,
+  loadingRowCount = 5,
+  searchable,
+  searchKeys,
   actions,
-  searchPlaceholder,
-  noDataMessage,
-  onSort,
-  sortConfig,
+  pagination,
+  emptyState,
   stickyHeader = true,
-  containerClassName,
   className,
-}: DataTableWithLoadingProps) {
+  ...props
+}) => {
   if (isLoading) {
     return (
-      <div className="space-y-3">
-        {Array(5).fill(0).map((_, index) => (
-          <Skeleton 
-            key={index} 
-            className="h-12 w-full"
-          />
-        ))}
+      <div className="space-y-4">
+        <div className="flex justify-between">
+          {searchable && (
+            <Skeleton className="h-10 w-[250px]" />
+          )}
+          <div className="flex ml-auto gap-2">
+            <Skeleton className="h-10 w-[100px]" />
+            <Skeleton className="h-10 w-[100px]" />
+          </div>
+        </div>
+        <div className="border rounded-md">
+          <div className="h-12 px-4 border-b flex items-center">
+            <div className="flex w-full">
+              {columns.map((column, i) => (
+                <div 
+                  key={i} 
+                  className="flex-1 h-4"
+                  style={column.width ? { width: column.width } : {}}
+                >
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              ))}
+              {actions && <div className="w-[100px]" />}
+            </div>
+          </div>
+          <div className="divide-y">
+            {Array(loadingRowCount).fill(0).map((_, i) => (
+              <div key={i} className="h-16 px-4 flex items-center">
+                <div className="flex w-full">
+                  {columns.map((column, j) => (
+                    <div 
+                      key={j} 
+                      className="flex-1 h-4"
+                      style={column.width ? { width: column.width } : {}}
+                    >
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                  ))}
+                  {actions && (
+                    <div className="w-[100px] flex justify-end gap-2">
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -58,16 +85,15 @@ export function DataTableWithLoading({
       data={data}
       searchable={searchable}
       searchKeys={searchKeys}
-      pagination={pagination}
-      itemsPerPage={itemsPerPage}
       actions={actions}
-      searchPlaceholder={searchPlaceholder}
-      noDataMessage={noDataMessage}
-      onSort={onSort}
-      sortConfig={sortConfig}
+      pagination={pagination}
+      emptyState={emptyState}
       stickyHeader={stickyHeader}
-      containerClassName={containerClassName}
-      className={className}
+      className={className} // Pass className prop
+      {...props}
     />
   );
-}
+};
+
+// For backward compatibility
+export default DataTableWithLoading;

@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +15,8 @@ import {
   ArrowUp,
   ArrowDown,
   RefreshCw,
-  Info
+  Info,
+  PieChart
 } from 'lucide-react';
 import {
   AreaChart,
@@ -23,7 +25,7 @@ import {
   Bar,
   LineChart,
   Line,
-  PieChart,
+  PieChart as RechartsPieChart,
   Pie,
   Cell,
   ResponsiveContainer,
@@ -33,7 +35,8 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import ProductMovementHistory from './ProductMovementHistory';
+import { Button } from '@/components/ui/button';
+import { ProductMovementHistory } from './movement';
 import { InventoryMovement } from '@/types/inventoryTypes';
 
 interface ProductData {
@@ -91,9 +94,17 @@ const ProductDetailsView: React.FC<ProductDetailsViewProps> = ({
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="col-span-1 md:col-span-3">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xl">تفاصيل المنتج</CardTitle>
-            <CardDescription>جميع المعلومات الأساسية للمنتج</CardDescription>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-xl">تفاصيل المنتج</CardTitle>
+              <CardDescription>جميع المعلومات الأساسية للمنتج</CardDescription>
+            </div>
+            <Link to={`/inventory/${productType}/${product.id}/reports`}>
+              <Button className="flex items-center gap-2" variant="outline">
+                <PieChart className="h-4 w-4" />
+                <span>تقارير مفصلة</span>
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent className="space-y-4">
             <Tabs defaultValue="overview" className="w-full">
