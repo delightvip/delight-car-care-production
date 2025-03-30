@@ -29,6 +29,7 @@ const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId,
       const { data, error } = await rpcFunctions.getInventoryMovementsByItem(itemId, itemType);
       
       if (error) throw error;
+      // تحويل البيانات صراحةً إلى نوع InventoryMovement المطلوب
       return data as InventoryMovement[];
     }
   });

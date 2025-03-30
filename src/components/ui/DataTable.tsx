@@ -26,7 +26,8 @@ interface DataTableProps {
   onSort?: (key: string) => void;
   sortConfig?: { key: string; direction: 'asc' | 'desc' } | null;
   stickyHeader?: boolean;
-  containerClassName?: string; // إضافة خاصية للتحكم بتنسيق الحاوية الخارجية
+  containerClassName?: string;
+  className?: string;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -43,15 +44,14 @@ const DataTable: React.FC<DataTableProps> = ({
   sortConfig,
   stickyHeader = true,
   containerClassName = "",
+  className = "",
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const { isExpanded } = useSidebar(); // استدعاء سياق القائمة الجانبية لمعرفة حالتها
-  
-  // Ensure data is an array
+  const { isExpanded } = useSidebar();
+
   const safeData = Array.isArray(data) ? data : [];
-  
-  // Handle search
+
   const filteredData = searchable && searchTerm 
     ? safeData.filter(item => {
         return (searchKeys.length > 0 ? searchKeys : Object.keys(item)).some(key => {
@@ -60,20 +60,18 @@ const DataTable: React.FC<DataTableProps> = ({
         });
       })
     : safeData;
-    
-  // Handle pagination
+
   const pageCount = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = pagination 
     ? filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) 
     : filteredData;
-  
-  // إعادة ضبط رقم الصفحة الحالية عند تغيير البيانات أو شروط البحث
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, data]);
 
   return (
-    <div className={`space-y-4 w-full ${containerClassName}`}>
+    <div className={`space-y-4 w-full ${containerClassName} ${className}`}>
       {searchable && (
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -86,13 +84,11 @@ const DataTable: React.FC<DataTableProps> = ({
         </div>
       )}
       
-      {/* تحسين التمرير الأفقي وتغليف الجدول */}
       <div className="rounded-md border overflow-hidden">
         <div 
           className="overflow-x-auto" 
           style={{ 
             WebkitOverflowScrolling: 'touch',
-            // التأكد من أن منطقة تمرير الجدول كافية حتى مع تغير حالة القائمة الجانبية
             maxWidth: '100%'
           }}
         >
@@ -132,7 +128,6 @@ const DataTable: React.FC<DataTableProps> = ({
                     className="bg-muted sticky right-0 z-20 shadow-md" 
                     style={{ 
                       minWidth: '120px',
-                      // إضافة خلفية للتأكد من أن عمود الإجراءات يبقى مرئيًا عند التمرير الأفقي
                       backgroundColor: 'var(--muted)'
                     }}
                   >
@@ -163,7 +158,6 @@ const DataTable: React.FC<DataTableProps> = ({
                         className="sticky right-0 z-20 bg-background shadow-md" 
                         style={{ 
                           minWidth: '120px',
-                          // إضافة خلفية للتأكد من أن خلية الإجراءات تبقى مرئية دائمًا
                           backgroundColor: 'var(--background)'
                         }}
                       >
@@ -199,7 +193,6 @@ const DataTable: React.FC<DataTableProps> = ({
               السابق
             </button>
             {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
-              // Show pages around current page
               let pageNum;
               if (pageCount <= 5) {
                 pageNum = i + 1;
