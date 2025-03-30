@@ -1046,6 +1046,19 @@ export type Database = {
           balance: number
         }[]
       }
+      get_inventory_summary_stats: {
+        Args: {
+          p_item_id: string
+          p_item_type: string
+        }
+        Returns: {
+          total_movements: number
+          total_in: number
+          total_out: number
+          adjustments: number
+          current_quantity: number
+        }[]
+      }
       get_inventory_usage_stats: {
         Args: {
           p_item_id: string
