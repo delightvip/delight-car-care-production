@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,11 +24,17 @@ const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId,
   const { data: movements, isLoading, error, refetch } = useQuery({
     queryKey: ['movements', itemType, itemId],
     queryFn: async () => {
-      // Fix: Cast the table name as a string literal with 'inventory_movements'
       const { data, error } = await supabase
         .from('inventory_movements')
         .select(`
-          *,
+          id,
+          item_id,
+          item_type,
+          movement_type,
+          quantity,
+          balance_after,
+          reason,
+          created_at,
           users (name)
         `)
         .eq('item_id', itemId)

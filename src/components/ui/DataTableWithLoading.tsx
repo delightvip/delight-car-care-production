@@ -1,3 +1,4 @@
+
 import React from 'react';
 import DataTable from './DataTable';
 import { Skeleton } from './skeleton';
@@ -8,7 +9,8 @@ export interface DataTableWithLoadingProps {
     title: string;
     render?: (value: any, record: any) => any;
     sortable?: boolean;
-    width?: string; // إضافة خاصية العرض للعمود
+    width?: string;
+    minWidth?: string;
   }[];
   data: any[];
   searchable?: boolean;
@@ -19,7 +21,8 @@ export interface DataTableWithLoadingProps {
   noDataMessage?: string;
   onSort?: (key: string) => void;
   sortConfig?: { key: string; direction: 'asc' | 'desc' } | null;
-  className?: string; // إضافة خاصية CSS إضافية
+  className?: string;
+  stickyHeader?: boolean;
 }
 
 const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({ 
@@ -33,8 +36,10 @@ const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
   noDataMessage = "لا توجد بيانات لعرضها.",
   onSort,
   sortConfig,
-  className = ""
+  className = "",
+  stickyHeader = true
 }) => {
+  // تحسين: إضافة خاصية stickyHeader للتحكم بثبات الرأس
   if (isLoading) {
     return (
       <div className={`space-y-4 ${className}`}>
@@ -68,6 +73,7 @@ const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
       onSort={onSort}
       sortConfig={sortConfig}
       className={className}
+      stickyHeader={stickyHeader}
     />
   );
 };
