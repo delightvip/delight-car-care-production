@@ -13,38 +13,27 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BellRing, AlertTriangle, CheckCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { useNotifications } from './NotificationProvider';
-import { getItemTypeIcon, getItemTypeBgColor } from '@/services/NotificationService';
 import NotificationItem from './NotificationItem';
 
 const NotificationPanel = () => {
-  try {
-    const { 
-      notifications, 
-      unreadCount, 
-      lowStockItems, 
-      markAllAsRead, 
-      clearAllNotifications,
-      refreshLowStockData
-    } = useNotifications();
-    
-    const totalLowStock = lowStockItems?.totalCount || 0;
-
-    const handleRefresh = () => {
-      refreshLowStockData();
-    };
-
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="relative">
-            <BellRing className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
-                {unreadCount}
-              </Badge>
-            )}
-          </Button>
-        </DropdownMenuTrigger>
+  const NotificationPanelContent = () => {
+    try {
+      const { 
+        notifications, 
+        unreadCount, 
+        lowStockItems, 
+        markAllAsRead, 
+        clearAllNotifications,
+        refreshLowStockData
+      } = useNotifications();
+      
+      const totalLowStock = lowStockItems?.totalCount || 0;
+  
+      const handleRefresh = () => {
+        refreshLowStockData();
+      };
+  
+      return (
         <DropdownMenuContent align="end" className="w-80">
           <div className="flex items-center justify-between p-2">
             <DropdownMenuLabel className="text-base">الإشعارات</DropdownMenuLabel>
@@ -147,16 +136,30 @@ const NotificationPanel = () => {
             </>
           )}
         </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  } catch (error) {
-    console.error("NotificationPanel: Error using notifications context", error);
-    return (
-      <Button variant="ghost" size="icon">
-        <BellRing className="h-5 w-5" />
-      </Button>
-    );
-  }
+      );
+    } catch (error) {
+      console.error("NotificationPanel: Error rendering notification content", error);
+      return (
+        <DropdownMenuContent align="end" className="w-80">
+          <div className="p-4 text-center text-muted-foreground">
+            حدث خطأ أثناء تحميل الإشعارات
+          </div>
+        </DropdownMenuContent>
+      );
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <BellRing className="h-5 w-5" />
+          {/* We don't show the badge with count here to avoid the same error */}
+        </Button>
+      </DropdownMenuTrigger>
+      <NotificationPanelContent />
+    </DropdownMenu>
+  );
 };
 
 export default NotificationPanel;

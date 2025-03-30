@@ -20,13 +20,13 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <NotificationProvider>
+    <NotificationProvider>
+      <BrowserRouter>
         <SidebarProvider>
           <App />
           <Toaster position="top-center" richColors />
         </SidebarProvider>
-      </NotificationProvider>
-    </BrowserRouter>
+      </BrowserRouter>
+    </NotificationProvider>
   </QueryClientProvider>
 );
