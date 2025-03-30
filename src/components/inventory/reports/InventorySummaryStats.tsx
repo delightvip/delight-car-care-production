@@ -26,9 +26,12 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
       try {
         console.log(`Fetching inventory summary for item: ${itemId}, type: ${itemType}`);
         
+        // Convert string ID to integer for the SQL function
+        const numericItemId = parseInt(itemId);
+        
         // Call the Supabase RPC function to get the summary stats
         const { data, error } = await supabase.rpc('get_inventory_summary_stats', {
-          p_item_id: itemId,
+          p_item_id: numericItemId.toString(), // Convert back to string as the function expects
           p_item_type: itemType
         });
 
@@ -36,6 +39,8 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
           console.error("Error fetching inventory summary stats:", error);
           throw error;
         }
+        
+        console.log("Received summary data:", data);
         
         // The function returns an array with a single row, we need to extract it
         if (Array.isArray(data) && data.length > 0) {
@@ -101,7 +106,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
   const items = [
     {
       title: 'المخزون الحالي',
-      value: stats.current_quantity || 0,
+      value: stats?.current_quantity || 0,
       description: 'الرصيد المتوفر',
       icon: Package2,
       color: 'text-blue-500',
@@ -109,7 +114,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
     },
     {
       title: 'إجمالي الوارد',
-      value: stats.total_in || 0,
+      value: stats?.total_in || 0,
       description: 'إجمالي الكميات الواردة',
       icon: ArrowDown,
       color: 'text-green-500',
@@ -117,7 +122,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
     },
     {
       title: 'إجمالي الصادر',
-      value: stats.total_out || 0,
+      value: stats?.total_out || 0,
       description: 'إجمالي الكميات المستهلكة',
       icon: ArrowUp,
       color: 'text-red-500',
@@ -125,7 +130,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
     },
     {
       title: 'التعديلات',
-      value: stats.adjustments || 0,
+      value: stats?.adjustments || 0,
       description: 'جرد وتعديلات المخزون',
       icon: RefreshCw,
       color: 'text-amber-500',
@@ -144,7 +149,6 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
                   {item.title}
                 </p>
                 <h3 className="text-2xl font-bold mt-1">
-                  {/* Ensure the value is a number before calling toLocaleString */}
                   {typeof item.value === 'number' ? item.value.toLocaleString('ar-EG') : '0'}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">

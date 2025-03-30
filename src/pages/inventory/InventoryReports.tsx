@@ -109,7 +109,7 @@ const InventoryReports = () => {
       const { data, error } = await supabase
         .from(selectedTableInfo.table)
         .select('id, code, name, quantity, unit')
-        .eq('id', selectedItem)
+        .eq('id', parseInt(selectedItem))
         .single();
         
       if (error) {
