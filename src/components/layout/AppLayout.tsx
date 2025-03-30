@@ -3,7 +3,11 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 
-const AppLayout: React.FC = () => {
+interface AppLayoutProps {
+  children?: React.ReactNode;
+}
+
+const AppLayout: React.FC<AppLayoutProps> = () => {
   return (
     <Layout>
       <Outlet />

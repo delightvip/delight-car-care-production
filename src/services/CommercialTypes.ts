@@ -33,10 +33,10 @@ export interface Payment {
   amount: number;
   payment_type: 'collection' | 'disbursement';
   method: 'cash' | 'check' | 'bank_transfer' | 'other';
-  related_invoice_id?: string;
   payment_status: 'draft' | 'confirmed' | 'cancelled';
+  related_invoice_id?: string;
   notes?: string;
-  created_at?: string;
+  created_at: string;
 }
 
 export interface Return {
