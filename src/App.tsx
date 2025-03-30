@@ -13,6 +13,9 @@ const Dashboard = React.lazy(() => import('./pages/financial/TransactionPage'));
 const Settings = () => <div>Settings Page</div>;
 const NoMatch = () => <div>404 Not Found</div>;
 
+// Import the LowStockItems page
+const LowStockItems = React.lazy(() => import('./pages/inventory/LowStockItems'));
+
 // For now, we'll use the financial pages we already have
 const FinancialTransactionPage = React.lazy(() => import('./pages/financial/TransactionPage'));
 const FinancialPaymentsPage = React.lazy(() => import('./pages/financial/FinancialPaymentsPage'));
@@ -64,6 +67,13 @@ function App() {
         <Route path="financial/payments" element={
           <Suspense fallback={<Loading />}>
             <FinancialPaymentsPage />
+          </Suspense>
+        } />
+        
+        {/* Inventory routes */}
+        <Route path="inventory/low-stock" element={
+          <Suspense fallback={<Loading />}>
+            <LowStockItems />
           </Suspense>
         } />
         
