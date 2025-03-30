@@ -35,6 +35,8 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
     queryKey: ['inventory-movement-chart', itemId, itemType, timeRange],
     queryFn: async () => {
       try {
+        console.log(`Fetching movements for item: ${itemId}, type: ${itemType}, range: ${timeRange}`);
+        
         const { data, error } = await supabase.rpc('get_inventory_movements_by_time', {
           p_item_id: itemId,
           p_item_type: itemType,
@@ -45,7 +47,8 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
           console.error("Error fetching inventory movements:", error);
           throw error;
         }
-
+        
+        console.log("Received movement data:", data);
         return data as MovementData[];
       } catch (err) {
         console.error("Failed to fetch inventory movements data:", err);
@@ -56,7 +59,7 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
   
   const formatPeriod = (period: string): string => {
     try {
-      if (timeRange === 'week' || timeRange === 'month') {
+      if (timeRange === 'week' || timeRange === 'day') {
         // If format is yyyy-MM-dd
         const date = new Date(period);
         return format(date, 'dd MMM', { locale: ar });
@@ -67,6 +70,7 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
         return format(date, 'MMM yyyy', { locale: ar });
       }
     } catch (error) {
+      console.warn("Error formatting period:", error);
       return period;
     }
   };
@@ -84,7 +88,8 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
   }
   
   if (error || !data) {
-    return <MovementChartError />;
+    const errorMessage = error ? `${(error as Error).message}` : "تعذر تحميل البيانات";
+    return <MovementChartError message={errorMessage} />;
   }
   
   return (

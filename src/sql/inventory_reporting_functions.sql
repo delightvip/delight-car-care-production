@@ -21,7 +21,7 @@ BEGIN
   -- Set date format based on period
   CASE p_period
     WHEN 'day' THEN date_format := 'YYYY-MM-DD';
-    WHEN 'week' THEN date_format := 'YYYY-"W"IW';
+    WHEN 'week' THEN date_format := 'YYYY-MM-DD';
     WHEN 'month' THEN date_format := 'YYYY-MM';
     WHEN 'year' THEN date_format := 'YYYY';
     ELSE date_format := 'YYYY-MM-DD';
@@ -46,18 +46,18 @@ BEGIN
   aggregated AS (
     SELECT 
       time_period,
-      SUM(in_qty) AS in_quantity,
-      SUM(out_qty) AS out_quantity
+      SUM(in_qty) AS in_qty_sum,
+      SUM(out_qty) AS out_qty_sum
     FROM movements
     GROUP BY time_period
     ORDER BY time_period
   ),
   running_balance AS (
     SELECT
-      time_period,
-      in_quantity,
-      out_quantity,
-      SUM(in_quantity - out_quantity) OVER (ORDER BY time_period) AS balance
+      time_period AS period,
+      in_qty_sum AS in_quantity,
+      out_qty_sum AS out_quantity,
+      SUM(in_qty_sum - out_qty_sum) OVER (ORDER BY time_period) AS balance
     FROM aggregated
   )
   SELECT * FROM running_balance;
