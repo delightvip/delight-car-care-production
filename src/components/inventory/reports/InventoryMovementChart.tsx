@@ -56,41 +56,44 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
                      timeRange === 'quarter' ? 12 : 12;
                      
       // Generate sample data for the chart
-      const sampleData = Array.from({ length: periods }).map((_, index) => {
+      const sampleData: MovementData[] = [];
+      
+      for (let i = 0; i < periods; i++) {
         let date: Date;
         let periodFormat: string;
         
         if (timeRange === 'week') {
           date = new Date(currentDate);
-          date.setDate(date.getDate() - (periods - index - 1));
+          date.setDate(date.getDate() - (periods - i - 1));
           periodFormat = 'yyyy-MM-dd';
         } else if (timeRange === 'month') {
           date = new Date(currentDate);
-          date.setDate(date.getDate() - (periods - index - 1));
+          date.setDate(date.getDate() - (periods - i - 1));
           periodFormat = 'yyyy-MM-dd';
         } else if (timeRange === 'quarter') {
           date = new Date(currentDate);
           date.setDate(1);
-          date.setMonth(date.getMonth() - (periods - index - 1));
+          date.setMonth(date.getMonth() - (periods - i - 1));
           periodFormat = 'yyyy-MM';
         } else {
           date = new Date(currentDate);
           date.setDate(1);
-          date.setMonth(date.getMonth() - (periods - index - 1));
+          date.setMonth(date.getMonth() - (periods - i - 1));
           periodFormat = 'yyyy-MM';
         }
         
         // Generate random data
         const inQuantity = Math.floor(Math.random() * 50);
         const outQuantity = Math.floor(Math.random() * 30);
+        const previousBalance = i > 0 ? sampleData[i - 1].balance : 100;
         
-        return {
+        sampleData.push({
           period: format(date, periodFormat),
           in_quantity: inQuantity,
           out_quantity: outQuantity,
-          balance: (index > 0 ? sampleData[index - 1]?.balance || 100 : 100) + inQuantity - outQuantity
-        };
-      });
+          balance: previousBalance + inQuantity - outQuantity
+        });
+      }
       
       return sampleData;
     }
