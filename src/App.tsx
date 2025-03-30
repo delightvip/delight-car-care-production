@@ -1,7 +1,7 @@
 
 import React, { Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import Loading from './components/ui/Loading';
 import LoginPage from './pages/auth/LoginPage';
@@ -40,110 +40,108 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={
-          authenticated ? <Navigate to="/" /> : <LoginPage />
+    <Routes>
+      <Route path="/login" element={
+        authenticated ? <Navigate to="/" /> : <LoginPage />
+      } />
+      
+      <Route path="/" element={
+        authenticated ? <AppLayout /> : <Navigate to="/login" />
+      }>
+        <Route index element={
+          <Suspense fallback={<Loading />}>
+            <Dashboard />
+          </Suspense>
         } />
         
-        <Route path="/" element={
-          authenticated ? <AppLayout /> : <Navigate to="/login" />
-        }>
-          <Route index element={
-            <Suspense fallback={<Loading />}>
-              <Dashboard />
-            </Suspense>
-          } />
-          
-          {/* Inventory routes */}
-          <Route path="inventory/raw-materials" element={
-            <Suspense fallback={<Loading />}>
-              <RawMaterials />
-            </Suspense>
-          } />
-          <Route path="inventory/semi-finished" element={
-            <Suspense fallback={<Loading />}>
-              <SemiFinishedProducts />
-            </Suspense>
-          } />
-          <Route path="inventory/packaging-materials" element={
-            <Suspense fallback={<Loading />}>
-              <PackagingMaterials />
-            </Suspense>
-          } />
-          <Route path="inventory/finished-products" element={
-            <Suspense fallback={<Loading />}>
-              <FinishedProducts />
-            </Suspense>
-          } />
-          <Route path="inventory/reports" element={
-            <Suspense fallback={<Loading />}>
-              <InventoryReports />
-            </Suspense>
-          } />
-          
-          {/* Production routes */}
-          <Route path="production/orders" element={
-            <Suspense fallback={<Loading />}>
-              <ProductionOrders />
-            </Suspense>
-          } />
-          <Route path="production/packaging" element={
-            <Suspense fallback={<Loading />}>
-              <PackagingOrders />
-            </Suspense>
-          } />
-          
-          {/* Commercial routes */}
-          <Route path="commercial/parties/customers" element={
-            <Suspense fallback={<Loading />}>
-              <Customers />
-            </Suspense>
-          } />
-          <Route path="commercial/parties/suppliers" element={
-            <Suspense fallback={<Loading />}>
-              <Suppliers />
-            </Suspense>
-          } />
-          <Route path="commercial/payments" element={
-            <Suspense fallback={<Loading />}>
-              <Payments />
-            </Suspense>
-          } />
-          <Route path="commercial/ledger" element={
-            <Suspense fallback={<Loading />}>
-              <Ledger />
-            </Suspense>
-          } />
-          
-          {/* Financial routes */}
-          <Route path="financial" element={
-            <Suspense fallback={<Loading />}>
-              <TransactionPage />
-            </Suspense>
-          } />
-          <Route path="financial/payments" element={
-            <Suspense fallback={<Loading />}>
-              <FinancialPaymentsPage />
-            </Suspense>
-          } />
-          
-          {/* Settings */}
-          <Route path="settings" element={
-            <Suspense fallback={<Loading />}>
-              <Settings />
-            </Suspense>
-          } />
-          
-          {/* 404 */}
-          <Route path="*" element={
-            <Suspense fallback={<Loading />}>
-              <NoMatch />
-            </Suspense>
-          } />
-        </Route>
-      </Routes>
-    </Router>
+        {/* Inventory routes */}
+        <Route path="inventory/raw-materials" element={
+          <Suspense fallback={<Loading />}>
+            <RawMaterials />
+          </Suspense>
+        } />
+        <Route path="inventory/semi-finished" element={
+          <Suspense fallback={<Loading />}>
+            <SemiFinishedProducts />
+          </Suspense>
+        } />
+        <Route path="inventory/packaging-materials" element={
+          <Suspense fallback={<Loading />}>
+            <PackagingMaterials />
+          </Suspense>
+        } />
+        <Route path="inventory/finished-products" element={
+          <Suspense fallback={<Loading />}>
+            <FinishedProducts />
+          </Suspense>
+        } />
+        <Route path="inventory/reports" element={
+          <Suspense fallback={<Loading />}>
+            <InventoryReports />
+          </Suspense>
+        } />
+        
+        {/* Production routes */}
+        <Route path="production/orders" element={
+          <Suspense fallback={<Loading />}>
+            <ProductionOrders />
+          </Suspense>
+        } />
+        <Route path="production/packaging" element={
+          <Suspense fallback={<Loading />}>
+            <PackagingOrders />
+          </Suspense>
+        } />
+        
+        {/* Commercial routes */}
+        <Route path="commercial/parties/customers" element={
+          <Suspense fallback={<Loading />}>
+            <Customers />
+          </Suspense>
+        } />
+        <Route path="commercial/parties/suppliers" element={
+          <Suspense fallback={<Loading />}>
+            <Suppliers />
+          </Suspense>
+        } />
+        <Route path="commercial/payments" element={
+          <Suspense fallback={<Loading />}>
+            <Payments />
+          </Suspense>
+        } />
+        <Route path="commercial/ledger" element={
+          <Suspense fallback={<Loading />}>
+            <Ledger />
+          </Suspense>
+        } />
+        
+        {/* Financial routes */}
+        <Route path="financial" element={
+          <Suspense fallback={<Loading />}>
+            <TransactionPage />
+          </Suspense>
+        } />
+        <Route path="financial/payments" element={
+          <Suspense fallback={<Loading />}>
+            <FinancialPaymentsPage />
+          </Suspense>
+        } />
+        
+        {/* Settings */}
+        <Route path="settings" element={
+          <Suspense fallback={<Loading />}>
+            <Settings />
+          </Suspense>
+        } />
+        
+        {/* 404 */}
+        <Route path="*" element={
+          <Suspense fallback={<Loading />}>
+            <NoMatch />
+          </Suspense>
+        } />
+      </Route>
+    </Routes>
   );
 }
 
