@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 
 interface InventorySummaryStatsProps {
-  itemId: string;  // Changed from number to string to match with other components
+  itemId: string;  // Using string to match with other components
   itemType: string;
 }
 
@@ -37,7 +37,19 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
           throw error;
         }
         
-        return data as SummaryStats;
+        // The function returns an array with a single row, we need to extract it
+        if (Array.isArray(data) && data.length > 0) {
+          return data[0] as SummaryStats;
+        }
+        
+        // If no data is returned, provide default values
+        return {
+          total_movements: 0,
+          total_in: 0,
+          total_out: 0,
+          adjustments: 0,
+          current_quantity: 0
+        } as SummaryStats;
       } catch (err) {
         console.error("Error in summary stats query:", err);
         
@@ -82,7 +94,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
   const items = [
     {
       title: 'المخزون الحالي',
-      value: stats.current_quantity,
+      value: stats.current_quantity || 0,
       description: 'الرصيد المتوفر',
       icon: Package2,
       color: 'text-blue-500',
@@ -90,7 +102,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
     },
     {
       title: 'إجمالي الوارد',
-      value: stats.total_in,
+      value: stats.total_in || 0,
       description: 'إجمالي الكميات الواردة',
       icon: ArrowDown,
       color: 'text-green-500',
@@ -98,7 +110,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
     },
     {
       title: 'إجمالي الصادر',
-      value: stats.total_out,
+      value: stats.total_out || 0,
       description: 'إجمالي الكميات المستهلكة',
       icon: ArrowUp,
       color: 'text-red-500',
@@ -106,7 +118,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
     },
     {
       title: 'التعديلات',
-      value: stats.adjustments,
+      value: stats.adjustments || 0,
       description: 'جرد وتعديلات المخزون',
       icon: RefreshCw,
       color: 'text-amber-500',
@@ -125,7 +137,8 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
                   {item.title}
                 </p>
                 <h3 className="text-2xl font-bold mt-1">
-                  {item.value.toLocaleString('ar-EG')}
+                  {/* Add fallback in case value is undefined */}
+                  {typeof item.value === 'number' ? item.value.toLocaleString('ar-EG') : '0'}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">
                   {item.description}
