@@ -266,19 +266,19 @@ class InventoryService {
           raw_material:raw_material_id(id, code, name)
         `)
         .eq('semi_finished_id', productId);
-      
+    
       if (error) throw error;
       
       const typedData = data as Array<{
         id: number;
         percentage: number;
-        raw_material: { id: number; code: string; name: string; };
+        raw_material: { id: number; code: string; name: string; }[];
       }>;
       
       return typedData.map(item => ({
         id: item.id,
-        code: item.raw_material.code,
-        name: item.raw_material.name,
+        code: item.raw_material[0]?.code || '',
+        name: item.raw_material[0]?.name || '',
         percentage: item.percentage
       }));
     } catch (error) {
@@ -390,18 +390,18 @@ class InventoryService {
           packaging:packaging_material_id(id, code, name)
         `)
         .eq('finished_product_id', productId);
-      
+    
       if (error) throw error;
       
       const typedData = data as Array<{
         id: number;
         quantity: number;
-        packaging: { id: number; code: string; name: string; };
+        packaging: { id: number; code: string; name: string; }[];
       }>;
       
       return typedData.map(item => ({
-        code: item.packaging.code,
-        name: item.packaging.name,
+        code: item.packaging[0]?.code || '',
+        name: item.packaging[0]?.name || '',
         quantity: item.quantity
       }));
     } catch (error) {
