@@ -1,9 +1,9 @@
 
 import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Loading from './components/ui/Loading'; // We'll create this next
+import { Routes, Route, Navigate } from 'react-router-dom';
+import Loading from './components/ui/Loading';
 
-// For now, let's create a minimal version of these components to resolve errors
+// For now, let's create minimal version of these components to resolve errors
 const useAuth = () => ({ authenticated: true, authLoading: false });
 const AppLayout = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
 const LoginPage = () => <div>Login Page</div>;
@@ -41,44 +41,42 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={
-          authenticated ? <Navigate to="/" /> : <LoginPage />
+    <Routes>
+      <Route path="/login" element={
+        authenticated ? <Navigate to="/" /> : <LoginPage />
+      } />
+      
+      <Route path="/" element={
+        authenticated ? <AppLayout /> : <Navigate to="/login" />
+      }>
+        <Route index element={
+          <Suspense fallback={<Loading />}>
+            <Dashboard />
+          </Suspense>
         } />
         
-        <Route path="/" element={
-          authenticated ? <AppLayout /> : <Navigate to="/login" />
-        }>
-          <Route index element={
-            <Suspense fallback={<Loading />}>
-              <Dashboard />
-            </Suspense>
-          } />
-          
-          {/* Financial routes - these should work */}
-          <Route path="financial" element={
-            <Suspense fallback={<Loading />}>
-              <FinancialTransactionPage />
-            </Suspense>
-          } />
-          <Route path="financial/payments" element={
-            <Suspense fallback={<Loading />}>
-              <FinancialPaymentsPage />
-            </Suspense>
-          } />
-          
-          {/* Placeholder routes for other sections */}
-          <Route path="inventory/*" element={<PlaceholderPage />} />
-          <Route path="production/*" element={<PlaceholderPage />} />
-          <Route path="commercial/*" element={<PlaceholderPage />} />
-          <Route path="settings" element={<PlaceholderPage />} />
-          
-          {/* 404 */}
-          <Route path="*" element={<NoMatch />} />
-        </Route>
-      </Routes>
-    </Router>
+        {/* Financial routes - these should work */}
+        <Route path="financial" element={
+          <Suspense fallback={<Loading />}>
+            <FinancialTransactionPage />
+          </Suspense>
+        } />
+        <Route path="financial/payments" element={
+          <Suspense fallback={<Loading />}>
+            <FinancialPaymentsPage />
+          </Suspense>
+        } />
+        
+        {/* Placeholder routes for other sections */}
+        <Route path="inventory/*" element={<PlaceholderPage />} />
+        <Route path="production/*" element={<PlaceholderPage />} />
+        <Route path="commercial/*" element={<PlaceholderPage />} />
+        <Route path="settings" element={<PlaceholderPage />} />
+        
+        {/* 404 */}
+        <Route path="*" element={<NoMatch />} />
+      </Route>
+    </Routes>
   );
 }
 
