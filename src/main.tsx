@@ -5,6 +5,7 @@ import App from './App.tsx'
 import './index.css'
 import { SidebarProvider } from './components/layout/SidebarContext'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from "sonner";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -21,6 +22,7 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <SidebarProvider>
         <App />
+        <Toaster position="top-center" richColors />
       </SidebarProvider>
     </BrowserRouter>
   </QueryClientProvider>

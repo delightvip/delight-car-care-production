@@ -2,10 +2,10 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Loading from './components/ui/Loading';
+import Layout from './components/layout/Layout';
 
 // For now, let's create minimal version of these components to resolve errors
 const useAuth = () => ({ authenticated: true, authLoading: false });
-const AppLayout = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
 const LoginPage = () => <div>Login Page</div>;
 
 // Main pages
@@ -47,7 +47,7 @@ function App() {
       } />
       
       <Route path="/" element={
-        authenticated ? <AppLayout /> : <Navigate to="/login" />
+        authenticated ? <Layout /> : <Navigate to="/login" />
       }>
         <Route index element={
           <Suspense fallback={<Loading />}>
@@ -71,7 +71,7 @@ function App() {
         <Route path="inventory/*" element={<PlaceholderPage />} />
         <Route path="production/*" element={<PlaceholderPage />} />
         <Route path="commercial/*" element={<PlaceholderPage />} />
-        <Route path="settings" element={<PlaceholderPage />} />
+        <Route path="settings" element={<Settings />} />
         
         {/* 404 */}
         <Route path="*" element={<NoMatch />} />
