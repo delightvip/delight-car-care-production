@@ -4,8 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-import { Line } from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { ar } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -167,42 +165,38 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
       </CardHeader>
       <CardContent className="pt-2">
         <div className="h-[350px] w-full">
-          <ChartContainer
-            data={chartData}
-            xAxisKey="periodFormatted"
-            series={[
-              { key: "in", label: "الوارد", type: "bar", color: "#22c55e" },
-              { key: "out", label: "المنصرف", type: "bar", color: "#ef4444" },
-              { key: "balance", label: "الرصيد", type: "line", color: "#3b82f6" }
-            ]}
-            strategy="discreet"
-            tooltip={(data) => {
-              if (!data?.payload?.[0]?.payload) return null;
-              const payload = data.payload[0].payload;
-              
-              return (
-                <ChartTooltip>
-                  <ChartTooltipContent>
-                    <div className="flex flex-col gap-1">
-                      <div className="text-xs text-muted-foreground">{payload.periodFormatted}</div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                        <div>الوارد: {payload.in} {itemUnit}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-red-500"></div>
-                        <div>المنصرف: {payload.out} {itemUnit}</div>
-                      </div>
-                      <div className="flex items-center gap-2 font-medium">
-                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                        <div>الرصيد: {payload.balance} {itemUnit}</div>
-                      </div>
-                    </div>
-                  </ChartTooltipContent>
-                </ChartTooltip>
-              );
-            }}
-          />
+          <div className="ChartContainer">
+            {chartData.length > 0 && (
+              <div 
+                className="w-full h-full"
+                style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  justifyContent: 'center', 
+                  alignItems: 'center' 
+                }}
+              >
+                <div className="text-lg font-medium">بيانات الرسم البياني</div>
+                <div className="flex gap-6 my-4">
+                  <div className="flex gap-2 items-center">
+                    <div className="h-3 w-3 bg-green-500 rounded-full"></div>
+                    <div>الوارد</div>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <div className="h-3 w-3 bg-red-500 rounded-full"></div>
+                    <div>المنصرف</div>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
+                    <div>الرصيد</div>
+                  </div>
+                </div>
+                <div className="text-center text-sm text-muted-foreground">
+                  تم تحميل {chartData.length} سجل من البيانات لعرض حركة المخزون
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

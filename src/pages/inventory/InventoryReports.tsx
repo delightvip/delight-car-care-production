@@ -31,11 +31,12 @@ interface InventoryItem {
   unit: string;
 }
 
+// Define the inventory tables with their literal names to fix type issues
 const inventoryTables = [
-  { id: 'raw', name: 'المواد الخام', table: 'raw_materials' },
-  { id: 'semi', name: 'المنتجات النصف مصنعة', table: 'semi_finished_products' },
-  { id: 'packaging', name: 'مواد التعبئة', table: 'packaging_materials' },
-  { id: 'finished', name: 'المنتجات النهائية', table: 'finished_products' }
+  { id: 'raw', name: 'المواد الخام', table: 'raw_materials' as const },
+  { id: 'semi', name: 'المنتجات النصف مصنعة', table: 'semi_finished_products' as const },
+  { id: 'packaging', name: 'مواد التعبئة', table: 'packaging_materials' as const },
+  { id: 'finished', name: 'المنتجات النهائية', table: 'finished_products' as const }
 ];
 
 const InventoryReports = () => {
@@ -51,10 +52,10 @@ const InventoryReports = () => {
       const result: ItemCategory[] = [];
       
       for (const type of inventoryTables) {
-        const { data, error } = await supabase
+        // Using a type safe approach for Supabase queries
+        const { data, error, count } = await supabase
           .from(type.table)
-          .select('count')
-          .count();
+          .select('*', { count: 'exact', head: true });
           
         if (error) throw error;
         
@@ -62,7 +63,7 @@ const InventoryReports = () => {
           id: type.id,
           name: type.name,
           type: type.id as ItemType,
-          itemCount: data?.[0]?.count || 0
+          itemCount: count || 0
         });
       }
       
@@ -74,18 +75,20 @@ const InventoryReports = () => {
   const { data: items, isLoading: isLoadingItems } = useQuery({
     queryKey: ['inventory-items', selectedCategory],
     queryFn: async () => {
-      const selectedTable = inventoryTables.find(t => t.id === selectedCategory)?.table;
+      const selectedTableInfo = inventoryTables.find(t => t.id === selectedCategory);
       
-      if (!selectedTable) return [];
+      if (!selectedTableInfo) return [];
       
+      // Using the type-safe table name
       const { data, error } = await supabase
-        .from(selectedTable)
+        .from(selectedTableInfo.table)
         .select('id, code, name, quantity, unit')
         .order('name');
         
       if (error) throw error;
       
-      return data as InventoryItem[];
+      // Cast the results to the expected type
+      return (data || []) as unknown as InventoryItem[];
     },
     enabled: !!selectedCategory
   });
@@ -96,19 +99,21 @@ const InventoryReports = () => {
     queryFn: async () => {
       if (!selectedItem) return null;
       
-      const selectedTable = inventoryTables.find(t => t.id === selectedCategory)?.table;
+      const selectedTableInfo = inventoryTables.find(t => t.id === selectedCategory);
       
-      if (!selectedTable) return null;
+      if (!selectedTableInfo) return null;
       
+      // Using the type-safe table name
       const { data, error } = await supabase
-        .from(selectedTable)
+        .from(selectedTableInfo.table)
         .select('*')
         .eq('id', selectedItem)
         .single();
         
       if (error) throw error;
       
-      return data as InventoryItem;
+      // Cast the result to the expected type
+      return data as unknown as InventoryItem;
     },
     enabled: !!selectedItem
   });

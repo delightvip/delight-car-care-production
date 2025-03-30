@@ -32,3 +32,9 @@ export interface DataTableProps {
   className?: string;
   emptyState?: ReactNode;
 }
+
+export interface TableSearchProps {
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  placeholder?: string;
+}
