@@ -81,7 +81,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
     return (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {Array(4).fill(0).map((_, i) => (
-          <Card key={i}>
+          <Card key={i} className="border-border/40 bg-card/60 backdrop-blur-sm">
             <CardContent className="p-6">
               <Skeleton className="h-8 w-16 mb-2" />
               <Skeleton className="h-12 w-24" />
@@ -95,9 +95,14 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
   
   if (error || !stats) {
     return (
-      <Card>
+      <Card className="border-destructive/20 bg-destructive/5">
         <CardContent className="p-6">
-          <p className="text-destructive">حدث خطأ أثناء تحميل البيانات</p>
+          <p className="text-destructive flex items-center gap-2">
+            <span className="rounded-full bg-destructive/20 p-1">
+              <RefreshCw size={16} className="text-destructive" />
+            </span>
+            حدث خطأ أثناء تحميل البيانات
+          </p>
         </CardContent>
       </Card>
     );
@@ -141,7 +146,7 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {items.map((item, i) => (
-        <Card key={i}>
+        <Card key={i} className="border-border/40 bg-card/60 backdrop-blur-sm hover:bg-card/80 transition-colors">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>

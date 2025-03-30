@@ -415,6 +415,7 @@ const ModernSidebar: React.FC = () => {
     { to: '/inventory/finished-products', title: 'منتجات نهائية' },
     { to: '/inventory/low-stock', title: 'مخزون منخفض' },
     { to: '/inventory/tracking', title: 'حركة المخزون' },
+    { to: '/inventory/reports', title: 'تقارير المخزون' },
     { to: '/production/orders', title: 'أوامر الإنتاج' },
     { to: '/production/packaging', title: 'التعبئة والتغليف' },
     { to: '/production/planning', title: 'تخطيط الإنتاج' },
@@ -620,6 +621,7 @@ const ModernSidebar: React.FC = () => {
               badgeColor="red" 
             />
             <SidebarItem to="/inventory/tracking" icon={ArrowLeftRight} title="حركة المخزون" />
+            <SidebarItem to="/inventory/reports" icon={BarChart3} title="تقارير المخزون" />
           </SidebarGroup>
 
           <SidebarGroup title="الإنتاج" icon={Factory} defaultOpen={false} id="production" color="success">

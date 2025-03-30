@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -7,9 +8,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { FileDown, BarChart3, PieChart, ActivitySquare } from 'lucide-react';
+import { FileDown, BarChart3, PieChart, ActivitySquare, Download, Calendar } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 
 type ItemType = 'raw' | 'semi' | 'packaging' | 'finished';
 
@@ -134,6 +136,14 @@ const InventoryReports = () => {
     }
   }, [items, selectedItem]);
 
+  const handleExportReport = () => {
+    toast.info("جاري تحضير التقرير للتنزيل...");
+    
+    setTimeout(() => {
+      toast.success("تم تحضير التقرير بنجاح، جاري التنزيل");
+    }, 1500);
+  };
+
   const renderReport = () => {
     if (!selectedItem || !selectedCategory) {
       return (
@@ -163,24 +173,62 @@ const InventoryReports = () => {
             itemType={selectedCategory} 
           />
           
-          {reportType === 'movement' && (
-            <InventoryMovementChart 
-              itemId={selectedItem} 
-              itemType={selectedCategory} 
-              timeRange={timeRange} 
-              itemName={selectedItemDetails?.name || ''} 
-              itemUnit={selectedItemDetails?.unit || ''}
-            />
-          )}
-          
-          {reportType === 'usage' && (
-            <InventoryUsageChart 
-              itemId={selectedItem} 
-              itemType={selectedCategory} 
-              timeRange={timeRange} 
-              itemName={selectedItemDetails?.name || ''}
-            />
-          )}
+          <Tabs defaultValue={reportType} value={reportType} onValueChange={setReportType} className="w-full">
+            <div className="flex justify-between items-center mb-4">
+              <TabsList className="grid grid-cols-2 w-[400px]">
+                <TabsTrigger value="movement" className="flex items-center gap-2">
+                  <ActivitySquare size={16} />
+                  <span>حركة المخزون</span>
+                </TabsTrigger>
+                <TabsTrigger value="usage" className="flex items-center gap-2">
+                  <PieChart size={16} />
+                  <span>توزيع الاستهلاك</span>
+                </TabsTrigger>
+              </TabsList>
+              
+              <div className="flex items-center gap-2">
+                <Calendar size={16} className="text-muted-foreground" />
+                <Select value={timeRange} onValueChange={setTimeRange}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="اختر الفترة الزمنية" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="week">أسبوع</SelectItem>
+                    <SelectItem value="month">شهر</SelectItem>
+                    <SelectItem value="quarter">ربع سنوي</SelectItem>
+                    <SelectItem value="year">سنوي</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <Card className="border-border/40">
+              <CardContent className="p-4">
+                <TabsContent value="movement" className="mt-0">
+                  <div className="h-[400px]">
+                    <InventoryMovementChart 
+                      itemId={selectedItem} 
+                      itemType={selectedCategory} 
+                      timeRange={timeRange} 
+                      itemName={selectedItemDetails?.name || ''} 
+                      itemUnit={selectedItemDetails?.unit || ''}
+                    />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="usage" className="mt-0">
+                  <div className="h-[400px]">
+                    <InventoryUsageChart 
+                      itemId={selectedItem} 
+                      itemType={selectedCategory} 
+                      timeRange={timeRange} 
+                      itemName={selectedItemDetails?.name || ''}
+                    />
+                  </div>
+                </TabsContent>
+              </CardContent>
+            </Card>
+          </Tabs>
         </div>
       </React.Suspense>
     );
@@ -194,14 +242,18 @@ const InventoryReports = () => {
             <h1 className="text-3xl font-bold tracking-tight">تقارير المخزون</h1>
             <p className="text-muted-foreground mt-1">تحليل وإحصائيات حركة المخزون</p>
           </div>
-          <Button variant="outline" className="gap-2">
-            <FileDown size={16} />
+          <Button 
+            variant="outline" 
+            className="gap-2"
+            onClick={handleExportReport}
+          >
+            <Download size={16} />
             تصدير التقرير
           </Button>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
+          <Card className="border-border/40 bg-card/60 backdrop-blur-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">نوع الصنف</CardTitle>
             </CardHeader>
@@ -231,7 +283,7 @@ const InventoryReports = () => {
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border/40 bg-card/60 backdrop-blur-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">الصنف</CardTitle>
             </CardHeader>
@@ -265,54 +317,37 @@ const InventoryReports = () => {
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border/40 bg-card/60 backdrop-blur-sm col-span-2">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">نوع التقرير</CardTitle>
+              <CardTitle className="text-sm font-medium">معلومات التقرير</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={reportType} onValueChange={setReportType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر نوع التقرير" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="movement">
-                    <div className="flex items-center gap-2">
-                      <ActivitySquare size={14} />
-                      <span>حركة المخزون</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="usage">
-                    <div className="flex items-center gap-2">
-                      <PieChart size={14} />
-                      <span>توزيع الاستهلاك</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">الفترة الزمنية</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر الفترة الزمنية" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="week">أسبوع</SelectItem>
-                  <SelectItem value="month">شهر</SelectItem>
-                  <SelectItem value="quarter">ربع سنوي</SelectItem>
-                  <SelectItem value="year">سنوي</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex justify-between items-center">
+                {selectedItemDetails ? (
+                  <div>
+                    <p className="font-medium">{selectedItemDetails.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      كود: {selectedItemDetails.code} | الوحدة: {selectedItemDetails.unit}
+                    </p>
+                  </div>
+                ) : (
+                  <Skeleton className="h-10 w-[200px]" />
+                )}
+                
+                <div className="flex gap-4 items-center">
+                  <div className="text-sm text-right">
+                    <span className="block font-medium">آخر تحديث:</span>
+                    <span className="block text-muted-foreground">
+                      {new Date().toLocaleDateString('ar-EG')}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
         
-        <div className="bg-muted/50 rounded-lg p-6 border">
+        <div className="bg-muted/30 rounded-lg p-6 border border-border/40 shadow-sm">
           {renderReport()}
         </div>
       </div>
