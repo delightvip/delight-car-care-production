@@ -1,34 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
-
-export const getProductionOrderDetails = async (orderId: number) => {
-  try {
-    // Get production order details
-    const { data: orderData, error: orderError } = await supabase
-      .from('production_orders')
-      .select('*')
-      .eq('id', orderId)
-      .single();
-    
-    if (orderError) throw orderError;
-    
-    // Get ingredients for this production order
-    const { data: ingredientsData, error: ingredientsError } = await supabase
-      .from('production_order_ingredients')
-      .select('*')
-      .eq('production_order_id', orderId);
-    
-    if (ingredientsError) throw ingredientsError;
-    
-    return {
-      order: orderData,
-      ingredients: ingredientsData
-    };
-  } catch (error) {
-    console.error('Error fetching production order details:', error);
-    throw error;
-  }
-};
-
 import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
@@ -46,6 +15,36 @@ class ProductionDatabaseService {
       ProductionDatabaseService.instance = new ProductionDatabaseService();
     }
     return ProductionDatabaseService.instance;
+  }
+
+  // Add this method to the class to avoid duplication
+  public async getProductionOrderDetails(orderId: number) {
+    try {
+      // Get production order details
+      const { data: orderData, error: orderError } = await supabase
+        .from('production_orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+      
+      if (orderError) throw orderError;
+      
+      // Get ingredients for this production order
+      const { data: ingredientsData, error: ingredientsError } = await supabase
+        .from('production_order_ingredients')
+        .select('*')
+        .eq('production_order_id', orderId);
+      
+      if (ingredientsError) throw ingredientsError;
+      
+      return {
+        order: orderData,
+        ingredients: ingredientsData
+      };
+    } catch (error) {
+      console.error('Error fetching production order details:', error);
+      throw error;
+    }
   }
 
   // جلب جميع أوامر الإنتاج
@@ -364,7 +363,7 @@ class ProductionDatabaseService {
     }
   }
 
-  // حذف أمر إ��تاج
+  // حذف أمر إنتاج
   public async deleteProductionOrder(orderId: number): Promise<boolean> {
     try {
       // حذف المكونات أولاً

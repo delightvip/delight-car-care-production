@@ -26,6 +26,33 @@ export const rpcFunctions = {
       .order('created_at', { ascending: false });
     
     return { data, error };
+  },
+  
+  // Add missing RPC functions
+  getProductionStats: async () => {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_production_stats');
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      console.error("Error getting production stats:", error);
+      return { data: null, error };
+    }
+  },
+  
+  getMonthlyProductionStats: async () => {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_monthly_production_stats');
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      console.error("Error getting monthly production stats:", error);
+      return { data: null, error };
+    }
   }
 };
 
