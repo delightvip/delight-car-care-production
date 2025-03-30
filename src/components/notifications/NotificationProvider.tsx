@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { 
@@ -6,6 +5,7 @@ import {
   ShoppingBag, Bell, InfoIcon, CheckCircle
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchLowStockItems } from '@/services/NotificationService';
 
@@ -40,29 +40,8 @@ interface NotificationContextType {
   refreshLowStockData: () => void;
 }
 
-// Create context with default values
-const NotificationContext = createContext<NotificationContextType>({
-  notifications: [],
-  unreadCount: 0,
-  lowStockItems: {
-    totalCount: 0,
-    counts: {
-      rawMaterials: 0,
-      semiFinished: 0,
-      packaging: 0,
-      finished: 0
-    },
-    items: []
-  },
-  addNotification: () => {},
-  markAsRead: () => {},
-  markAllAsRead: () => {},
-  clearNotification: () => {},
-  clearAllNotifications: () => {},
-  refreshLowStockData: () => {}
-});
+const NotificationContext = createContext<NotificationContextType | null>(null);
 
-// Export the hook with error handling
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -71,7 +50,6 @@ export const useNotifications = () => {
   return context;
 };
 
-// The provider component
 const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [prevLowStockCounts, setPrevLowStockCounts] = useState({
@@ -87,8 +65,6 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     queryFn: fetchLowStockItems,
     refetchInterval: 30000, // كل 30 ثانية
     staleTime: 20000, // تعتبر البيانات قديمة بعد 20 ثانية
-    retry: 1,
-    enabled: true,
   });
 
   // إضافة إشعار جديد
@@ -179,39 +155,34 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // إضافة مستمع للتغييرات في قاعدة البيانات
   useEffect(() => {
     const setupRealtimeSubscriptions = async () => {
-      try {
-        // إعداد قناة Supabase الحقيقية للاستماع للتغييرات
-        const channel = supabase
-          .channel('db-changes')
-          .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'raw_materials',
-          }, () => refreshLowStockData())
-          .on('postgres_changes', {
-            event: '*', 
-            schema: 'public',
-            table: 'semi_finished_products',
-          }, () => refreshLowStockData())
-          .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'packaging_materials',
-          }, () => refreshLowStockData())
-          .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'finished_products',
-          }, () => refreshLowStockData())
-          .subscribe();
-  
-        return () => {
-          supabase.removeChannel(channel);
-        };
-      } catch (error) {
-        console.error("Error setting up realtime subscriptions:", error);
-        return () => {};
-      }
+      // إعداد قناة Supabase الحقيقية للاستماع للتغييرات
+      const channel = supabase
+        .channel('db-changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'raw_materials',
+        }, () => refreshLowStockData())
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'semi_finished_products',
+        }, () => refreshLowStockData())
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'packaging_materials',
+        }, () => refreshLowStockData())
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'finished_products',
+        }, () => refreshLowStockData())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     };
 
     setupRealtimeSubscriptions();
@@ -291,24 +262,20 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => clearInterval(interval);
   }, [refreshLowStockData]);
 
-  const contextValue = {
-    notifications,
-    unreadCount,
-    lowStockItems: lowStockItems || {
-      totalCount: 0,
-      counts: { rawMaterials: 0, semiFinished: 0, packaging: 0, finished: 0 },
-      items: []
-    },
-    addNotification,
-    markAsRead,
-    markAllAsRead,
-    clearNotification,
-    clearAllNotifications,
-    refreshLowStockData
-  };
-
   return (
-    <NotificationContext.Provider value={contextValue}>
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        unreadCount,
+        lowStockItems,
+        addNotification,
+        markAsRead,
+        markAllAsRead,
+        clearNotification,
+        clearAllNotifications,
+        refreshLowStockData
+      }}
+    >
       {children}
     </NotificationContext.Provider>
   );
