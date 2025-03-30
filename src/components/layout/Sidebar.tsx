@@ -22,7 +22,7 @@ import {
   DollarSign,
   PieChart,
   Tags,
-  PresentationChart
+  LineChart
 } from 'lucide-react';
 import { useSidebar } from './SidebarContext';
 
@@ -142,7 +142,7 @@ const Sidebar: React.FC = () => {
             />
             <NavItem 
               to="/inventory/reports" 
-              icon={<PresentationChart size={20} />} 
+              icon={<LineChart size={20} />} 
               label="تقارير المخزون" 
               active={pathname === '/inventory/reports' || pathname.includes('/inventory/reports')}
             />
