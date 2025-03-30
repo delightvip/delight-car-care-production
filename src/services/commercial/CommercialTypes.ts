@@ -1,7 +1,7 @@
 
 export interface Payment {
   id: string;
-  party_id: string;  // Making this required to match with other definitions
+  party_id?: string;
   party_name?: string;
   date: string;
   amount: number;
@@ -25,18 +25,4 @@ export interface LedgerEntry {
   balance_after: number;
   created_at: string;
   notes?: string;
-}
-
-// Add Invoice interface that was missing in this file but referenced in CommercialFinancialLinkage.tsx
-export interface Invoice {
-  id: string;
-  invoice_type: 'sale' | 'purchase';
-  party_id: string;
-  party_name?: string;
-  date: string;
-  total_amount: number;
-  payment_status: 'draft' | 'confirmed' | 'cancelled';
-  status: 'paid' | 'partial' | 'unpaid';
-  notes?: string;
-  created_at?: string;
 }

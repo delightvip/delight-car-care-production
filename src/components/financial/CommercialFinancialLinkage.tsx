@@ -13,7 +13,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { format } from 'date-fns';
-import { Payment, Invoice } from '@/services/commercial/CommercialTypes'; // Updated import path
+import { Payment, Invoice } from '@/services/commercial/CommercialTypes';
 import { Transaction } from '@/services/financial/FinancialTypes';
 import FinancialService from '@/services/financial/FinancialService';
 import { toast } from 'sonner';

@@ -36,52 +36,19 @@ class PaymentService {
       
       return data.map(item => ({
         id: item.id,
-        party_id: item.party_id || '',
+        party_id: item.party_id,
         party_name: item.parties?.name || 'غير معروف',
         date: item.date,
         amount: item.amount,
-        payment_type: item.payment_type as 'collection' | 'disbursement',
-        method: item.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        payment_status: item.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        related_invoice_id: item.related_invoice_id || undefined,
-        notes: item.notes || '',
+        payment_type: item.payment_type,
+        method: item.method,
+        payment_status: item.payment_status,
+        related_invoice_id: item.related_invoice_id,
+        notes: item.notes,
         created_at: item.created_at
       }));
     } catch (error) {
       console.error('Error fetching payments:', error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
-      return [];
-    }
-  }
-  
-  public async getPaymentsByParty(partyId: string): Promise<Payment[]> {
-    try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          parties (name)
-        `)
-        .eq('party_id', partyId)
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      return data.map(item => ({
-        id: item.id,
-        party_id: item.party_id || '',
-        party_name: item.parties?.name || 'غير معروف',
-        date: item.date,
-        amount: item.amount,
-        payment_type: item.payment_type as 'collection' | 'disbursement',
-        method: item.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        payment_status: item.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        related_invoice_id: item.related_invoice_id || undefined,
-        notes: item.notes || '',
-        created_at: item.created_at
-      }));
-    } catch (error) {
-      console.error(`Error fetching payments for party ${partyId}:`, error);
       toast.error('حدث خطأ أثناء جلب المدفوعات');
       return [];
     }
@@ -106,9 +73,9 @@ class PaymentService {
         party_name: data.parties?.name || 'غير معروف',
         date: data.date,
         amount: data.amount,
-        payment_type: data.payment_type as 'collection' | 'disbursement',
-        method: data.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled',
+        payment_type: data.payment_type,
+        method: data.method,
+        payment_status: data.payment_status,
         related_invoice_id: data.related_invoice_id,
         notes: data.notes,
         created_at: data.created_at
