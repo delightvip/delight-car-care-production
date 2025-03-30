@@ -179,7 +179,10 @@ const InventoryReports = () => {
       <React.Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
         <div className="space-y-6">
           {/* Summary statistics */}
-          <InventorySummaryStats itemId={selectedItem} itemType={selectedCategory} />
+          <InventorySummaryStats 
+            itemId={selectedItem} 
+            itemType={selectedCategory} 
+          />
           
           {/* Main report content */}
           {reportType === 'movement' && (
