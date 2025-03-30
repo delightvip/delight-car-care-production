@@ -6,15 +6,15 @@ import SidebarBranding from './sidebar/SidebarBranding';
 import SidebarMenu from './sidebar/SidebarMenu';
 
 const Sidebar = () => {
-  const { expanded, mobile, setExpanded } = useSidebar();
+  const { isOpen, isMobile, setOpenMobile } = useSidebar();
   
   return (
     <>
       {/* Mobile backdrop */}
-      {mobile && expanded && (
+      {isMobile && isOpen && (
         <div
           className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm"
-          onClick={() => setExpanded(false)}
+          onClick={() => setOpenMobile(false)}
         />
       )}
       
@@ -22,8 +22,8 @@ const Sidebar = () => {
       <aside
         className={cn(
           "fixed top-0 z-50 h-full border-l bg-card shadow-lg transition-all duration-300 ease-in-out",
-          expanded ? "w-64" : "w-0 overflow-hidden",
-          mobile ? "right-0" : "right-0"
+          isOpen ? "w-64" : "w-0 overflow-hidden",
+          isMobile ? "right-0" : "right-0"
         )}
       >
         <nav className="flex h-full flex-col">
