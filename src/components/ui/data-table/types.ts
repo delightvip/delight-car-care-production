@@ -1,9 +1,10 @@
+
 import { ReactNode } from "react";
 
 export interface Column {
   key: string;
   title: string;
-  render?: (record: any) => ReactNode;
+  render?: ((record: any) => ReactNode) | ((value: any, record: any) => ReactNode);
   sortable?: boolean;
   width?: string;
   minWidth?: string;

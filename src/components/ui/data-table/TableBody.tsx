@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Column } from './types';
@@ -30,6 +29,19 @@ const TableBodyComponent: React.FC<TableBodyProps> = ({
     );
   }
 
+  const renderCell = (column: Column, record: any) => {
+    if (!column.render) {
+      return record[column.key];
+    }
+    
+    const renderFn = column.render as Function;
+    if (renderFn.length > 1) {
+      return renderFn(record[column.key], record);
+    } else {
+      return renderFn(record);
+    }
+  };
+
   return (
     <TableBody>
       {data.map((record, index) => (
@@ -42,11 +54,9 @@ const TableBodyComponent: React.FC<TableBodyProps> = ({
                 minWidth: column.minWidth || '100px'
               }}
             >
-              {column.render 
-                ? column.render(record) 
-                : column.cell 
-                  ? column.cell({ row: { original: record } }) 
-                  : record[column.key]}
+              {column.cell 
+                ? column.cell({ row: { original: record } }) 
+                : renderCell(column, record)}
             </TableCell>
           ))}
           {actions && (
