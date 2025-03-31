@@ -1,151 +1,127 @@
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Helmet } from 'react-helmet-async';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle
-} from '@/components/ui/resizable';
+import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
-import Breadcrumbs from '@/components/navigation/Breadcrumbs';
-import ProfitService, { ProfitFilter as ProfitFilterType } from '@/services/commercial/profit/ProfitService';
+import { useQuery } from '@tanstack/react-query';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import ProfitService from '@/services/commercial/profit/ProfitService';
 import ProfitFilter from '@/components/commercial/profits/ProfitFilter';
 import ProfitSummaryCards from '@/components/commercial/profits/ProfitSummaryCards';
 import ProfitTable from '@/components/commercial/profits/ProfitTable';
 import ProfitDistributionChart from '@/components/commercial/profits/ProfitDistributionChart';
 import ProfitTrendsChart from '@/components/commercial/profits/ProfitTrendsChart';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import { RefreshCw } from 'lucide-react';
 
 const Profits = () => {
-  const [filters, setFilters] = useState<ProfitFilterType>({});
-  const [activeTab, setActiveTab] = useState<string>('profits');
-  const [isRecalculating, setIsRecalculating] = useState<boolean>(false);
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    minProfit: '',
+    maxProfit: '',
+    partyId: '',
+  });
   
-  const profitService = ProfitService.getInstance();
+  // حالة زر "إعادة حساب جميع الأرباح"
+  const [isRecalculating, setIsRecalculating] = useState(false);
   
-  const { 
-    data: profits = [],
-    isLoading,
-    refetch
-  } = useQuery({
+  // استدعاء بيانات الأرباح
+  const { data: profits, isLoading, refetch } = useQuery({
     queryKey: ['profits', filters],
-    queryFn: async () => {
-      return await profitService.getProfits(filters);
-    }
+    queryFn: () => ProfitService.getInstance().getFilteredProfits(filters),
   });
   
-  const { 
-    data: summary,
-    isLoading: isSummaryLoading
-  } = useQuery({
-    queryKey: ['profit-summary', filters],
-    queryFn: async () => {
-      return await profitService.getProfitSummary(
-        filters.startDate,
-        filters.endDate,
-        filters.partyId
-      );
-    },
-    initialData: {
-      total_sales: 0,
-      total_cost: 0,
-      total_profit: 0,
-      average_profit_percentage: 0,
-      invoice_count: 0
-    }
+  // استدعاء ملخص الأرباح
+  const { data: summary, isLoading: isSummaryLoading } = useQuery({
+    queryKey: ['profitsSummary', filters],
+    queryFn: () => ProfitService.getInstance().getProfitSummary(filters),
   });
   
-  const handleFilterChange = (newFilters: ProfitFilterType) => {
-    setFilters(newFilters);
-  };
-  
-  const handleRecalculateAll = async () => {
-    setIsRecalculating(true);
+  // وظيفة إعادة حساب جميع الأرباح
+  const handleRecalculateAllProfits = async () => {
     try {
-      const result = await profitService.recalculateAllProfits();
-      if (result) {
-        refetch();
-      }
+      setIsRecalculating(true);
+      await ProfitService.getInstance().recalculateAllProfits();
+      toast.success('تم إعادة حساب جميع الأرباح بنجاح');
+      refetch(); // تحديث البيانات بعد إعادة الحساب
+    } catch (error) {
+      console.error('Error recalculating profits:', error);
+      toast.error('حدث خطأ أثناء إعادة حساب الأرباح');
     } finally {
       setIsRecalculating(false);
     }
   };
   
+  // معالجة تغيير الفلتر
+  const handleFilterChange = (newFilters: typeof filters) => {
+    setFilters(newFilters);
+  };
+  
   return (
     <PageTransition>
-      <Helmet>
-        <title>الأرباح - إدارة المبيعات</title>
-      </Helmet>
-      
-      <div className="container mx-auto p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-          <Breadcrumbs
-            items={[
-              { label: 'الرئيسية', href: '/' },
-              { label: 'إدارة المبيعات', href: '/commercial' },
-              { label: 'الأرباح', href: '/commercial/profits' },
-            ]}
-          />
-          
+      <div className="space-y-6">
+        <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">تحليل الأرباح</h2>
+            <p className="text-muted-foreground">
+              قم بتحليل أرباح البيع ومراجعة أداء المبيعات
+            </p>
+          </div>
           <Button
-            variant="outline"
-            onClick={handleRecalculateAll}
+            onClick={handleRecalculateAllProfits}
             disabled={isRecalculating}
-            className="mt-2 sm:mt-0 gap-2"
+            className="gap-2"
           >
-            {isRecalculating ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                جارِ إعادة الحساب...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4" />
-                إعادة حساب جميع الأرباح
-              </>
-            )}
+            <RefreshCw className={`h-4 w-4 ${isRecalculating ? 'animate-spin' : ''}`} />
+            إعادة حساب جميع الأرباح
           </Button>
         </div>
 
-        <ProfitFilter onFilterChange={handleFilterChange} />
-        
-        <ProfitSummaryCards summary={summary} />
-        
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid grid-cols-3 max-w-md mx-auto">
-            <TabsTrigger value="profits">الأرباح</TabsTrigger>
-            <TabsTrigger value="distribution">توزيع الأرباح</TabsTrigger>
-            <TabsTrigger value="trends">اتجاهات الأرباح</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="profits" className="space-y-4">
-            <ProfitTable profits={profits} isLoading={isLoading} />
-          </TabsContent>
-          
-          <TabsContent value="distribution">
-            <ResizablePanelGroup direction="horizontal" className="min-h-[400px]">
-              <ResizablePanel defaultSize={50}>
-                <div className="p-2">
-                  <ProfitDistributionChart profits={profits} />
-                </div>
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={50}>
-                <div className="p-2">
-                  <ProfitTrendsChart profits={profits} />
-                </div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          </TabsContent>
-          
-          <TabsContent value="trends">
-            <ProfitTrendsChart profits={profits} />
-          </TabsContent>
-        </Tabs>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/">الرئيسية</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/commercial">المبيعات</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>الأرباح</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+
+        <div className="space-y-6">
+          <ProfitFilter onFilterChange={handleFilterChange} />
+
+          {!isSummaryLoading && summary && (
+            <ProfitSummaryCards summary={summary} />
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-medium mb-4">توزيع الأرباح</h3>
+              <div className="h-[300px]">
+                <ProfitDistributionChart data={profits?.slice(0, 5) || []} />
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h3 className="text-lg font-medium mb-4">اتجاهات الأرباح</h3>
+              <div className="h-[300px]">
+                <ProfitTrendsChart profits={profits || []} />
+              </div>
+            </Card>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-medium mb-4">تفاصيل الأرباح</h3>
+            <ProfitTable profits={profits || []} isLoading={isLoading} />
+          </div>
+        </div>
       </div>
     </PageTransition>
   );

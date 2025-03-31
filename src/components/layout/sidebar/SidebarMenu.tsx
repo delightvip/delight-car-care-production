@@ -14,16 +14,17 @@ import {
   Wallet,
   Truck,
   Users,
-  RotateCcw,
-  TrendingUp
+  RotateCw,
+  TrendingUp,
+  LucideIcon
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import SidebarMenuGroup from './SidebarMenuGroup';
 
-interface MenuItem {
-  icon: ReactNode;
+interface SidebarMenuItem {
+  icon: LucideIcon;
   title: string;
   path: string;
   badge?: number;
@@ -37,40 +38,40 @@ interface MenuItem {
 const SidebarMenu = () => {
   const location = useLocation();
   
-  const menuItems: Record<string, MenuItem[]> = {
+  const menuItems: Record<string, SidebarMenuItem[]> = {
     main: [
-      { icon: <Home className="h-5 w-5" />, title: 'الرئيسية', path: '/' },
+      { icon: Home, title: 'الرئيسية', path: '/' },
     ],
     commercial: [
-      { icon: <ShoppingCart className="h-5 w-5" />, title: 'لوحة المبيعات', path: '/commercial' },
-      { icon: <Receipt className="h-5 w-5" />, title: 'الفواتير', path: '/commercial/invoices' },
-      { icon: <Users className="h-5 w-5" />, title: 'العملاء والموردين', path: '/commercial/parties' },
-      { icon: <Wallet className="h-5 w-5" />, title: 'المدفوعات', path: '/commercial/payments' },
-      { icon: <TrendingUp className="h-5 w-5" />, title: 'الأرباح', path: '/commercial/profits' },
-      { icon: <RotateCcw className="h-5 w-5" />, title: 'المرتجعات', path: '/commercial/returns' },
+      { icon: ShoppingCart, title: 'لوحة المبيعات', path: '/commercial' },
+      { icon: Receipt, title: 'الفواتير', path: '/commercial/invoices' },
+      { icon: Users, title: 'العملاء والموردين', path: '/commercial/parties' },
+      { icon: Wallet, title: 'المدفوعات', path: '/commercial/payments' },
+      { icon: TrendingUp, title: 'الأرباح', path: '/commercial/profits' },
+      { icon: RotateCw, title: 'المرتجعات', path: '/commercial/returns' },
     ],
     inventory: [
-      { icon: <Archive className="h-5 w-5" />, title: 'المخزون', path: '/inventory' },
-      { icon: <Package className="h-5 w-5" />, title: 'المواد الخام', path: '/inventory/raw-materials' },
-      { icon: <Package className="h-5 w-5" />, title: 'مواد التعبئة', path: '/inventory/packaging' },
-      { icon: <Package className="h-5 w-5" />, title: 'منتجات نصف مصنعة', path: '/inventory/semi-finished' },
-      { icon: <Archive className="h-5 w-5" />, title: 'المنتجات النهائية', path: '/inventory/finished' },
-      { icon: <Truck className="h-5 w-5" />, title: 'حركة المخزون', path: '/inventory/tracking' },
+      { icon: Archive, title: 'المخزون', path: '/inventory' },
+      { icon: Package, title: 'المواد الخام', path: '/inventory/raw-materials' },
+      { icon: Package, title: 'مواد التعبئة', path: '/inventory/packaging' },
+      { icon: Package, title: 'منتجات نصف مصنعة', path: '/inventory/semi-finished' },
+      { icon: Archive, title: 'المنتجات النهائية', path: '/inventory/finished' },
+      { icon: Truck, title: 'حركة المخزون', path: '/inventory/tracking' },
     ],
     production: [
-      { icon: <Factory className="h-5 w-5" />, title: 'الإنتاج', path: '/production' },
-      { icon: <Factory className="h-5 w-5" />, title: 'أوامر الإنتاج', path: '/production/orders' },
-      { icon: <Factory className="h-5 w-5" />, title: 'أوامر التعبئة', path: '/production/packaging-orders' },
+      { icon: Factory, title: 'الإنتاج', path: '/production' },
+      { icon: Factory, title: 'أوامر الإنتاج', path: '/production/orders' },
+      { icon: Factory, title: 'أوامر التعبئة', path: '/production/packaging-orders' },
     ],
     financial: [
-      { icon: <DollarSign className="h-5 w-5" />, title: 'المالية', path: '/financial' },
-      { icon: <DollarSign className="h-5 w-5" />, title: 'المعاملات', path: '/financial/transactions' },
+      { icon: DollarSign, title: 'المالية', path: '/financial' },
+      { icon: DollarSign, title: 'المعاملات', path: '/financial/transactions' },
     ],
     analytics: [
-      { icon: <BarChart3 className="h-5 w-5" />, title: 'التقارير والتحليل', path: '/analytics' },
+      { icon: BarChart3, title: 'التقارير والتحليل', path: '/analytics' },
     ],
     settings: [
-      { icon: <Settings className="h-5 w-5" />, title: 'الإعدادات', path: '/settings' },
+      { icon: Settings, title: 'الإعدادات', path: '/settings' },
     ],
   };
   
@@ -105,7 +106,7 @@ const SidebarMenu = () => {
           asChild
         >
           <Link to={item.path} className="gap-3">
-            {item.icon}
+            <item.icon className="h-5 w-5" />
             <span>{item.title}</span>
           </Link>
         </Button>
@@ -136,7 +137,7 @@ const SidebarMenu = () => {
             asChild
           >
             <Link to={item.path} className="gap-3">
-              {item.icon}
+              <item.icon className="h-5 w-5" />
               <span>{item.title}</span>
             </Link>
           </Button>

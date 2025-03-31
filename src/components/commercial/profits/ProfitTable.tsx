@@ -83,7 +83,7 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
         }
         
         return (
-          <Badge variant={badgeVariant as any}>
+          <Badge variant={badgeVariant as "success" | "default" | "secondary" | "outline" | "destructive"}>
             {percentage.toFixed(1)}%
           </Badge>
         );
