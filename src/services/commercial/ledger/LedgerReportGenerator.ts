@@ -1,17 +1,16 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import PartyService from '@/services/PartyService';
-import { LedgerEntry } from '@/services/commercial/CommercialTypes';
-import { LedgerEntity } from './LedgerEntity';
+import { LedgerEntry } from '@/services/CommercialTypes';
 import { toast } from "sonner";
+import PartyService from '../../PartyService';
+import { LedgerEntity } from './LedgerEntity';
 import { format } from 'date-fns';
 
+// خدمة تُعنى بإنشاء التقارير المالية
 export class LedgerReportGenerator {
   private static partyService = PartyService.getInstance();
-  
-  /**
-   * Generate an account statement for all parties or parties of a specific type
-   */
+
+  // إنشاء كشف حساب عام
   public static async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
     try {
       // Get parties of the specified type or all if not specified
@@ -27,7 +26,7 @@ export class LedgerReportGenerator {
         parties = await this.partyService.getParties();
       }
       
-      // For each party, calculate ledger entries and balances
+      // For each party, get their ledger entries in the date range and calculate balances
       const statements = await Promise.all(
         parties.map(async (party) => {
           const entries = await LedgerEntity.fetchLedgerEntries(party.id, startDate, endDate);
@@ -65,9 +64,7 @@ export class LedgerReportGenerator {
     }
   }
   
-  /**
-   * Generate a statement for a single party
-   */
+  // إنشاء كشف حساب لطرف محدد
   public static async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
     try {
       const party = await this.partyService.getPartyById(partyId);
@@ -106,22 +103,11 @@ export class LedgerReportGenerator {
     }
   }
   
-  /**
-   * Export ledger entries to CSV
-   */
+  // تصدير سجل الحساب إلى CSV
   public static async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
     try {
       const ledgerEntries = await LedgerEntity.fetchLedgerEntries(partyId, startDate, endDate);
-      
-      const { data: party, error: partyError } = await supabase
-        .from('parties')
-        .select('name')
-        .eq('id', partyId)
-        .single();
-      
-      if (partyError) {
-        console.error('Error fetching party:', partyError);
-      }
+      const party = await this.partyService.getPartyById(partyId);
       
       if (!ledgerEntries.length) {
         return '';
@@ -150,33 +136,26 @@ export class LedgerReportGenerator {
     }
   }
   
-  /**
-   * Get transaction description based on transaction type
-   */
-  public static getTransactionDescription(transactionType: string): string {
-    switch (transactionType) {
-      case 'sale_invoice':
-        return 'فاتورة مبيعات';
-      case 'purchase_invoice':
-        return 'فاتورة مشتريات';
-      case 'payment_collection':
-        return 'تحصيل دفعة';
-      case 'payment_disbursement':
-        return 'صرف دفعة';
-      case 'sales_return':
-        return 'مرتجع مبيعات';
-      case 'purchase_return':
-        return 'مرتجع مشتريات';
-      case 'cancel_sale_invoice':
-        return 'إلغاء فاتورة مبيعات';
-      case 'cancel_purchase_invoice':
-        return 'إلغاء فاتورة مشتريات';
-      case 'cancel_payment_collection':
-        return 'إلغاء تحصيل دفعة';
-      case 'cancel_payment_disbursement':
-        return 'إلغاء صرف دفعة';
-      default:
-        return transactionType;
-    }
+  // الحصول على وصف المعاملة
+  private static getTransactionDescription(transaction_type: string): string {
+    const descriptions: { [key: string]: string } = {
+      'sale_invoice': 'فاتورة مبيعات',
+      'purchase_invoice': 'فاتورة مشتريات',
+      'payment_received': 'دفعة مستلمة',
+      'payment_made': 'دفعة مدفوعة',
+      'sales_return': 'مرتجع مبيعات',
+      'purchase_return': 'مرتجع مشتريات',
+      'opening_balance': 'رصيد افتتاحي',
+      'cancel_sale_invoice': 'إلغاء فاتورة مبيعات',
+      'cancel_purchase_invoice': 'إلغاء فاتورة مشتريات',
+      'cancel_payment_received': 'إلغاء دفعة مستلمة',
+      'cancel_payment_made': 'إلغاء دفعة مدفوعة',
+      'cancel_sales_return': 'إلغاء مرتجع مبيعات',
+      'cancel_purchase_return': 'إلغاء مرتجع مشتريات',
+      'invoice_amount_adjustment': 'تعديل قيمة فاتورة',
+      'opening_balance_update': 'تعديل الرصيد الافتتاحي'
+    };
+    
+    return descriptions[transaction_type] || transaction_type;
   }
 }

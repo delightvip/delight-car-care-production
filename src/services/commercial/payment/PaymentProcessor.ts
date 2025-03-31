@@ -1,96 +1,83 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import PartyService from '@/services/PartyService';
-import { Payment } from '@/services/commercial/CommercialTypes';
-import InvoiceService from '../invoice/InvoiceService';
+import { Payment } from "@/services/CommercialTypes";
+import InventoryService from "@/services/InventoryService";
+import PartyService from "@/services/PartyService";
+import InvoiceService from "../invoice/InvoiceService";
 import { toast } from "@/hooks/use-toast";
 
 export class PaymentProcessor {
+  private inventoryService: InventoryService;
   private partyService: PartyService;
   private invoiceService: InvoiceService;
-  
+
   constructor() {
+    this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
     this.invoiceService = InvoiceService.getInstance();
   }
-  
+
   /**
-   * Confirm a payment and update related invoice and party balances.
+   * تأكيد الدفعة وتحديث الحسابات ذات الصلة
    */
   public async confirmPayment(paymentId: string): Promise<boolean> {
     try {
-      console.log('Confirming payment:', paymentId);
-      
-      // Fetch payment details
+      // التحقق من حالة الدفعة
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .select('*')
         .eq('id', paymentId)
         .single();
       
-      if (paymentError) {
-        console.error('Error fetching payment:', paymentError);
-        toast({
-          title: "خطأ",
-          description: "فشل جلب بيانات الدفعة",
-          variant: "destructive"
-        });
-        return false;
-      }
-      
-      if (!payment) {
-        toast({
-          title: "خطأ",
-          description: "لم يتم العثور على الدفعة",
-          variant: "destructive"
-        });
-        return false;
-      }
+      if (paymentError) throw paymentError;
       
       if (payment.payment_status === 'confirmed') {
         toast({
-          title: "معلومة",
+          title: "تنبيه",
           description: "الدفعة مؤكدة بالفعل",
           variant: "default"
         });
         return true;
       }
       
-      // Update party balance
-      const amount = Number(payment.amount);
-      const isCollection = payment.payment_type === 'collection';
-      
-      await this.partyService.updatePartyBalance(
-        payment.party_id,
-        amount,
-        !isCollection, // Debit if disbursement, credit if collection
-        isCollection ? 'تحصيل دفعة' : 'صرف دفعة',
-        isCollection ? 'payment_collection' : 'payment_disbursement',
-        payment.id
-      );
-      
-      // Update invoice status if related_invoice_id is present
-      if (payment.related_invoice_id) {
-        await this.invoiceService.updateInvoiceStatusAfterPayment(payment.related_invoice_id, amount);
+      // تحديث سجل الطرف (العميل/المورد)
+      if (payment.party_id) {
+        const isCredit = payment.payment_type === 'collection';
+        
+        await this.partyService.updatePartyBalance(
+          payment.party_id,
+          payment.amount,
+          !isCredit, // مدين إذا كان disbursement، دائن إذا كان collection
+          isCredit ? 'تحصيل دفعة' : 'تسديد دفعة',
+          isCredit ? 'payment_collection' : 'payment_disbursement',
+          paymentId
+        );
       }
       
-      // Update payment status to confirmed
+      // إذا كانت الدفعة مرتبطة بفاتورة، قم بتحديث حالة الفاتورة
+      if (payment.related_invoice_id) {
+        await this.invoiceService.updateInvoiceStatusAfterPayment(
+          payment.related_invoice_id,
+          payment.amount
+        );
+      }
+      
+      // تحديث حالة الدفعة إلى "مؤكدة"
       const { error: updateError } = await supabase
         .from('payments')
         .update({ payment_status: 'confirmed' })
         .eq('id', paymentId);
       
-      if (updateError) {
-        console.error('Error updating payment status:', updateError);
-        
-        toast({
-          title: "خطأ",
-          description: "فشل تحديث حالة الدفعة",
-          variant: "destructive"
-        });
-        return false;
-      }
+      if (updateError) throw updateError;
       
-      console.log('Payment confirmed successfully:', paymentId);
+      // استخدام setTimeout لتجنب تعليق واجهة المستخدم
+      setTimeout(() => {
+        toast({
+          title: "نجاح",
+          description: "تم تأكيد الدفعة بنجاح",
+          variant: "success"
+        });
+      }, 100);
       
       return true;
     } catch (error) {
@@ -105,82 +92,66 @@ export class PaymentProcessor {
   }
   
   /**
-   * Cancel a payment and reverse related invoice and party balances.
+   * إلغاء الدفعة وعكس التغييرات ذات الصلة
    */
   public async cancelPayment(paymentId: string): Promise<boolean> {
     try {
-      console.log('Cancelling payment:', paymentId);
-      
-      // Fetch payment details
+      // التحقق من حالة الدفعة
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .select('*')
         .eq('id', paymentId)
         .single();
       
-      if (paymentError) {
-        console.error('Error fetching payment:', paymentError);
-        toast({
-          title: "خطأ",
-          description: "فشل جلب بيانات الدفعة",
-          variant: "destructive"
-        });
-        return false;
-      }
-      
-      if (!payment) {
-        toast({
-          title: "خطأ",
-          description: "لم يتم العثور على الدفعة",
-          variant: "destructive"
-        });
-        return false;
-      }
+      if (paymentError) throw paymentError;
       
       if (payment.payment_status !== 'confirmed') {
         toast({
           title: "خطأ",
-          description: "لا يمكن إلغاء دفعة غير مؤكدة",
+          description: "يمكن إلغاء الدفعات المؤكدة فقط",
           variant: "destructive"
         });
         return false;
       }
       
-      // Reverse party balance update
-      const amount = Number(payment.amount);
-      const isCollection = payment.payment_type === 'collection';
-      
-      await this.partyService.updatePartyBalance(
-        payment.party_id,
-        amount,
-        isCollection, // Credit if disbursement, debit if collection
-        isCollection ? 'إلغاء تحصيل دفعة' : 'إلغاء صرف دفعة',
-        isCollection ? 'cancel_payment_collection' : 'cancel_payment_disbursement',
-        payment.id
-      );
-      
-      // Reverse invoice status update if related_invoice_id is present
-      if (payment.related_invoice_id) {
-        await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id, amount);
+      // عكس تحديث سجل الطرف (العميل/المورد)
+      if (payment.party_id) {
+        const isCredit = payment.payment_type === 'collection';
+        
+        await this.partyService.updatePartyBalance(
+          payment.party_id,
+          payment.amount,
+          isCredit, // عكس التأثير الأصلي
+          isCredit ? 'إلغاء تحصيل دفعة' : 'إلغاء تسديد دفعة',
+          isCredit ? 'cancel_payment_collection' : 'cancel_payment_disbursement',
+          paymentId
+        );
       }
       
-      // Update payment status to cancelled
+      // إذا كانت الدفعة مرتبطة بفاتورة، قم بعكس تحديث حالة الفاتورة
+      if (payment.related_invoice_id) {
+        await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(
+          payment.related_invoice_id,
+          payment.amount
+        );
+      }
+      
+      // تحديث حالة الدفعة إلى "ملغاة"
       const { error: updateError } = await supabase
         .from('payments')
         .update({ payment_status: 'cancelled' })
         .eq('id', paymentId);
       
-      if (updateError) {
-        console.error('Error updating payment status:', updateError);
-        toast({
-          title: "خطأ",
-          description: "فشل تحديث حالة الدفعة",
-          variant: "destructive"
-        });
-        return false;
-      }
+      if (updateError) throw updateError;
       
-      console.log('Payment cancelled successfully:', paymentId);
+      // استخدام setTimeout لتجنب تعليق واجهة المستخدم
+      setTimeout(() => {
+        toast({
+          title: "نجاح",
+          description: "تم إلغاء الدفعة بنجاح",
+          variant: "success"
+        });
+      }, 100);
       
       return true;
     } catch (error) {

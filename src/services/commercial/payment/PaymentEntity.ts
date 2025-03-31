@@ -1,7 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import PartyService from '@/services/PartyService';
-import { Payment } from '@/services/commercial/CommercialTypes';
-import { toast } from "@/hooks/use-toast";
+import { Payment } from "@/services/CommercialTypes";
 
 export class PaymentEntity {
   /**

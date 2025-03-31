@@ -1,6 +1,6 @@
 
 import BaseCommercialService from './BaseCommercialService';
-import { Invoice, InvoiceItem } from './CommercialTypes';
+import { Invoice, InvoiceItem } from '../CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
 
@@ -34,13 +34,13 @@ class InvoiceService extends BaseCommercialService {
       // Map the data to our Invoice type
       const invoicesWithParties = data.map(invoice => ({
         id: invoice.id,
-        invoice_type: invoice.invoice_type as "sale" | "purchase",
+        invoice_type: invoice.invoice_type,
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status as "paid" | "partial" | "unpaid",
-        payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled" || 'draft',
+        status: invoice.status,
+        payment_status: invoice.payment_status || 'draft',
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
@@ -66,7 +66,7 @@ class InvoiceService extends BaseCommercialService {
         })
       );
       
-      return invoicesWithItems as Invoice[];
+      return invoicesWithItems;
     } catch (error) {
       console.error('Error fetching invoices:', error);
       toast.error('حدث خطأ أثناء جلب الفواتير');
@@ -89,13 +89,13 @@ class InvoiceService extends BaseCommercialService {
       
       const invoicesWithParties = data.map(invoice => ({
         id: invoice.id,
-        invoice_type: invoice.invoice_type as "sale" | "purchase",
+        invoice_type: invoice.invoice_type,
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status as "paid" | "partial" | "unpaid",
-        payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled" || 'draft',
+        status: invoice.status,
+        payment_status: invoice.payment_status || 'draft',
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
@@ -121,7 +121,7 @@ class InvoiceService extends BaseCommercialService {
         })
       );
       
-      return invoicesWithItems as Invoice[];
+      return invoicesWithItems;
     } catch (error) {
       console.error(`Error fetching invoices for party ${partyId}:`, error);
       toast.error('حدث خطأ أثناء جلب الفواتير');
@@ -151,19 +151,16 @@ class InvoiceService extends BaseCommercialService {
       
       return {
         id: invoiceData.id,
-        invoice_type: invoiceData.invoice_type as "sale" | "purchase",
+        invoice_type: invoiceData.invoice_type,
         party_id: invoiceData.party_id,
         party_name: invoiceData.parties?.name,
         date: invoiceData.date,
         total_amount: invoiceData.total_amount,
-        status: invoiceData.status as "paid" | "partial" | "unpaid",
-        payment_status: invoiceData.payment_status as "draft" | "confirmed" | "cancelled" || 'draft',
+        status: invoiceData.status,
+        payment_status: invoiceData.payment_status || 'draft',
         notes: invoiceData.notes,
         created_at: invoiceData.created_at,
-        items: items.map(item => ({
-          ...item,
-          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products"
-        })) as InvoiceItem[]
+        items: items
       };
     } catch (error) {
       console.error(`Error fetching invoice with id ${id}:`, error);

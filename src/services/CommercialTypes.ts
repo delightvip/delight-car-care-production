@@ -1,6 +1,4 @@
 
-// تم نقل التعريفات من ملف CommercialTypes الأصلي إلى هذا الملف
-
 export interface Invoice {
   id: string;
   invoice_type: 'sale' | 'purchase';

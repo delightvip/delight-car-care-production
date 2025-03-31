@@ -1,12 +1,14 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { LedgerEntry } from '@/services/commercial/CommercialTypes';
+import { LedgerEntry } from '@/services/CommercialTypes';
 import { toast } from "sonner";
+import PartyService from '../../PartyService';
 
+// خدمة تُعنى بعمليات جلب سجل الحساب
 export class LedgerEntity {
-  /**
-   * Fetch ledger entries for a party
-   */
+  private static partyService = PartyService.getInstance();
+
+  // جلب سجل الحساب للطرف
   public static async fetchLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
     try {
       let query = supabase
@@ -28,20 +30,12 @@ export class LedgerEntity {
       if (error) throw error;
       
       // Get party name
-      const { data: partyData, error: partyError } = await supabase
-        .from('parties')
-        .select('name')
-        .eq('id', partyId)
-        .single();
-      
-      if (partyError) {
-        console.error('Error fetching party:', partyError);
-      }
+      const party = await this.partyService.getPartyById(partyId);
       
       return data.map(entry => ({
         id: entry.id,
         party_id: entry.party_id,
-        party_name: partyData?.name,
+        party_name: party?.name,
         transaction_id: entry.transaction_id,
         transaction_type: entry.transaction_type,
         date: entry.date,
@@ -49,7 +43,7 @@ export class LedgerEntity {
         credit: entry.credit,
         balance_after: entry.balance_after,
         created_at: entry.created_at,
-        notes: entry.notes || ''
+        notes: ''
       }));
     } catch (error) {
       console.error('Error fetching ledger entries:', error);
@@ -57,10 +51,8 @@ export class LedgerEntity {
       return [];
     }
   }
-
-  /**
-   * Fetch the previous balance before a certain date
-   */
+  
+  // جلب الرصيد السابق للطرف
   public static async fetchPreviousBalance(partyId: string, startDate: string): Promise<number> {
     try {
       const { data: previousEntries, error: previousError } = await supabase
@@ -77,14 +69,7 @@ export class LedgerEntity {
         return previousEntries[0].balance_after;
       } else {
         // If no previous entries, get opening balance from party
-        const { data: party, error: partyError } = await supabase
-          .from('parties')
-          .select('opening_balance, balance_type')
-          .eq('id', partyId)
-          .single();
-          
-        if (partyError) throw partyError;
-        
+        const party = await this.partyService.getPartyById(partyId);
         if (party) {
           return party.balance_type === 'debit' 
             ? party.opening_balance 
