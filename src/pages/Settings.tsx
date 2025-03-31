@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import CompanySettings from '@/components/settings/CompanySettings';
-import AppearanceSettings from '@/components/settings/AppearanceSettings';
+import { AppearanceSettings } from '@/components/settings/AppearanceSettings';
 import InventorySettings from '@/components/settings/InventorySettings';
 import CommercialSettings from '@/components/settings/CommercialSettings';
 import SystemSettings from '@/components/settings/SystemSettings';
