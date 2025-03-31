@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,9 +13,24 @@ import { useTheme } from "@/components/theme-provider";
 export function ModeToggle() {
   const { theme, setTheme } = useTheme();
   
-  // Add console log for debugging
-  console.log("Current theme:", theme);
+  // Log current theme for debugging
+  useEffect(() => {
+    console.log("Mode Toggle - Current theme:", theme);
+  }, [theme]);
   
+  // This ensures the document's class reflects the current theme
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    
+    if (theme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.classList.add(systemTheme);
+    } else {
+      root.classList.add(theme);
+    }
+  }, [theme]);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

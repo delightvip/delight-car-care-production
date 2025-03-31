@@ -1,16 +1,24 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users, Truck, Wallet, ArrowUpDown, TrendingUp, TrendingDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
+import { toast } from 'sonner';
 
 export function CommercialStats() {
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['commercialStats'],
     queryFn: async () => {
       try {
+        console.log("Fetching commercial stats data...");
+        // Get today's date and 30 days ago
+        const today = new Date();
+        const thirtyDaysAgo = subDays(today, 30);
+        const dateStr = format(thirtyDaysAgo, 'yyyy-MM-dd');
+        
         // Get customers count
         const { count: customersCount, error: customersError } = await supabase
           .from('parties')
@@ -21,6 +29,8 @@ export function CommercialStats() {
           console.error('Error fetching customers:', customersError);
           throw customersError;
         }
+        
+        console.log("Customers count:", customersCount);
         
         // Get suppliers count
         const { count: suppliersCount, error: suppliersError } = await supabase
@@ -33,21 +43,21 @@ export function CommercialStats() {
           throw suppliersError;
         }
         
-        // Get recent invoices (last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const dateStr = format(thirtyDaysAgo, 'yyyy-MM-dd');
+        console.log("Suppliers count:", suppliersCount);
         
+        // Get recent invoices (last 30 days)
         const { data: recentInvoices, error: invoicesError } = await supabase
           .from('invoices')
           .select('*')
           .gte('date', dateStr)
-          .eq('status', 'confirmed');
+          .eq('payment_status', 'confirmed');
           
         if (invoicesError) {
           console.error('Error fetching invoices:', invoicesError);
           throw invoicesError;
         }
+        
+        console.log("Recent invoices:", recentInvoices?.length);
         
         // Calculate sales and purchases from recent invoices
         const sales = recentInvoices
@@ -62,29 +72,39 @@ export function CommercialStats() {
               .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
           : 0;
         
+        console.log("Calculated sales:", sales, "and purchases:", purchases);
+        
         // Get party balances
         const { data: partyBalances, error: balancesError } = await supabase
           .from('party_balances')
-          .select('balance, parties!inner(type)');
+          .select(`
+            balance,
+            parties (id, type)
+          `);
           
         if (balancesError) {
           console.error('Error fetching party balances:', balancesError);
           throw balancesError;
         }
         
-        // Calculate receivables and payables
-        const receivables = partyBalances
-          ? partyBalances
-              .filter(item => item.parties && item.parties.type === 'customer' && item.balance < 0)
-              .reduce((sum, item) => sum + Math.abs(item.balance), 0)
-          : 0;
-          
-        const payables = partyBalances
-          ? partyBalances
-              .filter(item => item.parties && item.parties.type === 'supplier' && item.balance > 0)
-              .reduce((sum, item) => sum + item.balance, 0)
-          : 0;
-          
+        console.log("Party balances:", partyBalances?.length);
+        
+        // Calculate receivables (money owed to us by customers) and payables (money we owe to suppliers)
+        let receivables = 0;
+        let payables = 0;
+        
+        if (partyBalances) {
+          for (const item of partyBalances) {
+            if (item.parties?.type === 'customer' && item.balance < 0) {
+              receivables += Math.abs(item.balance);
+            } else if (item.parties?.type === 'supplier' && item.balance > 0) {
+              payables += item.balance;
+            }
+          }
+        }
+        
+        console.log("Calculated receivables:", receivables, "and payables:", payables);
+        
         return {
           customersCount: customersCount || 0,
           suppliersCount: suppliersCount || 0,
@@ -95,6 +115,7 @@ export function CommercialStats() {
         };
       } catch (error) {
         console.error('Error fetching commercial stats:', error);
+        toast.error("حدث خطأ أثناء جلب البيانات التجارية");
         throw error;
       }
     },
@@ -103,6 +124,7 @@ export function CommercialStats() {
 
   if (error) {
     console.error('Error loading commercial stats:', error);
+    toast.error("فشل تحميل البيانات التجارية، يرجى المحاولة مرة أخرى");
   }
 
   return (
