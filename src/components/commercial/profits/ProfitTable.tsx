@@ -52,7 +52,7 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
     {
       key: 'invoice_date',
       title: 'التاريخ',
-      render: (row) => formatDate(row.invoice_date),
+      render: (record) => formatDate(record.invoice_date),
     },
     {
       key: 'party_name',
@@ -61,34 +61,34 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
     {
       key: 'total_sales',
       title: 'المبيعات',
-      render: (row) => formatCurrency(row.total_sales),
+      render: (record) => formatCurrency(record.total_sales),
     },
     {
       key: 'total_cost',
       title: 'التكلفة',
-      render: (row) => formatCurrency(row.total_cost),
+      render: (record) => formatCurrency(record.total_cost),
     },
     {
       key: 'profit_amount',
       title: 'قيمة الربح',
-      render: (row) => formatCurrency(row.profit_amount),
+      render: (record) => formatCurrency(record.profit_amount),
     },
     {
       key: 'profit_badge',
       title: 'حالة الربح',
-      render: (row) => getProfitBadge(row.profit_amount),
+      render: (record) => getProfitBadge(record.profit_amount),
     },
     {
       key: 'profit_percentage',
       title: 'نسبة الربح',
-      render: (row) => getProfitPercentageBadge(row.profit_percentage),
+      render: (record) => getProfitPercentageBadge(record.profit_percentage),
     },
     {
       key: 'actions',
       title: 'الإجراءات',
-      render: (row) => (
+      render: (record) => (
         <Button asChild variant="ghost" size="sm">
-          <Link to={`/commercial/invoices/${row.invoice_id}`} className="flex items-center gap-1">
+          <Link to={`/commercial/invoices/${record.invoice_id}`} className="flex items-center gap-1">
             تفاصيل الفاتورة
             <ArrowRight className="h-4 w-4" />
           </Link>

@@ -8,49 +8,49 @@ export const getTableColumns = () => [
   {
     key: "code",
     title: "الرمز",
-    render: (value: any, row: InventoryItem) => (
-      <div className="font-medium">{row.code}</div>
+    render: (record: InventoryItem) => (
+      <div className="font-medium">{record.code}</div>
     )
   },
   {
     key: "name",
     title: "الاسم",
-    render: (value: any, row: InventoryItem) => (
-      <div className="max-w-[200px] truncate" title={row.name}>
-        {row.name}
+    render: (record: InventoryItem) => (
+      <div className="max-w-[200px] truncate" title={record.name}>
+        {record.name}
       </div>
     )
   },
   {
     key: "current_stock",
     title: "المخزون الحالي",
-    render: (value: any, row: InventoryItem) => (
+    render: (record: InventoryItem) => (
       <div className="font-medium">
-        {row.quantity} {row.unit}
+        {record.quantity} {record.unit}
       </div>
     )
   },
   {
     key: "min_stock",
     title: "الحد الأدنى",
-    render: (value: any, row: InventoryItem) => (
+    render: (record: InventoryItem) => (
       <div>
-        {row.min_stock} {row.unit}
+        {record.min_stock} {record.unit}
       </div>
     )
   },
   {
     key: "status",
     title: "الحالة",
-    render: (value: any, row: InventoryItem) => (
-      <StatusBadge quantity={row.quantity} minStock={row.min_stock} />
+    render: (record: InventoryItem) => (
+      <StatusBadge quantity={record.quantity} minStock={record.min_stock} />
     )
   },
   {
     key: "importance",
     title: "الأهمية",
-    render: (value: any, row: InventoryItem) => (
-      <ImportanceBadge importance={row.importance || 0} />
+    render: (record: InventoryItem) => (
+      <ImportanceBadge importance={record.importance || 0} />
     )
   }
 ];
