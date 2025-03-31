@@ -1,5 +1,5 @@
 
-import React, { ErrorBoundary } from 'react';
+import React from 'react';
 import {
   Routes,
   Route,
@@ -37,23 +37,32 @@ import Settings from './pages/settings/Settings';
 import NotFound from './pages/NotFound';
 import Profits from './pages/commercial/Profits';
 
-// Custom error boundary fallback component
-class AppErrorBoundary extends React.Component {
-  constructor(props) {
+// Properly defined error boundary component with correct TypeScript interface
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+class AppErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error("Application error:", error, errorInfo);
     toast.error("حدث خطأ في التطبيق. يرجى تحديث الصفحة.");
   }
 
-  render() {
+  render(): React.ReactNode {
     if (this.state.hasError) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
