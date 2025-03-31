@@ -1,13 +1,15 @@
-
 import { ReactNode } from "react";
 
 export interface Column {
   key: string;
   title: string;
-  render?: (value: any, record: any) => ReactNode;
+  render?: (record: any) => ReactNode;
   sortable?: boolean;
   width?: string;
   minWidth?: string;
+  // Keep older properties for backward compatibility
+  accessorKey?: string;
+  cell?: ({ row }: any) => ReactNode;
 }
 
 export interface SortConfig {

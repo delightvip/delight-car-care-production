@@ -1,26 +1,26 @@
 
 import React from 'react';
-import { TableHeader as ShadcnTableHeader, TableHead, TableRow } from "@/components/ui/table";
-import { ArrowUp, ArrowDown } from 'lucide-react';
-import { Column } from './types';
+import { TableHeader, TableHead, TableRow } from "@/components/ui/table";
+import { ArrowDown, ArrowUp } from 'lucide-react';
+import { Column, SortConfig } from './types';
 
 interface TableHeaderProps {
   columns: Column[];
   onSort?: (key: string) => void;
-  sortConfig?: { key: string; direction: 'asc' | 'desc' } | null;
-  stickyHeader: boolean;
-  hasActions: boolean;
+  sortConfig?: SortConfig | null;
+  stickyHeader?: boolean;
+  hasActions?: boolean;
 }
 
-const TableHeader: React.FC<TableHeaderProps> = ({ 
-  columns, 
-  onSort, 
-  sortConfig, 
-  stickyHeader,
-  hasActions
+const TableHeaderComponent: React.FC<TableHeaderProps> = ({
+  columns,
+  onSort,
+  sortConfig,
+  stickyHeader = true,
+  hasActions = false
 }) => {
   return (
-    <ShadcnTableHeader className={stickyHeader ? "sticky top-0 z-10" : ""}>
+    <TableHeader className={stickyHeader ? "sticky top-0 z-10" : ""}>
       <TableRow>
         {columns.map((column) => (
           <TableHead 
@@ -62,8 +62,8 @@ const TableHeader: React.FC<TableHeaderProps> = ({
           </TableHead>
         )}
       </TableRow>
-    </ShadcnTableHeader>
+    </TableHeader>
   );
 };
 
-export default TableHeader;
+export default TableHeaderComponent;

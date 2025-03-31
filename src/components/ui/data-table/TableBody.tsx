@@ -1,16 +1,10 @@
 
 import React from 'react';
 import { TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Column } from './types';
 
 interface TableBodyProps {
-  columns: Array<{
-    key: string;
-    title: string;
-    render?: (value: any, record: any) => React.ReactNode;
-    sortable?: boolean;
-    width?: string;
-    minWidth?: string;
-  }>;
+  columns: Column[];
   data: any[];
   actions?: (record: any) => React.ReactNode;
   noDataMessage?: string;
@@ -22,9 +16,9 @@ const TableBodyComponent: React.FC<TableBodyProps> = ({
   data,
   actions,
   noDataMessage = "لا توجد بيانات للعرض",
-  emptyState,
+  emptyState
 }) => {
-  if (data.length === 0) {
+  if (!data.length) {
     return (
       <TableBody>
         <TableRow>
@@ -49,8 +43,10 @@ const TableBodyComponent: React.FC<TableBodyProps> = ({
               }}
             >
               {column.render 
-                ? column.render(record[column.key], record) 
-                : record[column.key]}
+                ? column.render(record) 
+                : column.cell 
+                  ? column.cell({ row: { original: record } }) 
+                  : record[column.key]}
             </TableCell>
           ))}
           {actions && (

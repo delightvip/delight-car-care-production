@@ -4,9 +4,11 @@ import { Skeleton } from './skeleton';
 import DataTable from './data-table/DataTable';
 import { DataTableProps } from './data-table/types';
 
-interface DataTableWithLoadingProps extends DataTableProps {
+interface DataTableWithLoadingProps extends Omit<DataTableProps, 'pagination'> {
   isLoading: boolean;
   loadingRowCount?: number;
+  pagination?: boolean | { pageSize: number };
+  itemsPerPage?: number;
   className?: string;
   emptyState?: React.ReactNode;
 }
@@ -20,6 +22,7 @@ export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
   searchKeys,
   actions,
   pagination,
+  itemsPerPage,
   emptyState,
   stickyHeader = true,
   className,
@@ -80,6 +83,16 @@ export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
     );
   }
 
+  // Handle pagination options to be compatible with DataTable
+  const paginationOption = typeof pagination === 'boolean' 
+    ? pagination 
+    : true;
+  
+  // Handle itemsPerPage
+  const finalItemsPerPage = typeof pagination === 'object' && pagination.pageSize
+    ? pagination.pageSize
+    : itemsPerPage || 10;
+
   return (
     <DataTable
       columns={columns}
@@ -87,7 +100,8 @@ export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
       searchable={searchable}
       searchKeys={searchKeys}
       actions={actions}
-      pagination={pagination}
+      pagination={paginationOption}
+      itemsPerPage={finalItemsPerPage}
       emptyState={emptyState}
       stickyHeader={stickyHeader}
       className={className}
