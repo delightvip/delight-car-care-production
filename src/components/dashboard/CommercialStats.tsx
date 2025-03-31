@@ -74,12 +74,12 @@ export function CommercialStats() {
         
         console.log("Calculated sales:", sales, "and purchases:", purchases);
         
-        // Get party balances
+        // Get party balances with customer/supplier data joined
         const { data: partyBalances, error: balancesError } = await supabase
           .from('party_balances')
           .select(`
             balance,
-            parties (id, type)
+            parties!inner (id, name, type)
           `);
           
         if (balancesError) {
@@ -93,14 +93,22 @@ export function CommercialStats() {
         let receivables = 0;
         let payables = 0;
         
-        if (partyBalances) {
-          for (const item of partyBalances) {
+        if (partyBalances && partyBalances.length > 0) {
+          partyBalances.forEach(item => {
             if (item.parties?.type === 'customer' && item.balance < 0) {
+              // Negative balance for customer means they owe us money
               receivables += Math.abs(item.balance);
             } else if (item.parties?.type === 'supplier' && item.balance > 0) {
+              // Positive balance for supplier means we owe them money
+              payables += item.balance;
+            } else if (item.parties?.type === 'supplier' && item.balance < 0) {
+              // Negative balance for supplier means they owe us money (overpayment)
+              receivables += Math.abs(item.balance);
+            } else if (item.parties?.type === 'customer' && item.balance > 0) {
+              // Positive balance for customer means we owe them money (customer prepayment or credit)
               payables += item.balance;
             }
-          }
+          });
         }
         
         console.log("Calculated receivables:", receivables, "and payables:", payables);

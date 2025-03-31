@@ -16,7 +16,8 @@ import {
   Users,
   RotateCw,
   TrendingUp,
-  LucideIcon
+  LucideIcon,
+  CalendarRange
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -62,6 +63,7 @@ const SidebarMenu = () => {
       { icon: Factory, title: 'الإنتاج', path: '/production' },
       { icon: Factory, title: 'أوامر الإنتاج', path: '/production/orders' },
       { icon: Factory, title: 'أوامر التعبئة', path: '/production/packaging-orders' },
+      { icon: CalendarRange, title: 'تخطيط الإنتاج', path: '/production/planning' },
     ],
     financial: [
       { icon: DollarSign, title: 'المالية', path: '/financial' },

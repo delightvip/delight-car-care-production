@@ -19,6 +19,7 @@ import LowStockItems from './pages/inventory/LowStockItems';
 import InventoryReports from './pages/inventory/InventoryReports';
 import ProductionOrders from './pages/production/ProductionOrders';
 import PackagingOrders from './pages/production/PackagingOrders';
+import ProductionPlanning from './pages/production/ProductionPlanning';
 import CommercialDashboard from './pages/commercial/CommercialDashboard';
 import Invoices from './pages/commercial/Invoices';
 import InvoiceDetails from './pages/commercial/InvoiceDetails';
@@ -113,6 +114,7 @@ function App() {
             <Route path="production" element={<Navigate replace to="/production/orders" />} />
             <Route path="production/orders" element={<ProductionOrders />} />
             <Route path="production/packaging-orders" element={<PackagingOrders />} />
+            <Route path="production/planning" element={<ProductionPlanning />} />
             
             <Route path="commercial" element={<CommercialDashboard />} />
             <Route path="commercial/invoices" element={<Invoices />} />
