@@ -66,7 +66,7 @@ const ReportFilterCard: React.FC<ReportFilterCardProps> = ({
         </CardHeader>
         <CardContent>
           <Select 
-            value={selectedItem || ''} 
+            value={selectedItem || 'none'} 
             onValueChange={setSelectedItem}
             disabled={isItemReport}
           >
@@ -79,7 +79,7 @@ const ReportFilterCard: React.FC<ReportFilterCardProps> = ({
                   <Skeleton className="h-8 w-full" />
                 </div>
               ) : items?.length === 0 ? (
-                <SelectItem value="none" disabled>
+                <SelectItem value="no-items" disabled>
                   لا توجد أصناف
                 </SelectItem>
               ) : (

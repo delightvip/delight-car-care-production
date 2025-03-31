@@ -111,7 +111,7 @@ const ProfitFilterComponent = ({ onFilterChange }: ProfitFilterProps) => {
               <SelectValue placeholder="اختر العميل" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">جميع العملاء</SelectItem>
+              <SelectItem value="all">جميع العملاء</SelectItem>
               {parties.map(party => (
                 <SelectItem key={party.id} value={party.id}>{party.name}</SelectItem>
               ))}

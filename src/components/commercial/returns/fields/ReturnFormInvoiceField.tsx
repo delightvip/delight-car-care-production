@@ -34,7 +34,7 @@ export default function ReturnFormInvoiceField({
           </FormLabel>
           <Select 
             onValueChange={onInvoiceChange} 
-            value={field.value || ""}
+            value={field.value || "none"}
             disabled={isLoadingInvoices || loadingInvoiceItems}
           >
             <FormControl>
@@ -55,6 +55,11 @@ export default function ReturnFormInvoiceField({
                   {`${invoice.id.substring(0, 8)}... - ${invoice.party_name || 'غير محدد'} - ${invoice.total_amount}`}
                 </SelectItem>
               ))}
+              {filteredInvoices.length === 0 && (
+                <SelectItem value="no-invoices" disabled>
+                  لا توجد فواتير متاحة
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
           <FormDescription>
