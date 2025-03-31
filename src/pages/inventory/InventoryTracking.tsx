@@ -6,18 +6,39 @@ import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MovementCard from '@/components/inventory/MovementCard';
-import { fetchInventoryMovements, filterMovementsByCategory } from '@/services/InventoryMovementService';
+import { 
+  fetchInventoryMovements, 
+  filterMovementsByCategory, 
+  InventoryMovementQuery 
+} from '@/services/InventoryMovementService';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { CalendarIcon, FileDownIcon, FilterIcon, RefreshCw } from 'lucide-react';
+import { 
+  CalendarIcon, 
+  ChartBarIcon, 
+  FileDownIcon, 
+  FilterIcon, 
+  PlusIcon, 
+  RefreshCw 
+} from 'lucide-react';
 import { format, subDays, isAfter, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import InventoryMovementStats from '@/components/inventory/InventoryMovementStats';
+import InventoryMovementChart from '@/components/inventory/InventoryMovementChart';
+import ManualMovementForm from '@/components/inventory/ManualMovementForm';
 import { DateRange } from 'react-day-picker';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const InventoryTracking = () => {
   const [activeTab, setActiveTab] = React.useState('all');
@@ -28,12 +49,35 @@ const InventoryTracking = () => {
   });
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState<'list' | 'chart'>('list');
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  
+  // Definir getCategoryName al principio del componente para evitar
+  // el error "Cannot access 'getCategoryName' before initialization"
+  const getCategoryName = (category: string) => {
+    switch(category) {
+      case 'raw_materials': return 'المواد الأولية';
+      case 'semi_finished': return 'المنتجات النصف مصنعة';
+      case 'packaging': return 'مستلزمات التعبئة';
+      case 'finished_products': return 'المنتجات النهائية';
+      default: return category;
+    }
+  };
   
   // Fetch real inventory movements from our service
   const { data: movementsData, isLoading, error, refetch } = useQuery({
     queryKey: ['inventoryMovements'],
-    queryFn: fetchInventoryMovements,
-    refetchInterval: 60000 // Refresh every minute
+    queryFn: () => {
+      const query: InventoryMovementQuery = {
+        dateRange: {
+          from: dateRange.from,
+          to: dateRange.to
+        }
+      };
+      return fetchInventoryMovements(query);
+    },
+    refetchInterval: 60000, // Refresh every minute
+    refetchOnWindowFocus: true
   });
   
   // Filter movements based on active filters
@@ -103,20 +147,14 @@ const InventoryTracking = () => {
     document.body.removeChild(link);
   };
   
-  const getCategoryName = (category: string) => {
-    switch(category) {
-      case 'raw_materials': return 'المواد الأولية';
-      case 'semi_finished': return 'المنتجات النصف مصنعة';
-      case 'packaging': return 'مستلزمات التعبئة';
-      case 'finished_products': return 'المنتجات النهائية';
-      default: return category;
-    }
-  };
-  
-  // حساب عدد الحركات في كل فئة للشارة (badge) على علامات التبويب
   const getCategoryMovementCount = (category: string) => {
     if (!movementsData) return 0;
     return movementsData.filter(m => category === 'all' || m.category === category).length;
+  };
+  
+  const handleManualMovementSuccess = () => {
+    setDialogOpen(false);
+    refetch();
   };
   
   if (isLoading) {
@@ -181,6 +219,49 @@ const InventoryTracking = () => {
           </div>
           
           <div className="flex gap-2">
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  size="sm"
+                  className="flex gap-2 items-center"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  <span>إضافة حركة</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[550px]">
+                <DialogHeader>
+                  <DialogTitle>إضافة حركة مخزون جديدة</DialogTitle>
+                  <DialogDescription>
+                    أدخل بيانات حركة المخزون الجديدة (وارد أو صادر)
+                  </DialogDescription>
+                </DialogHeader>
+                <ManualMovementForm 
+                  onSuccess={handleManualMovementSuccess}
+                  onCancel={() => setDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+            
+            <Button 
+              variant={viewMode === 'list' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="flex gap-2 items-center"
+            >
+              <span>قائمة</span>
+            </Button>
+            
+            <Button 
+              variant={viewMode === 'chart' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setViewMode('chart')}
+              className="flex gap-2 items-center"
+            >
+              <ChartBarIcon className="h-4 w-4" />
+              <span>رسم بياني</span>
+            </Button>
+            
             <Button 
               variant="outline" 
               size="sm"
@@ -241,145 +322,79 @@ const InventoryTracking = () => {
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
-            <Card>
-              <CardHeader className="pb-0">
-                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                  <CardTitle className="text-lg">حركة المخزون</CardTitle>
-                  
-                  <div className="flex flex-col md:flex-row gap-2">
-                    <div className="flex gap-2 flex-wrap md:flex-nowrap">
-                      <div className="w-full md:w-auto">
-                        <Input
-                          placeholder="بحث في الأصناف والملاحظات..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full md:w-60"
-                        />
+            {viewMode === 'chart' && movementsData ? (
+              <InventoryMovementChart movements={filteredMovements} selectedCategory={activeTab} />
+            ) : (
+              <Card>
+                <CardHeader className="pb-0">
+                  <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                    <CardTitle className="text-lg">حركة المخزون</CardTitle>
+                    
+                    <div className="flex flex-col md:flex-row gap-2">
+                      <div className="flex gap-2 flex-wrap md:flex-nowrap">
+                        <div className="w-full md:w-auto">
+                          <Input
+                            placeholder="بحث في الأصناف والملاحظات..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full md:w-60"
+                          />
+                        </div>
+                        
+                        <Select value={movementType} onValueChange={setMovementType}>
+                          <SelectTrigger className="w-full md:w-40">
+                            <SelectValue placeholder="نوع الحركة" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">جميع الحركات</SelectItem>
+                            <SelectItem value="in">وارد</SelectItem>
+                            <SelectItem value="out">صادر</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        
+                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full md:w-auto justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="ml-2 h-4 w-4" />
+                              {dateRange.from ? (
+                                dateRange.to ? (
+                                  <>
+                                    {format(dateRange.from, "yyyy/MM/dd")} - {format(dateRange.to, "yyyy/MM/dd")}
+                                  </>
+                                ) : (
+                                  format(dateRange.from, "yyyy/MM/dd")
+                                )
+                              ) : (
+                                "اختر الفترة"
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              initialFocus
+                              mode="range"
+                              defaultMonth={dateRange.from}
+                              selected={dateRange}
+                              onSelect={range => {
+                                setDateRange(range || { from: undefined, to: undefined });
+                                if (range?.from && range?.to) {
+                                  setIsCalendarOpen(false);
+                                }
+                              }}
+                              locale={ar}
+                              numberOfMonths={2}
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       
-                      <Select value={movementType} onValueChange={setMovementType}>
-                        <SelectTrigger className="w-full md:w-40">
-                          <SelectValue placeholder="نوع الحركة" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">جميع الحركات</SelectItem>
-                          <SelectItem value="in">وارد</SelectItem>
-                          <SelectItem value="out">صادر</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      
-                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full md:w-auto justify-start text-left font-normal"
-                          >
-                            <CalendarIcon className="ml-2 h-4 w-4" />
-                            {dateRange.from ? (
-                              dateRange.to ? (
-                                <>
-                                  {format(dateRange.from, "yyyy/MM/dd")} - {format(dateRange.to, "yyyy/MM/dd")}
-                                </>
-                              ) : (
-                                format(dateRange.from, "yyyy/MM/dd")
-                              )
-                            ) : (
-                              "اختر الفترة"
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={dateRange.from}
-                            selected={dateRange}
-                            onSelect={range => {
-                              setDateRange(range || { from: undefined, to: undefined });
-                              if (range?.from && range?.to) {
-                                setIsCalendarOpen(false);
-                              }
-                            }}
-                            locale={ar}
-                            numberOfMonths={2}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    
-                    {(searchTerm || movementType !== 'all' || dateRange.from || dateRange.to) && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => {
-                          setSearchTerm('');
-                          setMovementType('all');
-                          setDateRange({
-                            from: subDays(new Date(), 30),
-                            to: new Date()
-                          });
-                        }}
-                        className="mt-2 md:mt-0"
-                      >
-                        مسح التصفية
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                
-                {filteredMovements.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    <Badge variant="outline" className="bg-muted">
-                      {filteredMovements.length} عنصر
-                    </Badge>
-                    
-                    {activeTab !== 'all' && (
-                      <Badge variant="outline" className="bg-muted">
-                        التصنيف: {getCategoryName(activeTab)}
-                      </Badge>
-                    )}
-                    
-                    {movementType !== 'all' && (
-                      <Badge variant="outline" className="bg-muted">
-                        نوع الحركة: {movementType === 'in' ? 'وارد' : 'صادر'}
-                      </Badge>
-                    )}
-                    
-                    {dateRange.from && (
-                      <Badge variant="outline" className="bg-muted">
-                        من: {format(dateRange.from, 'yyyy/MM/dd')}
-                      </Badge>
-                    )}
-                    
-                    {dateRange.to && (
-                      <Badge variant="outline" className="bg-muted">
-                        إلى: {format(dateRange.to, 'yyyy/MM/dd')}
-                      </Badge>
-                    )}
-                    
-                    {searchTerm && (
-                      <Badge variant="outline" className="bg-muted">
-                        بحث: {searchTerm}
-                      </Badge>
-                    )}
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[500px] pr-4">
-                  <div className="space-y-6">
-                    {filteredMovements.length > 0 ? (
-                      filteredMovements.map((movement) => (
-                        <MovementCard key={movement.id} movement={movement} />
-                      ))
-                    ) : (
-                      <div className="text-center py-16 text-muted-foreground">
-                        <FilterIcon className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                        <h3 className="text-xl font-medium mb-2">لا توجد نتائج</h3>
-                        <p>لا توجد حركات مخزون تطابق معايير التصفية الحالية</p>
+                      {(searchTerm || movementType !== 'all' || dateRange.from || dateRange.to) && (
                         <Button 
-                          className="mt-4" 
-                          variant="outline"
+                          variant="ghost" 
+                          size="sm"
                           onClick={() => {
                             setSearchTerm('');
                             setMovementType('all');
@@ -387,17 +402,87 @@ const InventoryTracking = () => {
                               from: subDays(new Date(), 30),
                               to: new Date()
                             });
-                            setActiveTab('all');
                           }}
+                          className="mt-2 md:mt-0"
                         >
-                          مسح جميع المرشحات
+                          مسح التصفية
                         </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+                  
+                  {filteredMovements.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      <Badge variant="outline" className="bg-muted">
+                        {filteredMovements.length} عنصر
+                      </Badge>
+                      
+                      {activeTab !== 'all' && (
+                        <Badge variant="outline" className="bg-muted">
+                          التصنيف: {getCategoryName(activeTab)}
+                        </Badge>
+                      )}
+                      
+                      {movementType !== 'all' && (
+                        <Badge variant="outline" className="bg-muted">
+                          نوع الحركة: {movementType === 'in' ? 'وارد' : 'صادر'}
+                        </Badge>
+                      )}
+                      
+                      {dateRange.from && (
+                        <Badge variant="outline" className="bg-muted">
+                          من: {format(dateRange.from, 'yyyy/MM/dd')}
+                        </Badge>
+                      )}
+                      
+                      {dateRange.to && (
+                        <Badge variant="outline" className="bg-muted">
+                          إلى: {format(dateRange.to, 'yyyy/MM/dd')}
+                        </Badge>
+                      )}
+                      
+                      {searchTerm && (
+                        <Badge variant="outline" className="bg-muted">
+                          بحث: {searchTerm}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[500px] pr-4">
+                    <div className="space-y-6">
+                      {filteredMovements.length > 0 ? (
+                        filteredMovements.map((movement) => (
+                          <MovementCard key={movement.id} movement={movement} />
+                        ))
+                      ) : (
+                        <div className="text-center py-16 text-muted-foreground">
+                          <FilterIcon className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                          <h3 className="text-xl font-medium mb-2">لا توجد نتائج</h3>
+                          <p>لا توجد حركات مخزون تطابق معايير التصفية الحالية</p>
+                          <Button 
+                            className="mt-4" 
+                            variant="outline"
+                            onClick={() => {
+                              setSearchTerm('');
+                              setMovementType('all');
+                              setDateRange({
+                                from: subDays(new Date(), 30),
+                                to: new Date()
+                              });
+                              setActiveTab('all');
+                            }}
+                          >
+                            مسح جميع المرشحات
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>
