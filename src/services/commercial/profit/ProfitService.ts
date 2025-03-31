@@ -123,5 +123,4 @@ class ProfitService extends BaseCommercialService {
   }
 }
 
-export { ProfitFilter };
 export default ProfitService;

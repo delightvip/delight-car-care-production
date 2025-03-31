@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Filter, Search, X } from 'lucide-react';
-import { ProfitFilter as ProfitFilterType } from '@/services/commercial/profit/ProfitService';
+import { ProfitFilter as ProfitFilterType } from '@/services/commercial/profit/ProfitTypes';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ProfitFilterProps {

@@ -1,5 +1,5 @@
 
-import { ProfitData } from '@/services/commercial/profit/ProfitService';
+import { ProfitData } from '@/services/commercial/profit/ProfitTypes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { format, parseISO } from 'date-fns';

@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ProfitSummary } from '@/services/commercial/profit/ProfitService';
+import { ProfitSummary } from '@/services/commercial/profit/ProfitTypes';
 import { TrendingUp, Banknote, ShoppingBag, ChartBar, Receipt } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
 

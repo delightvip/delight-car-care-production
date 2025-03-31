@@ -1,5 +1,4 @@
-
-import { ProfitData } from '@/services/commercial/profit/ProfitService';
+import { ProfitData } from '@/services/commercial/profit/ProfitTypes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 import { PieChartIcon } from 'lucide-react';

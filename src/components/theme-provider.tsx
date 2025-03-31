@@ -23,11 +23,19 @@ export const useTheme = () => {
   const context = useContext(ThemeProviderContext)
   
   if (!context) {
-    throw new Error("useTheme must be used within a ThemeProvider")
+    // Use next-themes directly if our context is not available
+    const { theme, setTheme } = useNextTheme()
+    return {
+      theme: (theme as Theme) || 'system',
+      setTheme: (value: Theme) => setTheme(value)
+    }
   }
   
   return context
 }
+
+// Add import for next-themes at the top of the file to use it as a fallback
+import { useTheme as useNextTheme } from "next-themes"
 
 export interface UseThemeReturn {
   theme: string | undefined;

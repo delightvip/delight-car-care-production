@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { ProfitData } from '@/services/commercial/profit/ProfitService';
+import { ProfitData } from '@/services/commercial/profit/ProfitTypes';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 import { ArrowRight } from 'lucide-react';

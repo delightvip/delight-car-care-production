@@ -8,12 +8,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-// Import from next-themes directly since our wrapper might have issues
-import { useTheme as useNextTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 
 export function ModeToggle() {
-  const { theme, setTheme } = useNextTheme();
+  const { theme, setTheme } = useTheme();
   
   return (
     <DropdownMenu>
