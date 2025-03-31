@@ -11,6 +11,9 @@ const NavbarLowStockAlert = () => {
   const { lowStockItems } = useNotifications();
   const totalLowStock = lowStockItems?.totalCount || 0;
   
+  // Debug logging to see if we're actually getting the notifications context
+  console.log("NavbarLowStockAlert - lowStockItems:", lowStockItems);
+  
   if (totalLowStock === 0) {
     return null;
   }

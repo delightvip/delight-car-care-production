@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 const Navbar = () => {
   const { isExpanded, isMobile } = useSidebar();
   
-  // Add logging to debug context issues
+  // Add more detailed logging to debug context issues
   console.log("Navbar - Current sidebar state:", { isExpanded, isMobile });
   
   return (

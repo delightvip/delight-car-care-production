@@ -11,6 +11,9 @@ const NavbarRefreshButton = () => {
   const queryClient = useQueryClient();
   const { refreshLowStockData } = useNotifications();
   
+  // Add logging for debugging
+  console.log("NavbarRefreshButton - Using refreshLowStockData:", !!refreshLowStockData);
+  
   const handleRefresh = async () => {
     setSyncing(true);
     toast.info('جاري تحديث البيانات...', { id: 'data-refresh' });

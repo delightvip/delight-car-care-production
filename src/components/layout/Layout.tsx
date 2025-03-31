@@ -29,8 +29,9 @@ export const Layout = () => {
     }
   }, [theme]);
 
-  // Add logging to debug context issues
+  // Add detailed logging to debug context issues
   console.log("Layout - Current sidebar state:", { isExpanded, isMobile });
+  console.log("Layout - Current theme:", theme);
 
   return (
     <div className="flex min-h-screen bg-background">

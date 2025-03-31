@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BellRing, AlertTriangle, CheckCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { useNotifications } from './NotificationProvider';
-import { getItemTypeIcon, getItemTypeBgColor } from '@/services/NotificationService';
 import NotificationItem from './NotificationItem';
 
 const NotificationPanel = () => {
@@ -25,6 +24,13 @@ const NotificationPanel = () => {
     clearAllNotifications,
     refreshLowStockData
   } = useNotifications();
+  
+  // Add logging for debugging
+  console.log("NotificationPanel - Notifications:", { 
+    notificationCount: notifications?.length || 0, 
+    unreadCount, 
+    lowStockCount: lowStockItems?.totalCount || 0 
+  });
   
   const totalLowStock = lowStockItems?.totalCount || 0;
 
@@ -80,7 +86,7 @@ const NotificationPanel = () => {
         <DropdownMenuSeparator />
         
         <div className="max-h-[400px] overflow-y-auto p-1">
-          {notifications.length > 0 ? (
+          {notifications && notifications.length > 0 ? (
             notifications.map((notification) => (
               <NotificationItem key={notification.id} notification={notification} />
             ))
@@ -91,7 +97,7 @@ const NotificationPanel = () => {
           )}
         </div>
         
-        {totalLowStock > 0 && (
+        {totalLowStock > 0 && lowStockItems && (
           <>
             <DropdownMenuSeparator />
             <div className="p-2">
@@ -100,7 +106,7 @@ const NotificationPanel = () => {
                 <span>ملخص المخزون المنخفض</span>
               </div>
               
-              {lowStockItems?.counts.rawMaterials ? (
+              {lowStockItems.counts.rawMaterials ? (
                 <DropdownMenuItem>
                   <div className="flex justify-between w-full">
                     <span>المواد الأولية</span>
@@ -109,7 +115,7 @@ const NotificationPanel = () => {
                 </DropdownMenuItem>
               ) : null}
               
-              {lowStockItems?.counts.semiFinished ? (
+              {lowStockItems.counts.semiFinished ? (
                 <DropdownMenuItem>
                   <div className="flex justify-between w-full">
                     <span>منتجات نصف مصنعة</span>
@@ -118,7 +124,7 @@ const NotificationPanel = () => {
                 </DropdownMenuItem>
               ) : null}
               
-              {lowStockItems?.counts.packaging ? (
+              {lowStockItems.counts.packaging ? (
                 <DropdownMenuItem>
                   <div className="flex justify-between w-full">
                     <span>مستلزمات التعبئة</span>
@@ -127,7 +133,7 @@ const NotificationPanel = () => {
                 </DropdownMenuItem>
               ) : null}
               
-              {lowStockItems?.counts.finished ? (
+              {lowStockItems.counts.finished ? (
                 <DropdownMenuItem>
                   <div className="flex justify-between w-full">
                     <span>المنتجات النهائية</span>
