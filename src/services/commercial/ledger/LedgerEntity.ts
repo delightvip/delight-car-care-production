@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { LedgerEntry } from '@/services/CommercialTypes';
+import { LedgerEntry } from '@/services/commercial/CommercialTypes';
 import { toast } from "sonner";
 import PartyService from '../../PartyService';
 

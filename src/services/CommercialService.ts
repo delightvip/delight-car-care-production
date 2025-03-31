@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { 
@@ -7,7 +8,7 @@ import {
   Return, 
   ReturnItem, 
   LedgerEntry 
-} from "./CommercialTypes";
+} from "./commercial/CommercialTypes";
 
 // Import other service classes
 import InvoiceService from './commercial/invoice/InvoiceService';
@@ -496,4 +497,3 @@ export type {
 };
 
 export default CommercialService;
-

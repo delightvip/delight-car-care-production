@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Invoice } from "@/services/CommercialTypes";
+import { Invoice } from '@/services/commercial/CommercialTypes';
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import { InvoiceEntity } from "./InvoiceEntity";
@@ -10,7 +10,6 @@ export class InvoiceProcessor {
   private partyService: PartyService;
 
   constructor() {
-    // استخدام getInstance للوصول إلى الخدمات
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
   }

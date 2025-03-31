@@ -1,6 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Return, ReturnItem } from "@/services/CommercialTypes";
+import { Return, ReturnItem } from '@/services/commercial/CommercialTypes';
 
 export class ReturnEntity {
   /**

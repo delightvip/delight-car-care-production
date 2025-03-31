@@ -1,5 +1,5 @@
 
-import { Payment } from '@/services/CommercialTypes';
+import { Payment } from '@/services/commercial/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
 import { PaymentProcessor } from './PaymentProcessor';
 import { toast } from '@/hooks/use-toast';

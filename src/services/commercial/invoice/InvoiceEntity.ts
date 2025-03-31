@@ -1,6 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Invoice, InvoiceItem } from "@/services/CommercialTypes";
+import { Invoice, InvoiceItem } from '@/services/commercial/CommercialTypes';
 
 export class InvoiceEntity {
   /**

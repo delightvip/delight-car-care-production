@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Return } from "@/services/CommercialTypes";
+import { Return } from '@/services/commercial/CommercialTypes';
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import { ReturnEntity } from "./ReturnEntity";

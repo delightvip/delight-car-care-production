@@ -1,5 +1,5 @@
 
-import { LedgerEntry } from '@/services/CommercialTypes';
+import { LedgerEntry } from '@/services/commercial/CommercialTypes';
 import { LedgerEntity } from './LedgerEntity';
 import { LedgerReportGenerator } from './LedgerReportGenerator';
 import { toast } from "sonner";

@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Payment } from "@/services/CommercialTypes";
+import { Payment } from '@/services/commercial/CommercialTypes';
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import InvoiceService from "../invoice/InvoiceService";
