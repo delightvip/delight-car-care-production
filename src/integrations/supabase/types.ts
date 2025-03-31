@@ -682,6 +682,57 @@ export type Database = {
         }
         Relationships: []
       }
+      profits: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_date: string
+          invoice_id: string
+          party_id: string
+          profit_amount: number
+          profit_percentage: number
+          total_cost: number
+          total_sales: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_date: string
+          invoice_id: string
+          party_id: string
+          profit_amount?: number
+          profit_percentage?: number
+          total_cost?: number
+          total_sales?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_date?: string
+          invoice_id?: string
+          party_id?: string
+          profit_amount?: number
+          profit_percentage?: number
+          total_cost?: number
+          total_sales?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profits_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profits_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       raw_materials: {
         Row: {
           code: string

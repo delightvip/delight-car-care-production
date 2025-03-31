@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProfitSummary } from '@/services/commercial/profit/ProfitService';
-import { ArrowTrendingUp, Banknote, ChartBar, ShoppingBag, Receipt } from 'lucide-react';
+import { TrendingUp, Banknote, ShoppingBag, ChartBar, Receipt } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
 
 interface ProfitSummaryCardsProps {
@@ -14,7 +14,7 @@ const ProfitSummaryCards = ({ summary }: ProfitSummaryCardsProps) => {
       <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 shadow-sm border-border/40">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <ArrowTrendingUp className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4" />
             إجمالي الأرباح
           </CardTitle>
         </CardHeader>
