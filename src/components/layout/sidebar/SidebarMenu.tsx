@@ -62,7 +62,7 @@ const SidebarMenu = () => {
     production: [
       { icon: Factory, title: 'الإنتاج', path: '/production' },
       { icon: Factory, title: 'أوامر الإنتاج', path: '/production/orders' },
-      { icon: Factory, title: 'أوامر التعبئة', path: '/production/packaging-orders' },
+      { icon: Package, title: 'أوامر التعبئة', path: '/production/packaging-orders' },
       { icon: CalendarRange, title: 'تخطيط الإنتاج', path: '/production/planning' },
     ],
     financial: [
