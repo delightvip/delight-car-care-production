@@ -1,11 +1,12 @@
 
-import React from 'react';
+import React, { ErrorBoundary } from 'react';
 import {
   Routes,
   Route,
   Navigate,
 } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { toast } from 'sonner';
 
 import Layout from './components/layout/Layout';
 import Index from './pages/Index';
@@ -36,49 +37,98 @@ import Settings from './pages/settings/Settings';
 import NotFound from './pages/NotFound';
 import Profits from './pages/commercial/Profits';
 
+// Custom error boundary fallback component
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Application error:", error, errorInfo);
+    toast.error("حدث خطأ في التطبيق. يرجى تحديث الصفحة.");
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
+          <div className="rounded-lg border bg-card p-8 shadow-lg">
+            <h1 className="mb-4 text-2xl font-bold">حدث خطأ في التطبيق</h1>
+            <p className="mb-4 text-muted-foreground">
+              نعتذر عن هذا الانقطاع. يرجى تحديث الصفحة للمتابعة.
+            </p>
+            <div className="overflow-auto rounded bg-muted p-4 text-sm">
+              <pre>{this.state.error?.toString()}</pre>
+            </div>
+            <div className="mt-6">
+              <button
+                className="rounded-md bg-primary px-4 py-2 text-primary-foreground"
+                onClick={() => window.location.reload()}
+              >
+                تحديث الصفحة
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function App() {
+  console.log("App component rendering");
+  
   return (
-    <div className="App">
-      <Toaster />
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Index />} />
-          <Route path="inventory" element={<Navigate replace to="/inventory/raw-materials" />} />
-          <Route path="inventory/raw-materials" element={<RawMaterials />} />
-          <Route path="inventory/semi-finished" element={<SemiFinishedProducts />} />
-          <Route path="inventory/packaging" element={<PackagingMaterials />} />
-          <Route path="inventory/finished-products" element={<FinishedProducts />} />
-          <Route path="inventory/tracking" element={<InventoryTracking />} />
-          <Route path="inventory/low-stock" element={<LowStockItems />} />
-          <Route path="inventory/reports" element={<InventoryReports />} />
-          
-          <Route path="production" element={<Navigate replace to="/production/orders" />} />
-          <Route path="production/orders" element={<ProductionOrders />} />
-          <Route path="production/packaging-orders" element={<PackagingOrders />} />
-          
-          <Route path="commercial" element={<CommercialDashboard />} />
-          <Route path="commercial/invoices" element={<Invoices />} />
-          <Route path="commercial/invoices/:id" element={<InvoiceDetails />} />
-          <Route path="commercial/parties" element={<Parties />} />
-          <Route path="commercial/parties/:id" element={<PartyDetails />} />
-          <Route path="commercial/payments" element={<Payments />} />
-          <Route path="commercial/profits" element={<Profits />} />
-          <Route path="commercial/returns" element={<Returns />} />
-          <Route path="commercial/ledger" element={<CommercialLedger />} />
-          <Route path="commercial/statements" element={<AccountStatements />} />
-          
-          <Route path="financial" element={<FinancialDashboard />} />
-          <Route path="financial/transactions" element={<TransactionPage />} />
-          <Route path="financial/categories" element={<CategoriesPage />} />
-          
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
-          
-          <Route path="settings" element={<Settings />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    </div>
+    <AppErrorBoundary>
+      <div className="App">
+        <Toaster />
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Index />} />
+            <Route path="inventory" element={<Navigate replace to="/inventory/raw-materials" />} />
+            <Route path="inventory/raw-materials" element={<RawMaterials />} />
+            <Route path="inventory/semi-finished" element={<SemiFinishedProducts />} />
+            <Route path="inventory/packaging" element={<PackagingMaterials />} />
+            <Route path="inventory/finished-products" element={<FinishedProducts />} />
+            <Route path="inventory/tracking" element={<InventoryTracking />} />
+            <Route path="inventory/low-stock" element={<LowStockItems />} />
+            <Route path="inventory/reports" element={<InventoryReports />} />
+            
+            <Route path="production" element={<Navigate replace to="/production/orders" />} />
+            <Route path="production/orders" element={<ProductionOrders />} />
+            <Route path="production/packaging-orders" element={<PackagingOrders />} />
+            
+            <Route path="commercial" element={<CommercialDashboard />} />
+            <Route path="commercial/invoices" element={<Invoices />} />
+            <Route path="commercial/invoices/:id" element={<InvoiceDetails />} />
+            <Route path="commercial/parties" element={<Parties />} />
+            <Route path="commercial/parties/:id" element={<PartyDetails />} />
+            <Route path="commercial/payments" element={<Payments />} />
+            <Route path="commercial/profits" element={<Profits />} />
+            <Route path="commercial/returns" element={<Returns />} />
+            <Route path="commercial/ledger" element={<CommercialLedger />} />
+            <Route path="commercial/statements" element={<AccountStatements />} />
+            
+            <Route path="financial" element={<FinancialDashboard />} />
+            <Route path="financial/transactions" element={<TransactionPage />} />
+            <Route path="financial/categories" element={<CategoriesPage />} />
+            
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
+            
+            <Route path="settings" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </div>
+    </AppErrorBoundary>
   );
 }
 

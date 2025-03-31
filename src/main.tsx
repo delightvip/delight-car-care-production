@@ -9,6 +9,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { SidebarProvider } from '@/components/layout/SidebarContext'
 import NotificationProvider from '@/components/notifications/NotificationProvider'
 
+// Create a client for React Query
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -17,6 +18,9 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+// Add console logs to help debug provider mounting
+console.log("Mounting React application with providers");
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

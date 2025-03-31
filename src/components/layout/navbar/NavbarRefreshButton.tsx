@@ -9,10 +9,18 @@ import { useNotifications } from '@/components/notifications/NotificationProvide
 const NavbarRefreshButton = () => {
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
-  const { refreshLowStockData } = useNotifications();
   
-  // Add logging for debugging
-  console.log("NavbarRefreshButton - Using refreshLowStockData:", !!refreshLowStockData);
+  // Wrap in try/catch to debug notification context issues
+  let refreshLowStockData;
+  try {
+    const notificationsContext = useNotifications();
+    refreshLowStockData = notificationsContext.refreshLowStockData;
+    
+    // Add logging for debugging
+    console.log("NavbarRefreshButton - Using refreshLowStockData:", !!refreshLowStockData);
+  } catch (error) {
+    console.error("Error accessing notification context in NavbarRefreshButton:", error);
+  }
   
   const handleRefresh = async () => {
     setSyncing(true);
@@ -23,7 +31,9 @@ const NavbarRefreshButton = () => {
       await queryClient.invalidateQueries();
       
       // تحديث بيانات المخزون المنخفض
-      await refreshLowStockData();
+      if (refreshLowStockData) {
+        await refreshLowStockData();
+      }
       
       toast.success('تم تحديث البيانات بنجاح', { id: 'data-refresh' });
     } catch (error) {

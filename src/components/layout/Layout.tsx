@@ -9,7 +9,15 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 import { motion } from 'framer-motion';
 
 export const Layout = () => {
-  const { isExpanded, isMobile } = useSidebar();
+  // Wrap in try/catch to debug sidebar context issues
+  let sidebarContext = { isExpanded: true, isMobile: false };
+  try {
+    sidebarContext = useSidebar();
+  } catch (error) {
+    console.error("Error accessing sidebar context in Layout:", error);
+  }
+  
+  const { isExpanded, isMobile } = sidebarContext;
   const { theme } = useTheme();
   const [rtl] = useLocalStorage('rtl-mode', true);
   

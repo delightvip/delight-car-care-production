@@ -14,7 +14,15 @@ import NotificationPanel from '@/components/notifications/NotificationPanel';
 import { cn } from '@/lib/utils';
 
 const Navbar = () => {
-  const { isExpanded, isMobile } = useSidebar();
+  // Wrap in try/catch to debug sidebar context issues
+  let sidebarContext = { isExpanded: true, isMobile: false };
+  try {
+    sidebarContext = useSidebar();
+  } catch (error) {
+    console.error("Error accessing sidebar context in Navbar:", error);
+  }
+  
+  const { isExpanded, isMobile } = sidebarContext;
   
   // Add more detailed logging to debug context issues
   console.log("Navbar - Current sidebar state:", { isExpanded, isMobile });
