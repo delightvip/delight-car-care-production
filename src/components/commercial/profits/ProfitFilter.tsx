@@ -77,6 +77,7 @@ const ProfitFilterComponent = ({ onFilterChange }: ProfitFilterProps) => {
       filters.sortOrder = sortOrder as any;
     }
     
+    console.log("Applying filters:", filters);
     onFilterChange(filters);
   };
   
@@ -91,6 +92,7 @@ const ProfitFilterComponent = ({ onFilterChange }: ProfitFilterProps) => {
     setSortBy('date');
     setSortOrder('desc');
     
+    console.log("Resetting filters");
     onFilterChange({});
   };
   

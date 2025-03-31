@@ -6,6 +6,7 @@ import './index.css'
 import { SidebarProvider } from './components/layout/SidebarContext'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import NotificationProvider from './components/notifications/NotificationProvider'
+import { ThemeProvider } from './components/theme-provider'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -20,11 +21,13 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <SidebarProvider>
-        <NotificationProvider>
-          <App />
-        </NotificationProvider>
-      </SidebarProvider>
+      <ThemeProvider defaultTheme="system" enableSystem>
+        <SidebarProvider>
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
+        </SidebarProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </QueryClientProvider>
 );

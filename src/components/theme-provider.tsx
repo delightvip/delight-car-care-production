@@ -6,9 +6,8 @@ import { createContext, useContext, useEffect, useState } from "react"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
 import { type ThemeProviderProps } from "next-themes/dist/types"
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
-}
+// Import next-themes at the top to avoid issues
+import { useTheme as useNextTheme } from "next-themes"
 
 type Theme = "dark" | "light" | "system"
 
@@ -18,6 +17,34 @@ interface ThemeProviderContextProps {
 }
 
 const ThemeProviderContext = createContext<ThemeProviderContextProps | undefined>(undefined)
+
+export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
+  const [theme, setTheme] = useState<Theme>('system')
+  
+  // Update our state when the theme changes via next-themes
+  const { theme: nextTheme, setTheme: setNextTheme } = useNextTheme()
+  
+  useEffect(() => {
+    if (nextTheme) {
+      setTheme(nextTheme as Theme)
+    }
+  }, [nextTheme])
+  
+  // Create a provider value with our state and methods
+  const value = {
+    theme: theme as Theme,
+    setTheme: (newTheme: Theme) => {
+      setNextTheme(newTheme)
+      setTheme(newTheme)
+    }
+  }
+  
+  return (
+    <ThemeProviderContext.Provider value={value}>
+      <NextThemesProvider {...props}>{children}</NextThemesProvider>
+    </ThemeProviderContext.Provider>
+  )
+}
 
 export const useTheme = () => {
   const context = useContext(ThemeProviderContext)
@@ -33,9 +60,6 @@ export const useTheme = () => {
   
   return context
 }
-
-// Add import for next-themes at the top of the file to use it as a fallback
-import { useTheme as useNextTheme } from "next-themes"
 
 export interface UseThemeReturn {
   theme: string | undefined;

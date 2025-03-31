@@ -13,6 +13,9 @@ import { useTheme } from "@/components/theme-provider";
 export function ModeToggle() {
   const { theme, setTheme } = useTheme();
   
+  // Add console log for debugging
+  console.log("Current theme:", theme);
+  
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

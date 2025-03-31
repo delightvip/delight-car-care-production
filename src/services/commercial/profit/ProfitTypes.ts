@@ -9,7 +9,7 @@ export interface ProfitData {
   total_cost: number;
   profit_amount: number;
   profit_percentage: number;
-  created_at?: string;
+  created_at: string;
 }
 
 export interface ProfitSummary {
