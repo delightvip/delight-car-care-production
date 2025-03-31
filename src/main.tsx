@@ -7,6 +7,7 @@ import App from './App.tsx'
 import './index.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SidebarProvider } from '@/components/layout/SidebarContext'
+import { SidebarProvider as ShadcnSidebarProvider } from '@/components/ui/sidebar'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,9 +23,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <QueryClientProvider client={queryClient}>
         <SidebarProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <ShadcnSidebarProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </ShadcnSidebarProvider>
         </SidebarProvider>
       </QueryClientProvider>
     </ThemeProvider>

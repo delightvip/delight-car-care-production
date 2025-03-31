@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -14,6 +15,9 @@ import { cn } from '@/lib/utils';
 
 const Navbar = () => {
   const { isExpanded, isMobile } = useSidebar();
+  
+  // Add logging to debug context issues
+  console.log("Navbar - Current sidebar state:", { isExpanded, isMobile });
   
   return (
     <motion.header 
