@@ -30,8 +30,8 @@ export interface ProfitFilter {
   startDate?: string;
   endDate?: string;
   partyId?: string;
-  minProfit?: number;
-  maxProfit?: number;
+  minProfit?: string;
+  maxProfit?: string;
   sortBy?: 'date' | 'profit_amount' | 'profit_percentage';
   sortOrder?: 'asc' | 'desc';
 }
@@ -198,12 +198,18 @@ class ProfitService extends BaseCommercialService {
           query = query.eq('party_id', filters.partyId);
         }
         
-        if (filters.minProfit !== undefined) {
-          query = query.gte('profit_amount', filters.minProfit);
+        if (filters.minProfit) {
+          const min = parseFloat(filters.minProfit);
+          if (!isNaN(min)) {
+            query = query.gte('profit_amount', min);
+          }
         }
         
-        if (filters.maxProfit !== undefined) {
-          query = query.lte('profit_amount', filters.maxProfit);
+        if (filters.maxProfit) {
+          const max = parseFloat(filters.maxProfit);
+          if (!isNaN(max)) {
+            query = query.lte('profit_amount', max);
+          }
         }
         
         // Handle sorting

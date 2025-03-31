@@ -14,9 +14,10 @@ export interface SidebarMenuItem {
 interface SidebarMenuGroupProps {
   title: string;
   items: SidebarMenuItem[];
+  isActive?: (path: string) => boolean;
 }
 
-const SidebarMenuGroup: React.FC<SidebarMenuGroupProps> = ({ title, items }) => {
+const SidebarMenuGroup: React.FC<SidebarMenuGroupProps> = ({ title, items, isActive }) => {
   return (
     <div className="pb-5">
       <h3 className="text-xs font-medium text-muted-foreground px-4 py-2">
@@ -28,7 +29,7 @@ const SidebarMenuGroup: React.FC<SidebarMenuGroupProps> = ({ title, items }) => 
             key={item.path}
             to={item.path}
             className={`group flex items-center px-4 py-2 text-sm hover:bg-accent/80 ${
-              item.active ? 'bg-accent text-accent-foreground' : 'text-foreground/80'
+              isActive && isActive(item.path) ? 'bg-accent text-accent-foreground' : 'text-foreground/80'
             } group transition-colors rounded-md`}
           >
             <item.icon className="mr-3 h-5 w-5" />

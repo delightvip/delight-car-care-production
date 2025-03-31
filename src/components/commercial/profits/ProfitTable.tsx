@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { DataTableWithLoading } from "@/components/ui/DataTableWithLoading";
 import { ProfitData } from "@/services/commercial/profit/ProfitService";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,9 @@ interface ProfitTableProps {
 const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
   const columns = [
     {
+      key: "invoice_date",
+      title: "التاريخ",
       accessorKey: "invoice_date",
-      header: "التاريخ",
       cell: ({ row }: any) => {
         return format(
           new Date(row.getValue("invoice_date")),
@@ -26,12 +27,14 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
       },
     },
     {
+      key: "party_name",
+      title: "العميل",
       accessorKey: "party_name",
-      header: "العميل",
     },
     {
+      key: "total_sales",
+      title: "المبيعات",
       accessorKey: "total_sales",
-      header: "المبيعات",
       cell: ({ row }: any) => {
         return (
           <span className="font-medium">
@@ -41,8 +44,9 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
       },
     },
     {
+      key: "total_cost",
+      title: "التكلفة",
       accessorKey: "total_cost",
-      header: "التكلفة",
       cell: ({ row }: any) => {
         return (
           <span>
@@ -52,8 +56,9 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
       },
     },
     {
+      key: "profit_amount",
+      title: "الربح",
       accessorKey: "profit_amount",
-      header: "الربح",
       cell: ({ row }: any) => {
         const profit = Number(row.getValue("profit_amount"));
         return (
@@ -64,8 +69,9 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
       },
     },
     {
+      key: "profit_percentage",
+      title: "نسبة الربح",
       accessorKey: "profit_percentage",
-      header: "نسبة الربح",
       cell: ({ row }: any) => {
         const percentage = Number(row.getValue("profit_percentage"));
         let badgeVariant = "default";
@@ -90,6 +96,8 @@ const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
       },
     },
     {
+      key: "actions",
+      title: "الإجراءات",
       id: "actions",
       cell: ({ row }: any) => {
         const profit = row.original;

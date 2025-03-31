@@ -43,57 +43,45 @@ const ProfitDistributionChart = ({ profits }: ProfitDistributionChartProps) => {
   
   if (profits.length === 0) {
     return (
-      <Card className="shadow-sm border-border/40 h-[400px] flex items-center justify-center">
-        <div className="text-center p-4">
-          <PieChartIcon className="h-16 w-16 text-muted-foreground opacity-30 mx-auto mb-2" />
-          <h3 className="text-lg font-medium">لا توجد بيانات كافية</h3>
-          <p className="text-sm text-muted-foreground">قم بتحديد نطاق زمني لعرض بيانات توزيع الأرباح</p>
-        </div>
-      </Card>
+      <div className="text-center p-4 h-full flex flex-col items-center justify-center">
+        <PieChartIcon className="h-16 w-16 text-muted-foreground opacity-30 mx-auto mb-2" />
+        <h3 className="text-lg font-medium">لا توجد بيانات كافية</h3>
+        <p className="text-sm text-muted-foreground">قم بتحديد نطاق زمني لعرض بيانات توزيع الأرباح</p>
+      </div>
     );
   }
   
   return (
-    <Card className="shadow-sm border-border/40 h-[400px]">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <PieChartIcon className="h-5 w-5" />
-          توزيع الأرباح حسب العملاء
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={top5}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              outerRadius={100}
-              fill="#8884d8"
-              dataKey="value"
-              nameKey="name"
-              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-            >
-              {top5.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={COLORS[index % COLORS.length]} 
-                />
-              ))}
-            </Pie>
-            <Tooltip 
-              formatter={(value: number) => [`${value.toLocaleString('ar-SA')} ر.س`, 'الربح']}
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart>
+        <Pie
+          data={top5}
+          cx="50%"
+          cy="50%"
+          labelLine={false}
+          outerRadius={100}
+          fill="#8884d8"
+          dataKey="value"
+          nameKey="name"
+          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+        >
+          {top5.map((entry, index) => (
+            <Cell 
+              key={`cell-${index}`} 
+              fill={COLORS[index % COLORS.length]} 
             />
-            <Legend 
-              layout="horizontal" 
-              verticalAlign="bottom" 
-              align="center" 
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+          ))}
+        </Pie>
+        <Tooltip 
+          formatter={(value: number) => [`${value.toLocaleString('ar-SA')} ر.س`, 'الربح']}
+        />
+        <Legend 
+          layout="horizontal" 
+          verticalAlign="bottom" 
+          align="center" 
+        />
+      </PieChart>
+    </ResponsiveContainer>
   );
 };
 

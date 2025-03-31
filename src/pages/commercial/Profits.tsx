@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import ProfitService from '@/services/commercial/profit/ProfitService';
+import ProfitService, { ProfitFilter } from '@/services/commercial/profit/ProfitService';
 import ProfitFilter from '@/components/commercial/profits/ProfitFilter';
 import ProfitSummaryCards from '@/components/commercial/profits/ProfitSummaryCards';
 import ProfitTable from '@/components/commercial/profits/ProfitTable';
@@ -15,7 +15,7 @@ import ProfitDistributionChart from '@/components/commercial/profits/ProfitDistr
 import ProfitTrendsChart from '@/components/commercial/profits/ProfitTrendsChart';
 
 const Profits = () => {
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<ProfitFilter>({
     startDate: '',
     endDate: '',
     minProfit: '',
@@ -29,13 +29,19 @@ const Profits = () => {
   // استدعاء بيانات الأرباح
   const { data: profits, isLoading, refetch } = useQuery({
     queryKey: ['profits', filters],
-    queryFn: () => ProfitService.getInstance().getFilteredProfits(filters),
+    queryFn: () => ProfitService.getInstance().getProfits(filters),
   });
   
   // استدعاء ملخص الأرباح
   const { data: summary, isLoading: isSummaryLoading } = useQuery({
     queryKey: ['profitsSummary', filters],
-    queryFn: () => ProfitService.getInstance().getProfitSummary(filters),
+    queryFn: () => {
+      return ProfitService.getInstance().getProfitSummary(
+        filters.startDate, 
+        filters.endDate, 
+        filters.partyId
+      );
+    },
   });
   
   // وظيفة إعادة حساب جميع الأرباح
@@ -54,7 +60,7 @@ const Profits = () => {
   };
   
   // معالجة تغيير الفلتر
-  const handleFilterChange = (newFilters: typeof filters) => {
+  const handleFilterChange = (newFilters: ProfitFilter) => {
     setFilters(newFilters);
   };
   
@@ -105,7 +111,7 @@ const Profits = () => {
             <Card className="p-6">
               <h3 className="text-lg font-medium mb-4">توزيع الأرباح</h3>
               <div className="h-[300px]">
-                <ProfitDistributionChart data={profits?.slice(0, 5) || []} />
+                <ProfitDistributionChart profits={profits?.slice(0, 5) || []} />
               </div>
             </Card>
 

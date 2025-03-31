@@ -64,11 +64,11 @@ const ProfitFilter = ({ onFilterChange }: ProfitFilterProps) => {
     }
     
     if (minProfit) {
-      filters.minProfit = parseFloat(minProfit);
+      filters.minProfit = minProfit;
     }
     
     if (maxProfit) {
-      filters.maxProfit = parseFloat(maxProfit);
+      filters.maxProfit = maxProfit;
     }
     
     if (sortBy) {
