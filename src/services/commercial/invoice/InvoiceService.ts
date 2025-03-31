@@ -1,16 +1,18 @@
-
 import { Invoice } from '@/services/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
 import { toast } from "sonner";
+import ProfitService from '../profit/ProfitService';
 
 // خدمة الفواتير الرئيسية
 export class InvoiceService {
   private static instance: InvoiceService;
   private invoiceProcessor: InvoiceProcessor;
+  private profitService: ProfitService;
   
   private constructor() {
     this.invoiceProcessor = new InvoiceProcessor();
+    this.profitService = ProfitService.getInstance();
   }
   
   public static getInstance(): InvoiceService {
@@ -54,15 +56,63 @@ export class InvoiceService {
   }
   
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
-    return this.invoiceProcessor.confirmInvoice(invoiceId);
+    try {
+      const result = await this.invoiceProcessor.confirmInvoice(invoiceId);
+      
+      // If this is a sales invoice and was confirmed, calculate profits
+      if (result) {
+        const invoice = await this.getInvoiceById(invoiceId);
+        if (invoice && invoice.invoice_type === 'sale') {
+          await this.profitService.calculateInvoiceProfit(invoiceId);
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error confirming invoice:', error);
+      toast.error('حدث خطأ أثناء تأكيد الفاتورة');
+      return false;
+    }
   }
   
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
-    return this.invoiceProcessor.cancelInvoice(invoiceId);
+    try {
+      // Get invoice details before cancellation
+      const invoice = await this.getInvoiceById(invoiceId);
+      
+      const result = await this.invoiceProcessor.cancelInvoice(invoiceId);
+      
+      // If this was a sales invoice, remove profit data
+      if (result && invoice && invoice.invoice_type === 'sale') {
+        await this.profitService.removeProfitData(invoiceId);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error cancelling invoice:', error);
+      toast.error('حدث خطأ أثناء إلغاء الفاتورة');
+      return false;
+    }
   }
   
   public async deleteInvoice(id: string): Promise<boolean> {
-    return InvoiceEntity.delete(id);
+    try {
+      // Get invoice details before deletion
+      const invoice = await this.getInvoiceById(id);
+      
+      const result = await InvoiceEntity.delete(id);
+      
+      // If this was a sales invoice, remove profit data
+      if (result && invoice && invoice.invoice_type === 'sale') {
+        await this.profitService.removeProfitData(id);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      toast.error('حدث خطأ أثناء حذف الفاتورة');
+      return false;
+    }
   }
   
   public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
