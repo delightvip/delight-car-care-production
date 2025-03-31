@@ -20,6 +20,141 @@ import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 
+// Define types for raw materials
+interface RawMaterial {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+}
+
+// Define types for semi-finished products
+interface SemiFinishedProduct {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+  ingredients: {
+    code: string;
+    name: string;
+    percentage: number;
+  }[];
+}
+
+// Define types for finished products
+interface FinishedProduct {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+  semiFinished: {
+    code: string;
+    name: string;
+    quantity: number;
+  };
+  packaging: {
+    code: string;
+    name: string;
+    quantity: number;
+  }[];
+}
+
+// Define types for packaging materials
+interface PackagingMaterial {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+}
+
+// Define types for simulation results
+interface ProductionCapacityResult {
+  type: 'production';
+  semiFinished: SemiFinishedProduct;
+  materials: {
+    code: string;
+    name: string;
+    availableQuantity: number;
+    requiredPercentage: number;
+    maxProduction: number;
+    isLimiting: boolean;
+  }[];
+  maxPossibleProduction: number;
+  daysOfProduction: number;
+}
+
+interface RawMaterialsDepletionResult {
+  type: 'raw-materials';
+  simulationData: any[];
+  daysUntilDepletion: number;
+  reorderRequired: boolean;
+  material: RawMaterial;
+}
+
+interface PackagingCapacityResult {
+  type: 'packaging';
+  product: FinishedProduct;
+  semiFinishedAvailable: number;
+  maxProductionFromSemi: number;
+  packagingLimits: {
+    code: string;
+    name: string;
+    availableQuantity: number;
+    requiredQuantity: number;
+    maxProduction: number;
+    isLimiting: boolean;
+  }[];
+  maxPossibleProduction: number;
+  daysOfProduction: number;
+  limitingFactor: 'semiFinished' | 'packaging';
+}
+
+interface PackagingMaterialUsageResult {
+  type: 'packaging-materials';
+  material: PackagingMaterial;
+  productStats: {
+    productCode: string;
+    productName: string;
+    requiredQuantity: number;
+    maxProduction: number;
+  }[];
+  simulationData: any[];
+  daysUntilDepletion: number;
+  reorderRequired: boolean;
+}
+
+type SimulationResult = 
+  | ProductionCapacityResult
+  | RawMaterialsDepletionResult
+  | PackagingCapacityResult
+  | PackagingMaterialUsageResult
+  | null;
+
+// Type guards to check which type of simulation result we have
+const isProductionCapacityResult = (result: SimulationResult): result is ProductionCapacityResult => 
+  result !== null && result.type === 'production';
+
+const isRawMaterialsDepletionResult = (result: SimulationResult): result is RawMaterialsDepletionResult => 
+  result !== null && result.type === 'raw-materials';
+
+const isPackagingCapacityResult = (result: SimulationResult): result is PackagingCapacityResult => 
+  result !== null && result.type === 'packaging';
+
+const isPackagingMaterialUsageResult = (result: SimulationResult): result is PackagingMaterialUsageResult => 
+  result !== null && result.type === 'packaging-materials';
+
 const ProductionPlanning = () => {
   const [simulationPeriod, setSimulationPeriod] = useState<number>(30); // days
   const [simulationScenario, setSimulationScenario] = useState<string>("moderate");
@@ -143,6 +278,7 @@ const ProductionPlanning = () => {
     }
     
     return {
+      type: 'raw-materials' as const,
       simulationData,
       daysUntilDepletion,
       reorderRequired: daysUntilDepletion <= simulationPeriod,
@@ -187,6 +323,7 @@ const ProductionPlanning = () => {
       const maxPossibleProduction = limitingMaterial.maxProduction;
       
       return {
+        type: 'production' as const,
         semiFinished,
         materials: updatedMaterials,
         maxPossibleProduction,
@@ -230,11 +367,11 @@ const ProductionPlanning = () => {
     let limitingPackaging = [...packagingLimits].sort((a, b) => a.maxProduction - b.maxProduction)[0];
     
     let maxPossibleProduction = maxProductionFromSemi;
-    let limitingFactor = "semiFinished";
+    let limitingFactor = "semiFinished" as const;
     
     if (limitingPackaging && limitingPackaging.maxProduction < maxProductionFromSemi) {
       maxPossibleProduction = limitingPackaging.maxProduction;
-      limitingFactor = "packaging";
+      limitingFactor = "packaging" as const;
       
       // Mark the limiting packaging material
       packagingLimits.forEach(p => {
@@ -245,6 +382,7 @@ const ProductionPlanning = () => {
     }
     
     return {
+      type: 'packaging' as const,
       product,
       semiFinishedAvailable,
       maxProductionFromSemi,
@@ -308,6 +446,7 @@ const ProductionPlanning = () => {
     const daysUntilDepletion = Math.floor(material.quantity / dailyUsage);
     
     return {
+      type: 'packaging-materials' as const,
       material,
       productStats,
       simulationData,
@@ -317,7 +456,7 @@ const ProductionPlanning = () => {
   }, [selectedPackagingMaterial, packagingMaterials, finishedProducts, simulationScenario, simulationPeriod]);
   
   // Calculate results based on selected tab
-  const simulationResult = (() => {
+  const simulationResult: SimulationResult = (() => {
     switch (selectedTab) {
       case "production":
         return simulateProductionCapacity();
@@ -473,7 +612,7 @@ const ProductionPlanning = () => {
                           </div>
 
                           {/* Production Capacity Results */}
-                          {selectedSemiFinished && simulationResult && (
+                          {selectedSemiFinished && isProductionCapacityResult(simulationResult) && (
                             <div className="mt-6 space-y-6">
                               <Card className="bg-muted/40">
                                 <CardContent className="pt-6">
@@ -561,7 +700,7 @@ const ProductionPlanning = () => {
                           </div>
 
                           {/* Raw Material Depletion Results */}
-                          {selectedRawMaterial && simulationResult && (
+                          {selectedRawMaterial && isRawMaterialsDepletionResult(simulationResult) && (
                             <div className="mt-6">
                               <Card className="bg-muted/40">
                                 <CardContent className="pt-6">
@@ -661,7 +800,7 @@ const ProductionPlanning = () => {
                           </div>
 
                           {/* Packaging Capacity Results */}
-                          {selectedProduct && simulationResult && (
+                          {selectedProduct && isPackagingCapacityResult(simulationResult) && (
                             <div className="mt-6 space-y-6">
                               <Card className="bg-muted/40">
                                 <CardContent className="pt-6">
@@ -778,7 +917,7 @@ const ProductionPlanning = () => {
                           </div>
 
                           {/* Packaging Material Usage Results */}
-                          {selectedPackagingMaterial && simulationResult && (
+                          {selectedPackagingMaterial && isPackagingMaterialUsageResult(simulationResult) && (
                             <div className="mt-6 space-y-6">
                               <Card className="bg-muted/40">
                                 <CardContent className="pt-6">
