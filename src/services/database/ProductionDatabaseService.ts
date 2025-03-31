@@ -1,10 +1,10 @@
 
-import { supabase, rpcFunctions } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   ProductionOrder, 
   PackagingOrder 
-} from "../ProductionService";
+} from "../production/types/ProductionTypes";
 
 class ProductionDatabaseService {
   private static instance: ProductionDatabaseService;
@@ -391,10 +391,25 @@ class ProductionDatabaseService {
   // جلب بيانات إحصائية للإنتاج
   public async getProductionStats() {
     try {
-      const { data, error } = await rpcFunctions.getProductionStats();
+      // استخدام استعلام خاص بدلاً من RPC لتجنب مشاكل التوافق
+      const { data, error } = await supabase
+        .from('production_orders')
+        .select('status, total_cost')
+        .order('created_at', { ascending: false });
         
       if (error) throw error;
-      return data || { total_production_orders: 0, completed_orders: 0, pending_orders: 0, total_cost: 0 };
+      
+      // معالجة البيانات يدوياً
+      const stats = {
+        total_production_orders: data.length,
+        completed_orders: data.filter(order => order.status === 'completed').length,
+        pending_orders: data.filter(order => order.status === 'pending').length,
+        total_cost: data
+          .filter(order => order.status === 'completed')
+          .reduce((sum, order) => sum + (order.total_cost || 0), 0)
+      };
+      
+      return stats;
     } catch (error) {
       console.error('Error fetching production stats:', error);
       return { total_production_orders: 0, completed_orders: 0, pending_orders: 0, total_cost: 0 };
@@ -404,10 +419,40 @@ class ProductionDatabaseService {
   // جلب بيانات شهرية للإنتاج
   public async getMonthlyProductionStats() {
     try {
-      const { data, error } = await rpcFunctions.getMonthlyProductionStats();
+      // استخدام استعلام خاص بدلاً من RPC
+      const { data, error } = await supabase
+        .from('production_orders')
+        .select('date, status, quantity')
+        .order('date', { ascending: true });
         
       if (error) throw error;
-      return data || [];
+      
+      // معالجة البيانات لتجميعها حسب الشهر
+      const monthlyData: Record<string, { month: string, completed: number, pending: number }> = {};
+      
+      data.forEach(order => {
+        // استخراج الشهر والسنة من التاريخ (مثل 2023-05)
+        const monthKey = order.date.substring(0, 7);
+        
+        // إنشاء مدخل جديد للشهر إذا لم يكن موجوداً
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = {
+            month: monthKey,
+            completed: 0,
+            pending: 0
+          };
+        }
+        
+        // تحديث الإحصائيات حسب حالة الأمر
+        if (order.status === 'completed') {
+          monthlyData[monthKey].completed += order.quantity || 0;
+        } else if (order.status === 'pending') {
+          monthlyData[monthKey].pending += order.quantity || 0;
+        }
+      });
+      
+      // تحويل النتائج إلى مصفوفة
+      return Object.values(monthlyData);
     } catch (error) {
       console.error('Error fetching monthly production stats:', error);
       return [];

@@ -1,5 +1,6 @@
+
 import BaseCommercialService from './BaseCommercialService';
-import { LedgerEntry } from '../CommercialTypes';
+import { LedgerEntry } from './CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
 
