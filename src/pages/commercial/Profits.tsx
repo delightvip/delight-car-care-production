@@ -7,15 +7,15 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import ProfitService, { ProfitFilter } from '@/services/commercial/profit/ProfitService';
-import ProfitFilter from '@/components/commercial/profits/ProfitFilter';
+import ProfitService, { ProfitFilter as ProfitFilterType } from '@/services/commercial/profit/ProfitService';
+import ProfitFilterComponent from '@/components/commercial/profits/ProfitFilter';
 import ProfitSummaryCards from '@/components/commercial/profits/ProfitSummaryCards';
 import ProfitTable from '@/components/commercial/profits/ProfitTable';
 import ProfitDistributionChart from '@/components/commercial/profits/ProfitDistributionChart';
 import ProfitTrendsChart from '@/components/commercial/profits/ProfitTrendsChart';
 
 const Profits = () => {
-  const [filters, setFilters] = useState<ProfitFilter>({
+  const [filters, setFilters] = useState<ProfitFilterType>({
     startDate: '',
     endDate: '',
     minProfit: '',
@@ -60,7 +60,7 @@ const Profits = () => {
   };
   
   // معالجة تغيير الفلتر
-  const handleFilterChange = (newFilters: ProfitFilter) => {
+  const handleFilterChange = (newFilters: ProfitFilterType) => {
     setFilters(newFilters);
   };
   
@@ -101,7 +101,7 @@ const Profits = () => {
         </Breadcrumb>
 
         <div className="space-y-6">
-          <ProfitFilter onFilterChange={handleFilterChange} />
+          <ProfitFilterComponent onFilterChange={handleFilterChange} />
 
           {!isSummaryLoading && summary && (
             <ProfitSummaryCards summary={summary} />
@@ -111,7 +111,7 @@ const Profits = () => {
             <Card className="p-6">
               <h3 className="text-lg font-medium mb-4">توزيع الأرباح</h3>
               <div className="h-[300px]">
-                <ProfitDistributionChart profits={profits?.slice(0, 5) || []} />
+                <ProfitDistributionChart profits={profits || []} />
               </div>
             </Card>
 

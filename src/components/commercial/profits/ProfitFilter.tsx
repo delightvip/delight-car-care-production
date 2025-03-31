@@ -20,7 +20,8 @@ interface Party {
   name: string;
 }
 
-const ProfitFilter = ({ onFilterChange }: ProfitFilterProps) => {
+// Renamed to ProfitFilterComponent to avoid naming conflicts
+const ProfitFilterComponent = ({ onFilterChange }: ProfitFilterProps) => {
   const [dateRange, setDateRange] = useState<DateRange>({
     from: new Date(new Date().setDate(new Date().getDate() - 30)), // Last 30 days
     to: new Date()
@@ -179,4 +180,4 @@ const ProfitFilter = ({ onFilterChange }: ProfitFilterProps) => {
   );
 };
 
-export default ProfitFilter;
+export default ProfitFilterComponent;

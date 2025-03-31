@@ -1,12 +1,13 @@
 
-import { useState } from "react";
-import { DataTableWithLoading } from "@/components/ui/DataTableWithLoading";
-import { ProfitData } from "@/services/commercial/profit/ProfitService";
-import { format } from "date-fns";
-import { ArrowUpRight } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import React from 'react';
+import { ProfitData } from '@/services/commercial/profit/ProfitService';
+import { Badge } from '@/components/ui/badge';
+import { formatDate } from '@/lib/utils';
+import { ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { DataTableWithLoading } from '@/components/ui/DataTableWithLoading';
+import { Column } from '@/components/ui/data-table/types';
 
 interface ProfitTableProps {
   profits: ProfitData[];
@@ -14,118 +15,112 @@ interface ProfitTableProps {
 }
 
 const ProfitTable = ({ profits, isLoading }: ProfitTableProps) => {
-  const columns = [
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('ar-SA', {
+      style: 'currency',
+      currency: 'SAR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+  
+  const getProfitBadge = (profit: number) => {
+    if (profit < 0) {
+      return <Badge className="bg-destructive">خسارة</Badge>;
+    } else if (profit < 1000) {
+      return <Badge variant="outline" className="text-amber-500 border-amber-500">منخفض</Badge>;
+    } else if (profit < 5000) {
+      return <Badge className="bg-green-500">متوسط</Badge>;
+    } else {
+      return <Badge className="bg-green-600">مرتفع</Badge>;
+    }
+  };
+  
+  const getProfitPercentageBadge = (percentage: number) => {
+    if (percentage < 0) {
+      return <Badge variant="destructive">{percentage.toFixed(1)}%</Badge>;
+    } else if (percentage < 10) {
+      return <Badge variant="outline" className="text-amber-500 border-amber-500">{percentage.toFixed(1)}%</Badge>;
+    } else if (percentage < 25) {
+      return <Badge className="bg-green-500">{percentage.toFixed(1)}%</Badge>;
+    } else {
+      return <Badge className="bg-green-600">{percentage.toFixed(1)}%</Badge>;
+    }
+  };
+
+  const columns: Column[] = [
     {
-      key: "invoice_date",
-      title: "التاريخ",
-      accessorKey: "invoice_date",
-      cell: ({ row }: any) => {
-        return format(
-          new Date(row.getValue("invoice_date")),
-          "yyyy-MM-dd"
-        );
-      },
+      key: 'invoice_date',
+      title: 'التاريخ',
+      accessorKey: 'invoice_date',
+      cell: ({ row }) => formatDate(row.original.invoice_date),
     },
     {
-      key: "party_name",
-      title: "العميل",
-      accessorKey: "party_name",
+      key: 'party_name',
+      title: 'العميل',
+      accessorKey: 'party_name',
     },
     {
-      key: "total_sales",
-      title: "المبيعات",
-      accessorKey: "total_sales",
-      cell: ({ row }: any) => {
-        return (
-          <span className="font-medium">
-            {Number(row.getValue("total_sales")).toLocaleString("ar-SA")} ر.س
-          </span>
-        );
-      },
+      key: 'total_sales',
+      title: 'المبيعات',
+      accessorKey: 'total_sales',
+      cell: ({ row }) => formatCurrency(row.original.total_sales),
     },
     {
-      key: "total_cost",
-      title: "التكلفة",
-      accessorKey: "total_cost",
-      cell: ({ row }: any) => {
-        return (
-          <span>
-            {Number(row.getValue("total_cost")).toLocaleString("ar-SA")} ر.س
-          </span>
-        );
-      },
+      key: 'total_cost',
+      title: 'التكلفة',
+      accessorKey: 'total_cost',
+      cell: ({ row }) => formatCurrency(row.original.total_cost),
     },
     {
-      key: "profit_amount",
-      title: "الربح",
-      accessorKey: "profit_amount",
-      cell: ({ row }: any) => {
-        const profit = Number(row.getValue("profit_amount"));
-        return (
-          <span className={`font-bold ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {profit.toLocaleString("ar-SA")} ر.س
-          </span>
-        );
-      },
+      key: 'profit_amount',
+      title: 'قيمة الربح',
+      accessorKey: 'profit_amount',
+      cell: ({ row }) => formatCurrency(row.original.profit_amount),
     },
     {
-      key: "profit_percentage",
-      title: "نسبة الربح",
-      accessorKey: "profit_percentage",
-      cell: ({ row }: any) => {
-        const percentage = Number(row.getValue("profit_percentage"));
-        let badgeVariant = "default";
-        
-        if (percentage >= 25) {
-          badgeVariant = "success";
-        } else if (percentage >= 15) {
-          badgeVariant = "default";
-        } else if (percentage >= 5) {
-          badgeVariant = "secondary";
-        } else if (percentage >= 0) {
-          badgeVariant = "outline";
-        } else {
-          badgeVariant = "destructive";
-        }
-        
-        return (
-          <Badge variant={badgeVariant as "success" | "default" | "secondary" | "outline" | "destructive"}>
-            {percentage.toFixed(1)}%
-          </Badge>
-        );
-      },
+      key: 'profit_badge',
+      title: 'حالة الربح',
+      accessorKey: 'profit_amount',
+      cell: ({ row }) => getProfitBadge(row.original.profit_amount),
     },
     {
-      key: "actions",
-      title: "الإجراءات",
-      id: "actions",
-      cell: ({ row }: any) => {
-        const profit = row.original;
-        return (
-          <Button 
-            asChild 
-            variant="ghost" 
-            size="icon"
-            className="hover:bg-muted/80 transition-colors"
-          >
-            <Link to={`/commercial/invoices/${profit.invoice_id}`}>
-              <ArrowUpRight className="h-4 w-4" />
-              <span className="sr-only">عرض الفاتورة</span>
-            </Link>
-          </Button>
-        );
-      },
+      key: 'profit_percentage',
+      title: 'نسبة الربح',
+      accessorKey: 'profit_percentage',
+      cell: ({ row }) => getProfitPercentageBadge(row.original.profit_percentage),
+    },
+    {
+      key: 'actions',
+      title: 'الإجراءات',
+      accessorKey: 'invoice_id',
+      cell: ({ row }) => (
+        <Button asChild variant="ghost" size="sm">
+          <Link to={`/commercial/invoices/${row.original.invoice_id}`} className="flex items-center gap-1">
+            تفاصيل الفاتورة
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+      ),
     },
   ];
-
+  
+  const emptyState = (
+    <div className="text-center p-4">
+      <p className="text-muted-foreground text-lg">لا توجد بيانات أرباح لعرضها</p>
+      <p className="text-sm text-muted-foreground">حاول تعديل معايير الفلتر لعرض نتائج مختلفة</p>
+    </div>
+  );
+  
   return (
     <DataTableWithLoading
       columns={columns}
       data={profits}
       isLoading={isLoading}
-      noDataMessage="لا توجد أرباح متاحة"
-      loadingMessage="جاري تحميل بيانات الأرباح..."
-      pagination
+      searchable
+      searchKeys={['party_name', 'invoice_id']}
+      pagination={{ pageSize: 10 }}
+      emptyState={emptyState}
     />
   );
 };
