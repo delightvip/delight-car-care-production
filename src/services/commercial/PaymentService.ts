@@ -1,3 +1,4 @@
+
 import BaseCommercialService from './BaseCommercialService';
 import { Payment } from './CommercialTypes';
 import { toast } from "sonner";
@@ -38,15 +39,15 @@ class PaymentService extends BaseCommercialService {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
         payment_status: payment.payment_status || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
       
-      return paymentsWithParties;
+      return paymentsWithParties as Payment[];
     } catch (error) {
       console.error('Error fetching payments:', error);
       toast.error('حدث خطأ أثناء جلب المدفوعات');
@@ -73,15 +74,15 @@ class PaymentService extends BaseCommercialService {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
         payment_status: payment.payment_status || 'draft',
         notes: payment.notes,
         created_at: payment.created_at
       }));
       
-      return paymentsWithParties;
+      return paymentsWithParties as Payment[];
     } catch (error) {
       console.error(`Error fetching payments for party ${partyId}:`, error);
       toast.error('حدث خطأ أثناء جلب المدفوعات');
@@ -127,8 +128,8 @@ class PaymentService extends BaseCommercialService {
         party_name: party?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
         payment_status: paymentStatus,
         notes: payment.notes,

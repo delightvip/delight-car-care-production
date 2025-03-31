@@ -1,8 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import PartyService from '@/services/PartyService';
 import { LedgerEntry } from '@/services/commercial/CommercialTypes';
 import { toast } from "sonner";
-import PartyService from '../../PartyService';
 
 // خدمة تُعنى بعمليات جلب سجل الحساب
 export class LedgerEntity {

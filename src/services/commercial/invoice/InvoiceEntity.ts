@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice, InvoiceItem } from '@/services/commercial/CommercialTypes';
+import { toast } from "sonner";
 
 export class InvoiceEntity {
   /**

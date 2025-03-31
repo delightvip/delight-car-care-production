@@ -1,9 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import PartyService from '@/services/PartyService';
 import { LedgerEntry } from '@/services/commercial/CommercialTypes';
 import { toast } from "sonner";
-import PartyService from '../../PartyService';
-import { LedgerEntity } from './LedgerEntity';
 import { format } from 'date-fns';
 
 // خدمة تُعنى بإنشاء التقارير المالية

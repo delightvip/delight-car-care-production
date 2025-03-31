@@ -1,77 +1,36 @@
-
-import { Invoice } from '@/services/commercial/CommercialTypes';
-import { InvoiceEntity } from './InvoiceEntity';
-import { InvoiceProcessor } from './InvoiceProcessor';
+import { LedgerEntry } from '@/services/commercial/CommercialTypes';
+import { LedgerEntity } from './LedgerEntity';
+import { LedgerReportGenerator } from './LedgerReportGenerator';
 import { toast } from "sonner";
 
-// خدمة الفواتير الرئيسية
-export class InvoiceService {
-  private static instance: InvoiceService;
-  private invoiceProcessor: InvoiceProcessor;
+// خدمة سجل الحساب الرئيسية
+export class LedgerService {
+  private static instance: LedgerService;
   
-  private constructor() {
-    this.invoiceProcessor = new InvoiceProcessor();
-  }
+  private constructor() {}
   
-  public static getInstance(): InvoiceService {
-    if (!InvoiceService.instance) {
-      InvoiceService.instance = new InvoiceService();
+  public static getInstance(): LedgerService {
+    if (!LedgerService.instance) {
+      LedgerService.instance = new LedgerService();
     }
-    return InvoiceService.instance;
+    return LedgerService.instance;
   }
   
-  public async getInvoices(): Promise<Invoice[]> {
-    return InvoiceEntity.fetchAll();
+  public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
+    return LedgerEntity.fetchLedgerEntries(partyId, startDate, endDate);
   }
   
-  public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
-    return InvoiceEntity.fetchByParty(partyId);
+  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
+    return LedgerReportGenerator.generateAccountStatement(startDate, endDate, partyType);
   }
   
-  public async getInvoiceById(id: string): Promise<Invoice | null> {
-    return InvoiceEntity.fetchById(id);
+  public async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
+    return LedgerReportGenerator.generateSinglePartyStatement(partyId, startDate, endDate);
   }
   
-  public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
-    try {
-      const invoice = await InvoiceEntity.create(invoiceData);
-      
-      // If invoice status is not "draft", automatically confirm it
-      if (invoice && invoiceData.payment_status === 'confirmed') {
-        await this.confirmInvoice(invoice.id);
-        
-        // Refresh the invoice data after confirmation
-        return this.getInvoiceById(invoice.id);
-      }
-      
-      toast.success('تم إنشاء الفاتورة بنجاح');
-      return invoice;
-    } catch (error) {
-      console.error('Error creating invoice:', error);
-      toast.error('حدث خطأ أثناء إنشاء الفاتورة');
-      return null;
-    }
-  }
-  
-  public async confirmInvoice(invoiceId: string): Promise<boolean> {
-    return this.invoiceProcessor.confirmInvoice(invoiceId);
-  }
-  
-  public async cancelInvoice(invoiceId: string): Promise<boolean> {
-    return this.invoiceProcessor.cancelInvoice(invoiceId);
-  }
-  
-  public async deleteInvoice(id: string): Promise<boolean> {
-    return InvoiceEntity.delete(id);
-  }
-  
-  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
-    return this.invoiceProcessor.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
-  }
-  
-  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
-    return this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
+  public async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
+    return LedgerReportGenerator.exportLedgerToCSV(partyId, startDate, endDate);
   }
 }
 
-export default InvoiceService;
+export default LedgerService;

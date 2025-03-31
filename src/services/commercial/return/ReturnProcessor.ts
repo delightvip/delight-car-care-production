@@ -1,10 +1,9 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Return } from '@/services/commercial/CommercialTypes';
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import { ReturnEntity } from "./ReturnEntity";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 interface InventoryItem {
   id: number;
@@ -152,7 +151,7 @@ export class ReturnProcessor {
             if (!currentItem) {
               console.error(`Item not found: ${item.item_name}`);
               toast({
-                title: "خطأ", 
+                title: "خطأ",
                 description: `لم يتم العثور على ${item.item_name} في المخزون`,
                 variant: "destructive"
               });
@@ -791,4 +790,3 @@ export class ReturnProcessor {
     }
   }
 }
-

@@ -1,6 +1,6 @@
 
 import BaseCommercialService from './BaseCommercialService';
-import { Invoice, InvoiceItem } from '../CommercialTypes';
+import { Invoice, InvoiceItem } from './CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
 

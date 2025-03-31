@@ -1,20 +1,15 @@
+import { Invoice, Payment, Return, ReturnItem, LedgerEntry } from './commercial/CommercialTypes';
+
+// Re-export types
+export { Invoice, Payment, Return, ReturnItem, LedgerEntry };
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { 
-  Invoice, 
-  InvoiceItem, 
-  Payment, 
-  Return, 
-  ReturnItem, 
-  LedgerEntry 
-} from "./commercial/CommercialTypes";
-
-// Import other service classes
-import InvoiceService from './commercial/invoice/InvoiceService';
-import PaymentService from './commercial/payment/PaymentService';
-import LedgerService from './commercial/ledger/LedgerService';
-import { format } from "date-fns";
+  InvoiceService, 
+  PaymentService, 
+  LedgerService 
+} from './commercial';
 
 // ReturnService will be imported lazily to avoid circular dependencies
 let returnServiceInstance: any = null;

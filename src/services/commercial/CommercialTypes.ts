@@ -1,5 +1,5 @@
 
-// تم نقل التعريفات من ملف CommercialTypes الأصلي إلى هذا الملف
+// Types for Commercial module
 
 export interface Invoice {
   id: string;
