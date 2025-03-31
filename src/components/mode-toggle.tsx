@@ -1,8 +1,7 @@
 
 import React from 'react';
-import { useTheme } from '@/components/theme-provider';
-import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,8 +9,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Import from next-themes directly since our wrapper might have issues
+import { useTheme as useNextTheme } from "next-themes";
+
 export function ModeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useNextTheme();
   
   return (
     <DropdownMenu>

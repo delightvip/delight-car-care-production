@@ -1,4 +1,3 @@
-
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -75,13 +74,9 @@ const SidebarMenu = () => {
     ],
   };
   
-  // Check if a path is active or not
   const isActive = (path: string) => {
-    // Exact match for home
     if (path === '/' && location.pathname === '/') return true;
     
-    // For other paths, check if the current path starts with the given path
-    // but avoid matching parent paths with child paths
     if (path !== '/') {
       const endWithSlashPath = path.endsWith('/') ? path : `${path}/`;
       const currentPath = location.pathname.endsWith('/') ? location.pathname : `${location.pathname}/`;
@@ -97,7 +92,6 @@ const SidebarMenu = () => {
   
   return (
     <nav className="px-2 py-3 flex flex-col gap-1">
-      {/* Main Links */}
       {menuItems.main.map((item) => (
         <Button
           key={item.path}
@@ -112,23 +106,17 @@ const SidebarMenu = () => {
         </Button>
       ))}
       
-      {/* Commercial Group */}
       <SidebarMenuGroup title="إدارة المبيعات" items={menuItems.commercial} isActive={isActive} />
       
-      {/* Inventory Group */}
       <SidebarMenuGroup title="إدارة المخزون" items={menuItems.inventory} isActive={isActive} />
       
-      {/* Production Group */}
       <SidebarMenuGroup title="إدارة الإنتاج" items={menuItems.production} isActive={isActive} />
       
-      {/* Financial Group */}
       <SidebarMenuGroup title="الإدارة المالية" items={menuItems.financial} isActive={isActive} />
       
-      {/* Analytics Group */}
       <SidebarMenuGroup title="التحليلات" items={menuItems.analytics} isActive={isActive} />
       
       <div className="mt-auto">
-        {/* Settings */}
         {menuItems.settings.map((item) => (
           <Button
             key={item.path}

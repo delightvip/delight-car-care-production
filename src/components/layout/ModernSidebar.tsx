@@ -24,7 +24,8 @@ import {
   DollarSign,
   PieChart,
   Tags,
-  Search
+  Search,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './SidebarContext';
@@ -70,7 +71,6 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
     yellow: 'bg-warning text-warning-foreground',
   };
 
-  // Handle mobile navigation
   const handleClick = () => {
     if (isMobile) {
       setTimeout(() => toggleSidebar(), 150);
@@ -503,7 +503,6 @@ const ModernSidebar: React.FC = () => {
         className={cn(
           'bg-background border-l border-border h-screen flex flex-col fixed top-0 right-0 z-30',
           'will-change-transform',
-          // تحسين ظل القائمة لمنع ظهور المناطق المظلمة
           'shadow-sm',
           'overflow-hidden'
         )}
@@ -635,6 +634,7 @@ const ModernSidebar: React.FC = () => {
             <SidebarItem to="/commercial/parties" icon={Users} title="العملاء والموردين" />
             <SidebarItem to="/commercial/invoices" icon={Receipt} title="الفواتير" />
             <SidebarItem to="/commercial/payments" icon={Wallet} title="المدفوعات" />
+            <SidebarItem to="/commercial/profits" icon={TrendingUp} title="الأرباح" />
             <SidebarItem to="/commercial/returns" icon={ArrowUpDown} title="المرتجعات" />
             <SidebarItem to="/commercial/statements" icon={ClipboardList} title="كشوف الحسابات" />
             <SidebarItem to="/commercial/purchase-orders" icon={Truck} title="أوامر الشراء" />
@@ -660,7 +660,6 @@ const ModernSidebar: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.3 }}
-            // تعديل موضع الزر ليكون أقرب إلى القائمة وأكثر وضوحًا
             className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-10"
           >
             <TooltipProvider>
