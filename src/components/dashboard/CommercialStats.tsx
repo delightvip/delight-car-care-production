@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 
 export function CommercialStats() {
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, error } = useQuery({
     queryKey: ['commercialStats'],
     queryFn: async () => {
       try {
@@ -18,7 +17,10 @@ export function CommercialStats() {
           .select('*', { count: 'exact', head: true })
           .eq('type', 'customer');
           
-        if (customersError) throw customersError;
+        if (customersError) {
+          console.error('Error fetching customers:', customersError);
+          throw customersError;
+        }
         
         // Get suppliers count
         const { count: suppliersCount, error: suppliersError } = await supabase
@@ -26,44 +28,62 @@ export function CommercialStats() {
           .select('*', { count: 'exact', head: true })
           .eq('type', 'supplier');
           
-        if (suppliersError) throw suppliersError;
+        if (suppliersError) {
+          console.error('Error fetching suppliers:', suppliersError);
+          throw suppliersError;
+        }
         
         // Get recent invoices (last 30 days)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const dateStr = format(thirtyDaysAgo, 'yyyy-MM-dd');
         
         const { data: recentInvoices, error: invoicesError } = await supabase
           .from('invoices')
           .select('*')
-          .gte('date', format(thirtyDaysAgo, 'yyyy-MM-dd'))
+          .gte('date', dateStr)
           .eq('status', 'confirmed');
           
-        if (invoicesError) throw invoicesError;
+        if (invoicesError) {
+          console.error('Error fetching invoices:', invoicesError);
+          throw invoicesError;
+        }
         
         // Calculate sales and purchases from recent invoices
         const sales = recentInvoices
-          .filter(invoice => invoice.invoice_type === 'sale')
-          .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0);
+          ? recentInvoices
+              .filter(invoice => invoice.invoice_type === 'sale')
+              .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
+          : 0;
           
         const purchases = recentInvoices
-          .filter(invoice => invoice.invoice_type === 'purchase')
-          .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0);
+          ? recentInvoices
+              .filter(invoice => invoice.invoice_type === 'purchase')
+              .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
+          : 0;
         
         // Get party balances
         const { data: partyBalances, error: balancesError } = await supabase
           .from('party_balances')
           .select('balance, parties!inner(type)');
           
-        if (balancesError) throw balancesError;
+        if (balancesError) {
+          console.error('Error fetching party balances:', balancesError);
+          throw balancesError;
+        }
         
         // Calculate receivables and payables
         const receivables = partyBalances
-          .filter(item => item.parties.type === 'customer' && item.balance < 0)
-          .reduce((sum, item) => sum + Math.abs(item.balance), 0);
+          ? partyBalances
+              .filter(item => item.parties && item.parties.type === 'customer' && item.balance < 0)
+              .reduce((sum, item) => sum + Math.abs(item.balance), 0)
+          : 0;
           
         const payables = partyBalances
-          .filter(item => item.parties.type === 'supplier' && item.balance > 0)
-          .reduce((sum, item) => sum + item.balance, 0);
+          ? partyBalances
+              .filter(item => item.parties && item.parties.type === 'supplier' && item.balance > 0)
+              .reduce((sum, item) => sum + item.balance, 0)
+          : 0;
           
         return {
           customersCount: customersCount || 0,
@@ -80,6 +100,10 @@ export function CommercialStats() {
     },
     refetchInterval: 300000, // Refresh every 5 minutes
   });
+
+  if (error) {
+    console.error('Error loading commercial stats:', error);
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

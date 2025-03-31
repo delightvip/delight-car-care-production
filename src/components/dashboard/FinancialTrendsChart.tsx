@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { RefreshCcw } from 'lucide-react';
 import { useTheme } from '@/components/theme-provider';
 
-// نوع الخاصية لتحديد طريقة العرض
 interface FinancialTrendsChartProps {
   variant?: 'default' | 'compact';
   title?: string;
@@ -38,17 +37,14 @@ export function FinancialTrendsChart({
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
   
-  // استخدام refetch لإعادة جلب البيانات
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['financialTrends'],
     queryFn: async () => {
       try {
-        // Calculate date ranges for the last 6 months
         const today = new Date();
         const months = [];
         const results = [];
         
-        // Generate the last 6 months
         for (let i = 5; i >= 0; i--) {
           const month = subMonths(today, i);
           const monthStart = format(startOfMonth(month), 'yyyy-MM-dd');
@@ -62,9 +58,9 @@ export function FinancialTrendsChart({
           });
         }
         
-        // Fetch sales data for each month
+        console.log("Fetching financial trends for months:", months);
+        
         for (const month of months) {
-          // Get sales invoices
           const { data: sales, error: salesError } = await supabase
             .from('invoices')
             .select('total_amount')
@@ -73,9 +69,11 @@ export function FinancialTrendsChart({
             .gte('date', month.start)
             .lte('date', month.end);
             
-          if (salesError) throw salesError;
+          if (salesError) {
+            console.error(`Error fetching sales for ${month.label}:`, salesError);
+            throw salesError;
+          }
           
-          // Get purchase invoices
           const { data: purchases, error: purchasesError } = await supabase
             .from('invoices')
             .select('total_amount')
@@ -84,11 +82,19 @@ export function FinancialTrendsChart({
             .gte('date', month.start)
             .lte('date', month.end);
             
-          if (purchasesError) throw purchasesError;
+          if (purchasesError) {
+            console.error(`Error fetching purchases for ${month.label}:`, purchasesError);
+            throw purchasesError;
+          }
           
-          // Calculate totals
-          const salesTotal = sales.reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0);
-          const purchasesTotal = purchases.reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0);
+          const salesTotal = sales 
+            ? sales.reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0) 
+            : 0;
+            
+          const purchasesTotal = purchases
+            ? purchases.reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
+            : 0;
+            
           const profit = salesTotal - purchasesTotal;
           
           results.push({
@@ -97,6 +103,8 @@ export function FinancialTrendsChart({
             purchases: purchasesTotal,
             profit: profit
           });
+          
+          console.log(`Month ${month.label}: Sales=${salesTotal}, Purchases=${purchasesTotal}, Profit=${profit}`);
         }
         
         return results;
@@ -106,22 +114,23 @@ export function FinancialTrendsChart({
       }
     },
     refetchInterval: 600000,
-    staleTime: 600000,
+    staleTime: 300000,
   });
   
-  // الألوان المستخدمة في الرسم البياني
+  if (error) {
+    console.error("Error loading financial trends chart:", error);
+  }
+
   const colors = {
-    sales: isDarkMode ? '#60A5FA' : '#3B82F6',      // أزرق
-    purchases: isDarkMode ? '#F87171' : '#EF4444',  // أحمر
-    profit: isDarkMode ? '#34D399' : '#10B981'      // أخضر
+    sales: isDarkMode ? '#60A5FA' : '#3B82F6',
+    purchases: isDarkMode ? '#F87171' : '#EF4444',
+    profit: isDarkMode ? '#34D399' : '#10B981'
   };
-  
-  // خاصية للهامش بناءً على الحجم المختار
+
   const margin = variant === 'compact' 
     ? { top: 10, right: 10, left: 0, bottom: 10 }
     : { top: 20, right: 20, left: 0, bottom: 20 };
 
-  // عنصر الرسم البياني الفعلي
   const renderChart = () => (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={margin}>
@@ -195,8 +204,7 @@ export function FinancialTrendsChart({
       </LineChart>
     </ResponsiveContainer>
   );
-  
-  // إظهار حالة التحميل
+
   if (isLoading) {
     return (
       <Card className={className}>
@@ -212,8 +220,7 @@ export function FinancialTrendsChart({
       </Card>
     );
   }
-  
-  // إظهار حالة عدم وجود بيانات
+
   if (!data || data.length === 0) {
     return (
       <Card className={className}>
@@ -229,8 +236,7 @@ export function FinancialTrendsChart({
       </Card>
     );
   }
-  
-  // عرض الرسم البياني النهائي
+
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">

@@ -36,6 +36,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
     setTheme: (newTheme: Theme) => {
       setNextTheme(newTheme)
       setTheme(newTheme)
+      console.log("Theme changed to:", newTheme);  // Log theme changes
     }
   }
   

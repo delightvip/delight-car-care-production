@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,10 +46,11 @@ const CommercialDashboard = () => {
   });
   
   // Fetch top customers by value
-  const { data: topCustomers, isLoading: loadingCustomers } = useQuery({
+  const { data: topCustomers, isLoading: loadingCustomers, error: customersError } = useQuery({
     queryKey: ['topCustomers'],
     queryFn: async () => {
       try {
+        console.log("Fetching top customers");
         // Get customers with negative balances (receivables)
         const { data, error } = await supabase
           .from('party_balances')
@@ -62,10 +62,15 @@ const CommercialDashboard = () => {
           .order('balance', { ascending: true }) // Ascending because negative values
           .limit(5);
         
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching top customers:", error);
+          throw error;
+        }
+        
+        console.log("Top customers data:", data);
         
         return data
-          .filter(item => item.parties.type === 'customer')
+          .filter(item => item.parties && item.parties.type === 'customer')
           .map(item => ({
             id: item.parties.id,
             name: item.parties.name,
@@ -80,11 +85,16 @@ const CommercialDashboard = () => {
     refetchInterval: 300000
   });
   
+  if (customersError) {
+    console.error("Error loading customers:", customersError);
+  }
+  
   // Fetch recent invoices
-  const { data: recentInvoices, isLoading: loadingInvoices } = useQuery({
+  const { data: recentInvoices, isLoading: loadingInvoices, error: invoicesError } = useQuery({
     queryKey: ['recentInvoices'],
     queryFn: async () => {
       try {
+        console.log("Fetching recent invoices");
         const { data, error } = await supabase
           .from('invoices')
           .select(`
@@ -99,13 +109,18 @@ const CommercialDashboard = () => {
           .order('date', { ascending: false })
           .limit(5);
         
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching recent invoices:", error);
+          throw error;
+        }
+        
+        console.log("Recent invoices data:", data);
         
         return data.map(invoice => ({
           id: invoice.id,
           invoice_type: invoice.invoice_type,
           party_id: invoice.party_id,
-          party_name: invoice.parties.name,
+          party_name: invoice.parties?.name || 'غير محدد',
           date: invoice.date,
           total_amount: invoice.total_amount,
           status: invoice.status
@@ -118,11 +133,16 @@ const CommercialDashboard = () => {
     refetchInterval: 300000
   });
   
+  if (invoicesError) {
+    console.error("Error loading invoices:", invoicesError);
+  }
+  
   // Fetch recent payments
-  const { data: recentPayments, isLoading: loadingPayments } = useQuery({
+  const { data: recentPayments, isLoading: loadingPayments, error: paymentsError } = useQuery({
     queryKey: ['recentPayments'],
     queryFn: async () => {
       try {
+        console.log("Fetching recent payments");
         const { data, error } = await supabase
           .from('payments')
           .select(`
@@ -136,13 +156,18 @@ const CommercialDashboard = () => {
           .order('date', { ascending: false })
           .limit(5);
         
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching recent payments:", error);
+          throw error;
+        }
+        
+        console.log("Recent payments data:", data);
         
         return data.map(payment => ({
           id: payment.id,
           payment_type: payment.payment_type,
           party_id: payment.party_id,
-          party_name: payment.parties.name,
+          party_name: payment.parties?.name || 'غير محدد',
           date: payment.date,
           amount: payment.amount
         }));
@@ -154,13 +179,18 @@ const CommercialDashboard = () => {
     refetchInterval: 300000
   });
   
+  if (paymentsError) {
+    console.error("Error loading payments:", paymentsError);
+  }
+  
   // Fetch overdue invoices
-  const { data: overdueInvoices, isLoading: loadingOverdue } = useQuery({
+  const { data: overdueInvoices, isLoading: loadingOverdue, error: overdueError } = useQuery({
     queryKey: ['overdueInvoices'],
     queryFn: async () => {
       const today = format(new Date(), 'yyyy-MM-dd');
       
       try {
+        console.log("Fetching overdue invoices");
         const { data, error } = await supabase
           .from('invoices')
           .select(`
@@ -176,13 +206,18 @@ const CommercialDashboard = () => {
           .lt('date', today)
           .order('date', { ascending: true });
         
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching overdue invoices:", error);
+          throw error;
+        }
+        
+        console.log("Overdue invoices data:", data);
         
         return data.map(invoice => ({
           id: invoice.id,
           invoice_type: invoice.invoice_type,
           party_id: invoice.party_id,
-          party_name: invoice.parties.name,
+          party_name: invoice.parties?.name || 'غير محدد',
           date: invoice.date,
           total_amount: invoice.total_amount
         }));
@@ -193,6 +228,10 @@ const CommercialDashboard = () => {
     },
     refetchInterval: 300000
   });
+  
+  if (overdueError) {
+    console.error("Error loading overdue invoices:", overdueError);
+  }
   
   return (
     <PageTransition>

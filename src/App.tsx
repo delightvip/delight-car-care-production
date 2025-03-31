@@ -47,7 +47,7 @@ function App() {
           <Route path="inventory/raw-materials" element={<RawMaterials />} />
           <Route path="inventory/semi-finished" element={<SemiFinishedProducts />} />
           <Route path="inventory/packaging" element={<PackagingMaterials />} />
-          <Route path="inventory/finished" element={<FinishedProducts />} />
+          <Route path="inventory/finished-products" element={<FinishedProducts />} />
           <Route path="inventory/tracking" element={<InventoryTracking />} />
           <Route path="inventory/low-stock" element={<LowStockItems />} />
           <Route path="inventory/reports" element={<InventoryReports />} />

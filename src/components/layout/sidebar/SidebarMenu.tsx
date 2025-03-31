@@ -54,7 +54,7 @@ const SidebarMenu = () => {
       { icon: Package, title: 'المواد الخام', path: '/inventory/raw-materials' },
       { icon: Package, title: 'مواد التعبئة', path: '/inventory/packaging' },
       { icon: Package, title: 'منتجات نصف مصنعة', path: '/inventory/semi-finished' },
-      { icon: Archive, title: 'المنتجات النهائية', path: '/inventory/finished' },
+      { icon: Package, title: 'المنتجات النهائية', path: '/inventory/finished-products' },
       { icon: Truck, title: 'حركة المخزون', path: '/inventory/tracking' },
     ],
     production: [
