@@ -1,6 +1,7 @@
+
 import { LedgerEntry } from '@/services/commercial/CommercialTypes';
-import { LedgerEntity } from './LedgerEntity';
-import { LedgerReportGenerator } from './LedgerReportGenerator';
+import { LedgerEntity } from '../ledger/LedgerEntity';
+import { LedgerReportGenerator } from '../ledger/LedgerReportGenerator';
 import { toast } from "sonner";
 
 // خدمة سجل الحساب الرئيسية

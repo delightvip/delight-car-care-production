@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -70,14 +69,17 @@ export function InvoiceForm({
   initialData, 
   isEditing = false 
 }: InvoiceFormProps) {
-  const [invoiceItems, setInvoiceItems] = useState<Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>[]>(
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>(
     initialData?.items ? initialData.items.map(item => ({
       item_id: item.item_id,
       item_type: item.item_type,
       item_name: item.item_name,
       quantity: item.quantity,
       unit_price: item.unit_price,
-      total: item.quantity * item.unit_price
+      total: item.quantity * item.unit_price,
+      id: item.id,
+      invoice_id: item.invoice_id,
+      created_at: item.created_at
     })) : []
   );
   const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
