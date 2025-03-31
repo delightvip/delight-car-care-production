@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
 import './index.css'
 import { ThemeProvider } from '@/components/theme-provider'
+import { SidebarProvider } from '@/components/layout/SidebarContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,9 +21,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <SidebarProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </SidebarProvider>
       </QueryClientProvider>
     </ThemeProvider>
   </React.StrictMode>,
