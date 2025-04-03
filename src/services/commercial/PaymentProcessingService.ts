@@ -2,7 +2,7 @@
 import BaseCommercialService from './BaseCommercialService';
 import { toast } from "sonner";
 import InvoiceService from './InvoiceService';
-import PaymentConfirmationService from './payment/PaymentConfirmationService';
+import { PaymentConfirmationService } from './payment/PaymentConfirmationService';
 
 class PaymentProcessingService extends BaseCommercialService {
   private static instance: PaymentProcessingService;
@@ -12,7 +12,7 @@ class PaymentProcessingService extends BaseCommercialService {
   private constructor() {
     super();
     this.invoiceService = InvoiceService.getInstance();
-    this.paymentConfirmationService = PaymentConfirmationService.getInstance();
+    this.paymentConfirmationService = new PaymentConfirmationService();
   }
   
   public static getInstance(): PaymentProcessingService {

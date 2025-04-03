@@ -1,8 +1,22 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import PartyService from "../PartyService";
-import FinancialService from "../FinancialService";
-import { Payment } from "@/types/payment";
+import PartyService from "@/services/PartyService";
+import FinancialService from "@/services/financial/FinancialService";
+
+interface Payment {
+  id: string;
+  party_id: string;
+  date: string;
+  amount: number;
+  payment_type: 'receipt' | 'payment';
+  method: 'cash' | 'check' | 'bank_transfer' | 'other';
+  related_invoice_id?: string;
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  notes?: string;
+  account_id?: string;
+  created_at: string;
+}
 
 export class PaymentConfirmationService {
   private partyService: PartyService;
@@ -35,7 +49,7 @@ export class PaymentConfirmationService {
         return false;
       }
 
-      if (payment.status === 'confirmed') {
+      if (payment.payment_status === 'confirmed') {
         toast.info("الدفعة مؤكدة بالفعل");
         return true;
       }
@@ -43,9 +57,9 @@ export class PaymentConfirmationService {
       let success = false;
 
       if (payment.payment_type === 'receipt') {
-        success = await this.confirmReceiptFromCustomer(payment);
+        success = await this.confirmReceiptFromCustomer(payment as Payment);
       } else if (payment.payment_type === 'payment') {
-        success = await this.confirmPaymentToSupplier(payment);
+        success = await this.confirmPaymentToSupplier(payment as Payment);
       }
 
       if (!success) {
@@ -55,7 +69,7 @@ export class PaymentConfirmationService {
       // Update payment status to confirmed
       const { error: updateError } = await supabase
         .from('payments')
-        .update({ status: 'confirmed' })
+        .update({ payment_status: 'confirmed' })
         .eq('id', paymentId);
 
       if (updateError) {
@@ -95,7 +109,7 @@ export class PaymentConfirmationService {
         return false;
       }
 
-      if (payment.status === 'cancelled') {
+      if (payment.payment_status === 'cancelled') {
         toast.info("الدفعة ملغاة بالفعل");
         return true;
       }
@@ -103,9 +117,9 @@ export class PaymentConfirmationService {
       let success = false;
 
       if (payment.payment_type === 'receipt') {
-        success = await this.cancelReceiptFromCustomer(payment);
+        success = await this.cancelReceiptFromCustomer(payment as Payment);
       } else if (payment.payment_type === 'payment') {
-        success = await this.cancelPaymentToSupplier(payment);
+        success = await this.cancelPaymentToSupplier(payment as Payment);
       }
 
       if (!success) {
@@ -115,7 +129,7 @@ export class PaymentConfirmationService {
       // Update payment status to cancelled
       const { error: updateError } = await supabase
         .from('payments')
-        .update({ status: 'cancelled' })
+        .update({ payment_status: 'cancelled' })
         .eq('id', paymentId);
 
       if (updateError) {
