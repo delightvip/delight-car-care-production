@@ -1,89 +1,52 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Payment } from "@/services/CommercialTypes";
+import { Payment } from '@/services/commercial/CommercialTypes';
+import { toast } from "sonner";
 
+// تكاملية وصول البيانات للمدفوعات
 export class PaymentEntity {
   /**
-   * جلب جميع الدفعات
+   * جلب كافة المدفوعات
+   * @returns قائمة بكل المدفوعات
    */
   public static async fetchAll(): Promise<Payment[]> {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('payments')
         .select(`
           *,
-          parties(name)
+          parties (name)
         `)
         .order('date', { ascending: false });
       
       if (error) throw error;
       
-      // Transform data to match Payment type
-      const payments: Payment[] = data.map(payment => ({
+      const paymentsWithParties = data.map(payment => ({
         id: payment.id,
-        party_id: payment.party_id || '',
-        party_name: payment.parties?.name || '',
+        party_id: payment.party_id,
+        party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        // Type assertion to ensure payment_type matches the expected union type
-        payment_type: payment.payment_type as 'collection' | 'disbursement',
-        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        related_invoice_id: payment.related_invoice_id || '',
-        // Type assertion to ensure payment_status matches the expected union type
-        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: payment.notes || '',
+        payment_type: payment.payment_type,
+        method: payment.method,
+        related_invoice_id: payment.related_invoice_id,
+        payment_status: payment.payment_status || 'draft',
+        notes: payment.notes,
         created_at: payment.created_at
       }));
       
-      return payments;
+      return paymentsWithParties;
     } catch (error) {
       console.error('Error fetching payments:', error);
+      toast.error('حدث خطأ أثناء جلب المدفوعات');
       return [];
     }
   }
-  
+
   /**
-   * جلب جميع الدفعات الخاصة بعميل/مورد معين
-   */
-  public static async fetchByPartyId(partyId: string): Promise<Payment[]> {
-    try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          parties(name)
-        `)
-        .eq('party_id', partyId)
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Transform data to match Payment type
-      const payments: Payment[] = data.map(payment => ({
-        id: payment.id,
-        party_id: payment.party_id || '',
-        party_name: payment.parties?.name || '',
-        date: payment.date,
-        amount: payment.amount,
-        // Type assertion to ensure payment_type matches the expected union type
-        payment_type: payment.payment_type as 'collection' | 'disbursement',
-        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        related_invoice_id: payment.related_invoice_id || '',
-        // Type assertion to ensure payment_status matches the expected union type
-        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: payment.notes || '',
-        created_at: payment.created_at
-      }));
-      
-      return payments;
-    } catch (error) {
-      console.error('Error fetching payments by party ID:', error);
-      return [];
-    }
-  }
-  
-  /**
-   * جلب دفعة بواسطة المعرف
+   * جلب معاملة دفع محددة بواسطة المعرف
+   * @param id معرف معاملة الدفع
+   * @returns بيانات معاملة الدفع إذا وجدت، أو null إذا لم توجد
    */
   public static async fetchById(id: string): Promise<Payment | null> {
     try {
@@ -91,116 +54,150 @@ export class PaymentEntity {
         .from('payments')
         .select(`
           *,
-          parties(name)
+          parties (name)
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
       
+      if (!data) return null;
+      
       return {
         id: data.id,
-        party_id: data.party_id || '',
-        party_name: data.parties?.name || '',
+        party_id: data.party_id,
+        party_name: data.parties?.name,
         date: data.date,
         amount: data.amount,
-        // Type assertion to ensure payment_type matches the expected union type
-        payment_type: data.payment_type as 'collection' | 'disbursement',
-        method: data.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        related_invoice_id: data.related_invoice_id || '',
-        // Type assertion to ensure payment_status matches the expected union type
-        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: data.notes || '',
+        payment_type: data.payment_type,
+        method: data.method,
+        related_invoice_id: data.related_invoice_id,
+        payment_status: data.payment_status || 'draft',
+        notes: data.notes,
         created_at: data.created_at
       };
     } catch (error) {
-      console.error('Error fetching payment by ID:', error);
+      console.error(`Error fetching payment ${id}:`, error);
+      toast.error('حدث خطأ أثناء جلب بيانات المعاملة');
       return null;
     }
   }
   
   /**
-   * إنشاء دفعة جديدة
+   * جلب المدفوعات الخاصة بطرف تجاري محدد
+   * @param partyId معرف الطرف التجاري
+   * @returns قائمة بالمدفوعات المرتبطة بالطرف
    */
-  public static async create(payment: Omit<Payment, 'id' | 'party_name' | 'created_at'>): Promise<Payment | null> {
+  public static async fetchByPartyId(partyId: string): Promise<Payment[]> {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          parties (name)
+        `)
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      const paymentsWithParties = data.map(payment => ({
+        id: payment.id,
+        party_id: payment.party_id,
+        party_name: payment.parties?.name,
+        date: payment.date,
+        amount: payment.amount,
+        payment_type: payment.payment_type,
+        method: payment.method,
+        related_invoice_id: payment.related_invoice_id,
+        payment_status: payment.payment_status || 'draft',
+        notes: payment.notes,
+        created_at: payment.created_at
+      }));
+      
+      return paymentsWithParties;
+    } catch (error) {
+      console.error(`Error fetching payments for party ${partyId}:`, error);
+      toast.error('حدث خطأ أثناء جلب المدفوعات');
+      return [];
+    }
+  }
+  
+  /**
+   * إنشاء معاملة دفع جديدة
+   * @param paymentData بيانات الدفع
+   * @returns بيانات المعاملة المنشأة إذا نجحت العملية، أو null إذا فشلت
+   */
+  public static async create(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
+    try {
+      // Set default payment status to draft
+      const paymentStatus = paymentData.payment_status || 'draft';
+      
+      const { data: payment, error } = await supabase
         .from('payments')
         .insert({
-          party_id: payment.party_id,
-          date: payment.date,
-          amount: payment.amount,
-          payment_type: payment.payment_type,
-          method: payment.method,
-          related_invoice_id: payment.related_invoice_id || null,
-          payment_status: payment.payment_status,
-          notes: payment.notes
+          party_id: paymentData.party_id,
+          date: paymentData.date,
+          amount: paymentData.amount,
+          payment_type: paymentData.payment_type,
+          method: paymentData.method,
+          related_invoice_id: paymentData.related_invoice_id,
+          payment_status: paymentStatus,
+          notes: paymentData.notes
         })
         .select()
         .single();
       
       if (error) throw error;
       
-      // Fetch party name
-      const { data: partyData, error: partyError } = await supabase
-        .from('parties')
-        .select('name')
-        .eq('id', payment.party_id)
-        .single();
-      
-      if (partyError) {
-        console.error('Error fetching party name:', partyError);
-      }
-      
       return {
-        id: data.id,
-        party_id: data.party_id || '',
-        party_name: partyData?.name || '',
-        date: data.date,
-        amount: data.amount,
-        payment_type: data.payment_type as 'collection' | 'disbursement',
-        method: data.method as 'cash' | 'check' | 'bank_transfer' | 'other',
-        related_invoice_id: data.related_invoice_id || '',
-        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        notes: data.notes || '',
-        created_at: data.created_at
+        ...payment,
+        party_name: ''  // سيتم تعبئته عند الحاجة في الخدمات العليا
       };
     } catch (error) {
       console.error('Error creating payment:', error);
+      toast.error('حدث خطأ أثناء إنشاء معاملة جديدة');
       return null;
     }
   }
   
   /**
-   * تحديث دفعة موجودة
+   * تحديث معاملة دفع
+   * @param id معرف معاملة الدفع
+   * @param paymentData بيانات التحديث
+   * @returns نجاح العملية
    */
-  public static async update(id: string, updates: Partial<Payment>): Promise<boolean> {
+  public static async update(id: string, paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<boolean> {
     try {
       const { error } = await supabase
         .from('payments')
         .update({
-          party_id: updates.party_id,
-          date: updates.date,
-          amount: updates.amount,
-          payment_type: updates.payment_type,
-          method: updates.method,
-          related_invoice_id: updates.related_invoice_id || null,
-          payment_status: updates.payment_status,
-          notes: updates.notes
+          party_id: paymentData.party_id,
+          date: paymentData.date,
+          amount: paymentData.amount,
+          payment_type: paymentData.payment_type,
+          method: paymentData.method,
+          related_invoice_id: paymentData.related_invoice_id,
+          payment_status: paymentData.payment_status,
+          notes: paymentData.notes
         })
         .eq('id', id);
       
       if (error) throw error;
       
+      toast.success('تم تحديث المعاملة بنجاح');
       return true;
     } catch (error) {
-      console.error('Error updating payment:', error);
+      console.error(`Error updating payment ${id}:`, error);
+      toast.error('حدث خطأ أثناء تحديث المعاملة');
       return false;
     }
   }
   
   /**
-   * حذف دفعة
+   * حذف معاملة دفع
+   * @param id معرف معاملة الدفع
+   * @returns نجاح العملية
    */
   public static async delete(id: string): Promise<boolean> {
     try {
@@ -211,10 +208,14 @@ export class PaymentEntity {
       
       if (error) throw error;
       
+      toast.success('تم حذف المعاملة بنجاح');
       return true;
     } catch (error) {
-      console.error('Error deleting payment:', error);
+      console.error(`Error deleting payment ${id}:`, error);
+      toast.error('حدث خطأ أثناء حذف المعاملة');
       return false;
     }
   }
 }
+
+export default PaymentEntity;
