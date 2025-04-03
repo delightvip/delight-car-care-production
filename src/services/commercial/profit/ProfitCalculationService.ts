@@ -49,12 +49,17 @@ class ProfitCalculationService extends BaseCommercialService {
         return null;
       }
       
-      // Calculate total cost of items
+      console.log('Calculating profit for invoice:', invoice);
+      
+      // Calculate total cost of items with fixed numeric conversion
       const totalCost = await this.profitCalculator.calculateInvoiceCost(invoiceId);
       
-      const totalSales = invoice.total_amount;
+      // Ensure the values are properly converted to numbers
+      const totalSales = Number(invoice.total_amount);
       const profitAmount = totalSales - totalCost;
       const profitPercentage = totalSales > 0 ? (profitAmount / totalSales) * 100 : 0;
+      
+      console.log('Profit calculation result:', { totalSales, totalCost, profitAmount, profitPercentage });
       
       // Check if profit record already exists
       const { data: existingProfit, error: existingError } = await this.supabase

@@ -1,3 +1,4 @@
+
 import { Invoice } from '@/services/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
