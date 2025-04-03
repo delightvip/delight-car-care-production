@@ -85,6 +85,3 @@ export interface InventoryMovement {
   created_at: string;
   updated_at?: string;
 }
-
-// Export from InventoryService.ts for use in components
-export type { RawMaterial, PackagingMaterial, SemiFinishedProduct, FinishedProduct, InventoryMovement };

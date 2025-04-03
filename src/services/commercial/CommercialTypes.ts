@@ -34,9 +34,9 @@ export interface Payment {
   party_name?: string;
   amount: number;
   date: string;
-  payment_type: "collection" | "disbursement"; // Updated from "receipt" | "payment"
+  payment_type: "collection" | "disbursement"; 
   payment_status: "draft" | "confirmed" | "cancelled";
-  method: "cash" | "bank" | "check" | "bank_transfer" | "credit" | "other"; // Added "check" and "bank_transfer"
+  method: "cash" | "bank" | "check" | "bank_transfer" | "credit" | "other";
   related_invoice_id?: string;
   notes?: string;
   created_at?: string;

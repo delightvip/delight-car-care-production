@@ -26,7 +26,7 @@ import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 import { PackagingOrder } from '@/services/ProductionService';
-import { FinishedProduct } from '@/services/InventoryService';
+import { FinishedProduct } from '@/types/inventoryTypes';
 import { useQuery } from '@tanstack/react-query';
 
 const statusTranslations = {

@@ -99,7 +99,16 @@ class CommercialService {
   
   public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
-      const invoice = await this.invoiceService.createInvoice(invoiceData);
+      const formattedInvoiceData = {
+        ...invoiceData,
+        items: invoiceData.items.map(item => ({
+          ...item,
+          id: item.id || '',  // Ensure id is not undefined
+          invoice_id: item.invoice_id || '',  // Ensure invoice_id is not undefined
+          total: item.total || (item.quantity * item.unit_price)  // Ensure total is not undefined
+        }))
+      };
+      const invoice = await this.invoiceService.createInvoice(formattedInvoiceData as any);
       
       if (!invoice) {
         console.error('Failed to create invoice');
@@ -120,7 +129,7 @@ class CommercialService {
   
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
-      // استخدام وعد يتم حله بعد تأكيد الفاتورة
+      // استخدام ��عد يتم حله بعد تأكيد الفاتورة
       // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const confirmPromise = new Promise<boolean>((resolve) => {
         // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
@@ -249,7 +258,7 @@ class CommercialService {
   
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
     try {
-      return await this.paymentService.recordPayment(paymentData);
+      return await this.paymentService.recordPayment(paymentData as any);
     } catch (error) {
       console.error('Error in recordPayment:', error);
       toast({
@@ -496,4 +505,3 @@ export type {
 };
 
 export default CommercialService;
-

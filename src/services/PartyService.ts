@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -41,7 +40,24 @@ class PartyService {
         
       if (error) throw error;
       
-      return data;
+      // Get party balance
+      const { data: balanceData, error: balanceError } = await supabase
+        .from('party_balances')
+        .select('balance')
+        .eq('party_id', id)
+        .single();
+      
+      let balance = data.opening_balance || 0;
+      if (!balanceError) {
+        balance = balanceData.balance;
+      }
+      
+      return {
+        ...data,
+        balance,
+        code: data.code || '',
+        type: data.type as 'customer' | 'supplier' | 'other'
+      } as Party;
     } catch (error) {
       console.error(`Error fetching party with id ${id}:`, error);
       return null;
@@ -73,8 +89,11 @@ class PartyService {
         
         return {
           ...party,
-          balance: balanceRecord ? Number(balanceRecord.balance) : Number(party.opening_balance || 0)
-        };
+          balance: balanceRecord ? Number(balanceRecord.balance) : Number(party.opening_balance || 0),
+          code: party.code || '',
+          notes: party.notes || '',
+          type: party.type as 'customer' | 'supplier' | 'other'
+        } as Party;
       });
       
       return partiesWithBalances;

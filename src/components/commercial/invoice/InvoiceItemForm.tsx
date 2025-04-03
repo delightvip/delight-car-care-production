@@ -40,15 +40,31 @@ const InvoiceItemSchema = z.object({
 export type InvoiceItemFormValues = z.infer<typeof InvoiceItemSchema>;
 
 interface InvoiceItemFormProps {
-  onSubmit: (data: InvoiceItemFormValues) => void;
-  initialData?: InvoiceItemFormValues;
   invoiceType: 'sale' | 'purchase';
+  onAddItem: (data: InvoiceItemFormValues) => void;
+  items: Array<{
+    id: number;
+    name: string;
+    type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
+    quantity: number;
+    unit_cost: number;
+    sales_price?: number;
+  }>;
+  categorizedItems: {
+    raw_materials: any[],
+    packaging_materials: any[],
+    semi_finished_products: any[],
+    finished_products: any[]
+  };
+  initialData?: InvoiceItemFormValues;
 }
 
 const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
-  onSubmit,
+  onAddItem,
   initialData,
-  invoiceType
+  invoiceType,
+  items,
+  categorizedItems
 }) => {
   const [itemType, setItemType] = useState<ItemType>(initialData?.item_type || 'raw_materials');
   const [items, setItems] = useState<any[]>([]);

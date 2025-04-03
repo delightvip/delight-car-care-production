@@ -27,7 +27,7 @@ import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 import { ProductionOrder } from '@/services/ProductionService';
-import { SemiFinishedProduct } from '@/services/InventoryService';
+import { SemiFinishedProduct } from '@/types/inventoryTypes';
 
 const statusTranslations = {
   pending: 'قيد الانتظار',
