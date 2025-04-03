@@ -1,15 +1,25 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Payment, Invoice, Return, CommercialSummary } from './commercial/CommercialTypes';
 import { toast } from "sonner";
 import InvoiceService from "./commercial/invoice/InvoiceService";
+import PaymentService from "./commercial/payment/PaymentService";
+import ReturnService from "./commercial/return/ReturnService";
+import LedgerService from "./commercial/ledger/LedgerService";
+
+export { Payment, Invoice, Return, CommercialSummary } from './commercial/CommercialTypes';
 
 class CommercialService {
   private static instance: CommercialService;
   private invoiceService: InvoiceService;
+  private paymentService: PaymentService;
+  private returnService: ReturnService;
+  private ledgerService: LedgerService;
   
   private constructor() {
     this.invoiceService = InvoiceService.getInstance();
+    this.paymentService = PaymentService.getInstance();
+    this.returnService = ReturnService.getInstance();
+    this.ledgerService = LedgerService.getInstance();
   }
   
   public static getInstance(): CommercialService {
@@ -61,7 +71,7 @@ class CommercialService {
       return data.map((payment: any) => ({
         ...payment,
         party_name: payment.parties?.name || 'Unknown'
-      }));
+      })) as Payment[];
     } catch (error) {
       console.error('Error fetching payments:', error);
       toast.error('حدث خطأ أثناء جلب المدفوعات');
@@ -69,24 +79,24 @@ class CommercialService {
     }
   }
   
-  async getPaymentById(id: string): Promise<Payment | null> {
+  async getPaymentsByParty(partyId: string): Promise<Payment[]> {
     try {
       const { data, error } = await supabase
         .from('payments')
         .select('*, parties:party_id (name)')
-        .eq('id', id)
-        .single();
+        .eq('party_id', partyId)
+        .order('date', { ascending: false });
       
       if (error) throw error;
       
-      return {
-        ...data,
-        party_name: data.parties?.name || 'Unknown'
-      };
+      return data.map((payment: any) => ({
+        ...payment,
+        party_name: payment.parties?.name || 'Unknown'
+      })) as Payment[];
     } catch (error) {
-      console.error('Error fetching payment:', error);
-      toast.error('حدث خطأ أثناء جلب تفاصيل الدفعة');
-      return null;
+      console.error(`Error fetching payments for party ${partyId}:`, error);
+      toast.error('حدث خطأ أثناء جلب المدفوعات');
+      return [];
     }
   }
   
@@ -118,7 +128,7 @@ class CommercialService {
       }
       
       toast.success('تم إنشاء الدفعة بنجاح');
-      return data;
+      return data as Payment;
     } catch (error) {
       console.error('Error creating payment:', error);
       toast.error('حدث خطأ أثناء إنشاء الدفعة');
@@ -129,7 +139,7 @@ class CommercialService {
   async confirmPayment(id: string): Promise<boolean> {
     try {
       // First get payment details to check related invoice
-      const payment = await this.getPaymentById(id);
+      const payment = await this.paymentService.getPaymentById(id);
       if (!payment) return false;
       
       const { error } = await supabase
@@ -161,7 +171,7 @@ class CommercialService {
   async cancelPayment(id: string): Promise<boolean> {
     try {
       // First get payment details to check related invoice
-      const payment = await this.getPaymentById(id);
+      const payment = await this.paymentService.getPaymentById(id);
       if (!payment) return false;
       
       const { error } = await supabase
@@ -205,39 +215,9 @@ class CommercialService {
     }
   }
   
-  // Return methods - stubbed for now
+  // Return methods
   async getReturns(): Promise<Return[]> {
-    try {
-      const { data, error } = await supabase
-        .from('returns')
-        .select('*, parties:party_id (name)')
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      const returnIds = data.map(ret => ret.id);
-      const { data: allItems, error: itemsError } = await supabase
-        .from('return_items')
-        .select('*')
-        .in('return_id', returnIds);
-        
-      if (itemsError) throw itemsError;
-      
-      const returnsWithItems = data.map(ret => {
-        const items = allItems.filter(item => item.return_id === ret.id);
-        return {
-          ...ret,
-          party_name: ret.parties?.name || 'Unknown',
-          items: items || []
-        };
-      });
-      
-      return returnsWithItems as Return[];
-    } catch (error) {
-      console.error('Error fetching returns:', error);
-      toast.error('حدث خطأ أثناء جلب المرتجعات');
-      return [];
-    }
+    return this.returnService.getReturns();
   }
   
   // Commercial summary methods
@@ -331,6 +311,16 @@ class CommercialService {
         recentInvoices: []
       };
     }
+  }
+  
+  // Ledger entries
+  async getLedgerEntries(partyId: string): Promise<any[]> {
+    return this.ledgerService.getLedgerEntriesByParty(partyId);
+  }
+  
+  // Account statement
+  async generateAccountStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
+    return this.ledgerService.generateAccountStatement(partyId, startDate, endDate);
   }
 }
 

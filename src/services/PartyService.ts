@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -13,8 +12,8 @@ export interface Party {
   balance_type?: 'debit' | 'credit';
   opening_balance?: number;
   notes?: string;
-  balance?: number;
   created_at?: string;
+  balance?: number;
 }
 
 interface PartyBalance {
@@ -38,7 +37,6 @@ class PartyService {
   
   public async getParties(): Promise<Party[]> {
     try {
-      // Get parties
       const { data: parties, error } = await supabase
         .from('parties')
         .select(`
@@ -49,7 +47,6 @@ class PartyService {
       
       if (error) throw error;
       
-      // Convert to Party interface
       return parties.map((party: any) => ({
         id: party.id,
         name: party.name,
@@ -107,7 +104,6 @@ class PartyService {
   
   public async createParty(partyData: Omit<Party, 'id' | 'balance' | 'created_at'>): Promise<Party | null> {
     try {
-      // Insert party
       const { data, error } = await supabase
         .from('parties')
         .insert({
@@ -126,8 +122,6 @@ class PartyService {
       
       if (error) throw error;
       
-      // Trigger will create party_balance entry
-      // Return created party
       return {
         ...data,
         balance: data.balance_type === 'debit' ? data.opening_balance : -data.opening_balance
@@ -141,7 +135,6 @@ class PartyService {
   
   public async updateParty(id: string, partyData: Partial<Party>): Promise<Party | null> {
     try {
-      // Update party
       const { data, error } = await supabase
         .from('parties')
         .update({
@@ -159,7 +152,6 @@ class PartyService {
       
       if (error) throw error;
       
-      // Get latest balance
       const { data: balances, error: balanceError } = await supabase
         .from('party_balances')
         .select('*')
@@ -170,7 +162,6 @@ class PartyService {
         console.error('Error fetching party balance:', balanceError);
       }
       
-      // Return updated party with balance
       return {
         ...data,
         balance: balances ? balances.balance : 0
@@ -184,7 +175,6 @@ class PartyService {
   
   public async deleteParty(id: string): Promise<boolean> {
     try {
-      // Check for related invoices
       const { count: invoiceCount, error: invoiceError } = await supabase
         .from('invoices')
         .select('*', { count: 'exact', head: true })
@@ -197,7 +187,6 @@ class PartyService {
         return false;
       }
       
-      // Check for related payments
       const { count: paymentCount, error: paymentError } = await supabase
         .from('payments')
         .select('*', { count: 'exact', head: true })
@@ -210,7 +199,6 @@ class PartyService {
         return false;
       }
       
-      // Delete party balance
       const { error: balanceError } = await supabase
         .from('party_balances')
         .delete()
@@ -218,7 +206,6 @@ class PartyService {
       
       if (balanceError) throw balanceError;
       
-      // Delete party
       const { error } = await supabase
         .from('parties')
         .delete()
@@ -315,7 +302,6 @@ class PartyService {
   
   public async updatePartyBalance(partyId: string, amount: number, isDebit: boolean): Promise<boolean> {
     try {
-      // Get current balance
       const { data: balances, error: fetchError } = await supabase
         .from('party_balances')
         .select('*')
@@ -327,7 +313,6 @@ class PartyService {
         return false;
       }
       
-      // Get party type
       const { data: party, error: partyError } = await supabase
         .from('parties')
         .select('type')
@@ -341,16 +326,6 @@ class PartyService {
       
       let currentBalance = balances?.balance || 0;
       
-      // For suppliers: 
-      // - Positive balance means we owe them money
-      // - isDebit=true means we're increasing their balance (we owe them more)
-      // - isDebit=false means we're decreasing their balance (we owe them less)
-      
-      // For customers:
-      // - Positive balance means they owe us money
-      // - isDebit=true means we're increasing their balance (they owe us more)
-      // - isDebit=false means we're decreasing their balance (they owe us less)
-      
       let newBalance: number;
       if (isDebit) {
         newBalance = currentBalance + amount;
@@ -358,7 +333,6 @@ class PartyService {
         newBalance = currentBalance - amount;
       }
       
-      // Update party balance
       const { error: updateError } = await supabase
         .from('party_balances')
         .update({
@@ -372,7 +346,6 @@ class PartyService {
         return false;
       }
       
-      // Record in ledger
       const { error: ledgerError } = await supabase
         .from('ledger')
         .insert({
@@ -393,6 +366,81 @@ class PartyService {
     } catch (error) {
       console.error('Error updating party balance:', error);
       return false;
+    }
+  }
+
+  public async addParty(partyData: Omit<Party, 'id' | 'created_at'>): Promise<Party | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('parties')
+        .insert({
+          name: partyData.name,
+          type: partyData.type,
+          code: partyData.code,
+          phone: partyData.phone || null,
+          email: partyData.email || null,
+          address: partyData.address || null,
+          balance_type: partyData.balance_type || 'debit',
+          opening_balance: partyData.opening_balance || 0,
+          notes: partyData.notes || null
+        })
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      
+      await this.supabase
+        .from('party_balances')
+        .insert({
+          party_id: data.id,
+          balance: data.opening_balance || 0
+        });
+
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type,
+        code: data.code,
+        phone: data.phone,
+        email: data.email,
+        address: data.address,
+        balance_type: data.balance_type,
+        opening_balance: data.opening_balance,
+        notes: data.notes,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error('Error adding party:', error);
+      return null;
+    }
+  }
+
+  public async getPartiesByType(type: string): Promise<Party[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('parties')
+        .select('*')
+        .eq('type', type)
+        .order('name');
+      
+      if (error) throw error;
+      
+      return data.map(party => ({
+        id: party.id,
+        name: party.name,
+        type: party.type,
+        code: party.code,
+        phone: party.phone,
+        email: party.email,
+        address: party.address,
+        balance_type: party.balance_type,
+        opening_balance: party.opening_balance,
+        notes: party.notes,
+        created_at: party.created_at
+      }));
+    } catch (error) {
+      console.error(`Error fetching parties of type ${type}:`, error);
+      return [];
     }
   }
 }

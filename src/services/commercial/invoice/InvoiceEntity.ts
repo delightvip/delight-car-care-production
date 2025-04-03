@@ -37,6 +37,9 @@ export class InvoiceEntity {
         return {
           ...invoice,
           party_name: invoice.parties ? invoice.parties.name : 'Unknown',
+          invoice_type: invoice.invoice_type as "sale" | "purchase",
+          payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
+          status: invoice.status as "unpaid" | "partial" | "paid",
           items: items || []
         };
       });
@@ -80,6 +83,9 @@ export class InvoiceEntity {
         return {
           ...invoice,
           party_name: invoice.parties ? invoice.parties.name : 'Unknown',
+          invoice_type: invoice.invoice_type as "sale" | "purchase",
+          payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
+          status: invoice.status as "unpaid" | "partial" | "paid",
           items: items || []
         };
       });
@@ -118,6 +124,9 @@ export class InvoiceEntity {
       return {
         ...invoice,
         party_name: invoice.parties ? invoice.parties.name : 'Unknown',
+        invoice_type: invoice.invoice_type as "sale" | "purchase",
+        payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
+        status: invoice.status as "unpaid" | "partial" | "paid",
         items: items || [],
       } as Invoice;
     } catch (error) {

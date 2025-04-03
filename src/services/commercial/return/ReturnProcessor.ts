@@ -3,160 +3,90 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-
-interface Return {
-  id: string;
-  party_id: string;
-  return_type: string;
-  payment_status: string;
-  date: string;
-  amount: number;
-  notes: string;
-  created_at: string;
-  invoice_id: string | null;
-}
-
-interface ReturnItem {
-  id: string;
-  return_id: string;
-  item_id: number;
-  item_name: string;
-  item_type: string;
-  quantity: number;
-  unit_price: number;
-  total: number;
-}
-
-interface ReturnWithItems extends Return {
-  items: ReturnItem[];
-}
-
-interface Invoice {
-  id: string;
-  party_id: string;
-  invoice_type: string;
-  payment_status: string;
-  status: string;
-  date: string;
-  total_amount: number;
-  notes: string;
-  created_at: string;
-  items: any[];
-}
+import { Return } from "../CommercialTypes";
 
 export class ReturnProcessor {
   private partyService: PartyService;
   private inventoryService: InventoryService;
-
+  
   constructor() {
     this.partyService = PartyService.getInstance();
     this.inventoryService = InventoryService.getInstance();
   }
-
-  async getReturnById(returnId: string): Promise<ReturnWithItems | null> {
+  
+  /**
+   * Get return details by ID
+   */
+  async getReturnById(returnId: string): Promise<Return | null> {
     try {
       // Fetch return base data
       const { data: returnData, error } = await supabase
         .from('returns')
-        .select('*')
+        .select(`
+          *,
+          parties:party_id (name)
+        `)
         .eq('id', returnId)
         .single();
       
       if (error) throw error;
-
+      
       // Fetch return items
       const { data: items, error: itemsError } = await supabase
         .from('return_items')
         .select('*')
         .eq('return_id', returnId);
-
+      
       if (itemsError) throw itemsError;
       
       return {
         ...returnData,
+        party_name: returnData.parties?.name,
+        return_type: returnData.return_type as any,
+        payment_status: returnData.payment_status as any,
         items: items || []
-      };
+      } as Return;
     } catch (error) {
       console.error(`Error fetching return ${returnId}:`, error);
       return null;
     }
   }
 
-  async getInvoiceById(invoiceId: string): Promise<Invoice | null> {
+  /**
+   * Confirm a sale return
+   */
+  async confirmSaleReturn(returnId: string): Promise<boolean> {
     try {
-      // Fetch invoice base data
-      const { data: invoice, error } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          parties:party_id (name)
-        `)
-        .eq('id', invoiceId)
-        .single();
-      
-      if (error) throw error;
-
-      // Fetch invoice items
-      const { data: items, error: itemsError } = await supabase
-        .from('invoice_items')
-        .select('*')
-        .eq('invoice_id', invoiceId);
-
-      if (itemsError) throw itemsError;
-      
-      return {
-        ...invoice,
-        items: items || []
-      };
-    } catch (error) {
-      console.error(`Error fetching invoice ${invoiceId}:`, error);
-      return null;
-    }
-  }
-
-  async confirmSalesReturn(returnId: string): Promise<boolean> {
-    try {
-      const salesReturn = await this.getReturnById(returnId);
-      
-      if (!salesReturn) {
-        console.error('Sales return not found:', returnId);
-        toast.error('لم يتم العثور على مرتجع المبيعات');
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        console.error('Return not found:', returnId);
+        toast.error('لم يتم العثور على المرتجع');
         return false;
       }
-
-      // Update party balance
-      await this.updatePartyBalance(
-        salesReturn.party_id,
-        salesReturn.amount,
-        false // isDebit=false for sales return (customer's debt decreases)
+      
+      if (returnData.payment_status === 'confirmed') {
+        console.log('Return already confirmed:', returnId);
+        toast.info('المرتجع مؤكد بالفعل');
+        return true;
+      }
+      
+      // Update party balance based on return status
+      await this.partyService.updatePartyBalance(
+        returnData.party_id, 
+        returnData.amount, 
+        false // isDebit=false for sale returns (customer's debt decreases)
       );
       
-      // Update inventory by returning items
-      for (const item of salesReturn.items) {
-        try {
-          // Here we are returning items back to inventory
-          // Therefore we need to add the quantity back
-          const { data: currentItem, error: fetchError } = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-          
-          if (fetchError) throw fetchError;
-          
-          const currentQuantity = currentItem.quantity || 0;
-          const newQuantity = currentQuantity + item.quantity;
-          
-          const { error: updateError } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-          
-          if (updateError) throw updateError;
-        } catch (error) {
-          console.error(`Error updating inventory for item ${item.item_id}:`, error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
+      // Update inventory - increase stock for returned items
+      for (const item of returnData.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: item.quantity });
         }
       }
       
@@ -174,228 +104,248 @@ export class ReturnProcessor {
         return false;
       }
       
-      toast.success('تم تأكيد مرتجع المبيعات بنجاح');
+      toast.success('تم تأكيد المرتجع بنجاح');
       return true;
     } catch (error) {
-      console.error('Error confirming sales return:', error);
-      toast.error('حدث خطأ أثناء تأكيد مرتجع المبيعات');
-      return false;
-    }
-  }
-
-  async cancelSalesReturn(returnId: string): Promise<boolean> {
-    try {
-      const salesReturn = await this.getReturnById(returnId);
-      
-      if (!salesReturn) {
-        console.error('Sales return not found:', returnId);
-        toast.error('لم يتم العثور على مرتجع المبيعات');
-        return false;
-      }
-
-      // Reverse party balance update
-      await this.updatePartyBalance(
-        salesReturn.party_id,
-        salesReturn.amount,
-        true // isDebit=true to reverse the effect (customer's debt increases)
-      );
-      
-      // Reverse inventory update by removing the items again
-      for (const item of salesReturn.items) {
-        try {
-          // Here we are reversing the return, so we remove the items again
-          const { data: currentItem, error: fetchError } = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-          
-          if (fetchError) throw fetchError;
-          
-          const currentQuantity = currentItem.quantity || 0;
-          const newQuantity = Math.max(0, currentQuantity - item.quantity);
-          
-          const { error: updateError } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-          
-          if (updateError) throw updateError;
-        } catch (error) {
-          console.error(`Error updating inventory for item ${item.item_id}:`, error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
-        }
-      }
-      
-      // Update return status
-      const { error: statusError } = await supabase
-        .from('returns')
-        .update({
-          payment_status: 'cancelled'
-        })
-        .eq('id', returnId);
-      
-      if (statusError) {
-        console.error('Error updating return status:', statusError);
-        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
-        return false;
-      }
-      
-      toast.success('تم إلغاء مرتجع المبيعات بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error cancelling sales return:', error);
-      toast.error('حدث خطأ أثناء إلغاء مرتجع المبيعات');
-      return false;
-    }
-  }
-
-  async confirmPurchaseReturn(returnId: string): Promise<boolean> {
-    try {
-      const purchaseReturn = await this.getReturnById(returnId);
-      
-      if (!purchaseReturn) {
-        console.error('Purchase return not found:', returnId);
-        toast.error('لم يتم العثور على مرتجع المشتريات');
-        return false;
-      }
-
-      // Update party balance
-      await this.updatePartyBalance(
-        purchaseReturn.party_id,
-        purchaseReturn.amount,
-        true // isDebit=true for purchase return (supplier's debt increases)
-      );
-      
-      // Update inventory by removing returned items
-      for (const item of purchaseReturn.items) {
-        try {
-          // For purchase returns, we are returning items to supplier
-          // Therefore we need to remove them from our inventory
-          const { data: currentItem, error: fetchError } = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-          
-          if (fetchError) throw fetchError;
-          
-          const currentQuantity = currentItem.quantity || 0;
-          const newQuantity = Math.max(0, currentQuantity - item.quantity);
-          
-          const { error: updateError } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-          
-          if (updateError) throw updateError;
-        } catch (error) {
-          console.error(`Error updating inventory for item ${item.item_id}:`, error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
-        }
-      }
-      
-      // Update return status
-      const { error: statusError } = await supabase
-        .from('returns')
-        .update({
-          payment_status: 'confirmed'
-        })
-        .eq('id', returnId);
-      
-      if (statusError) {
-        console.error('Error updating return status:', statusError);
-        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
-        return false;
-      }
-      
-      toast.success('تم تأكيد مرتجع المشتريات بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error confirming purchase return:', error);
-      toast.error('حدث خطأ أثناء تأكيد مرتجع المشتريات');
-      return false;
-    }
-  }
-
-  async cancelPurchaseReturn(returnId: string): Promise<boolean> {
-    try {
-      const purchaseReturn = await this.getReturnById(returnId);
-      
-      if (!purchaseReturn) {
-        console.error('Purchase return not found:', returnId);
-        toast.error('لم يتم العثور على مرتجع المشتريات');
-        return false;
-      }
-
-      // Reverse party balance update
-      await this.updatePartyBalance(
-        purchaseReturn.party_id,
-        purchaseReturn.amount,
-        false // isDebit=false to reverse the effect (supplier's debt decreases)
-      );
-      
-      // Reverse inventory update by adding the items back
-      for (const item of purchaseReturn.items) {
-        try {
-          // We are reversing the return to supplier, so add items back
-          const { data: currentItem, error: fetchError } = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-          
-          if (fetchError) throw fetchError;
-          
-          const currentQuantity = currentItem.quantity || 0;
-          const newQuantity = currentQuantity + item.quantity;
-          
-          const { error: updateError } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-          
-          if (updateError) throw updateError;
-        } catch (error) {
-          console.error(`Error updating inventory for item ${item.item_id}:`, error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
-        }
-      }
-      
-      // Update return status
-      const { error: statusError } = await supabase
-        .from('returns')
-        .update({
-          payment_status: 'cancelled'
-        })
-        .eq('id', returnId);
-      
-      if (statusError) {
-        console.error('Error updating return status:', statusError);
-        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
-        return false;
-      }
-      
-      toast.success('تم إلغاء مرتجع المشتريات بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error cancelling purchase return:', error);
-      toast.error('حدث خطأ أثناء إلغاء مرتجع المشتريات');
+      console.error('Error confirming sale return:', error);
+      toast.error('حدث خطأ أثناء تأكيد مرتجع البيع');
       return false;
     }
   }
 
   /**
-   * Update party balance based on return transaction
+   * Cancel a sale return
    */
-  async updatePartyBalance(partyId: string, amount: number, isDebit: boolean): Promise<boolean> {
+  async cancelSaleReturn(returnId: string): Promise<boolean> {
     try {
-      return await this.partyService.updatePartyBalance(partyId, amount, isDebit);
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        console.error('Return not found:', returnId);
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.payment_status !== 'confirmed') {
+        console.log('Return is not confirmed:', returnId);
+        toast.info('المرتجع ليس مؤكداً');
+        return true;
+      }
+      
+      // Update party balance based on return status
+      await this.partyService.updatePartyBalance(
+        returnData.party_id, 
+        returnData.amount, 
+        true // isDebit=true to reverse the sale return (customer's debt increases)
+      );
+      
+      // Update inventory - decrease stock for returned items (reversal)
+      for (const item of returnData.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -item.quantity });
+        }
+      }
+      
+      // Update return status
+      const { error: statusError } = await supabase
+        .from('returns')
+        .update({
+          payment_status: 'cancelled'
+        })
+        .eq('id', returnId);
+      
+      if (statusError) {
+        console.error('Error updating return status:', statusError);
+        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
+        return false;
+      }
+      
+      toast.success('تم إلغاء المرتجع بنجاح');
+      return true;
     } catch (error) {
-      console.error('Error updating party balance:', error);
+      console.error('Error cancelling sale return:', error);
+      toast.error('حدث خطأ أثناء إلغاء مرتجع البيع');
+      return false;
+    }
+  }
+
+  /**
+   * Confirm a purchase return
+   */
+  async confirmPurchaseReturn(returnId: string): Promise<boolean> {
+    try {
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        console.error('Return not found:', returnId);
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.payment_status === 'confirmed') {
+        console.log('Return already confirmed:', returnId);
+        toast.info('المرتجع مؤكد بالفعل');
+        return true;
+      }
+      
+      // Update party balance based on return status
+      await this.partyService.updatePartyBalance(
+        returnData.party_id, 
+        returnData.amount, 
+        true // isDebit=true for purchase returns (our debt to supplier decreases)
+      );
+      
+      // Update inventory - decrease stock for returned items
+      for (const item of returnData.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -item.quantity });
+        }
+      }
+      
+      // Update return status
+      const { error: statusError } = await supabase
+        .from('returns')
+        .update({
+          payment_status: 'confirmed'
+        })
+        .eq('id', returnId);
+      
+      if (statusError) {
+        console.error('Error updating return status:', statusError);
+        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
+        return false;
+      }
+      
+      toast.success('تم تأكيد المرتجع بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error confirming purchase return:', error);
+      toast.error('حدث خطأ أثناء تأكيد مرتجع الشراء');
+      return false;
+    }
+  }
+
+  /**
+   * Cancel a purchase return
+   */
+  async cancelPurchaseReturn(returnId: string): Promise<boolean> {
+    try {
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        console.error('Return not found:', returnId);
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.payment_status !== 'confirmed') {
+        console.log('Return is not confirmed:', returnId);
+        toast.info('المرتجع ليس مؤكداً');
+        return true;
+      }
+      
+      // Update party balance based on return status
+      await this.partyService.updatePartyBalance(
+        returnData.party_id, 
+        returnData.amount, 
+        false // isDebit=false to reverse the purchase return (our debt to supplier increases)
+      );
+      
+      // Update inventory - increase stock for returned items (reversal)
+      for (const item of returnData.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: item.quantity });
+        }
+      }
+      
+      // Update return status
+      const { error: statusError } = await supabase
+        .from('returns')
+        .update({
+          payment_status: 'cancelled'
+        })
+        .eq('id', returnId);
+      
+      if (statusError) {
+        console.error('Error updating return status:', statusError);
+        toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
+        return false;
+      }
+      
+      toast.success('تم إلغاء المرتجع بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error cancelling purchase return:', error);
+      toast.error('حدث خطأ أثناء إلغاء مرتجع الشراء');
+      return false;
+    }
+  }
+
+  /**
+   * Confirm a return of any type
+   */
+  async confirmReturn(returnId: string): Promise<boolean> {
+    try {
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        console.error('Return not found:', returnId);
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.return_type === 'sale' || returnData.return_type === 'sales_return') {
+        return await this.confirmSaleReturn(returnId);
+      } else if (returnData.return_type === 'purchase' || returnData.return_type === 'purchase_return') {
+        return await this.confirmPurchaseReturn(returnId);
+      } else {
+        toast.error('نوع المرتجع غير معروف');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error confirming return:', error);
+      toast.error('حدث خطأ أثناء تأكيد المرتجع');
+      return false;
+    }
+  }
+
+  /**
+   * Cancel a return of any type
+   */
+  async cancelReturn(returnId: string): Promise<boolean> {
+    try {
+      const returnData = await this.getReturnById(returnId);
+      if (!returnData) {
+        console.error('Return not found:', returnId);
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.return_type === 'sale' || returnData.return_type === 'sales_return') {
+        return await this.cancelSaleReturn(returnId);
+      } else if (returnData.return_type === 'purchase' || returnData.return_type === 'purchase_return') {
+        return await this.cancelPurchaseReturn(returnId);
+      } else {
+        toast.error('نوع المرتجع غير معروف');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error cancelling return:', error);
+      toast.error('حدث خطأ أثناء إلغاء المرتجع');
       return false;
     }
   }

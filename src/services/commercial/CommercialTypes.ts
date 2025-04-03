@@ -28,10 +28,10 @@ export interface Payment {
   id: string;
   party_id: string;
   party_name?: string;
-  payment_type: 'collection' | 'payment';
+  payment_type: 'collection' | 'payment' | 'disbursement';
   date: string;
   payment_status: 'draft' | 'confirmed' | 'cancelled';
-  method: 'cash' | 'bank' | 'other';
+  method: 'cash' | 'bank' | 'other' | 'check' | 'bank_transfer';
   amount: number;
   notes?: string;
   related_invoice_id?: string;
@@ -42,7 +42,7 @@ export interface Return {
   id: string;
   party_id: string;
   party_name?: string;
-  return_type: 'sale' | 'purchase';
+  return_type: 'sale' | 'purchase' | 'sales_return' | 'purchase_return';
   date: string;
   payment_status: 'draft' | 'confirmed' | 'cancelled';
   amount: number;

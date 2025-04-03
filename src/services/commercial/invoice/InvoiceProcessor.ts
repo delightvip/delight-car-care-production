@@ -3,17 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import { Invoice, InvoiceItem } from "@/services/commercial/CommercialTypes";
+import { Invoice } from "@/services/commercial/CommercialTypes";
 
 export class InvoiceProcessor {
+  /**
+   * Invoice processor handles confirming/cancelling invoices and their effects on inventory
+   */
   private partyService: PartyService;
   private inventoryService: InventoryService;
-
+  
   constructor() {
     this.partyService = PartyService.getInstance();
     this.inventoryService = InventoryService.getInstance();
   }
-
+  
   /**
    * Get invoice details by ID without using CommercialService
    */
@@ -30,85 +33,67 @@ export class InvoiceProcessor {
         .single();
       
       if (error) throw error;
-
+      
       // Fetch invoice items
       const { data: items, error: itemsError } = await supabase
         .from('invoice_items')
         .select('*')
         .eq('invoice_id', invoiceId);
-
+      
       if (itemsError) throw itemsError;
       
       return {
         ...invoice,
-        party_name: invoice.parties?.name || 'Unknown',
+        party_name: invoice.parties?.name,
+        invoice_type: invoice.invoice_type as "sale" | "purchase",
+        payment_status: invoice.payment_status as any,
+        status: invoice.status as any,
         items: items || []
-      };
+      } as Invoice;
     } catch (error) {
       console.error(`Error fetching invoice ${invoiceId}:`, error);
       return null;
     }
   }
-
+  
   /**
    * Confirm a sale invoice
    */
   async confirmSaleInvoice(invoiceId: string): Promise<boolean> {
     try {
       const invoice = await this.getInvoiceById(invoiceId);
-      
       if (!invoice) {
         console.error('Invoice not found:', invoiceId);
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-
+      
       if (invoice.payment_status === 'confirmed') {
         console.log('Invoice already confirmed:', invoiceId);
         toast.info('الفاتورة مؤكدة بالفعل');
         return true;
       }
-
+      
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
+        invoice.party_id, 
+        invoice.total_amount, 
         true // isDebit=true for sales (customer's debt increases)
       );
       
       // Update inventory
-      if (invoice.items) {
-        for (const item of invoice.items) {
-          // Get the current item from the database
-          const itemResult = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-            
-          if (itemResult.error) {
-            console.error('Error fetching item:', itemResult.error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
-          
-          const currentQuantity = itemResult.data.quantity || 0;
-          const newQuantity = Math.max(0, currentQuantity - item.quantity);
-          
-          // Update the item quantity
-          const { error } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-            
-          if (error) {
-            console.error('Error updating inventory:', error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
+      for (const item of invoice.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -item.quantity });
         }
       }
-
+      
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
@@ -131,66 +116,45 @@ export class InvoiceProcessor {
       return false;
     }
   }
-
+  
   /**
    * Cancel a sale invoice
    */
   async cancelSaleInvoice(invoiceId: string): Promise<boolean> {
     try {
       const invoice = await this.getInvoiceById(invoiceId);
-      
       if (!invoice) {
         console.error('Invoice not found:', invoiceId);
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-
+      
       if (invoice.payment_status !== 'confirmed') {
         console.log('Invoice is not confirmed:', invoiceId);
         toast.info('الفاتورة ليست مؤكدة');
         return true;
       }
-
+      
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
+        invoice.party_id, 
+        invoice.total_amount, 
         false // isDebit=false to reverse the sale (customer's debt decreases)
       );
       
       // Update inventory
-      if (invoice.items) {
-        for (const item of invoice.items) {
-          // Get the current item from the database
-          const itemResult = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-            
-          if (itemResult.error) {
-            console.error('Error fetching item:', itemResult.error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
-          
-          const currentQuantity = itemResult.data.quantity || 0;
-          const newQuantity = currentQuantity + item.quantity;
-          
-          // Update the item quantity
-          const { error } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-            
-          if (error) {
-            console.error('Error updating inventory:', error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
+      for (const item of invoice.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: item.quantity });
         }
       }
-
+      
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
@@ -213,66 +177,45 @@ export class InvoiceProcessor {
       return false;
     }
   }
-
+  
   /**
    * Confirm a purchase invoice
    */
   async confirmPurchaseInvoice(invoiceId: string): Promise<boolean> {
     try {
       const invoice = await this.getInvoiceById(invoiceId);
-      
       if (!invoice) {
         console.error('Invoice not found:', invoiceId);
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-
+      
       if (invoice.payment_status === 'confirmed') {
         console.log('Invoice already confirmed:', invoiceId);
         toast.info('الفاتورة مؤكدة بالفعل');
         return true;
       }
-
+      
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
+        invoice.party_id, 
+        invoice.total_amount, 
         false // isDebit=false for purchases (our debt to supplier increases)
       );
       
       // Update inventory
-      if (invoice.items) {
-        for (const item of invoice.items) {
-          // Get the current item from the database
-          const itemResult = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-            
-          if (itemResult.error) {
-            console.error('Error fetching item:', itemResult.error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
-          
-          const currentQuantity = itemResult.data.quantity || 0;
-          const newQuantity = currentQuantity + item.quantity;
-          
-          // Update the item quantity
-          const { error } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-            
-          if (error) {
-            console.error('Error updating inventory:', error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
+      for (const item of invoice.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: item.quantity });
         }
       }
-
+      
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
@@ -295,66 +238,45 @@ export class InvoiceProcessor {
       return false;
     }
   }
-
+  
   /**
    * Cancel a purchase invoice
    */
   async cancelPurchaseInvoice(invoiceId: string): Promise<boolean> {
     try {
       const invoice = await this.getInvoiceById(invoiceId);
-      
       if (!invoice) {
         console.error('Invoice not found:', invoiceId);
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-
+      
       if (invoice.payment_status !== 'confirmed') {
         console.log('Invoice is not confirmed:', invoiceId);
         toast.info('الفاتورة ليست مؤكدة');
         return true;
       }
-
+      
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
+        invoice.party_id, 
+        invoice.total_amount, 
         true // isDebit=true to reverse the purchase (our debt to supplier decreases)
       );
       
       // Update inventory
-      if (invoice.items) {
-        for (const item of invoice.items) {
-          // Get the current item from the database
-          const itemResult = await supabase
-            .from(item.item_type)
-            .select('quantity')
-            .eq('id', item.item_id)
-            .single();
-            
-          if (itemResult.error) {
-            console.error('Error fetching item:', itemResult.error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
-          
-          const currentQuantity = itemResult.data.quantity || 0;
-          const newQuantity = Math.max(0, currentQuantity - item.quantity);
-          
-          // Update the item quantity
-          const { error } = await supabase
-            .from(item.item_type)
-            .update({ quantity: newQuantity })
-            .eq('id', item.item_id);
-            
-          if (error) {
-            console.error('Error updating inventory:', error);
-            toast.error('حدث خطأ أثناء تحديث المخزون');
-            return false;
-          }
+      for (const item of invoice.items) {
+        if (item.item_type === 'raw_materials') {
+          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'packaging_materials') {
+          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'semi_finished_products') {
+          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -item.quantity });
+        } else if (item.item_type === 'finished_products') {
+          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -item.quantity });
         }
       }
-
+      
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
@@ -377,7 +299,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-
+  
   /**
    * Combined method to confirm an invoice of any type
    */
@@ -405,7 +327,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-
+  
   /**
    * Combined method to cancel an invoice of any type
    */
@@ -433,14 +355,13 @@ export class InvoiceProcessor {
       return false;
     }
   }
-
+  
   /**
    * Update invoice status after payment
    */
   async updateInvoiceStatusAfterPayment(invoiceId: string, amount: number): Promise<boolean> {
     try {
       const invoice = await this.getInvoiceById(invoiceId);
-      
       if (!invoice) {
         console.error('Invoice not found:', invoiceId);
         return false;
@@ -459,7 +380,7 @@ export class InvoiceProcessor {
           status
         })
         .eq('id', invoiceId);
-        
+      
       if (updateError) throw updateError;
       
       return true;
@@ -468,7 +389,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-
+  
   /**
    * Reverse invoice status after payment cancellation
    */
@@ -480,7 +401,7 @@ export class InvoiceProcessor {
           status: 'unpaid'
         })
         .eq('id', invoiceId);
-        
+      
       if (updateError) throw updateError;
       
       return true;
