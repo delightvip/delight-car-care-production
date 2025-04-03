@@ -3,20 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import { Invoice } from "@/services/commercial/CommercialTypes";
+import { Invoice } from "../CommercialTypes";
 
 export class InvoiceProcessor {
-  /**
-   * Invoice processor handles confirming/cancelling invoices and their effects on inventory
-   */
-  private partyService: PartyService;
-  private inventoryService: InventoryService;
-  
-  constructor() {
-    this.partyService = PartyService.getInstance();
-    this.inventoryService = InventoryService.getInstance();
-  }
-  
   /**
    * Get invoice details by ID without using CommercialService
    */
@@ -44,10 +33,10 @@ export class InvoiceProcessor {
       
       return {
         ...invoice,
-        party_name: invoice.parties?.name,
+        party_name: invoice.parties?.name || 'Unknown',
         invoice_type: invoice.invoice_type as "sale" | "purchase",
-        payment_status: invoice.payment_status as any,
-        status: invoice.status as any,
+        payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
+        status: invoice.status as "unpaid" | "partial" | "paid",
         items: items || []
       } as Invoice;
     } catch (error) {
@@ -55,7 +44,7 @@ export class InvoiceProcessor {
       return null;
     }
   }
-  
+
   /**
    * Confirm a sale invoice
    */
@@ -76,21 +65,59 @@ export class InvoiceProcessor {
       
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id, 
-        invoice.total_amount, 
+        invoice.party_id,
+        invoice.total_amount,
         true // isDebit=true for sales (customer's debt increases)
       );
       
       // Update inventory
       for (const item of invoice.items) {
-        if (item.item_type === 'raw_materials') {
-          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -item.quantity });
-        } else if (item.item_type === 'packaging_materials') {
-          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -item.quantity });
-        } else if (item.item_type === 'semi_finished_products') {
-          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -item.quantity });
-        } else if (item.item_type === 'finished_products') {
-          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -item.quantity });
+        // Get the appropriate table name based on item_type
+        let tableName: string;
+        switch (item.item_type) {
+          case 'raw_materials':
+            tableName = 'raw_materials';
+            break;
+          case 'packaging_materials':
+            tableName = 'packaging_materials';
+            break;
+          case 'semi_finished_products':
+            tableName = 'semi_finished_products';
+            break;
+          case 'finished_products':
+            tableName = 'finished_products';
+            break;
+          default:
+            console.error(`Unknown item type: ${item.item_type}`);
+            continue;
+        }
+        
+        // Get current quantity
+        const { data, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching ${tableName} item ${item.item_id}:`, fetchError);
+          continue;
+        }
+        
+        const currentQuantity = data.quantity || 0;
+        const newQuantity = Math.max(0, currentQuantity - item.quantity);
+        
+        const { error } = await supabase
+          .from(tableName)
+          .update({
+            quantity: newQuantity
+          })
+          .eq('id', item.item_id);
+        
+        if (error) {
+          console.error('Error updating inventory:', error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
         }
       }
       
@@ -116,7 +143,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Cancel a sale invoice
    */
@@ -137,21 +164,59 @@ export class InvoiceProcessor {
       
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id, 
-        invoice.total_amount, 
+        invoice.party_id,
+        invoice.total_amount,
         false // isDebit=false to reverse the sale (customer's debt decreases)
       );
       
       // Update inventory
       for (const item of invoice.items) {
-        if (item.item_type === 'raw_materials') {
-          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: item.quantity });
-        } else if (item.item_type === 'packaging_materials') {
-          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: item.quantity });
-        } else if (item.item_type === 'semi_finished_products') {
-          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: item.quantity });
-        } else if (item.item_type === 'finished_products') {
-          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: item.quantity });
+        // Get the appropriate table name based on item_type
+        let tableName: string;
+        switch (item.item_type) {
+          case 'raw_materials':
+            tableName = 'raw_materials';
+            break;
+          case 'packaging_materials':
+            tableName = 'packaging_materials';
+            break;
+          case 'semi_finished_products':
+            tableName = 'semi_finished_products';
+            break;
+          case 'finished_products':
+            tableName = 'finished_products';
+            break;
+          default:
+            console.error(`Unknown item type: ${item.item_type}`);
+            continue;
+        }
+        
+        // Get current quantity
+        const { data, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching ${tableName} item ${item.item_id}:`, fetchError);
+          continue;
+        }
+        
+        const currentQuantity = data.quantity || 0;
+        const newQuantity = currentQuantity + item.quantity;
+        
+        const { error } = await supabase
+          .from(tableName)
+          .update({
+            quantity: newQuantity
+          })
+          .eq('id', item.item_id);
+        
+        if (error) {
+          console.error('Error updating inventory:', error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
         }
       }
       
@@ -177,7 +242,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Confirm a purchase invoice
    */
@@ -198,21 +263,59 @@ export class InvoiceProcessor {
       
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id, 
-        invoice.total_amount, 
+        invoice.party_id,
+        invoice.total_amount,
         false // isDebit=false for purchases (our debt to supplier increases)
       );
       
       // Update inventory
       for (const item of invoice.items) {
-        if (item.item_type === 'raw_materials') {
-          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: item.quantity });
-        } else if (item.item_type === 'packaging_materials') {
-          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: item.quantity });
-        } else if (item.item_type === 'semi_finished_products') {
-          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: item.quantity });
-        } else if (item.item_type === 'finished_products') {
-          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: item.quantity });
+        // Get the appropriate table name based on item_type
+        let tableName: string;
+        switch (item.item_type) {
+          case 'raw_materials':
+            tableName = 'raw_materials';
+            break;
+          case 'packaging_materials':
+            tableName = 'packaging_materials';
+            break;
+          case 'semi_finished_products':
+            tableName = 'semi_finished_products';
+            break;
+          case 'finished_products':
+            tableName = 'finished_products';
+            break;
+          default:
+            console.error(`Unknown item type: ${item.item_type}`);
+            continue;
+        }
+        
+        // Get current quantity
+        const { data, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching ${tableName} item ${item.item_id}:`, fetchError);
+          continue;
+        }
+        
+        const currentQuantity = data.quantity || 0;
+        const newQuantity = currentQuantity + item.quantity;
+        
+        const { error } = await supabase
+          .from(tableName)
+          .update({
+            quantity: newQuantity
+          })
+          .eq('id', item.item_id);
+        
+        if (error) {
+          console.error('Error updating inventory:', error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
         }
       }
       
@@ -238,7 +341,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Cancel a purchase invoice
    */
@@ -259,21 +362,59 @@ export class InvoiceProcessor {
       
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id, 
-        invoice.total_amount, 
+        invoice.party_id,
+        invoice.total_amount,
         true // isDebit=true to reverse the purchase (our debt to supplier decreases)
       );
       
       // Update inventory
       for (const item of invoice.items) {
-        if (item.item_type === 'raw_materials') {
-          await this.inventoryService.updateRawMaterial(item.item_id, { quantity: -item.quantity });
-        } else if (item.item_type === 'packaging_materials') {
-          await this.inventoryService.updatePackagingMaterial(item.item_id, { quantity: -item.quantity });
-        } else if (item.item_type === 'semi_finished_products') {
-          await this.inventoryService.updateSemiFinishedProduct(item.item_id, { quantity: -item.quantity });
-        } else if (item.item_type === 'finished_products') {
-          await this.inventoryService.updateFinishedProduct(item.item_id, { quantity: -item.quantity });
+        // Get the appropriate table name based on item_type
+        let tableName: string;
+        switch (item.item_type) {
+          case 'raw_materials':
+            tableName = 'raw_materials';
+            break;
+          case 'packaging_materials':
+            tableName = 'packaging_materials';
+            break;
+          case 'semi_finished_products':
+            tableName = 'semi_finished_products';
+            break;
+          case 'finished_products':
+            tableName = 'finished_products';
+            break;
+          default:
+            console.error(`Unknown item type: ${item.item_type}`);
+            continue;
+        }
+        
+        // Get current quantity
+        const { data, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching ${tableName} item ${item.item_id}:`, fetchError);
+          continue;
+        }
+        
+        const currentQuantity = data.quantity || 0;
+        const newQuantity = Math.max(0, currentQuantity - item.quantity);
+        
+        const { error } = await supabase
+          .from(tableName)
+          .update({
+            quantity: newQuantity
+          })
+          .eq('id', item.item_id);
+        
+        if (error) {
+          console.error('Error updating inventory:', error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
         }
       }
       
@@ -299,7 +440,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Combined method to confirm an invoice of any type
    */
@@ -327,7 +468,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Combined method to cancel an invoice of any type
    */
@@ -355,7 +496,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Update invoice status after payment
    */
@@ -389,7 +530,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Reverse invoice status after payment cancellation
    */
@@ -409,5 +550,13 @@ export class InvoiceProcessor {
       console.error('Error reversing invoice status after payment cancellation:', error);
       return false;
     }
+  }
+
+  private partyService: PartyService;
+  private inventoryService: InventoryService;
+  
+  constructor() {
+    this.partyService = PartyService.getInstance();
+    this.inventoryService = InventoryService.getInstance();
   }
 }

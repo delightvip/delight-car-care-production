@@ -1,4 +1,6 @@
 
+// Type definitions for commercial operations
+
 export interface Invoice {
   id: string;
   party_id: string;

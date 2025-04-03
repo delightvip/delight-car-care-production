@@ -1,36 +1,41 @@
 
-import { LedgerEntry } from '@/services/CommercialTypes';
-import { LedgerEntity } from './LedgerEntity';
-import { LedgerReportGenerator } from './LedgerReportGenerator';
-import { toast } from "sonner";
+import { LedgerEntry } from "@/services/commercial/CommercialTypes";
+import { LedgerEntity } from "./LedgerEntity";
+import { LedgerReportGenerator } from "./LedgerReportGenerator";
 
-// خدمة سجل الحساب الرئيسية
-export class LedgerService {
+class LedgerService {
   private static instance: LedgerService;
-  
-  private constructor() {}
-  
+  private ledgerEntity: LedgerEntity;
+  private reportGenerator: LedgerReportGenerator;
+
+  private constructor() {
+    this.ledgerEntity = new LedgerEntity();
+    this.reportGenerator = new LedgerReportGenerator();
+  }
+
   public static getInstance(): LedgerService {
     if (!LedgerService.instance) {
       LedgerService.instance = new LedgerService();
     }
     return LedgerService.instance;
   }
-  
-  public async getLedgerEntries(partyId: string, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
-    return LedgerEntity.fetchLedgerEntries(partyId, startDate, endDate);
+
+  /**
+   * Get ledger entries for a specific party
+   */
+  public async getLedgerEntries(partyId: string): Promise<LedgerEntry[]> {
+    return this.ledgerEntity.getLedgerEntriesByParty(partyId);
   }
-  
-  public async generateAccountStatement(startDate: string, endDate: string, partyType?: string): Promise<any> {
-    return LedgerReportGenerator.generateAccountStatement(startDate, endDate, partyType);
-  }
-  
-  public async generateSinglePartyStatement(partyId: string, startDate: string, endDate: string): Promise<any> {
-    return LedgerReportGenerator.generateSinglePartyStatement(partyId, startDate, endDate);
-  }
-  
-  public async exportLedgerToCSV(partyId: string, startDate?: string, endDate?: string): Promise<string> {
-    return LedgerReportGenerator.exportLedgerToCSV(partyId, startDate, endDate);
+
+  /**
+   * Generate an account statement for a party
+   */
+  public async generateAccountStatement(
+    partyId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any> {
+    return this.reportGenerator.generateStatement(partyId, startDate, endDate);
   }
 }
 

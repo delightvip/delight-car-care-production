@@ -1,12 +1,28 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { Payment, Invoice, Return, CommercialSummary } from './commercial/CommercialTypes';
+import { 
+  Payment, 
+  Invoice, 
+  Return, 
+  CommercialSummary,
+  InvoiceItem,
+  ReturnItem
+} from './commercial/CommercialTypes';
 import { toast } from "sonner";
 import InvoiceService from "./commercial/invoice/InvoiceService";
 import PaymentService from "./commercial/payment/PaymentService";
 import ReturnService from "./commercial/return/ReturnService";
 import LedgerService from "./commercial/ledger/LedgerService";
 
-export { Payment, Invoice, Return, CommercialSummary } from './commercial/CommercialTypes';
+// Re-export the type definitions
+export type { 
+  Payment, 
+  Invoice, 
+  Return, 
+  CommercialSummary,
+  InvoiceItem,
+  ReturnItem 
+} from './commercial/CommercialTypes';
 
 class CommercialService {
   private static instance: CommercialService;
@@ -60,107 +76,57 @@ class CommercialService {
   
   // Payment methods
   async getPayments(): Promise<Payment[]> {
-    try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*, parties:party_id (name)')
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      return data.map((payment: any) => ({
-        ...payment,
-        party_name: payment.parties?.name || 'Unknown'
-      })) as Payment[];
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
-      return [];
-    }
+    return this.paymentService.getPayments();
   }
   
   async getPaymentsByParty(partyId: string): Promise<Payment[]> {
+    return this.paymentService.getPaymentsByParty(partyId);
+  }
+  
+  async getPaymentById(id: string): Promise<Payment | null> {
     try {
       const { data, error } = await supabase
         .from('payments')
         .select('*, parties:party_id (name)')
-        .eq('party_id', partyId)
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      return data.map((payment: any) => ({
-        ...payment,
-        party_name: payment.parties?.name || 'Unknown'
-      })) as Payment[];
-    } catch (error) {
-      console.error(`Error fetching payments for party ${partyId}:`, error);
-      toast.error('حدث خطأ أثناء جلب المدفوعات');
-      return [];
-    }
-  }
-  
-  async createPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
-    try {
-      const { data, error } = await supabase
-        .from('payments')
-        .insert({
-          party_id: paymentData.party_id,
-          payment_type: paymentData.payment_type,
-          amount: paymentData.amount,
-          date: paymentData.date,
-          related_invoice_id: paymentData.related_invoice_id,
-          payment_status: paymentData.payment_status || 'draft',
-          method: paymentData.method || 'cash',
-          notes: paymentData.notes || ''
-        })
-        .select()
+        .eq('id', id)
         .single();
       
       if (error) throw error;
       
-      // If payment is confirmed and related to an invoice, update invoice status
-      if (paymentData.payment_status === 'confirmed' && paymentData.related_invoice_id) {
-        await this.invoiceService.updateInvoiceStatusAfterPayment(
-          paymentData.related_invoice_id,
-          paymentData.amount
-        );
-      }
-      
-      toast.success('تم إنشاء الدفعة بنجاح');
-      return data as Payment;
+      return {
+        ...data,
+        party_name: data.parties?.name || 'Unknown',
+        payment_type: data.payment_type as 'collection' | 'payment' | 'disbursement',
+        method: data.method as 'cash' | 'bank' | 'other' | 'check' | 'bank_transfer',
+        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled'
+      } as Payment;
     } catch (error) {
-      console.error('Error creating payment:', error);
-      toast.error('حدث خطأ أثناء إنشاء الدفعة');
+      console.error(`Error fetching payment ${id}:`, error);
+      toast.error('حدث خطأ أثناء جلب بيانات الدفعة');
       return null;
     }
+  }
+  
+  async createPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
+    return this.paymentService.recordPayment(paymentData);
   }
   
   async confirmPayment(id: string): Promise<boolean> {
     try {
       // First get payment details to check related invoice
-      const payment = await this.paymentService.getPaymentById(id);
+      const payment = await this.getPaymentById(id);
       if (!payment) return false;
       
-      const { error } = await supabase
-        .from('payments')
-        .update({
-          payment_status: 'confirmed'
-        })
-        .eq('id', id);
+      const success = await this.paymentService.confirmPayment(id);
       
-      if (error) throw error;
-      
-      // If payment is related to an invoice, update invoice status
-      if (payment.related_invoice_id) {
+      if (success && payment.related_invoice_id) {
         await this.invoiceService.updateInvoiceStatusAfterPayment(
           payment.related_invoice_id,
           payment.amount
         );
       }
       
-      toast.success('تم تأكيد الدفعة بنجاح');
-      return true;
+      return success;
     } catch (error) {
       console.error('Error confirming payment:', error);
       toast.error('حدث خطأ أثناء تأكيد الدفعة');
@@ -171,25 +137,17 @@ class CommercialService {
   async cancelPayment(id: string): Promise<boolean> {
     try {
       // First get payment details to check related invoice
-      const payment = await this.paymentService.getPaymentById(id);
+      const payment = await this.getPaymentById(id);
       if (!payment) return false;
       
-      const { error } = await supabase
-        .from('payments')
-        .update({
-          payment_status: 'cancelled'
-        })
-        .eq('id', id);
-      
-      if (error) throw error;
+      const success = await this.paymentService.cancelPayment(id);
       
       // If payment is related to an invoice, update invoice status
-      if (payment.related_invoice_id) {
+      if (success && payment.related_invoice_id && payment.payment_status === 'confirmed') {
         await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(payment.related_invoice_id);
       }
       
-      toast.success('تم إلغاء الدفعة بنجاح');
-      return true;
+      return success;
     } catch (error) {
       console.error('Error cancelling payment:', error);
       toast.error('حدث خطأ أثناء إلغاء الدفعة');
@@ -198,21 +156,7 @@ class CommercialService {
   }
   
   async deletePayment(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('payments')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      toast.success('تم حذف الدفعة بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error deleting payment:', error);
-      toast.error('حدث خطأ أثناء حذف الدفعة');
-      return false;
-    }
+    return this.paymentService.deletePayment(id);
   }
   
   // Return methods
@@ -315,7 +259,7 @@ class CommercialService {
   
   // Ledger entries
   async getLedgerEntries(partyId: string): Promise<any[]> {
-    return this.ledgerService.getLedgerEntriesByParty(partyId);
+    return this.ledgerService.getLedgerEntries(partyId);
   }
   
   // Account statement

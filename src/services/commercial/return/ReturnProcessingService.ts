@@ -1,231 +1,228 @@
-import { toast } from "sonner";
-import { Return } from "@/types/returns";
-import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
-import returnDataService from "./ReturnDataService";
-import returnInventoryService from "./ReturnInventoryService";
-import returnValidationService from "./ReturnValidationService";
 
-/**
- * خدمة معالجة المرتجعات
- * مسؤولة عن عمليات تأكيد وإلغاء المرتجعات وتحديث المخزون والحسابات
- */
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Return, ReturnItem } from "@/services/commercial/CommercialTypes";
+import ReturnEntity from "./ReturnEntity";
+import { ReturnProcessor } from "./ReturnProcessor";
+
 export class ReturnProcessingService {
-  private financialBridge: FinancialCommercialBridge;
+  private returnProcessor: ReturnProcessor;
   
   constructor() {
-    this.financialBridge = FinancialCommercialBridge.getInstance();
+    this.returnProcessor = new ReturnProcessor();
   }
-
+  
   /**
-   * تأكيد مرتجع (تحديث المخزون والحسابات)
+   * Create a new return
    */
-  public async confirmReturn(returnId: string): Promise<boolean> {
+  async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      // 1. التحقق من صحة المرتجع قبل التأكيد
-      const validationResult = await returnValidationService.validateBeforeConfirm(returnId);
-      if (!validationResult.valid) {
-        toast.error(validationResult.message || 'فشل التحقق من صحة المرتجع');
-        return false;
-      }
-
-      // 2. جلب بيانات المرتجع كاملة
-      const returnData = await returnDataService.fetchReturnById(returnId);
-      
-      if (!returnData || !returnData.items || returnData.items.length === 0) {
-        toast.error('لا توجد بيانات كافية لتأكيد المرتجع');
-        return false;
-      }
-
-      console.log("Confirming return with data:", returnData);
-
-      // 3. تحديث حالة المرتجع إلى مؤكد
-      await returnDataService.updateReturnStatus(returnId, 'confirmed');
-
-      // 4. تحديث المخزون بناءً على نوع المرتجع
-      try {
-        await this.updateInventory(returnData, 'confirm');
-      } catch (error) {
-        // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مسودة
-        await returnDataService.updateReturnStatus(returnId, 'draft');
-        throw error;
-      }
-
-      // 5. تسجيل المعاملة المالية المقابلة
-      try {
-        await this.recordFinancialTransaction(returnData, 'confirm');
-      } catch (error) {
-        // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مسودة
-        await this.updateInventory(returnData, 'reverse_confirm');
-        await returnDataService.updateReturnStatus(returnId, 'draft');
-        throw error;
-      }
-
-      toast.success('تم تأكيد المرتجع وتحديث المخزون والحسابات');
-      return true;
+      const createdReturn = await ReturnEntity.create(returnData);
+      toast.success('تم إنشاء المرتجع بنجاح');
+      return createdReturn;
     } catch (error) {
-      console.error(`Error confirming return ${returnId}:`, error);
+      console.error('Error creating return:', error);
+      toast.error('حدث خطأ أثناء إنشاء المرتجع');
+      return null;
+    }
+  }
+  
+  /**
+   * Confirm a return - update inventory and party balance
+   */
+  async confirmReturn(returnId: string): Promise<boolean> {
+    try {
+      // Get return details
+      const returnData = await ReturnEntity.findById(returnId);
+      if (!returnData) {
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      // Process based on return type
+      let success = false;
+      if (returnData.return_type === 'sales_return' || returnData.return_type === 'sale') {
+        success = await this.returnProcessor.confirmSalesReturn(returnId);
+      } else if (returnData.return_type === 'purchase_return' || returnData.return_type === 'purchase') {
+        success = await this.returnProcessor.confirmPurchaseReturn(returnId);
+      } else {
+        toast.error('نوع المرتجع غير صالح');
+        return false;
+      }
+      
+      if (success) {
+        // Update return status in database
+        const { error } = await supabase
+          .from('returns')
+          .update({ payment_status: 'confirmed' })
+          .eq('id', returnId);
+        
+        if (error) {
+          console.error('Error updating return status:', error);
+          toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
+          return false;
+        }
+        
+        toast.success('تم تأكيد المرتجع بنجاح');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error confirming return:', error);
       toast.error('حدث خطأ أثناء تأكيد المرتجع');
       return false;
     }
   }
-
+  
   /**
-   * إلغاء مرتجع (عكس تأثيره على المخزون والحسابات)
+   * Cancel a return - revert inventory and party balance changes
    */
-  public async cancelReturn(returnId: string): Promise<boolean> {
+  async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      // 1. التحقق من صحة المرتجع قبل الإلغاء
-      const validationResult = await returnValidationService.validateBeforeCancel(returnId);
-      if (!validationResult.valid) {
-        toast.error(validationResult.message || 'فشل التحقق من صحة المرتجع');
-        return false;
-      }
-
-      // 2. جلب بيانات المرتجع كاملة
-      const returnData = await returnDataService.fetchReturnById(returnId);
-      
+      // Get return details
+      const returnData = await ReturnEntity.findById(returnId);
       if (!returnData) {
-        toast.error('لا توجد بيانات كافية لإلغاء المرتجع');
+        toast.error('لم يتم العثور على المرتجع');
         return false;
       }
-
-      console.log("Cancelling return with data:", returnData);
-
-      // 3. تحديث حالة المرتجع إلى ملغي
-      await returnDataService.updateReturnStatus(returnId, 'cancelled');
-
-      // 4. عكس تأثير المرتجع على المخزون
-      try {
-        await this.updateInventory(returnData, 'cancel');
-      } catch (error) {
-        // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مؤكد
-        await returnDataService.updateReturnStatus(returnId, 'confirmed');
-        throw error;
+      
+      if (returnData.payment_status !== 'confirmed') {
+        toast.info('المرتجع غير مؤكد');
+        return true;
       }
-
-      // 5. عكس المعاملة المالية
-      try {
-        await this.recordFinancialTransaction(returnData, 'cancel');
-      } catch (error) {
-        // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مؤكد
-        await this.updateInventory(returnData, 'reverse_cancel');
-        await returnDataService.updateReturnStatus(returnId, 'confirmed');
-        throw error;
+      
+      // Process based on return type
+      let success = false;
+      if (returnData.return_type === 'sales_return' || returnData.return_type === 'sale') {
+        success = await this.returnProcessor.cancelSalesReturn(returnId);
+      } else if (returnData.return_type === 'purchase_return' || returnData.return_type === 'purchase') {
+        success = await this.returnProcessor.cancelPurchaseReturn(returnId);
+      } else {
+        toast.error('نوع المرتجع غير صالح');
+        return false;
       }
-
-      toast.success('تم إلغاء المرتجع وعكس تأثيره على المخزون والحسابات');
-      return true;
+      
+      if (success) {
+        // Update return status in database
+        const { error } = await supabase
+          .from('returns')
+          .update({ payment_status: 'cancelled' })
+          .eq('id', returnId);
+        
+        if (error) {
+          console.error('Error updating return status:', error);
+          toast.error('حدث خطأ أثناء تحديث حالة المرتجع');
+          return false;
+        }
+        
+        toast.success('تم إلغاء المرتجع بنجاح');
+        return true;
+      }
+      
+      return false;
     } catch (error) {
-      console.error(`Error cancelling return ${returnId}:`, error);
+      console.error('Error cancelling return:', error);
       toast.error('حدث خطأ أثناء إلغاء المرتجع');
       return false;
     }
   }
-
+  
   /**
-   * تحديث المخزون بناءً على نوع المرتجع والعملية
-   * @private
+   * Update inventory for return items
    */
-  private async updateInventory(returnData: Return, action: 'confirm' | 'cancel' | 'reverse_confirm' | 'reverse_cancel'): Promise<void> {
-    if (!returnData.items || returnData.items.length === 0) {
-      console.log("No items to update inventory");
-      return;
-    }
-
-    console.log(`Processing ${returnData.items.length} items for inventory update`, returnData.items);
-
-    for (const item of returnData.items) {
-      // تحديد نوع العملية بناءً على نوع المرتجع والعملية المطلوبة
-      let shouldIncrease = false;
-
-      if (returnData.return_type === 'sales_return') {
-        // مرتجع مبيعات: عند التأكيد نزيد المخزون، عند الإلغاء ننقص المخزون
-        if (action === 'confirm' || action === 'reverse_cancel') {
-          shouldIncrease = true;
+  private async updateInventoryForReturnItems(items: ReturnItem[], increase: boolean): Promise<boolean> {
+    try {
+      for (const item of items) {
+        // Convert item_type to appropriate table name
+        let tableName: string;
+        switch (item.item_type) {
+          case 'raw_materials':
+            tableName = 'raw_materials';
+            break;
+          case 'packaging_materials':
+            tableName = 'packaging_materials';
+            break;
+          case 'semi_finished_products':
+            tableName = 'semi_finished_products';
+            break;
+          case 'finished_products':
+            tableName = 'finished_products';
+            break;
+          default:
+            console.error(`Invalid item_type: ${item.item_type}`);
+            continue;
         }
-      } else {
-        // مرتجع مشتريات: عند التأكيد ننقص المخزون، عند الإلغاء نزيد المخزون
-        if (action === 'cancel' || action === 'reverse_confirm') {
-          shouldIncrease = true;
+        
+        // Get current quantity
+        const { data, error: fetchError } = await supabase
+          .from(tableName)
+          .select('quantity')
+          .eq('id', item.item_id)
+          .single();
+        
+        if (fetchError) {
+          console.error(`Error fetching item ${item.item_id} from ${tableName}:`, fetchError);
+          continue;
         }
+        
+        const currentQuantity = data?.quantity || 0;
+        const newQuantity = increase 
+          ? currentQuantity + item.quantity 
+          : currentQuantity - item.quantity;
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from(tableName)
+          .update({ quantity: Math.max(0, newQuantity) })
+          .eq('id', item.item_id);
+        
+        if (updateError) {
+          console.error(`Error updating item ${item.item_id} in ${tableName}:`, updateError);
+          continue;
+        }
+        
+        // Record inventory movement
+        await this.recordInventoryMovement(
+          item.item_id.toString(),
+          tableName,
+          increase ? item.quantity : -item.quantity,
+          newQuantity
+        );
       }
-
-      // تأكد من أن item_id هو رقم
-      const itemId = Number(item.item_id);
-      // تأكد من أن الكمية هي رقم إيجابي
-      const quantity = Math.max(0, Number(item.quantity));
-
-      if (isNaN(itemId) || itemId <= 0) {
-        console.error(`Invalid item_id: ${item.item_id}, skipping inventory update`);
-        continue;
-      }
-
-      if (isNaN(quantity) || quantity <= 0) {
-        console.error(`Invalid quantity: ${item.quantity}, skipping inventory update`);
-        continue;
-      }
-
-      console.log(`${shouldIncrease ? 'Increasing' : 'Decreasing'} inventory for item ${itemId} (${item.item_type}) by ${quantity}`);
       
-      try {
-        if (shouldIncrease) {
-          const result = await returnInventoryService.increaseItemQuantity(
-            item.item_type,
-            itemId,
-            quantity
-          );
-          console.log(`Inventory increase result: ${result ? 'Success' : 'Failed'}`);
-        } else {
-          const result = await returnInventoryService.decreaseItemQuantity(
-            item.item_type,
-            itemId,
-            quantity
-          );
-          console.log(`Inventory decrease result: ${result ? 'Success' : 'Failed'}`);
-        }
-      } catch (error) {
-        console.error(`Error updating inventory for item ${itemId}:`, error);
-        throw new Error(`فشل تحديث المخزون للصنف: ${item.item_name}`);
-      }
+      return true;
+    } catch (error) {
+      console.error('Error updating inventory for return items:', error);
+      return false;
     }
   }
-
+  
   /**
-   * تسجيل المعاملة المالية
-   * @private
+   * Record inventory movement
    */
-  private async recordFinancialTransaction(returnData: Return, action: 'confirm' | 'cancel'): Promise<void> {
-    // 1. إعداد بيانات المعاملة المالية
-    const note = returnData.return_type === 'sales_return' 
-      ? `مرتجع مبيعات من ${returnData.party_name || ''}` 
-      : `مرتجع مشتريات إلى ${returnData.party_name || ''}`;
-
-    // 2. تحديد نوع المعاملة بناءً على الإجراء
-    const transactionData = (action === 'confirm')
-      ? {
-          id: returnData.id,
-          return_type: returnData.return_type,
-          amount: returnData.amount,
-          date: returnData.date,
-          party_id: returnData.party_id,
-          party_name: returnData.party_name,
-          invoice_id: returnData.invoice_id,
-          notes: note
-        }
-      : {
-          id: returnData.id,
-          return_type: returnData.return_type,
-          amount: returnData.amount,
-          date: returnData.date,
-          party_id: returnData.party_id,
-          party_name: returnData.party_name
-        };
-
-    // 3. استخدام جسر الربط المالي
-    if (action === 'confirm') {
-      await this.financialBridge.handleReturnConfirmation(transactionData);
-    } else {
-      await this.financialBridge.handleReturnCancellation(transactionData);
+  private async recordInventoryMovement(
+    itemId: string,
+    itemType: string,
+    quantity: number,
+    balanceAfter: number
+  ): Promise<void> {
+    try {
+      const movementType = quantity > 0 ? 'in' : 'out';
+      const reason = quantity > 0 ? 'return_in' : 'return_out';
+      
+      await supabase.from('inventory_movements').insert({
+        item_id: itemId,
+        item_type: itemType,
+        movement_type: movementType,
+        quantity: quantity,
+        balance_after: balanceAfter,
+        reason: reason
+      });
+    } catch (error) {
+      console.error('Error recording inventory movement:', error);
     }
   }
 }
+
+export default ReturnProcessingService;

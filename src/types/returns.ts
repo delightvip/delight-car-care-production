@@ -1,5 +1,6 @@
 
 import { z } from "zod";
+import { ReturnItem } from "@/services/commercial/CommercialTypes";
 
 export interface Return {
   id: string;
@@ -15,17 +16,10 @@ export interface Return {
   items: ReturnItem[];
 }
 
-export interface ReturnItem {
-  id?: string;
-  return_id?: string;
-  item_id: number;
-  item_name: string;
-  item_type: string;
-  quantity: number;
-  unit_price: number;
-  total?: number;
-  selected?: boolean;
-  max_quantity?: number;
+export interface ReturnFormItem extends ReturnItem {
+  selected: boolean;
+  max_quantity: number;
+  invoice_quantity?: number;
 }
 
 export interface ReturnFormValues {
@@ -36,11 +30,6 @@ export interface ReturnFormValues {
   notes?: string;
   amount?: number;
   items: ReturnFormItem[];
-}
-
-export interface ReturnFormItem extends ReturnItem {
-  selected: boolean;
-  max_quantity: number;
 }
 
 export const returnFormSchema = z.object({
@@ -59,6 +48,7 @@ export const returnFormSchema = z.object({
       unit_price: z.number(),
       selected: z.boolean(),
       max_quantity: z.number(),
+      invoice_quantity: z.number().optional(),
       total: z.number().optional()
     })
   )
