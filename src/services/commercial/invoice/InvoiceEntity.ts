@@ -1,6 +1,9 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Invoice, InvoiceItem } from '../CommercialTypes';
 import { toast } from "sonner";
+import { format } from 'date-fns';
+import PartyService from '@/services/PartyService';
 
 export class InvoiceEntity {
   /**
@@ -22,13 +25,13 @@ export class InvoiceEntity {
       // Map the data to our Invoice type
       const invoicesWithParties = data.map(invoice => ({
         id: invoice.id,
-        invoice_type: invoice.invoice_type,
+        invoice_type: invoice.invoice_type as "sale" | "purchase",
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status,
-        payment_status: invoice.payment_status || 'draft',
+        status: invoice.status as "paid" | "partial" | "unpaid",
+        payment_status: (invoice.payment_status || 'draft') as "draft" | "confirmed" | "cancelled",
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
@@ -83,13 +86,13 @@ export class InvoiceEntity {
       
       const invoicesWithParties = data.map(invoice => ({
         id: invoice.id,
-        invoice_type: invoice.invoice_type,
+        invoice_type: invoice.invoice_type as "sale" | "purchase",
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status,
-        payment_status: invoice.payment_status || 'draft',
+        status: invoice.status as "paid" | "partial" | "unpaid",
+        payment_status: (invoice.payment_status || 'draft') as "draft" | "confirmed" | "cancelled",
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
@@ -157,13 +160,13 @@ export class InvoiceEntity {
       
       return {
         id: invoiceData.id,
-        invoice_type: invoiceData.invoice_type,
+        invoice_type: invoiceData.invoice_type as "sale" | "purchase",
         party_id: invoiceData.party_id,
         party_name: invoiceData.parties?.name,
         date: invoiceData.date,
         total_amount: invoiceData.total_amount,
-        status: invoiceData.status,
-        payment_status: invoiceData.payment_status || 'draft',
+        status: invoiceData.status as "paid" | "partial" | "unpaid",
+        payment_status: (invoiceData.payment_status || 'draft') as "draft" | "confirmed" | "cancelled",
         notes: invoiceData.notes,
         created_at: invoiceData.created_at,
         items: typedItems
@@ -234,12 +237,14 @@ export class InvoiceEntity {
       }
       
       // Get party details for response
-      const party = await (await import('../PartyService')).default.getInstance().getPartyById(invoiceData.party_id);
+      const partyService = PartyService.getInstance();
+      const party = await partyService.getPartyById(invoiceData.party_id);
       console.log('Party details:', party);
       
       // If invoice status is not "draft", automatically confirm it
       if (invoiceData.payment_status === 'confirmed') {
-        const invoiceProcessor = new (await import('./InvoiceProcessor')).InvoiceProcessor();
+        const { InvoiceProcessor } = await import('./InvoiceProcessor');
+        const invoiceProcessor = new InvoiceProcessor();
         await invoiceProcessor.confirmInvoice(invoiceRecord.id);
       }
       
@@ -252,8 +257,8 @@ export class InvoiceEntity {
         party_name: party?.name,
         date: formattedDate,
         total_amount: invoiceData.total_amount,
-        status: invoiceRecord.status,
-        payment_status: invoiceRecord.payment_status,
+        status: invoiceRecord.status as "paid" | "partial" | "unpaid",
+        payment_status: invoiceRecord.payment_status as "draft" | "confirmed" | "cancelled",
         notes: invoiceData.notes,
         created_at: invoiceRecord.created_at,
         items: invoiceData.items
@@ -262,6 +267,36 @@ export class InvoiceEntity {
       console.error('Error creating invoice:', error);
       toast.error('حدث خطأ أثناء إنشاء الفاتورة');
       return null;
+    }
+  }
+  
+  /**
+   * Delete an invoice
+   */
+  public static async delete(id: string): Promise<boolean> {
+    try {
+      // Delete associated invoice items first
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', id);
+      
+      if (itemsError) throw itemsError;
+      
+      // Then delete the invoice
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast.success('تم حذف الفاتورة بنجاح');
+      return true;
+    } catch (error) {
+      console.error(`Error deleting invoice with id ${id}:`, error);
+      toast.error('حدث خطأ أثناء حذف الفاتورة');
+      return false;
     }
   }
   

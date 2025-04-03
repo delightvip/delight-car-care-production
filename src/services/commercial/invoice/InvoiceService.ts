@@ -24,15 +24,15 @@ export class InvoiceService {
   }
   
   public async getInvoices(): Promise<Invoice[]> {
-    return InvoiceEntity.fetchAll();
+    return InvoiceEntity.findAll();
   }
   
   public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
-    return InvoiceEntity.fetchByParty(partyId);
+    return InvoiceEntity.findByParty(partyId);
   }
   
   public async getInvoiceById(id: string): Promise<Invoice | null> {
-    return InvoiceEntity.fetchById(id);
+    return InvoiceEntity.findById(id);
   }
   
   public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
