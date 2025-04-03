@@ -961,6 +961,125 @@ class InventoryService {
   }
 
   /**
+   * Consume packaging materials from inventory
+   */
+  async consumePackagingMaterials(materials: {id: number, quantity: number}[]): Promise<boolean> {
+    try {
+      for (const material of materials) {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('quantity')
+          .eq('id', material.id)
+          .single();
+        
+        if (error) throw error;
+        
+        const currentQuantity = Number(data.quantity);
+        if (currentQuantity < material.quantity) {
+          toast.error(`مواد التعبئة غير متوفرة بالكمية المطلوبة`);
+          return false;
+        }
+        
+        const { error: updateError } = await supabase
+          .from('packaging_materials')
+          .update({ quantity: currentQuantity - material.quantity })
+          .eq('id', material.id);
+        
+        if (updateError) throw updateError;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error consuming packaging materials:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if there's enough raw material available
+   */
+  async checkRawMaterialAvailability(id: string | number, requiredQuantity: number): Promise<boolean> {
+    try {
+      const numericId = typeof id === 'string' ? parseInt(id) : id;
+      
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .select('quantity')
+        .eq('id', numericId)
+        .single();
+      
+      if (error) throw error;
+      
+      return Number(data.quantity) >= requiredQuantity;
+    } catch (error) {
+      console.error(`Error checking availability for raw material ${id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get semi-finished product by code
+   */
+  async getSemiFinishedProductByCode(code: string): Promise<SemiFinishedProduct | null> {
+    try {
+      // First, get the semi-finished product data
+      const { data: product, error: productError } = await supabase
+        .from('semi_finished_products')
+        .select('*')
+        .eq('code', code)
+        .single();
+      
+      if (productError) {
+        console.error(`Error fetching semi-finished product with code ${code}:`, productError);
+        return null;
+      }
+      
+      // Get the product's ingredients
+      const { data: ingredients, error: ingredientsError } = await supabase
+        .from('semi_finished_ingredients')
+        .select(`
+          id, percentage,
+          raw_material_id,
+          raw_materials (id, code, name)
+        `)
+        .eq('semi_finished_id', product.id);
+      
+      if (ingredientsError) {
+        console.error(`Error fetching ingredients for product ${code}:`, ingredientsError);
+        return {
+          ...product,
+          quantity: Number(product.quantity),
+          min_stock: Number(product.min_stock),
+          unit_cost: Number(product.unit_cost),
+          sales_price: Number(product.sales_price || 0),
+          ingredients: []
+        };
+      }
+      
+      // Format the ingredients as needed
+      const formattedIngredients = ingredients.map(item => ({
+        id: item.raw_material_id,
+        code: item.raw_materials.code,
+        name: item.raw_materials.name,
+        percentage: Number(item.percentage)
+      }));
+      
+      // Return the complete product with ingredients
+      return {
+        ...product,
+        quantity: Number(product.quantity),
+        min_stock: Number(product.min_stock),
+        unit_cost: Number(product.unit_cost),
+        sales_price: Number(product.sales_price || 0),
+        ingredients: formattedIngredients
+      };
+    } catch (error) {
+      console.error(`Error fetching semi-finished product by code ${code}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Produce finished product
    */
   async produceFinishedProduct(productId: number, quantity: number): Promise<boolean> {

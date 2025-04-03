@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -312,8 +311,8 @@ export function InvoiceForm({
               {showItemForm && (
                 <div className="mb-4">
                   <InvoiceItemForm 
-                    onSubmit={handleAddItemToInvoice}
                     invoiceType={invoiceType as 'sale' | 'purchase'}
+                    onAddItem={handleAddItemToInvoice}
                   />
                 </div>
               )}

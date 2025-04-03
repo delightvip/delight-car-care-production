@@ -1,67 +1,30 @@
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
-// Export the Party interface so it can be imported in other files
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
 export interface Party {
   id: string;
   name: string;
-  type: 'customer' | 'supplier' | 'other';
+  type: "customer" | "supplier" | "other";
   phone?: string;
   email?: string;
   address?: string;
-  opening_balance: number;
-  balance_type?: 'credit' | 'debit';
-  balance: number;  // Current balance
+  opening_balance?: number;
+  balance_type?: string;
+  balance?: number;
   notes?: string;
-  code?: string;    // Optional code property
-  created_at: string;
+  created_at?: string;
+  code?: string;
 }
 
 class PartyService {
   private static instance: PartyService | null = null;
-  
+
   public static getInstance(): PartyService {
     if (!PartyService.instance) {
       PartyService.instance = new PartyService();
     }
     return PartyService.instance;
-  }
-  
-  /**
-   * Get a party by ID
-   */
-  async getPartyById(id: string) {
-    try {
-      const { data, error } = await supabase
-        .from('parties')
-        .select('*')
-        .eq('id', id)
-        .single();
-        
-      if (error) throw error;
-      
-      // Get party balance
-      const { data: balanceData, error: balanceError } = await supabase
-        .from('party_balances')
-        .select('balance')
-        .eq('party_id', id)
-        .single();
-      
-      let balance = data.opening_balance || 0;
-      if (!balanceError) {
-        balance = balanceData.balance;
-      }
-      
-      return {
-        ...data,
-        balance,
-        code: data.code || '',
-        type: data.type as 'customer' | 'supplier' | 'other'
-      } as Party;
-    } catch (error) {
-      console.error(`Error fetching party with id ${id}:`, error);
-      return null;
-    }
   }
 
   /**
@@ -69,37 +32,45 @@ class PartyService {
    */
   async getParties(): Promise<Party[]> {
     try {
-      // First get parties data
-      const { data: partiesData, error: partiesError } = await supabase
+      const { data, error } = await supabase
         .from('parties')
-        .select('*');
-        
-      if (partiesError) throw partiesError;
-      
-      // Then get party balances
-      const { data: balancesData, error: balancesError } = await supabase
-        .from('party_balances')
-        .select('*');
-        
-      if (balancesError) throw balancesError;
-      
-      // Merge the data
-      const partiesWithBalances = partiesData.map(party => {
-        const balanceRecord = balancesData.find(b => b.party_id === party.id);
-        
-        return {
-          ...party,
-          balance: balanceRecord ? Number(balanceRecord.balance) : Number(party.opening_balance || 0),
-          code: party.code || '',
-          notes: party.notes || '',
-          type: party.type as 'customer' | 'supplier' | 'other'
-        } as Party;
-      });
-      
-      return partiesWithBalances;
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      // Get balances for each party
+      const partiesWithBalance = await Promise.all(
+        data.map(async (party) => {
+          const { data: balanceData, error: balanceError } = await supabase
+            .from('party_balances')
+            .select('balance')
+            .eq('party_id', party.id)
+            .maybeSingle();
+
+          if (balanceError) {
+            console.error('Error fetching balance for party', party.id, balanceError);
+            return {
+              ...party,
+              balance: 0,
+              // Ensure type is cast to the correct union type
+              type: party.type as "customer" | "supplier" | "other"
+            };
+          }
+
+          return {
+            ...party,
+            balance: balanceData?.balance || 0,
+            // Ensure type is cast to the correct union type
+            type: party.type as "customer" | "supplier" | "other"
+          };
+        })
+      );
+
+      return partiesWithBalance;
     } catch (error) {
       console.error('Error fetching parties:', error);
-      toast.error('حدث خطأ أثناء جلب بيانات الأطراف التجارية');
+      toast.error('حدث خطأ أثناء جلب الأطراف التجارية');
       return [];
     }
   }
@@ -109,325 +80,240 @@ class PartyService {
    */
   async getPartiesByType(type: 'customer' | 'supplier' | 'other'): Promise<Party[]> {
     try {
-      const allParties = await this.getParties();
-      return allParties.filter(party => party.type === type);
+      const { data, error } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('type', type)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      // Get balances for each party
+      const partiesWithBalance = await Promise.all(
+        data.map(async (party) => {
+          const { data: balanceData, error: balanceError } = await supabase
+            .from('party_balances')
+            .select('balance')
+            .eq('party_id', party.id)
+            .maybeSingle();
+
+          if (balanceError) {
+            console.error('Error fetching balance for party', party.id, balanceError);
+            return { 
+              ...party, 
+              balance: 0,
+              // Add these properties to match Party interface
+              notes: party.notes || "",
+              code: party.code || "",
+              // Ensure type is cast to the correct union type
+              type: party.type as "customer" | "supplier" | "other"
+            };
+          }
+
+          return { 
+            ...party, 
+            balance: balanceData?.balance || 0,
+            // Add these properties to match Party interface
+            notes: party.notes || "",
+            code: party.code || "",
+            // Ensure type is cast to the correct union type
+            type: party.type as "customer" | "supplier" | "other"
+          };
+        })
+      );
+
+      return partiesWithBalance;
     } catch (error) {
-      console.error(`Error fetching parties of type ${type}:`, error);
-      toast.error('حدث خطأ أثناء جلب بيانات الأطراف التجارية');
+      console.error(`Error fetching ${type} parties:`, error);
+      toast.error(`حدث خطأ أثناء جلب ${type === 'customer' ? 'العملاء' : type === 'supplier' ? 'الموردين' : 'الأطراف التجارية'}`);
       return [];
     }
   }
-  
+
   /**
-   * Add a new party
+   * Get a party by ID
    */
-  async addParty(partyData: Omit<Party, 'id' | 'balance' | 'created_at'>): Promise<Party | null> {
+  async getPartyById(id: string): Promise<Party | null> {
     try {
       const { data, error } = await supabase
         .from('parties')
-        .insert(partyData)
-        .select()
+        .select('*')
+        .eq('id', id)
         .single();
-        
+
       if (error) throw error;
-      
-      if (partyData.opening_balance && partyData.opening_balance !== 0) {
-        // Create initial balance record
-        await this.updatePartyBalanceAfterTransaction(
-          data.id,
-          partyData.opening_balance,
-          partyData.balance_type === 'credit' ? 'opening_balance_credit' : 'opening_balance_debit',
-          'initial'
-        );
+
+      // Get balance for the party
+      const { data: balanceData, error: balanceError } = await supabase
+        .from('party_balances')
+        .select('balance')
+        .eq('party_id', id)
+        .maybeSingle();
+
+      if (balanceError) {
+        console.error('Error fetching balance for party', id, balanceError);
+        return { 
+          ...data, 
+          balance: 0,
+          // Ensure type is cast to the correct union type
+          type: data.type as "customer" | "supplier" | "other"
+        };
       }
-      
-      toast.success('تمت إضافة الطرف التجاري بنجاح');
-      return { ...data, balance: partyData.opening_balance || 0 };
+
+      return { 
+        ...data, 
+        balance: balanceData?.balance || 0,
+        // Ensure type is cast to the correct union type
+        type: data.type as "customer" | "supplier" | "other"
+      };
     } catch (error) {
-      console.error('Error adding party:', error);
-      toast.error('حدث خطأ أثناء إضافة طرف تجاري جديد');
+      console.error('Error fetching party:', error);
+      toast.error('حدث خطأ أثناء جلب بيانات الطرف التجاري');
       return null;
     }
   }
-  
+
   /**
-   * Update party details
+   * Update a party's balance
    */
-  async updateParty(id: string, updates: Partial<Party>): Promise<boolean> {
+  async updatePartyBalance(partyId: string, amount: number, isDebit: boolean): Promise<boolean> {
     try {
-      // Remove balance from updates as it's not a column in the parties table
-      const { balance, ...partyUpdates } = updates;
-      
-      const { error } = await supabase
-        .from('parties')
-        .update(partyUpdates)
-        .eq('id', id);
-        
-      if (error) throw error;
-      
-      toast.success('تم تحديث بيانات الطرف التجاري بنجاح');
+      // Get current balance
+      const { data: balanceData, error: fetchError } = await supabase
+        .from('party_balances')
+        .select('balance')
+        .eq('party_id', partyId)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      let currentBalance = balanceData?.balance || 0;
+      let newBalance = isDebit ? currentBalance + amount : currentBalance - amount;
+
+      const { error: updateError } = await supabase
+        .from('party_balances')
+        .upsert({
+          party_id: partyId,
+          balance: newBalance,
+          last_updated: new Date().toISOString()
+        });
+
+      if (updateError) throw updateError;
+
       return true;
     } catch (error) {
-      console.error(`Error updating party ${id}:`, error);
-      toast.error('حدث خطأ أثناء تحديث بيانات الطرف التجاري');
+      console.error('Error updating party balance:', error);
+      toast.error('حدث خطأ أثناء تحديث رصيد الطرف التجاري');
       return false;
     }
   }
-  
+
+  /**
+   * Add a new party
+   */
+  async addParty(party: Omit<Party, 'id' | 'created_at'>): Promise<Party | null> {
+    try {
+      const { data, error } = await supabase
+        .from('parties')
+        .insert({
+          name: party.name,
+          type: party.type,
+          phone: party.phone || null,
+          email: party.email || null,
+          address: party.address || null,
+          opening_balance: party.opening_balance || 0,
+          balance_type: party.balance_type || null
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Initialize party balance
+      if (party.opening_balance && party.opening_balance !== 0) {
+        await this.updatePartyBalance(data.id, party.opening_balance, true);
+      }
+
+      return { 
+        ...data, 
+        balance: party.opening_balance || 0,
+        // Ensure type is cast to the correct union type
+        type: data.type as "customer" | "supplier" | "other"
+      };
+    } catch (error) {
+      console.error('Error adding party:', error);
+      toast.error('حدث خطأ أثناء إضافة الطرف التجاري');
+      return null;
+    }
+  }
+
+  /**
+   * Update a party
+   */
+  async updateParty(id: string, updates: Partial<Party>): Promise<Party | null> {
+    try {
+      // Extract fields relevant for parties table
+      const partyUpdates = {
+        name: updates.name,
+        type: updates.type,
+        phone: updates.phone,
+        email: updates.email,
+        address: updates.address,
+        opening_balance: updates.opening_balance,
+        balance_type: updates.balance_type
+      };
+
+      const { data, error } = await supabase
+        .from('parties')
+        .update(partyUpdates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // If balance needs updating, update it separately
+      if (updates.balance !== undefined) {
+        await this.updatePartyBalance(id, updates.balance, true);
+      }
+
+      return {
+        ...data,
+        balance: updates.balance,
+        // Ensure type is cast to the correct union type
+        type: data.type as "customer" | "supplier" | "other"
+      };
+    } catch (error) {
+      console.error('Error updating party:', error);
+      toast.error('حدث خطأ أثناء تحديث بيانات الطرف التجاري');
+      return null;
+    }
+  }
+
   /**
    * Delete a party
    */
   async deleteParty(id: string): Promise<boolean> {
     try {
+      // Delete party balance first
+      await supabase
+        .from('party_balances')
+        .delete()
+        .eq('party_id', id);
+      
+      // Then delete the party
       const { error } = await supabase
         .from('parties')
         .delete()
         .eq('id', id);
-        
+      
       if (error) throw error;
       
-      toast.success('تم حذف الطرف التجاري بنجاح');
       return true;
     } catch (error) {
-      console.error(`Error deleting party ${id}:`, error);
+      console.error('Error deleting party:', error);
       toast.error('حدث خطأ أثناء حذف الطرف التجاري');
       return false;
-    }
-  }
-  
-  /**
-   * Update party balance after a transaction
-   */
-  async updatePartyBalanceAfterTransaction(
-    partyId: string,
-    amount: number,
-    transactionType: string,
-    referenceId: string
-  ): Promise<boolean> {
-    try {
-      // First, get the current party balance
-      const { data: balanceData, error: balanceError } = await supabase
-        .from('party_balances')
-        .select('balance')
-        .eq('party_id', partyId)
-        .single();
-      
-      // If no balance record exists, create one
-      if (balanceError && balanceError.message.includes('No rows found')) {
-        // Get party details to determine initial balance
-        const { data: party } = await supabase
-          .from('parties')
-          .select('opening_balance')
-          .eq('id', partyId)
-          .single();
-          
-        const initialBalance = party ? party.opening_balance || 0 : 0;
-        
-        // Calculate new balance based on transaction type
-        let newBalance = initialBalance;
-        
-        if (transactionType === 'purchase') {
-          newBalance -= amount; // Increase liability to supplier (negative balance)
-        } else if (transactionType === 'sale') {
-          newBalance += amount; // Increase receivable from customer (positive balance)
-        } else if (transactionType === 'purchase_cancel') {
-          newBalance += amount; // Decrease liability to supplier
-        } else if (transactionType === 'sale_cancel') {
-          newBalance -= amount; // Decrease receivable from customer
-        }
-        
-        // Create a new balance record
-        const { error: createError } = await supabase
-          .from('party_balances')
-          .insert({
-            party_id: partyId,
-            balance: newBalance
-          });
-          
-        if (createError) throw createError;
-      } else if (balanceError) {
-        throw balanceError;
-      } else {
-        // Balance record exists, update it
-        let newBalance = Number(balanceData.balance);
-        
-        if (transactionType === 'purchase') {
-          newBalance -= amount; // Increase liability to supplier
-        } else if (transactionType === 'sale') {
-          newBalance += amount; // Increase receivable from customer
-        } else if (transactionType === 'purchase_cancel') {
-          newBalance += amount; // Decrease liability to supplier
-        } else if (transactionType === 'sale_cancel') {
-          newBalance -= amount; // Decrease receivable from customer
-        }
-        
-        const { error: updateError } = await supabase
-          .from('party_balances')
-          .update({ balance: newBalance })
-          .eq('party_id', partyId);
-          
-        if (updateError) throw updateError;
-      }
-      
-      // Record this transaction in the ledger
-      await this.recordLedgerTransaction(partyId, amount, transactionType, referenceId);
-      
-      return true;
-    } catch (error) {
-      console.error('Error updating party balance:', error);
-      toast.error('حدث خطأ أثناء تحديث رصيد الحساب');
-      return false;
-    }
-  }
-  
-  /**
-   * Update party balance directly
-   * Used by payment services
-   */
-  async updatePartyBalance(
-    partyId: string,
-    amount: number,
-    isDebit: boolean,
-    description: string,
-    transactionType: string,
-    referenceId: string
-  ): Promise<boolean> {
-    try {
-      // Get the current balance
-      const { data: balanceData, error: balanceError } = await supabase
-        .from('party_balances')
-        .select('balance')
-        .eq('party_id', partyId)
-        .single();
-      
-      // If no balance record exists, create one
-      if (balanceError && balanceError.message.includes('No rows found')) {
-        // Get party details to determine initial balance
-        const { data: party } = await supabase
-          .from('parties')
-          .select('opening_balance')
-          .eq('id', partyId)
-          .single();
-          
-        const initialBalance = party ? party.opening_balance || 0 : 0;
-        
-        // Calculate new balance
-        const newBalance = initialBalance + (isDebit ? amount : -amount);
-        
-        // Create a new balance record
-        const { error: createError } = await supabase
-          .from('party_balances')
-          .insert({
-            party_id: partyId,
-            balance: newBalance
-          });
-          
-        if (createError) throw createError;
-        
-        // Record in ledger
-        await this.recordBalanceTransaction(partyId, amount, isDebit, newBalance, description, transactionType, referenceId);
-      } else if (balanceError) {
-        throw balanceError;
-      } else {
-        // Balance record exists, update it
-        const currentBalance = Number(balanceData.balance);
-        const newBalance = currentBalance + (isDebit ? amount : -amount);
-        
-        const { error: updateError } = await supabase
-          .from('party_balances')
-          .update({ balance: newBalance })
-          .eq('party_id', partyId);
-          
-        if (updateError) throw updateError;
-        
-        // Record in ledger
-        await this.recordBalanceTransaction(partyId, amount, isDebit, newBalance, description, transactionType, referenceId);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error updating party balance:', error);
-      toast.error('حدث خطأ أثناء تحديث رصيد الحساب');
-      return false;
-    }
-  }
-  
-  /**
-   * Record a transaction in the ledger
-   */
-  private async recordLedgerTransaction(
-    partyId: string,
-    amount: number,
-    transactionType: string,
-    transactionId: string
-  ): Promise<void> {
-    try {
-      // Get current balance
-      const { data: balanceData } = await supabase
-        .from('party_balances')
-        .select('balance')
-        .eq('party_id', partyId)
-        .single();
-      
-      const currentBalance = balanceData ? Number(balanceData.balance) : 0;
-      
-      // Determine debit/credit based on transaction type
-      let debit = 0;
-      let credit = 0;
-      
-      if (transactionType === 'purchase') {
-        credit = amount; // Credit supplier account
-      } else if (transactionType === 'sale') {
-        debit = amount; // Debit customer account
-      } else if (transactionType === 'purchase_cancel') {
-        debit = amount; // Debit supplier account
-      } else if (transactionType === 'sale_cancel') {
-        credit = amount; // Credit customer account
-      }
-      
-      // Record in ledger
-      await supabase
-        .from('ledger')
-        .insert({
-          party_id: partyId,
-          transaction_id: transactionId,
-          transaction_type: transactionType,
-          date: new Date().toISOString().split('T')[0],
-          debit,
-          credit,
-          balance_after: currentBalance
-        });
-    } catch (error) {
-      console.error('Error recording ledger transaction:', error);
-    }
-  }
-  
-  /**
-   * Record a balance transaction in the ledger
-   */
-  private async recordBalanceTransaction(
-    partyId: string,
-    amount: number,
-    isDebit: boolean,
-    balanceAfter: number,
-    description: string,
-    transactionType: string,
-    referenceId: string
-  ): Promise<void> {
-    try {
-      await supabase
-        .from('ledger')
-        .insert({
-          party_id: partyId,
-          transaction_id: referenceId,
-          transaction_type: transactionType,
-          date: new Date().toISOString().split('T')[0],
-          debit: isDebit ? amount : 0,
-          credit: isDebit ? 0 : amount,
-          balance_after: balanceAfter
-        });
-    } catch (error) {
-      console.error('Error recording ledger transaction:', error);
     }
   }
 }

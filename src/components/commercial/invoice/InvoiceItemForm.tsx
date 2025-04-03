@@ -42,7 +42,7 @@ export type InvoiceItemFormValues = z.infer<typeof InvoiceItemSchema>;
 interface InvoiceItemFormProps {
   invoiceType: 'sale' | 'purchase';
   onAddItem: (data: InvoiceItemFormValues) => void;
-  items: Array<{
+  items?: Array<{
     id: number;
     name: string;
     type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
@@ -50,7 +50,7 @@ interface InvoiceItemFormProps {
     unit_cost: number;
     sales_price?: number;
   }>;
-  categorizedItems: {
+  categorizedItems?: {
     raw_materials: any[],
     packaging_materials: any[],
     semi_finished_products: any[],
@@ -63,11 +63,11 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
   onAddItem,
   initialData,
   invoiceType,
-  items,
+  items: providedItems,
   categorizedItems
 }) => {
   const [itemType, setItemType] = useState<ItemType>(initialData?.item_type || 'raw_materials');
-  const [items, setItems] = useState<any[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const inventoryService = InventoryService.getInstance();
 
@@ -85,6 +85,11 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
   // Fetch items based on selected type
   useEffect(() => {
     const fetchItems = async () => {
+      if (categorizedItems) {
+        setInventoryItems(categorizedItems[itemType] || []);
+        return;
+      }
+      
       let fetchedItems: any[] = [];
       
       switch (itemType) {
@@ -104,11 +109,11 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
           fetchedItems = [];
       }
       
-      setItems(fetchedItems);
+      setInventoryItems(fetchedItems);
     };
     
     fetchItems();
-  }, [itemType, inventoryService]);
+  }, [itemType, inventoryService, categorizedItems]);
 
   // Update form when item type changes
   useEffect(() => {
@@ -125,7 +130,7 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
 
   const handleItemChange = (value: string) => {
     const itemId = parseInt(value);
-    const item = items.find(item => item.id === itemId);
+    const item = inventoryItems.find(item => item.id === itemId);
     
     if (item) {
       setSelectedItem(item);
@@ -161,7 +166,7 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
       return;
     }
     
-    onSubmit(data);
+    onAddItem(data);
     
     // Reset form for next item
     form.reset({
@@ -221,8 +226,8 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {items.length > 0 ? (
-                      items.map((item) => (
+                    {inventoryItems.length > 0 ? (
+                      inventoryItems.map((item) => (
                         <SelectItem key={item.id} value={item.id.toString()}>
                           {formatItemLabel(item)}
                         </SelectItem>
