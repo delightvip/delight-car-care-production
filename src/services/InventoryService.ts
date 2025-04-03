@@ -1009,4 +1009,29 @@ class InventoryService {
           .update({ importance })
           .eq('id', material.id);
       }
+    } catch (error) {
+      console.error('Error updating raw materials importance:', error);
     }
+  }
+
+  /**
+   * Calculate importance of a raw material
+   * This is a simplified implementation that should be expanded based on business logic
+   */
+  private calculateImportance(material: any): number {
+    // If quantity is below min_stock, high importance (2)
+    if (material.quantity < material.min_stock) {
+      return 2;
+    }
+    // If quantity is close to min_stock (within 20%), medium importance (1)
+    else if (material.quantity < material.min_stock * 1.2) {
+      return 1;
+    }
+    // Otherwise, low importance (0)
+    else {
+      return 0;
+    }
+  }
+}
+
+export default InventoryService;
