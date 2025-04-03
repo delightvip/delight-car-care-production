@@ -53,6 +53,7 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
   const [itemType, setItemType] = useState<ItemType>(initialData?.item_type || 'raw_materials');
   const [items, setItems] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const inventoryService = InventoryService.getInstance();
 
   const form = useForm<InvoiceItemFormValues>({
     resolver: zodResolver(InvoiceItemSchema),
@@ -72,16 +73,16 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
       
       switch (itemType) {
         case 'raw_materials':
-          fetchedItems = await InventoryService.getRawMaterials();
+          fetchedItems = await inventoryService.getRawMaterials();
           break;
         case 'packaging_materials':
-          fetchedItems = await InventoryService.getPackagingMaterials();
+          fetchedItems = await inventoryService.getPackagingMaterials();
           break;
         case 'semi_finished_products':
-          fetchedItems = await InventoryService.getSemiFinishedProducts();
+          fetchedItems = await inventoryService.getSemiFinishedProducts();
           break;
         case 'finished_products':
-          fetchedItems = await InventoryService.getFinishedProducts();
+          fetchedItems = await inventoryService.getFinishedProducts();
           break;
         default:
           fetchedItems = [];
@@ -91,7 +92,7 @@ const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
     };
     
     fetchItems();
-  }, [itemType]);
+  }, [itemType, inventoryService]);
 
   // Update form when item type changes
   useEffect(() => {

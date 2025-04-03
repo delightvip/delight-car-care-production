@@ -1,11 +1,11 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
   RawMaterial, 
   PackagingMaterial,
   SemiFinishedProduct,
-  FinishedProduct
+  FinishedProduct,
+  InventoryMovement
 } from '@/types/inventoryTypes';
 import { generateCode, generateOrderCode } from '@/utils/generateCode';
 
@@ -111,7 +111,7 @@ class InventoryService {
       return null;
     }
   }
-
+  
   /**
    * Get raw material by code
    */
@@ -699,9 +699,10 @@ class InventoryService {
         .insert({
           movement_type: movement.type === 'in' ? 'add' : 'subtract',
           item_type: movement.category,
-          item_name: movement.itemName,
+          item_id: movement.itemName, // Using item name as its ID for now
           quantity: movement.quantity,
           reason: movement.note,
+          balance_after: 0, // This will need to be calculated before insertion
           created_at: movement.date.toISOString()
         });
       
@@ -1029,4 +1030,4 @@ class InventoryService {
 }
 
 export default InventoryService;
-
+export { RawMaterial, PackagingMaterial, SemiFinishedProduct, FinishedProduct };

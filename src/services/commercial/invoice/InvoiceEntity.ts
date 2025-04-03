@@ -1,8 +1,9 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Invoice, InvoiceItem } from '@/services/commercial/CommercialTypes';
 import { toast } from "sonner";
 import { format } from 'date-fns';
-import PartyService from '@/services/PartyService'; // Fixed: use absolute path instead of relative
+import PartyService from '@/services/PartyService';
 
 export class InvoiceEntity {
   /**
@@ -236,7 +237,7 @@ export class InvoiceEntity {
       }
       
       // Get party details for response
-      const partyService = PartyService.getInstance(); // Fixed: use imported PartyService
+      const partyService = PartyService.getInstance();
       const party = await partyService.getPartyById(invoiceData.party_id);
       console.log('Party details:', party);
       

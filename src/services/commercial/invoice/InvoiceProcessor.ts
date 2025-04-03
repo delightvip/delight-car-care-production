@@ -1,410 +1,258 @@
 
-import { Invoice, InvoiceItem } from '../CommercialTypes';
-import InvoiceEntity from './InvoiceEntity';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { InvoiceEntity } from './InvoiceEntity';
 import InventoryService from '@/services/InventoryService';
 import PartyService from '@/services/PartyService';
-import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 export class InvoiceProcessor {
-  private partyService: PartyService;
   private inventoryService: InventoryService;
-  
+  private partyService: PartyService;
+
   constructor() {
-    this.partyService = new PartyService();
-    this.inventoryService = new InventoryService();
+    this.inventoryService = InventoryService.getInstance();
+    this.partyService = PartyService.getInstance();
   }
-  
+
   /**
-   * Process an invoice to be confirmed
+   * Confirm an invoice, which updates inventory and party balances
    */
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
-      const invoiceData = await InvoiceEntity.findById(invoiceId);
-      if (!invoiceData) {
-        toast.error('لم يتم العثور على الفاتورة');
+      const invoice = await InvoiceEntity.findById(invoiceId);
+      if (!invoice) {
+        console.error(`Invoice with id ${invoiceId} not found`);
         return false;
       }
       
-      if (invoiceData.payment_status === 'confirmed') {
-        toast.info('الفاتورة مؤكدة بالفعل');
+      console.log('Confirming invoice:', invoice);
+      
+      if (invoice.payment_status === 'confirmed') {
+        console.log('Invoice already confirmed, skipping');
         return true;
       }
-      
-      // Update inventory based on invoice type
-      if (invoiceData.invoice_type === 'sale') {
-        // Decrease inventory for sales invoices
-        await this.processInventoryForSale(invoiceData.items);
-        
-        // Update financial records for sales invoices
-        if (invoiceData.party_id) {
-          await this.updatePartyBalanceForSale(invoiceData);
+
+      // Process inventory changes based on invoice type
+      if (invoice.invoice_type === 'purchase') {
+        // For purchases, add items to inventory
+        for (const item of invoice.items) {
+          // Record inventory movement
+          await this.inventoryService.recordItemMovement({
+            type: 'in',
+            category: item.item_type,
+            itemName: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: `Purchase from invoice #${invoiceId}`
+          });
         }
-      } else if (invoiceData.invoice_type === 'purchase') {
-        // Increase inventory for purchase invoices
-        await this.processInventoryForPurchase(invoiceData.items);
         
-        // Update financial records for purchase invoices
-        if (invoiceData.party_id) {
-          await this.updatePartyBalanceForPurchase(invoiceData);
+        // Update party balance (supplier)
+        if (invoice.party_id) {
+          await this.partyService.updatePartyBalanceAfterTransaction(
+            invoice.party_id,
+            invoice.total_amount,
+            'purchase',
+            invoiceId
+          );
+        }
+      } else if (invoice.invoice_type === 'sale') {
+        // For sales, remove items from inventory
+        for (const item of invoice.items) {
+          // Record inventory movement
+          await this.inventoryService.recordItemMovement({
+            type: 'out',
+            category: item.item_type,
+            itemName: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: `Sale from invoice #${invoiceId}`
+          });
+        }
+        
+        // Update party balance (customer)
+        if (invoice.party_id) {
+          await this.partyService.updatePartyBalanceAfterTransaction(
+            invoice.party_id,
+            invoice.total_amount,
+            'sale',
+            invoiceId
+          );
         }
       }
       
       // Update invoice status to confirmed
-      const { error } = await supabase
-        .from('invoices')
-        .update({ payment_status: 'confirmed' })
-        .eq('id', invoiceId);
+      const updateResult = await InvoiceEntity.updateStatus(invoiceId, invoice.status, 'confirmed');
       
-      if (error) throw error;
+      if (updateResult) {
+        toast.success('تم تأكيد الفاتورة بنجاح');
+      }
       
-      toast.success('تم تأكيد الفاتورة بنجاح');
-      return true;
+      return updateResult;
     } catch (error) {
       console.error('Error confirming invoice:', error);
       toast.error('حدث خطأ أثناء تأكيد الفاتورة');
       return false;
     }
   }
-  
+
   /**
-   * Process an invoice to be cancelled
+   * Cancel an invoice, reversing its effects on inventory and party balances
    */
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
-      const invoiceData = await InvoiceEntity.findById(invoiceId);
-      if (!invoiceData) {
-        toast.error('لم يتم العثور على الفاتورة');
+      const invoice = await InvoiceEntity.findById(invoiceId);
+      if (!invoice) {
+        console.error(`Invoice with id ${invoiceId} not found`);
         return false;
       }
       
-      if (invoiceData.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء الفواتير المؤكدة فقط');
-        return false;
-      }
+      console.log('Cancelling invoice:', invoice);
       
-      // Update inventory based on invoice type
-      if (invoiceData.invoice_type === 'sale') {
-        // Increase inventory for cancelled sales invoices
-        await this.reverseInventoryForSale(invoiceData.items);
-        
-        // Update financial records for cancelled sales invoices
-        if (invoiceData.party_id) {
-          await this.reversePartyBalanceForSale(invoiceData);
+      if (invoice.payment_status === 'cancelled') {
+        console.log('Invoice already cancelled, skipping');
+        return true;
+      }
+
+      // Process inventory reversal based on invoice type
+      if (invoice.invoice_type === 'purchase') {
+        // For purchases, remove items from inventory
+        for (const item of invoice.items) {
+          // Record inventory movement
+          await this.inventoryService.recordItemMovement({
+            type: 'out',
+            category: item.item_type,
+            itemName: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: `Cancelled purchase from invoice #${invoiceId}`
+          });
         }
-      } else if (invoiceData.invoice_type === 'purchase') {
-        // Decrease inventory for cancelled purchase invoices
-        await this.reverseInventoryForPurchase(invoiceData.items);
         
-        // Update financial records for cancelled purchase invoices
-        if (invoiceData.party_id) {
-          await this.reversePartyBalanceForPurchase(invoiceData);
+        // Reverse party balance update (supplier)
+        if (invoice.party_id) {
+          await this.partyService.updatePartyBalanceAfterTransaction(
+            invoice.party_id,
+            -invoice.total_amount,
+            'purchase_cancel',
+            invoiceId
+          );
+        }
+      } else if (invoice.invoice_type === 'sale') {
+        // For sales, add items back to inventory
+        for (const item of invoice.items) {
+          // Record inventory movement
+          await this.inventoryService.recordItemMovement({
+            type: 'in',
+            category: item.item_type,
+            itemName: item.item_name,
+            quantity: item.quantity,
+            date: new Date(),
+            note: `Cancelled sale from invoice #${invoiceId}`
+          });
+        }
+        
+        // Reverse party balance update (customer)
+        if (invoice.party_id) {
+          await this.partyService.updatePartyBalanceAfterTransaction(
+            invoice.party_id,
+            -invoice.total_amount,
+            'sale_cancel',
+            invoiceId
+          );
         }
       }
       
       // Update invoice status to cancelled
-      const { error } = await supabase
-        .from('invoices')
-        .update({ payment_status: 'cancelled' })
-        .eq('id', invoiceId);
+      const updateResult = await InvoiceEntity.updateStatus(invoiceId, invoice.status, 'cancelled');
       
-      if (error) throw error;
+      if (updateResult) {
+        toast.success('تم إلغاء الفاتورة بنجاح');
+      }
       
-      toast.success('تم إلغاء الفاتورة بنجاح');
-      return true;
+      return updateResult;
     } catch (error) {
       console.error('Error cancelling invoice:', error);
       toast.error('حدث خطأ أثناء إلغاء الفاتورة');
       return false;
     }
   }
-  
+
   /**
-   * Process inventory updates for a sales invoice
+   * Update invoice status after a payment is made
    */
-  private async processInventoryForSale(items: InvoiceItem[]): Promise<void> {
-    try {
-      for (const item of items) {
-        switch (item.item_type) {
-          case 'raw_materials':
-            await this.inventoryService.updateRawMaterial(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-          case 'packaging_materials':
-            await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-          case 'semi_finished_products':
-            await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-          case 'finished_products':
-            await this.inventoryService.updateFinishedProduct(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-        }
-      }
-    } catch (error) {
-      console.error('Error processing inventory for sale:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Process inventory updates for a purchase invoice
-   */
-  private async processInventoryForPurchase(items: InvoiceItem[]): Promise<void> {
-    try {
-      for (const item of items) {
-        switch (item.item_type) {
-          case 'raw_materials':
-            await this.inventoryService.updateRawMaterial(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-          case 'packaging_materials':
-            await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-          case 'semi_finished_products':
-            await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-          case 'finished_products':
-            await this.inventoryService.updateFinishedProduct(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-        }
-      }
-    } catch (error) {
-      console.error('Error processing inventory for purchase:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Reverse inventory updates for a sales invoice
-   */
-  private async reverseInventoryForSale(items: InvoiceItem[]): Promise<void> {
-    try {
-      for (const item of items) {
-        switch (item.item_type) {
-          case 'raw_materials':
-            await this.inventoryService.updateRawMaterial(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-          case 'packaging_materials':
-            await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-          case 'semi_finished_products':
-            await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-          case 'finished_products':
-            await this.inventoryService.updateFinishedProduct(item.item_id, { 
-              quantity: Number(item.quantity)
-            });
-            break;
-        }
-      }
-    } catch (error) {
-      console.error('Error reversing inventory for sale:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Reverse inventory updates for a purchase invoice
-   */
-  private async reverseInventoryForPurchase(items: InvoiceItem[]): Promise<void> {
-    try {
-      for (const item of items) {
-        switch (item.item_type) {
-          case 'raw_materials':
-            await this.inventoryService.updateRawMaterial(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-          case 'packaging_materials':
-            await this.inventoryService.updatePackagingMaterial(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-          case 'semi_finished_products':
-            await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-          case 'finished_products':
-            await this.inventoryService.updateFinishedProduct(item.item_id, { 
-              quantity: -Number(item.quantity)
-            });
-            break;
-        }
-      }
-    } catch (error) {
-      console.error('Error reversing inventory for purchase:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Update party balance for a sales invoice
-   */
-  private async updatePartyBalanceForSale(invoice: Invoice): Promise<void> {
-    try {
-      await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
-        true, // debit for sales (increase customer's debt)
-        'فاتورة مبيعات',
-        'sale_invoice',
-        invoice.id
-      );
-    } catch (error) {
-      console.error('Error updating party balance for sale:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Update party balance for a purchase invoice
-   */
-  private async updatePartyBalanceForPurchase(invoice: Invoice): Promise<void> {
-    try {
-      await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
-        false, // credit for purchases (increase our debt)
-        'فاتورة مشتريات',
-        'purchase_invoice',
-        invoice.id
-      );
-    } catch (error) {
-      console.error('Error updating party balance for purchase:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Reverse party balance update for a sales invoice
-   */
-  private async reversePartyBalanceForSale(invoice: Invoice): Promise<void> {
-    try {
-      await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
-        false, // credit for cancelled sales (reduce customer's debt)
-        'إلغاء فاتورة مبيعات',
-        'cancel_sale_invoice',
-        invoice.id
-      );
-    } catch (error) {
-      console.error('Error reversing party balance for sale:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Reverse party balance update for a purchase invoice
-   */
-  private async reversePartyBalanceForPurchase(invoice: Invoice): Promise<void> {
-    try {
-      await this.partyService.updatePartyBalance(
-        invoice.party_id,
-        invoice.total_amount,
-        true, // debit for cancelled purchases (reduce our debt)
-        'إلغاء فاتورة مشتريات',
-        'cancel_purchase_invoice',
-        invoice.id
-      );
-    } catch (error) {
-      console.error('Error reversing party balance for purchase:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Update an invoice's status after a payment
-   */
-  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
+  public async updateInvoiceStatusAfterPayment(
+    invoiceId: string,
+    paymentAmount: number
+  ): Promise<void> {
     try {
       const invoice = await InvoiceEntity.findById(invoiceId);
-      
       if (!invoice) {
-        toast.error('لم يتم العثور على الفاتورة');
+        console.error(`Invoice with id ${invoiceId} not found`);
         return;
       }
       
-      const remainingAmount = invoice.total_amount - paymentAmount;
-      let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      // Get all payments for this invoice to calculate total paid amount
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('related_invoice_id', invoiceId)
+        .eq('payment_status', 'confirmed');
+        
+      if (error) throw error;
       
-      if (remainingAmount <= 0) {
+      const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      
+      let newStatus = 'unpaid';
+      if (totalPaid >= invoice.total_amount) {
         newStatus = 'paid';
-      } else if (paymentAmount > 0) {
+      } else if (totalPaid > 0) {
         newStatus = 'partial';
       }
       
-      // Using the updateStatus method from InvoiceEntity class
-      const success = await InvoiceEntity.updateStatus(invoiceId, newStatus);
-      
-      if (!success) {
-        toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
-      } else {
-        toast.success('تم تحديث حالة الفاتورة بنجاح');
-      }
+      await InvoiceEntity.updateStatus(invoiceId, newStatus);
+      console.log(`Updated invoice ${invoiceId} status to ${newStatus}`);
     } catch (error) {
-      console.error('Error updating invoice status:', error);
-      toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
+      console.error('Error updating invoice status after payment:', error);
     }
   }
-  
+
   /**
-   * Reverse an invoice's status after a payment cancellation
+   * Reverse invoice status update after a payment is cancelled
    */
-  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
+  public async reverseInvoiceStatusAfterPaymentCancellation(
+    invoiceId: string,
+    paymentAmount: number
+  ): Promise<void> {
     try {
       const invoice = await InvoiceEntity.findById(invoiceId);
-      
       if (!invoice) {
-        toast.error('لم يتم العثور على الفاتورة');
+        console.error(`Invoice with id ${invoiceId} not found`);
         return;
       }
       
-      const remainingAmount = invoice.total_amount + paymentAmount;
-      let newStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      // Get all payments for this invoice to calculate total paid amount
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('related_invoice_id', invoiceId)
+        .eq('payment_status', 'confirmed');
+        
+      if (error) throw error;
       
-      if (remainingAmount <= 0) {
+      const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      
+      let newStatus = 'unpaid';
+      if (totalPaid >= invoice.total_amount) {
         newStatus = 'paid';
-      } else if (paymentAmount > 0) {
+      } else if (totalPaid > 0) {
         newStatus = 'partial';
       }
       
-      // Using the updateStatus method from InvoiceEntity class
-      const success = await InvoiceEntity.updateStatus(invoiceId, newStatus);
-      
-      if (!success) {
-        toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
-      } else {
-        toast.success('تم تحديث حالة الفاتورة بنجاح');
-      }
+      await InvoiceEntity.updateStatus(invoiceId, newStatus);
+      console.log(`Updated invoice ${invoiceId} status to ${newStatus} after payment cancellation`);
     } catch (error) {
-      console.error('Error updating invoice status:', error);
-      toast.error('حدث خطأ أثناء تحديث حالة الفاتورة');
+      console.error('Error updating invoice status after payment cancellation:', error);
     }
   }
 }
-
-export default InvoiceProcessor;
