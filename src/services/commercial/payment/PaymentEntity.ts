@@ -27,10 +27,10 @@ export class PaymentEntity {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status || 'draft',
+        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -69,10 +69,10 @@ export class PaymentEntity {
         party_name: data.parties?.name,
         date: data.date,
         amount: data.amount,
-        payment_type: data.payment_type,
-        method: data.method,
+        payment_type: data.payment_type as 'collection' | 'disbursement',
+        method: data.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: data.related_invoice_id,
-        payment_status: data.payment_status || 'draft',
+        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: data.notes,
         created_at: data.created_at
       };
@@ -107,10 +107,10 @@ export class PaymentEntity {
         party_name: payment.parties?.name,
         date: payment.date,
         amount: payment.amount,
-        payment_type: payment.payment_type,
-        method: payment.method,
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
         related_invoice_id: payment.related_invoice_id,
-        payment_status: payment.payment_status || 'draft',
+        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: payment.notes,
         created_at: payment.created_at
       }));
@@ -152,7 +152,10 @@ export class PaymentEntity {
       
       return {
         ...payment,
-        party_name: ''  // سيتم تعبئته عند الحاجة في الخدمات العليا
+        party_name: '',  // سيتم تعبئته عند الحاجة في الخدمات العليا
+        payment_type: payment.payment_type as 'collection' | 'disbursement',
+        method: payment.method as 'cash' | 'check' | 'bank_transfer' | 'other',
+        payment_status: payment.payment_status as 'draft' | 'confirmed' | 'cancelled'
       };
     } catch (error) {
       console.error('Error creating payment:', error);
