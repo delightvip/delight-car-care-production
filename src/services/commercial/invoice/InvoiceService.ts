@@ -1,3 +1,4 @@
+
 import { Invoice } from '@/services/commercial/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
@@ -118,12 +119,12 @@ export class InvoiceService {
     }
   }
   
-  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
+  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<boolean> {
     return this.invoiceProcessor.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
   }
   
-  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
-    return this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
+  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string): Promise<boolean> {
+    return this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(invoiceId);
   }
 }
 

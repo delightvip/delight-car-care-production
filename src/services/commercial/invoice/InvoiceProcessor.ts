@@ -1,8 +1,9 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import CommercialService from "@/services/commercial/CommercialService";
+import FinancialService from "@/services/financial/FinancialService";
 
 interface Invoice {
   id: string;
@@ -32,12 +33,10 @@ interface InvoiceWithItems extends Invoice {
 }
 
 export class InvoiceProcessor {
-  private commercialService: CommercialService;
   private partyService: PartyService;
   private inventoryService: InventoryService;
   
   constructor() {
-    this.commercialService = CommercialService.getInstance();
     this.partyService = PartyService.getInstance();
     this.inventoryService = InventoryService.getInstance();
   }
@@ -45,7 +44,7 @@ export class InvoiceProcessor {
   /**
    * Get invoice details by ID without using CommercialService
    */
-  private async getInvoiceById(invoiceId: string): Promise<InvoiceWithItems | null> {
+  async getInvoiceById(invoiceId: string): Promise<InvoiceWithItems | null> {
     try {
       // Fetch invoice base data
       const { data: invoice, error } = await supabase

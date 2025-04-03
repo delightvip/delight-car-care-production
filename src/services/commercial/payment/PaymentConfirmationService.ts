@@ -7,26 +7,25 @@ import FinancialService from "@/services/financial/FinancialService";
 interface Payment {
   id: string;
   party_id: string;
-  date: string;
   amount: number;
-  payment_type: 'receipt' | 'payment';
-  method: 'cash' | 'check' | 'bank_transfer' | 'other';
-  related_invoice_id?: string;
-  payment_status: 'draft' | 'confirmed' | 'cancelled';
-  notes?: string;
+  date: string;
+  payment_type: string;
+  payment_status?: string;
+  status?: string;
   account_id?: string;
-  created_at: string;
+  related_invoice_id?: string;
+  notes?: string;
 }
 
 export class PaymentConfirmationService {
   private partyService: PartyService;
   private financialService: FinancialService;
-
+  
   constructor() {
     this.partyService = PartyService.getInstance();
     this.financialService = FinancialService.getInstance();
   }
-
+  
   /**
    * Confirm a payment
    */
@@ -37,47 +36,49 @@ export class PaymentConfirmationService {
         .select('*')
         .eq('id', paymentId)
         .single();
-
+      
       if (error) {
         console.error("Error fetching payment:", error);
         toast.error("حدث خطأ أثناء جلب بيانات الدفع");
         return false;
       }
-
+      
       if (!payment) {
         toast.error("لم يتم العثور على الدفعة");
         return false;
       }
-
+      
       if (payment.payment_status === 'confirmed') {
         toast.info("الدفعة مؤكدة بالفعل");
         return true;
       }
-
+      
       let success = false;
-
+      
       if (payment.payment_type === 'receipt') {
-        success = await this.confirmReceiptFromCustomer(payment as Payment);
+        success = await this.confirmReceiptFromCustomer(payment);
       } else if (payment.payment_type === 'payment') {
-        success = await this.confirmPaymentToSupplier(payment as Payment);
+        success = await this.confirmPaymentToSupplier(payment);
       }
-
+      
       if (!success) {
         return false;
       }
-
+      
       // Update payment status to confirmed
       const { error: updateError } = await supabase
         .from('payments')
-        .update({ payment_status: 'confirmed' })
+        .update({
+          payment_status: 'confirmed'
+        })
         .eq('id', paymentId);
-
+      
       if (updateError) {
         console.error("Error updating payment status:", updateError);
         toast.error("حدث خطأ أثناء تحديث حالة الدفع");
         return false;
       }
-
+      
       toast.success("تم تأكيد الدفعة بنجاح");
       return true;
     } catch (error) {
@@ -86,7 +87,7 @@ export class PaymentConfirmationService {
       return false;
     }
   }
-
+  
   /**
    * Cancel a payment
    */
@@ -97,47 +98,49 @@ export class PaymentConfirmationService {
         .select('*')
         .eq('id', paymentId)
         .single();
-
+      
       if (error) {
         console.error("Error fetching payment:", error);
         toast.error("حدث خطأ أثناء جلب بيانات الدفع");
         return false;
       }
-
+      
       if (!payment) {
         toast.error("لم يتم العثور على الدفعة");
         return false;
       }
-
+      
       if (payment.payment_status === 'cancelled') {
         toast.info("الدفعة ملغاة بالفعل");
         return true;
       }
-
+      
       let success = false;
-
+      
       if (payment.payment_type === 'receipt') {
-        success = await this.cancelReceiptFromCustomer(payment as Payment);
+        success = await this.cancelReceiptFromCustomer(payment);
       } else if (payment.payment_type === 'payment') {
-        success = await this.cancelPaymentToSupplier(payment as Payment);
+        success = await this.cancelPaymentToSupplier(payment);
       }
-
+      
       if (!success) {
         return false;
       }
-
+      
       // Update payment status to cancelled
       const { error: updateError } = await supabase
         .from('payments')
-        .update({ payment_status: 'cancelled' })
+        .update({
+          payment_status: 'cancelled'
+        })
         .eq('id', paymentId);
-
+      
       if (updateError) {
         console.error("Error updating payment status:", updateError);
         toast.error("حدث خطأ أثناء تحديث حالة الدفع");
         return false;
       }
-
+      
       toast.success("تم إلغاء الدفعة بنجاح");
       return true;
     } catch (error) {
@@ -146,7 +149,7 @@ export class PaymentConfirmationService {
       return false;
     }
   }
-  
+
   private async confirmReceiptFromCustomer(payment: Payment): Promise<boolean> {
     try {
       // Update party balance
@@ -164,9 +167,11 @@ export class PaymentConfirmationService {
         amount: payment.amount,
         description: `Receipt from customer ${payment.party_id} - Payment ID: ${payment.id}`,
         reference_id: payment.id,
-        reference_type: 'payment',
+        reference_type: 'payment'
       };
+      
       const financialResult = await this.financialService.recordTransaction(transactionData);
+      
       if (!financialResult) {
         toast.error("حدث خطأ أثناء تسجيل المعاملة المالية");
         return false;
@@ -178,7 +183,7 @@ export class PaymentConfirmationService {
       return false;
     }
   }
-  
+
   private async cancelReceiptFromCustomer(payment: Payment): Promise<boolean> {
     try {
       // Update party balance by reversing the payment
@@ -196,9 +201,11 @@ export class PaymentConfirmationService {
         amount: -payment.amount,
         description: `Cancellation of receipt from customer ${payment.party_id} - Payment ID: ${payment.id}`,
         reference_id: payment.id,
-        reference_type: 'payment',
+        reference_type: 'payment'
       };
+      
       const financialResult = await this.financialService.recordTransaction(transactionData);
+      
       if (!financialResult) {
         toast.error("حدث خطأ أثناء عكس المعاملة المالية");
         return false;
@@ -210,7 +217,7 @@ export class PaymentConfirmationService {
       return false;
     }
   }
-  
+
   private async confirmPaymentToSupplier(payment: Payment): Promise<boolean> {
     try {
       // Update party balance
@@ -228,9 +235,11 @@ export class PaymentConfirmationService {
         amount: payment.amount,
         description: `Payment to supplier ${payment.party_id} - Payment ID: ${payment.id}`,
         reference_id: payment.id,
-        reference_type: 'payment',
+        reference_type: 'payment'
       };
+      
       const financialResult = await this.financialService.recordTransaction(transactionData);
+      
       if (!financialResult) {
         toast.error("حدث خطأ أثناء تسجيل المعاملة المالية");
         return false;
@@ -242,7 +251,7 @@ export class PaymentConfirmationService {
       return false;
     }
   }
-  
+
   private async cancelPaymentToSupplier(payment: Payment): Promise<boolean> {
     try {
       // Update party balance by reversing the payment
@@ -260,9 +269,11 @@ export class PaymentConfirmationService {
         amount: -payment.amount,
         description: `Cancellation of payment to supplier ${payment.party_id} - Payment ID: ${payment.id}`,
         reference_id: payment.id,
-        reference_type: 'payment',
+        reference_type: 'payment'
       };
+      
       const financialResult = await this.financialService.recordTransaction(transactionData);
+      
       if (!financialResult) {
         toast.error("حدث خطأ أثناء عكس المعاملة المالية");
         return false;

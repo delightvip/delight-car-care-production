@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
@@ -130,20 +131,18 @@ export class ReturnProcessor {
         false // isDebit=false for sales return (customer's debt decreases)
       );
       
-      // Update inventory
+      // Update inventory by returning items
       for (const item of salesReturn.items) {
-        const { error } = await supabase
+        // Here we are returning items back to inventory
+        // Therefore we need to add the quantity back
+        await supabase
           .from(item.item_type)
           .update({
-            quantity: item.quantity + item.quantity
+            quantity: supabase.rpc('coalesce_numeric', { 
+              p1: `quantity + ${item.quantity}` 
+            })
           })
           .eq('id', item.item_id);
-          
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
-        }
       }
       
       // Update return status
@@ -186,20 +185,17 @@ export class ReturnProcessor {
         true // isDebit=true to reverse the effect (customer's debt increases)
       );
       
-      // Reverse inventory update
+      // Reverse inventory update by removing the items again
       for (const item of salesReturn.items) {
-        const { error } = await supabase
+        // Here we are reversing the return, so we remove the items again
+        await supabase
           .from(item.item_type)
           .update({
-            quantity: item.quantity - item.quantity
+            quantity: supabase.rpc('coalesce_numeric', { 
+              p1: `quantity - ${item.quantity}` 
+            })
           })
           .eq('id', item.item_id);
-          
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
-        }
       }
       
       // Update return status
@@ -242,20 +238,18 @@ export class ReturnProcessor {
         true // isDebit=true for purchase return (supplier's debt increases)
       );
       
-      // Update inventory
+      // Update inventory by removing returned items
       for (const item of purchaseReturn.items) {
-        const { error } = await supabase
+        // For purchase returns, we are returning items to supplier
+        // Therefore we need to remove them from our inventory
+        await supabase
           .from(item.item_type)
           .update({
-            quantity: item.quantity - item.quantity
+            quantity: supabase.rpc('coalesce_numeric', { 
+              p1: `quantity - ${item.quantity}` 
+            })
           })
           .eq('id', item.item_id);
-          
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
-        }
       }
       
       // Update return status
@@ -298,20 +292,17 @@ export class ReturnProcessor {
         false // isDebit=false to reverse the effect (supplier's debt decreases)
       );
       
-      // Reverse inventory update
+      // Reverse inventory update by adding the items back
       for (const item of purchaseReturn.items) {
-        const { error } = await supabase
+        // We are reversing the return to supplier, so add items back
+        await supabase
           .from(item.item_type)
           .update({
-            quantity: item.quantity + item.quantity
+            quantity: supabase.rpc('coalesce_numeric', { 
+              p1: `quantity + ${item.quantity}` 
+            })
           })
           .eq('id', item.item_id);
-          
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
-        }
       }
       
       // Update return status
