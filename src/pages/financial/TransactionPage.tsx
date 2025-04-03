@@ -1,4 +1,3 @@
-
 import React from 'react';
 import TransactionForm from '@/components/financial/TransactionForm';
 import { Card, CardContent } from '@/components/ui/card';

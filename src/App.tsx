@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Routes,
@@ -129,6 +128,7 @@ function App() {
             
             <Route path="financial" element={<FinancialDashboard />} />
             <Route path="financial/transactions" element={<TransactionPage />} />
+            <Route path="financial/transactions/new" element={<TransactionPage />} />
             <Route path="financial/categories" element={<CategoriesPage />} />
             
             <Route path="analytics" element={<Analytics />} />
