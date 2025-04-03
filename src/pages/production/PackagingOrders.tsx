@@ -25,8 +25,8 @@ import { AlertTriangle, CheckCircle2, Clock, Edit, Eye, Plus, Trash, RefreshCw }
 import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
-import { PackagingOrder } from '@/services/types/productionTypes';
-import { FinishedProduct } from '@/types/inventoryTypes';
+import { PackagingOrder } from '@/services/ProductionService';
+import { FinishedProduct } from '@/services/InventoryService';
 import { useQuery } from '@tanstack/react-query';
 
 const statusTranslations = {
@@ -231,18 +231,12 @@ const PackagingOrders = () => {
       const success = await productionService.updatePackagingOrder(
         editOrder.id,
         {
-          product_code: editOrder.productCode,
-          product_name: product.name,
+          productCode: editOrder.productCode,
+          productName: product.name,
           quantity: editOrder.quantity,
           unit: editOrder.unit,
-          semi_finished_code: semiFinished.code,
-          semi_finished_name: semiFinished.name,
-          semi_finished_quantity: semiFinished.quantity,
-          materials: packagingMaterials.map(mat => ({
-            code: mat.code,
-            name: mat.name,
-            required_quantity: mat.quantity
-          }))
+          semiFinished,
+          packagingMaterials
         }
       );
       
@@ -318,8 +312,8 @@ const PackagingOrders = () => {
         onClick={() => {
           setEditOrder({
             id: record.id,
-            productCode: record.product_code,
-            productName: record.product_name,
+            productCode: record.productCode,
+            productName: record.productName,
             quantity: record.quantity,
             unit: record.unit
           });
@@ -471,7 +465,7 @@ const PackagingOrders = () => {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">المنتج</h4>
-                    <p className="font-medium">{currentOrder.product_name}</p>
+                    <p className="font-medium">{currentOrder.productName}</p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">الكمية</h4>
@@ -486,32 +480,34 @@ const PackagingOrders = () => {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">التكلفة الإجمالية</h4>
-                    <p className="font-medium">{currentOrder.total_cost} ج.م</p>
+                    <p className="font-medium">{currentOrder.totalCost} ج.م</p>
                   </div>
                 </div>
                 
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                   <div className="space-y-2">
-                    {currentOrder.semiFinished && (
-                      <div className="flex justify-between p-2 border rounded-md">
-                        <div>
-                          <span className="font-medium">{currentOrder.semi_finished_name}</span>
-                          <span className="text-sm text-muted-foreground mr-2">
-                            ({currentOrder.semi_finished_quantity})
-                          </span>
-                          <Badge variant="outline" className="mr-2">سائل</Badge>
-                        </div>
-                        <Badge className="bg-green-100 text-green-800">متوفر</Badge>
+                    <div className="flex justify-between p-2 border rounded-md">
+                      <div>
+                        <span className="font-medium">{currentOrder.semiFinished.name}</span>
+                        <span className="text-sm text-muted-foreground mr-2">
+                          ({currentOrder.semiFinished.quantity})
+                        </span>
+                        <Badge variant="outline" className="mr-2">سائل</Badge>
                       </div>
-                    )}
+                      {currentOrder.semiFinished.available ? (
+                        <Badge className="bg-green-100 text-green-800">متوفر</Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
+                      )}
+                    </div>
                     
-                    {currentOrder.packagingMaterials && currentOrder.packagingMaterials.map((material, index) => (
-                      <div key={`${material.packaging_material_code}-${index}`} className="flex justify-between p-2 border rounded-md">
+                    {currentOrder.packagingMaterials.map((material, index) => (
+                      <div key={`${material.code}-${index}`} className="flex justify-between p-2 border rounded-md">
                         <div>
-                          <span className="font-medium">{material.packaging_material_name}</span>
+                          <span className="font-medium">{material.name}</span>
                           <span className="text-sm text-muted-foreground mr-2">
-                            ({material.required_quantity})
+                            ({material.quantity})
                           </span>
                           <Badge variant="outline" className="mr-2">تعبئة</Badge>
                         </div>
@@ -593,7 +589,7 @@ const PackagingOrders = () => {
             </DialogHeader>
             {currentOrder && (
               <div className="py-4">
-                <p className="font-medium">{currentOrder.code} - {currentOrder.product_name}</p>
+                <p className="font-medium">{currentOrder.code} - {currentOrder.productName}</p>
                 <p className="text-sm text-muted-foreground">الكمية: {currentOrder.quantity} {currentOrder.unit}</p>
               </div>
             )}

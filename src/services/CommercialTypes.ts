@@ -32,7 +32,7 @@ export interface Payment {
   date: string;
   amount: number;
   payment_type: 'collection' | 'disbursement';
-  method: 'cash' | 'check' | 'bank_transfer' | 'bank' | 'credit' | 'other';
+  method: 'cash' | 'check' | 'bank_transfer' | 'other';
   related_invoice_id?: string;
   payment_status: 'draft' | 'confirmed' | 'cancelled';
   notes?: string;

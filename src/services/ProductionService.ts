@@ -1,16 +1,64 @@
-import { supabase } from "@/integrations/supabase/client";
+
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
-import { ProductionOrderIngredient } from "./commercial/CommercialTypes";
+import ProductionDatabaseService from "./database/ProductionDatabaseService";
+
+// أنواع البيانات لأوامر الإنتاج
+export interface ProductionOrder {
+  id: number;
+  code: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  status: 'pending' | 'inProgress' | 'completed' | 'cancelled';
+  date: string;
+  ingredients: {
+    id: number;
+    code: string;
+    name: string;
+    requiredQuantity: number;
+    available: boolean;
+  }[];
+  totalCost: number;
+}
+
+// أنواع البيانات لأوامر التعبئة
+export interface PackagingOrder {
+  id: number;
+  code: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  status: 'pending' | 'inProgress' | 'completed' | 'cancelled';
+  date: string;
+  semiFinished: {
+    code: string;
+    name: string;
+    quantity: number;
+    available: boolean;
+  };
+  packagingMaterials: {
+    code: string;
+    name: string;
+    quantity: number;
+    available: boolean;
+  }[];
+  totalCost: number;
+}
 
 class ProductionService {
   private static instance: ProductionService;
   private inventoryService: InventoryService;
+  private databaseService: ProductionDatabaseService;
   
   private constructor() {
     this.inventoryService = InventoryService.getInstance();
+    this.databaseService = ProductionDatabaseService.getInstance();
   }
   
+  // الحصول على كائن وحيد من الخدمة (نمط Singleton)
   public static getInstance(): ProductionService {
     if (!ProductionService.instance) {
       ProductionService.instance = new ProductionService();
@@ -18,386 +66,495 @@ class ProductionService {
     return ProductionService.instance;
   }
   
-  // Production order methods
-  async getProductionOrders(): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from('production_orders')
-        .select('*')
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Fetch ingredients for each production order
-      const productionOrdersWithIngredients = await Promise.all(
-        data.map(async (order) => {
-          const { data: ingredients, error: ingredientsError } = await supabase
-            .from('production_order_ingredients')
-            .select('*')
-            .eq('production_order_id', order.id);
-          
-          if (ingredientsError) {
-            console.error(`Error fetching ingredients for order ${order.id}:`, ingredientsError);
-            return order;
-          }
-          
-          return {
-            ...order,
-            ingredients: ingredients || []
-          };
-        })
-      );
-      
-      return productionOrdersWithIngredients;
-    } catch (error) {
-      console.error('Error fetching production orders:', error);
-      toast.error('حدث خطأ أثناء جلب أوامر الإنتاج');
-      return [];
-    }
+  // الحصول على جميع أوامر الإنتاج
+  public async getProductionOrders(): Promise<ProductionOrder[]> {
+    return await this.databaseService.getProductionOrders();
   }
   
-  async createProductionOrder(productCode: string, quantity: number): Promise<any> {
+  // الحصول على جميع أوامر التعبئة
+  public async getPackagingOrders(): Promise<PackagingOrder[]> {
+    return await this.databaseService.getPackagingOrders();
+  }
+  
+  // إنشاء أمر إنتاج جديد
+  public async createProductionOrder(productCode: string, quantity: number): Promise<ProductionOrder | null> {
     try {
-      // Fetch product details
-      const { data: product, error: productError } = await supabase
-        .from('semi_finished_products')
-        .select('*')
-        .eq('code', productCode)
-        .single();
+      const semiFinishedProducts = await this.inventoryService.getSemiFinishedProducts();
+      const product = semiFinishedProducts.find(p => p.code === productCode);
       
-      if (productError) throw productError;
-      
-      // Calculate total cost
-      const totalCost = product.unit_cost * quantity;
-      
-      // Create production order
-      const { data: order, error: orderError } = await supabase
-        .from('production_orders')
-        .insert({
-          product_id: product.id,
-          product_code: product.code,
-          product_name: product.name,
-          quantity: quantity,
-          unit: product.unit,
-          total_cost: totalCost,
-          status: 'pending'
-        })
-        .select()
-        .single();
-      
-      if (orderError) throw orderError;
-      
-      // Create ingredients
-      for (const ingredient of product.ingredients) {
-        const requiredQuantity = (ingredient.percentage / 100) * quantity;
-        
-        await supabase
-          .from('production_order_ingredients')
-          .insert({
-            production_order_id: order.id,
-            raw_material_id: ingredient.raw_material_id,
-            raw_material_code: ingredient.code,
-            raw_material_name: ingredient.name,
-            required_quantity: requiredQuantity
-          });
+      if (!product) {
+        toast.error('المنتج النصف مصنع غير موجود');
+        return null;
       }
       
-      toast.success('تم إنشاء أمر الإنتاج بنجاح');
-      return order;
+      // حساب الكميات المطلوبة من المواد الأولية
+      const rawMaterials = await this.inventoryService.getRawMaterials();
+      const ingredients = product.ingredients.map(ingredient => {
+        const requiredQuantity = (ingredient.percentage / 100) * quantity;
+        const inventoryItem = rawMaterials.find(item => item.code === ingredient.code);
+        const available = inventoryItem ? inventoryItem.quantity >= requiredQuantity : false;
+        
+        return {
+          code: ingredient.code,
+          name: ingredient.name,
+          requiredQuantity,
+          available
+        };
+      });
+      
+      // حساب التكلفة الإجمالية - Fix here: Changed unitCost to unit_cost
+      const totalCost = product.unit_cost * quantity;
+      
+      // إنشاء أمر الإنتاج في قاعدة البيانات
+      const newOrder = await this.databaseService.createProductionOrder(
+        productCode,
+        product.name,
+        quantity,
+        product.unit,
+        ingredients,
+        totalCost
+      );
+      
+      if (!newOrder) return null;
+      
+      // التحقق من توفر جميع المكونات
+      const allAvailable = ingredients.every(i => i.available);
+      if (!allAvailable) {
+        toast.warning('بعض المكونات غير متوفرة بالكمية المطلوبة. تم حفظ الأمر كمسودة.');
+      } else {
+        toast.success(`تم إنشاء أمر إنتاج ${newOrder.productName} بنجاح`);
+      }
+      
+      return newOrder;
     } catch (error) {
       console.error('Error creating production order:', error);
       toast.error('حدث خطأ أثناء إنشاء أمر الإنتاج');
       return null;
     }
   }
+  
+  // تحديث حالة أمر إنتاج
+  public async updateProductionOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
+    try {
+      const orders = await this.getProductionOrders();
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
+        toast.error('أمر الإنتاج غير موجود');
+        return false;
+      }
+      
+      // التحقق من الحالة السابقة للأمر
+      const prevStatus = order.status;
+      
+      // تحديث حالة الأمر في قاعدة البيانات
+      const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
+      
+      if (!result) {
+        return false;
+      }
 
-  // Add missing production order methods
-  async updateProductionOrder(id: number, data: any): Promise<boolean> {
-    try {
-      // Update the production order
-      const { error } = await this.supabase
-        .from('production_orders')
-        .update(data)
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      return true;
-    } catch (error) {
-      console.error('Error updating production order:', error);
-      return false;
-    }
-  }
-  
-  async deleteProductionOrder(id: number): Promise<boolean> {
-    try {
-      // Delete ingredients first
-      await this.supabase
-        .from('production_order_ingredients')
-        .delete()
-        .eq('production_order_id', id);
+      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
+      if (prevStatus === 'completed' && newStatus !== 'completed') {
+        // استرجاع المواد الأولية المستهلكة
+        const returnMaterials = order.ingredients.map(ingredient => ({
+          code: ingredient.code,
+          requiredQuantity: ingredient.requiredQuantity
+        }));
         
-      // Delete the production order
-      const { error } = await this.supabase
-        .from('production_orders')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      return true;
-    } catch (error) {
-      console.error('Error deleting production order:', error);
-      return false;
-    }
-  }
-  
-  async updateProductionOrderStatus(id: number, status: string): Promise<boolean> {
-    try {
-      const { error } = await this.supabase
-        .from('production_orders')
-        .update({ status })
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // If status is "completed", we should update inventory
-      if (status === 'completed') {
-        const { data: order, error: orderError } = await this.supabase
-          .from('production_orders')
-          .select('*')
-          .eq('id', id)
-          .single();
-          
-        if (orderError) throw orderError;
+        // إعادة المواد الأولية للمخزون
+        await this.inventoryService.returnRawMaterials(returnMaterials);
         
-        // Update raw materials inventory
-        const { data: ingredients, error: ingredientsError } = await this.supabase
-          .from('production_order_ingredients')
-          .select('*')
-          .eq('production_order_id', id);
-          
-        if (ingredientsError) throw ingredientsError;
+        // إزالة المنتج النصف مصنع من المخزون
+        await this.inventoryService.removeSemiFinishedFromInventory(order.productCode, order.quantity);
         
-        // Decrease raw materials inventory
-        for (const ingredient of ingredients) {
-          await this.inventoryService.updateRawMaterial(
-            ingredient.raw_material_id,
-            { quantity: -ingredient.required_quantity }
-          );
+        toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
+        return true;
+      }
+
+      // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
+      if (newStatus === 'completed' && prevStatus !== 'completed') {
+        // تجهيز متطلبات المواد الأولية
+        const requirements = order.ingredients.map(ingredient => ({
+          code: ingredient.code,
+          requiredQuantity: ingredient.requiredQuantity
+        }));
+        
+        // استهلاك المواد الأولية من المخزون
+        const consumeSuccess = await this.inventoryService.consumeRawMaterials(requirements);
+        if (!consumeSuccess) {
+          // إعادة الحالة السابقة إذا فشلت العملية
+          await this.databaseService.updateProductionOrderStatus(orderId, prevStatus);
+          return false;
         }
         
-        // Increase semi-finished products inventory
-        await this.inventoryService.updateSemiFinishedProduct(
-          order.product_id,
-          { quantity: order.quantity }
+        // تحديث الأهمية للمواد الأولية المستخدمة
+        await this.inventoryService.updateRawMaterialsImportance(
+          requirements.map(req => req.code)
         );
+        
+        // حساب التكلفة الإجمالية بناءً على تكلفة المواد الأولية
+        const totalCost = await this.calculateProductionCost(requirements);
+        
+        // إضافة المنتج النصف مصنع للمخزون مع تحديث التكلفة
+        const addSuccess = await this.inventoryService.addSemiFinishedToInventory(
+          order.productCode, 
+          order.quantity, 
+          totalCost / order.quantity // تكلفة الوحدة
+        );
+        
+        if (!addSuccess) {
+          // استعادة المواد الأولية إذا فشلت العملية
+          await this.inventoryService.returnRawMaterials(requirements);
+          await this.databaseService.updateProductionOrderStatus(orderId, prevStatus);
+          return false;
+        }
+        
+        // تحديث تكلفة الأمر في قاعدة البيانات
+        await this.databaseService.updateProductionOrderCost(orderId, totalCost);
       }
       
-      return true;
+      if (result) {
+        toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error updating production order status:', error);
+      toast.error('حدث خطأ أثناء تحديث حالة أمر الإنتاج');
       return false;
     }
   }
-
-  // Packaging order methods
-  async getPackagingOrders(): Promise<any[]> {
+  
+  // حساب تكلفة الإنتاج بناءً على المواد المستخدمة
+  private async calculateProductionCost(requirements: { code: string, requiredQuantity: number }[]): Promise<number> {
     try {
-      const { data, error } = await supabase
-        .from('packaging_orders')
-        .select('*')
-        .order('date', { ascending: false });
+      let totalCost = 0;
       
-      if (error) throw error;
+      for (const req of requirements) {
+        const { data: rawMaterial } = await this.inventoryService.getRawMaterialByCode(req.code);
+        if (rawMaterial) {
+          totalCost += rawMaterial.unit_cost * req.requiredQuantity;
+        }
+      }
       
-      // Fetch materials for each packaging order
-      const packagingOrdersWithMaterials = await Promise.all(
-        data.map(async (order) => {
-          const { data: materials, error: materialsError } = await supabase
-            .from('packaging_order_materials')
-            .select('*')
-            .eq('packaging_order_id', order.id);
-          
-          if (materialsError) {
-            console.error(`Error fetching materials for order ${order.id}:`, materialsError);
-            return order;
-          }
-          
-          return {
-            ...order,
-            materials: materials || []
-          };
-        })
-      );
-      
-      return packagingOrdersWithMaterials;
+      return totalCost;
     } catch (error) {
-      console.error('Error fetching packaging orders:', error);
-      toast.error('حدث خطأ أثناء جلب أوامر التعبئة والتغليف');
-      return [];
+      console.error('Error calculating production cost:', error);
+      return 0;
     }
   }
   
-  async createPackagingOrder(
-    productId: number,
-    semiFinishedId: number,
+  // إنشاء أمر تعبئة جديد
+  public async createPackagingOrder(
+    finishedProductCode: string,
     quantity: number
-  ): Promise<any> {
+  ): Promise<PackagingOrder | null> {
     try {
-      // Fetch product and semi-finished product details
-      const { data: product, error: productError } = await supabase
-        .from('finished_products')
-        .select('*')
-        .eq('id', productId)
-        .single();
+      const finishedProducts = await this.inventoryService.getFinishedProducts();
+      const product = finishedProducts.find(p => p.code === finishedProductCode);
       
-      if (productError) throw productError;
-      
-      const { data: semiFinished, error: semiFinishedError } = await supabase
-        .from('semi_finished_products')
-        .select('*')
-        .eq('id', semiFinishedId)
-        .single();
-      
-      if (semiFinishedError) throw semiFinishedError;
-      
-      // Create packaging order
-      const { data: order, error: orderError } = await supabase
-        .from('packaging_orders')
-        .insert({
-          product_id: product.id,
-          product_code: product.code,
-          product_name: product.name,
-          semi_finished_id: semiFinished.id,
-          semi_finished_code: semiFinished.code,
-          semi_finished_name: semiFinished.name,
-          semi_finished_quantity: semiFinished.quantity,
-          quantity: quantity,
-          unit: product.unit,
-          status: 'pending'
-        })
-        .select()
-        .single();
-      
-      if (orderError) throw orderError;
-      
-      // Create materials
-      for (const material of semiFinished.packaging_materials) {
-        const requiredQuantity = material.percentage / 100 * quantity;
-        
-        await supabase
-          .from('packaging_order_materials')
-          .insert({
-            packaging_order_id: order.id,
-            packaging_material_id: material.packaging_material_id,
-            packaging_material_code: material.code,
-            packaging_material_name: material.name,
-            required_quantity: requiredQuantity
-          });
+      if (!product) {
+        toast.error('المنتج النهائي غير موجود');
+        return null;
       }
       
-      toast.success('تم إنشاء أمر التعبئة والتغليف بنجاح');
-      return order;
+      // التحقق من توفر المنتج النصف مصنع
+      const semiFinishedCode = product.semiFinished.code;
+      const semiFinishedQuantity = product.semiFinished.quantity * quantity;
+      const semiAvailable = await this.inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
+      
+      // التحقق من توفر مواد التعبئة
+      const packagingMaterials = await Promise.all(product.packaging.map(async pkg => {
+        const pkgQuantity = pkg.quantity * quantity;
+        const available = await this.inventoryService.checkPackagingAvailability([{
+          code: pkg.code,
+          requiredQuantity: pkgQuantity
+        }]);
+        
+        return {
+          code: pkg.code,
+          name: pkg.name,
+          quantity: pkgQuantity,
+          available
+        };
+      }));
+      
+      // حساب التكلفة الإجمالية - Fix here: Changed unitCost to unit_cost
+      const totalCost = product.unit_cost * quantity;
+      
+      // إنشاء أمر التعبئة في قاعدة البيانات
+      const newOrder = await this.databaseService.createPackagingOrder(
+        finishedProductCode,
+        product.name,
+        quantity,
+        product.unit,
+        {
+          code: semiFinishedCode,
+          name: product.semiFinished.name,
+          quantity: semiFinishedQuantity
+        },
+        packagingMaterials,
+        totalCost
+      );
+      
+      if (!newOrder) return null;
+      
+      toast.success(`تم إنشاء أمر تعبئة ${newOrder.productName} بنجاح`);
+      
+      return newOrder;
     } catch (error) {
       console.error('Error creating packaging order:', error);
-      toast.error('حدث خطأ أثناء إنشاء أمر التعبئة والتغليف');
+      toast.error('حدث خطأ أثناء إنشاء أمر التعبئة');
       return null;
     }
   }
   
-  // Add missing packaging order methods
-  async updatePackagingOrder(id: number, data: any): Promise<boolean> {
+  // تحديث حالة أمر تعبئة
+  public async updatePackagingOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
     try {
-      // Update the packaging order
-      const { error } = await this.supabase
-        .from('packaging_orders')
-        .update(data)
-        .eq('id', id);
+      const orders = await this.getPackagingOrders();
+      const order = orders.find(o => o.id === orderId);
       
-      if (error) throw error;
-      
-      return true;
-    } catch (error) {
-      console.error('Error updating packaging order:', error);
-      return false;
-    }
-  }
-  
-  async deletePackagingOrder(id: number): Promise<boolean> {
-    try {
-      // Delete materials first
-      await this.supabase
-        .from('packaging_order_materials')
-        .delete()
-        .eq('packaging_order_id', id);
-        
-      // Delete the packaging order
-      const { error } = await this.supabase
-        .from('packaging_orders')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      return true;
-    } catch (error) {
-      console.error('Error deleting packaging order:', error);
-      return false;
-    }
-  }
-  
-  async updatePackagingOrderStatus(id: number, status: string): Promise<boolean> {
-    try {
-      const { error } = await this.supabase
-        .from('packaging_orders')
-        .update({ status })
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // If status is "completed", we should update inventory
-      if (status === 'completed') {
-        const { data: order, error: orderError } = await this.supabase
-          .from('packaging_orders')
-          .select('*')
-          .eq('id', id)
-          .single();
-          
-        if (orderError) throw orderError;
-        
-        // Update packaging materials inventory
-        const { data: materials, error: materialsError } = await this.supabase
-          .from('packaging_order_materials')
-          .select('*')
-          .eq('packaging_order_id', id);
-          
-        if (materialsError) throw materialsError;
-        
-        // Decrease packaging materials inventory
-        for (const material of materials) {
-          await this.inventoryService.updatePackagingMaterial(
-            material.packaging_material_id,
-            { quantity: -material.required_quantity }
-          );
-        }
-        
-        // Decrease semi-finished products inventory
-        await this.inventoryService.updateSemiFinishedProduct(
-          order.semi_finished_id,
-          { quantity: -order.semi_finished_quantity }
-        );
-        
-        // Increase finished products inventory
-        await this.inventoryService.updateFinishedProduct(
-          order.product_id,
-          { quantity: order.quantity }
-        );
+      if (!order) {
+        toast.error('أمر التعبئة غير موجود');
+        return false;
       }
       
-      return true;
+      // التحقق من الحالة السابقة للأمر
+      const prevStatus = order.status;
+      
+      // تحديث حالة الأمر في قاعدة البيانات
+      const result = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
+      
+      if (!result) {
+        return false;
+      }
+      
+      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
+      if (prevStatus === 'completed' && newStatus !== 'completed') {
+        // إعادة المنتج النصف مصنع للمخزون
+        await this.inventoryService.addSemiFinishedToInventory(
+          order.semiFinished.code,
+          order.semiFinished.quantity
+        );
+        
+        // إعادة مواد التعبئة للمخزون
+        const packagingReqs = order.packagingMaterials.map(material => ({
+          code: material.code,
+          requiredQuantity: material.quantity
+        }));
+        
+        await this.inventoryService.returnPackagingMaterials(packagingReqs);
+        
+        // إزالة المنتج النهائي من المخزون
+        await this.inventoryService.removeFinishedFromInventory(order.productCode, order.quantity);
+        
+        toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
+        return true;
+      }
+
+      // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
+      if (newStatus === 'completed' && prevStatus !== 'completed') {
+        // التحقق من توفر المنتج النصف مصنع
+        const semiFinishedAvailable = await this.inventoryService.checkSemiFinishedAvailability(
+          order.semiFinished.code, 
+          order.semiFinished.quantity
+        );
+        
+        if (!semiFinishedAvailable) {
+          toast.error('المنتج النصف مصنع غير متوفر بالكمية المطلوبة');
+          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
+          return false;
+        }
+        
+        // التحقق من توفر مواد التعبئة
+        const packagingReqs = order.packagingMaterials.map(material => ({
+          code: material.code,
+          requiredQuantity: material.quantity
+        }));
+        
+        const packagingAvailable = await this.inventoryService.checkPackagingAvailability(packagingReqs);
+        if (!packagingAvailable) {
+          toast.error('مواد التعبئة غير متوفرة بالكميات المطلوبة');
+          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
+          return false;
+        }
+        
+        // تنفيذ عملية إنتاج المنتج النهائي
+        const produceSuccess = await this.inventoryService.produceFinishedProduct(
+          order.productCode,
+          order.quantity,
+          order.semiFinished.code,
+          order.semiFinished.quantity,
+          packagingReqs
+        );
+        
+        if (!produceSuccess) {
+          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
+          return false;
+        }
+      }
+      
+      if (result) {
+        toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error updating packaging order status:', error);
+      toast.error('حدث خطأ أثناء تحديث حالة أمر التعبئة');
+      return false;
+    }
+  }
+  
+  // حذف أمر إنتاج
+  public async deleteProductionOrder(orderId: number): Promise<boolean> {
+    try {
+      const orders = await this.getProductionOrders();
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
+        toast.error('أمر الإنتاج غير موجود');
+        return false;
+      }
+      
+      // فقط أوامر الإنتاج في حالة "قيد الانتظار" يمكن حذفها
+      if (order.status !== 'pending') {
+        toast.error('لا يمكن حذف أمر إنتاج قيد التنفيذ أو مكتمل');
+        return false;
+      }
+      
+      // حذف الأمر من قاعدة البيانات
+      const result = await this.databaseService.deleteProductionOrder(orderId);
+      
+      if (result) {
+        toast.success(`تم حذف أمر الإنتاج ${order.code} بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error deleting production order:', error);
+      toast.error('حدث خطأ أثناء حذف أمر الإنتاج');
+      return false;
+    }
+  }
+  
+  // حذف أمر تعبئة
+  public async deletePackagingOrder(orderId: number): Promise<boolean> {
+    try {
+      const orders = await this.getPackagingOrders();
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
+        toast.error('أمر التعبئة غير موجود');
+        return false;
+      }
+      
+      // فقط أوامر التعبئة في حالة "قيد الانتظار" يمكن حذفها
+      if (order.status !== 'pending') {
+        toast.error('لا يمكن حذف أمر تعبئة قيد التنفيذ أو مكتمل');
+        return false;
+      }
+      
+      // حذف الأمر من قاعدة البيانات
+      const result = await this.databaseService.deletePackagingOrder(orderId);
+      
+      if (result) {
+        toast.success(`تم حذف أمر التعبئة ${order.code} بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error deleting packaging order:', error);
+      toast.error('حدث خطأ أثناء حذف أمر التعبئة');
+      return false;
+    }
+  }
+  
+  // ترجمة حالة الأمر
+  private getStatusTranslation(status: string): string {
+    const translations: Record<string, string> = {
+      pending: 'قيد الانتظار',
+      inProgress: 'قيد التنفيذ',
+      completed: 'مكتمل',
+      cancelled: 'ملغي'
+    };
+    
+    return translations[status] || status;
+  }
+  
+  // الحصول على بيانات إحصائية للإنتاج
+  public async getProductionStats() {
+    return await this.databaseService.getProductionStats();
+  }
+  
+  // الحصول على بيانات الإنتاج للرسوم البيانية
+  public async getProductionChartData() {
+    return await this.databaseService.getMonthlyProductionStats();
+  }
+
+  // تحديث أمر إنتاج
+  public async updateProductionOrder(
+    orderId: number,
+    orderData: {
+      productCode: string;
+      productName: string;
+      quantity: number;
+      unit: string;
+      ingredients: {
+        code: string;
+        name: string;
+        requiredQuantity: number;
+      }[];
+    }
+  ): Promise<boolean> {
+    try {
+      const result = await this.databaseService.updateProductionOrder(orderId, orderData);
+      
+      if (result) {
+        toast.success(`تم تحديث أمر الإنتاج بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error updating production order:', error);
+      toast.error('حدث خطأ أثناء تحديث أمر الإنتاج');
+      return false;
+    }
+  }
+
+  // تحديث أمر تعبئة
+  public async updatePackagingOrder(
+    orderId: number,
+    orderData: {
+      productCode: string;
+      productName: string;
+      quantity: number;
+      unit: string;
+      semiFinished: {
+        code: string;
+        name: string;
+        quantity: number;
+      };
+      packagingMaterials: {
+        code: string;
+        name: string;
+        quantity: number;
+      }[];
+    }
+  ): Promise<boolean> {
+    try {
+      const result = await this.databaseService.updatePackagingOrder(orderId, orderData);
+      
+      if (result) {
+        toast.success(`تم تحديث أمر التعبئة بنجاح`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error updating packaging order:', error);
+      toast.error('حدث خطأ أثناء تحديث أمر التعبئة');
       return false;
     }
   }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -29,7 +30,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Trash2, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
-import InvoiceItemForm, { InvoiceItemFormValues } from '@/components/commercial/invoice/InvoiceItemForm';
 
 const invoiceFormSchema = z.object({
   invoice_type: z.enum(['sale', 'purchase'], {
@@ -58,7 +58,6 @@ interface InvoiceFormProps {
     type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
     quantity: number;
     unit_cost: number;
-    sales_price?: number;
   }>;
   initialData?: Partial<Invoice>;
   isEditing?: boolean;
@@ -81,8 +80,12 @@ export function InvoiceForm({
       total: item.quantity * item.unit_price
     })) : []
   );
+  const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
+  const [selectedItemType, setSelectedItemType] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('finished_products');
+  const [itemQuantity, setItemQuantity] = useState<number>(1);
+  const [itemPrice, setItemPrice] = useState<number>(0);
   const [total, setTotal] = useState<number>(0);
-  const [showItemForm, setShowItemForm] = useState<boolean>(false);
   
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
@@ -107,6 +110,16 @@ export function InvoiceForm({
     setTotal(calculatedTotal);
   }, [invoiceItems]);
 
+  useEffect(() => {
+    if (selectedItemId) {
+      const selectedItem = items.find(item => item.id === Number(selectedItemId) && item.type === selectedCategory);
+      if (selectedItem) {
+        setItemPrice(selectedItem.unit_cost);
+        setSelectedItemType(selectedItem.type);
+      }
+    }
+  }, [selectedItemId, selectedCategory, items]);
+  
   // Categorized items
   const categorizedItems = React.useMemo(() => {
     return {
@@ -117,18 +130,27 @@ export function InvoiceForm({
     };
   }, [items]);
 
-  const handleAddItemToInvoice = (newItem: InvoiceItemFormValues) => {
-    const invoiceItem: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'> = {
-      item_id: newItem.item_id,
-      item_type: newItem.item_type,
-      item_name: newItem.item_name,
-      quantity: newItem.quantity,
-      unit_price: newItem.unit_price,
-      total: newItem.quantity * newItem.unit_price
-    };
-    
-    setInvoiceItems([...invoiceItems, invoiceItem]);
-    setShowItemForm(false);
+  const addItemToInvoice = () => {
+    if (selectedItemId && itemQuantity > 0 && itemPrice > 0) {
+      const selectedItem = items.find(item => item.id === Number(selectedItemId) && item.type === selectedCategory);
+      
+      if (!selectedItem) return;
+      
+      const newItem: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'> = {
+        item_id: Number(selectedItemId),
+        item_type: selectedItem.type,
+        item_name: selectedItem.name,
+        quantity: itemQuantity,
+        unit_price: itemPrice,
+        total: itemQuantity * itemPrice
+      };
+      
+      setInvoiceItems([...invoiceItems, newItem]);
+      
+      setSelectedItemId('');
+      setItemQuantity(1);
+      setItemPrice(0);
+    }
   };
 
   const removeItemFromInvoice = (index: number) => {
@@ -298,24 +320,76 @@ export function InvoiceForm({
             <div className="border rounded-md p-4">
               <h3 className="text-lg font-semibold mb-4">عناصر الفاتورة</h3>
               
-              {!showItemForm && (
-                <Button 
-                  type="button" 
-                  onClick={() => setShowItemForm(true)}
-                  className="mb-4"
-                >
-                  <Plus className="mr-2 h-4 w-4" /> إضافة صنف جديد
-                </Button>
-              )}
-              
-              {showItemForm && (
-                <div className="mb-4">
-                  <InvoiceItemForm 
-                    invoiceType={invoiceType as 'sale' | 'purchase'}
-                    onAddItem={handleAddItemToInvoice}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                <div>
+                  <label className="text-sm font-medium">فئة المنتج</label>
+                  <Select 
+                    value={selectedCategory}
+                    onValueChange={setSelectedCategory}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر فئة المنتج" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="finished_products">المنتجات النهائية</SelectItem>
+                      <SelectItem value="semi_finished_products">المنتجات نصف المصنعة</SelectItem>
+                      <SelectItem value="raw_materials">المواد الخام</SelectItem>
+                      <SelectItem value="packaging_materials">مواد التعبئة</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">المنتج</label>
+                  <Select 
+                    value={selectedItemId.toString() || undefined}
+                    onValueChange={(value) => setSelectedItemId(Number(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر المنتج" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categorizedItems[selectedCategory as keyof typeof categorizedItems].map(item => (
+                        <SelectItem key={item.id} value={item.id.toString()}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">الكمية</label>
+                  <Input 
+                    type="number" 
+                    min="1"
+                    value={itemQuantity} 
+                    onChange={(e) => setItemQuantity(Number(e.target.value))} 
                   />
                 </div>
-              )}
+                
+                <div>
+                  <label className="text-sm font-medium">السعر</label>
+                  <Input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={itemPrice} 
+                    onChange={(e) => setItemPrice(Number(e.target.value))} 
+                  />
+                </div>
+                
+                <div className="flex items-end">
+                  <Button 
+                    type="button" 
+                    onClick={addItemToInvoice}
+                    disabled={!selectedItemId || itemQuantity <= 0 || itemPrice <= 0}
+                    className="w-full"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> إضافة
+                  </Button>
+                </div>
+              </div>
               
               <div className="border rounded-md overflow-hidden">
                 <Table>

@@ -34,10 +34,6 @@ export class PaymentService {
     return PaymentEntity.fetchByPartyId(partyId);
   }
   
-  public async getPaymentById(id: string): Promise<Payment | null> {
-    return PaymentEntity.fetchById(id);
-  }
-  
   public async recordPayment(paymentData: Omit<Payment, 'id' | 'created_at'>): Promise<Payment | null> {
     try {
       const payment = await PaymentEntity.create(paymentData);

@@ -148,7 +148,6 @@ export type Database = {
           min_stock: number
           name: string
           quantity: number
-          sales_price: number | null
           semi_finished_id: number
           semi_finished_quantity: number
           unit: string
@@ -162,7 +161,6 @@ export type Database = {
           min_stock?: number
           name: string
           quantity?: number
-          sales_price?: number | null
           semi_finished_id: number
           semi_finished_quantity?: number
           unit: string
@@ -176,7 +174,6 @@ export type Database = {
           min_stock?: number
           name?: string
           quantity?: number
-          sales_price?: number | null
           semi_finished_id?: number
           semi_finished_quantity?: number
           unit?: string
@@ -373,7 +370,6 @@ export type Database = {
           min_stock: number
           name: string
           quantity: number
-          sales_price: number | null
           unit: string
           unit_cost: number
           updated_at: string | null
@@ -386,7 +382,6 @@ export type Database = {
           min_stock?: number
           name: string
           quantity?: number
-          sales_price?: number | null
           unit: string
           unit_cost?: number
           updated_at?: string | null
@@ -399,7 +394,6 @@ export type Database = {
           min_stock?: number
           name?: string
           quantity?: number
-          sales_price?: number | null
           unit?: string
           unit_cost?: number
           updated_at?: string | null
@@ -748,7 +742,6 @@ export type Database = {
           min_stock: number
           name: string
           quantity: number
-          sales_price: number | null
           unit: string
           unit_cost: number
           updated_at: string | null
@@ -761,7 +754,6 @@ export type Database = {
           min_stock?: number
           name: string
           quantity?: number
-          sales_price?: number | null
           unit: string
           unit_cost?: number
           updated_at?: string | null
@@ -774,7 +766,6 @@ export type Database = {
           min_stock?: number
           name?: string
           quantity?: number
-          sales_price?: number | null
           unit?: string
           unit_cost?: number
           updated_at?: string | null
@@ -923,7 +914,6 @@ export type Database = {
           min_stock: number
           name: string
           quantity: number
-          sales_price: number | null
           unit: string
           unit_cost: number
           updated_at: string | null
@@ -935,7 +925,6 @@ export type Database = {
           min_stock?: number
           name: string
           quantity?: number
-          sales_price?: number | null
           unit: string
           unit_cost?: number
           updated_at?: string | null
@@ -947,7 +936,6 @@ export type Database = {
           min_stock?: number
           name?: string
           quantity?: number
-          sales_price?: number | null
           unit?: string
           unit_cost?: number
           updated_at?: string | null

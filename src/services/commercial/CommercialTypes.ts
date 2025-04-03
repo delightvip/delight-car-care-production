@@ -1,108 +1,82 @@
 
-// Type definitions for commercial operations
+// تم نقل التعريفات من ملف CommercialTypes الأصلي إلى هذا الملف
 
 export interface Invoice {
   id: string;
+  invoice_type: 'sale' | 'purchase';
   party_id: string;
   party_name?: string;
-  invoice_type: 'sale' | 'purchase';
   date: string;
-  payment_status: 'draft' | 'confirmed' | 'cancelled';
-  status: 'unpaid' | 'partial' | 'paid';
   total_amount: number;
+  items: InvoiceItem[];
+  status: 'paid' | 'partial' | 'unpaid';
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
   notes?: string;
   created_at?: string;
-  items: InvoiceItem[];
 }
 
 export interface InvoiceItem {
   id?: string;
   invoice_id?: string;
   item_id: number;
+  item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
   item_name: string;
-  item_type: string;
   quantity: number;
   unit_price: number;
   total?: number;
+  created_at?: string;
 }
 
 export interface Payment {
   id: string;
   party_id: string;
   party_name?: string;
-  payment_type: 'collection' | 'payment' | 'disbursement';
   date: string;
-  payment_status: 'draft' | 'confirmed' | 'cancelled';
-  method: 'cash' | 'bank' | 'other' | 'check' | 'bank_transfer';
   amount: number;
-  notes?: string;
+  payment_type: 'collection' | 'disbursement';
+  method: 'cash' | 'check' | 'bank_transfer' | 'other';
   related_invoice_id?: string;
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  notes?: string;
   created_at?: string;
 }
 
 export interface Return {
   id: string;
-  party_id: string;
-  party_name?: string;
-  return_type: 'sale' | 'purchase' | 'sales_return' | 'purchase_return';
-  date: string;
-  payment_status: 'draft' | 'confirmed' | 'cancelled';
-  amount: number;
-  notes?: string;
   invoice_id?: string;
+  party_id?: string;
+  party_name?: string;
+  date: string;
+  return_type: 'sales_return' | 'purchase_return';
+  amount: number;
+  items?: ReturnItem[];
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  notes?: string;
   created_at?: string;
-  items: ReturnItem[];
 }
 
 export interface ReturnItem {
   id?: string;
   return_id?: string;
   item_id: number;
+  item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
   item_name: string;
-  item_type: string;
   quantity: number;
   unit_price: number;
   total?: number;
+  created_at?: string;
 }
 
-export interface CommercialSummary {
-  totalSales: number;
-  totalPurchases: number;
-  totalReturns: number;
-  topCustomers: {
-    id: string;
-    name: string;
-    total: number;
-  }[];
-  topProducts: {
-    id: number;
-    name: string;
-    quantity: number;
-    total: number;
-  }[];
-  recentInvoices: Invoice[];
-}
-
-export interface ProductionOrderIngredient {
-  id: number;
-  production_order_id: number;
-  raw_material_code: string;
-  raw_material_name: string;
-  required_quantity: number;
-  code?: string;
-  name?: string;
-  requiredQuantity?: number;
-  available?: number;
-}
-
-export interface PackagingOrderMaterial {
-  id: number;
-  packaging_order_id: number;
-  packaging_material_code: string;
-  packaging_material_name: string;
-  required_quantity: number;
-  code?: string;
-  name?: string;
-  requiredQuantity?: number;
-  available?: number;
+export interface LedgerEntry {
+  id: string;
+  party_id: string;
+  party_name?: string;
+  transaction_id?: string;
+  transaction_type: string;
+  date: string;
+  debit: number;
+  credit: number;
+  balance_after: number;
+  created_at?: string;
+  notes?: string;
 }

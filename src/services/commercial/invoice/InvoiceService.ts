@@ -1,5 +1,5 @@
 
-import { Invoice } from '@/services/commercial/CommercialTypes';
+import { Invoice } from '@/services/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
 import { toast } from "sonner";
@@ -24,15 +24,15 @@ export class InvoiceService {
   }
   
   public async getInvoices(): Promise<Invoice[]> {
-    return InvoiceEntity.findAll();
+    return InvoiceEntity.fetchAll();
   }
   
   public async getInvoicesByParty(partyId: string): Promise<Invoice[]> {
-    return InvoiceEntity.findByParty(partyId);
+    return InvoiceEntity.fetchByParty(partyId);
   }
   
   public async getInvoiceById(id: string): Promise<Invoice | null> {
-    return InvoiceEntity.findById(id);
+    return InvoiceEntity.fetchById(id);
   }
   
   public async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
@@ -119,12 +119,12 @@ export class InvoiceService {
     }
   }
   
-  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<boolean> {
+  public async updateInvoiceStatusAfterPayment(invoiceId: string, paymentAmount: number): Promise<void> {
     return this.invoiceProcessor.updateInvoiceStatusAfterPayment(invoiceId, paymentAmount);
   }
   
-  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string): Promise<boolean> {
-    return this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(invoiceId);
+  public async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string, paymentAmount: number): Promise<void> {
+    return this.invoiceProcessor.reverseInvoiceStatusAfterPaymentCancellation(invoiceId, paymentAmount);
   }
 }
 
