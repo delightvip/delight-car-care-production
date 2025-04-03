@@ -1,4 +1,3 @@
-
 import { Invoice } from '@/services/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
@@ -60,11 +59,12 @@ export class InvoiceService {
     try {
       const result = await this.invoiceProcessor.confirmInvoice(invoiceId);
       
-      // If this is a sales invoice and was confirmed, calculate profits
+      // If this is a sales invoice and was confirmed, calculate profits and update revenues
       if (result) {
         const invoice = await this.getInvoiceById(invoiceId);
         if (invoice && invoice.invoice_type === 'sale') {
-          await this.profitService.calculateInvoiceProfit(invoiceId);
+          const profitData = await this.profitService.calculateInvoiceProfit(invoiceId);
+          console.log('Profit calculated and revenue updated:', profitData);
         }
       }
       
@@ -83,9 +83,10 @@ export class InvoiceService {
       
       const result = await this.invoiceProcessor.cancelInvoice(invoiceId);
       
-      // If this was a sales invoice, remove profit data
+      // If this was a sales invoice, remove profit data and related revenue
       if (result && invoice && invoice.invoice_type === 'sale') {
         await this.profitService.removeProfitData(invoiceId);
+        console.log('Profit data and related revenue removed after invoice cancellation');
       }
       
       return result;
@@ -103,9 +104,10 @@ export class InvoiceService {
       
       const result = await InvoiceEntity.delete(id);
       
-      // If this was a sales invoice, remove profit data
+      // If this was a sales invoice, remove profit data and related revenue
       if (result && invoice && invoice.invoice_type === 'sale') {
         await this.profitService.removeProfitData(id);
+        console.log('Profit data and related revenue removed after invoice deletion');
       }
       
       return result;
