@@ -1,7 +1,6 @@
-
 import { Payment } from '@/services/commercial/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
-import { PaymentProcessor } from './PaymentProcessor';
+import PaymentProcessor from './PaymentProcessor';
 import { toast } from 'sonner';
 
 // الخدمة الرئيسية للدفعات
@@ -10,7 +9,7 @@ export class PaymentService {
   private paymentProcessor: PaymentProcessor;
   
   private constructor() {
-    this.paymentProcessor = new PaymentProcessor();
+    this.paymentProcessor = PaymentProcessor.getInstance();
   }
   
   public static getInstance(): PaymentService {
