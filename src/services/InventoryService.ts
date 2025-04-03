@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
@@ -7,9 +6,18 @@ import {
   SemiFinishedProduct,
   FinishedProduct
 } from '@/types/inventoryTypes';
-import generateCode from '@/utils/generateCode';
+import { generateCode, generateOrderCode } from '@/utils/generateCode';
 
 class InventoryService {
+  private static instance: InventoryService | null = null;
+  
+  public static getInstance(): InventoryService {
+    if (!InventoryService.instance) {
+      InventoryService.instance = new InventoryService();
+    }
+    return InventoryService.instance;
+  }
+  
   // Raw Materials Methods
   
   /**
@@ -49,7 +57,7 @@ class InventoryService {
         .from('raw_materials')
         .insert({
           ...rawMaterial,
-          code: rawMaterial.code || await generateCode('RM'),
+          code: rawMaterial.code || generateCode('raw', 0), // Fixed: use named export
           sales_price: rawMaterial.sales_price || (rawMaterial.unit_cost * 1.2),
         })
         .select()
@@ -142,7 +150,7 @@ class InventoryService {
         .from('packaging_materials')
         .insert({
           ...packagingMaterial,
-          code: packagingMaterial.code || await generateCode('PM'),
+          code: packagingMaterial.code || generateCode('packaging', 0), // Fixed: use named export
           sales_price: packagingMaterial.sales_price || (packagingMaterial.unit_cost * 1.2),
         })
         .select()
@@ -318,7 +326,7 @@ class InventoryService {
       const { data: newProduct, error: productError } = await supabase
         .from('semi_finished_products')
         .insert({
-          code: product.code || await generateCode('SF'),
+          code: product.code || generateCode('semi', 0),
           name: product.name,
           unit: product.unit,
           quantity: product.quantity,
@@ -547,7 +555,7 @@ class InventoryService {
       const { data: newProduct, error: productError } = await supabase
         .from('finished_products')
         .insert({
-          code: product.code || await generateCode('FP'),
+          code: product.code || generateCode('finished', 0),
           name: product.name,
           unit: product.unit,
           quantity: product.quantity,

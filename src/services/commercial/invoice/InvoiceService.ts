@@ -1,5 +1,5 @@
 
-import { Invoice } from '@/services/CommercialTypes';
+import { Invoice } from '@/services/commercial/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
 import { toast } from "sonner";
