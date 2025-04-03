@@ -1,11 +1,12 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Invoice } from '@/services/CommercialTypes';
-import { toast } from "sonner";
+import { Invoice, InvoiceItem } from "@/services/CommercialTypes";
 
 export class InvoiceEntity {
-  // Static method to fetch all invoices
-  public static async fetchAll(): Promise<Invoice[]> {
+  /**
+   * Fetch all invoices with their related data
+   */
+  static async fetchAll(): Promise<Invoice[]> {
     try {
       // First, get all invoices with basic information
       let { data, error } = await supabase
@@ -21,13 +22,13 @@ export class InvoiceEntity {
       // Map the data to our Invoice type
       const invoicesWithParties = data.map(invoice => ({
         id: invoice.id,
-        invoice_type: invoice.invoice_type as 'sale' | 'purchase',
+        invoice_type: invoice.invoice_type as "sale" | "purchase",
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status as 'paid' | 'partial' | 'unpaid',
-        payment_status: invoice.payment_status as 'draft' | 'confirmed' | 'cancelled',
+        status: invoice.status as "paid" | "partial" | "unpaid",
+        payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
@@ -46,9 +47,22 @@ export class InvoiceEntity {
             return invoice;
           }
           
+          // Map invoice items to the correct type
+          const typedItems = items ? items.map(item => ({
+            id: item.id,
+            invoice_id: item.invoice_id,
+            item_id: item.item_id,
+            item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total,
+            created_at: item.created_at
+          })) : [];
+          
           return {
             ...invoice,
-            items: items || []
+            items: typedItems
           };
         })
       );
@@ -56,13 +70,14 @@ export class InvoiceEntity {
       return invoicesWithItems;
     } catch (error) {
       console.error('Error fetching invoices:', error);
-      toast.error('حدث خطأ أثناء جلب الفواتير');
       return [];
     }
   }
   
-  // Static method to fetch invoices by party
-  public static async fetchByParty(partyId: string): Promise<Invoice[]> {
+  /**
+   * Fetch invoices by party
+   */
+  static async fetchByParty(partyId: string): Promise<Invoice[]> {
     try {
       let { data, error } = await supabase
         .from('invoices')
@@ -77,13 +92,13 @@ export class InvoiceEntity {
       
       const invoicesWithParties = data.map(invoice => ({
         id: invoice.id,
-        invoice_type: invoice.invoice_type as 'sale' | 'purchase',
+        invoice_type: invoice.invoice_type as "sale" | "purchase",
         party_id: invoice.party_id,
         party_name: invoice.parties?.name,
         date: invoice.date,
         total_amount: invoice.total_amount,
-        status: invoice.status as 'paid' | 'partial' | 'unpaid',
-        payment_status: invoice.payment_status as 'draft' | 'confirmed' | 'cancelled',
+        status: invoice.status as "paid" | "partial" | "unpaid",
+        payment_status: invoice.payment_status as "draft" | "confirmed" | "cancelled",
         notes: invoice.notes,
         created_at: invoice.created_at,
         items: [] // Initialize with empty items array
@@ -102,9 +117,22 @@ export class InvoiceEntity {
             return invoice;
           }
           
+          // Map invoice items to the correct type
+          const typedItems = items ? items.map(item => ({
+            id: item.id,
+            invoice_id: item.invoice_id,
+            item_id: item.item_id,
+            item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total,
+            created_at: item.created_at
+          })) : [];
+          
           return {
             ...invoice,
-            items: items || []
+            items: typedItems
           };
         })
       );
@@ -112,13 +140,14 @@ export class InvoiceEntity {
       return invoicesWithItems;
     } catch (error) {
       console.error(`Error fetching invoices for party ${partyId}:`, error);
-      toast.error('حدث خطأ أثناء جلب الفواتير');
       return [];
     }
   }
   
-  // Static method to fetch a single invoice by ID
-  public static async fetchById(id: string): Promise<Invoice | null> {
+  /**
+   * Fetch a specific invoice by ID with its related data
+   */
+  static async fetchById(id: string): Promise<Invoice | null> {
     try {
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
@@ -138,28 +167,42 @@ export class InvoiceEntity {
       
       if (itemsError) throw itemsError;
       
+      // Map invoice items to the correct type
+      const typedItems = items ? items.map(item => ({
+        id: item.id,
+        invoice_id: item.invoice_id,
+        item_id: item.item_id,
+        item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+        item_name: item.item_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total: item.total,
+        created_at: item.created_at
+      })) : [];
+      
       return {
         id: invoiceData.id,
-        invoice_type: invoiceData.invoice_type as 'sale' | 'purchase',
+        invoice_type: invoiceData.invoice_type as "sale" | "purchase",
         party_id: invoiceData.party_id,
         party_name: invoiceData.parties?.name,
         date: invoiceData.date,
         total_amount: invoiceData.total_amount,
-        status: invoiceData.status as 'paid' | 'partial' | 'unpaid',
-        payment_status: invoiceData.payment_status as 'draft' | 'confirmed' | 'cancelled',
+        status: invoiceData.status as "paid" | "partial" | "unpaid",
+        payment_status: invoiceData.payment_status as "draft" | "confirmed" | "cancelled",
         notes: invoiceData.notes,
         created_at: invoiceData.created_at,
-        items: items || []
+        items: typedItems
       };
     } catch (error) {
       console.error(`Error fetching invoice with id ${id}:`, error);
-      toast.error('حدث خطأ أثناء جلب بيانات الفاتورة');
       return null;
     }
   }
   
-  // Method to create a new invoice
-  public static async create(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
+  /**
+   * Create a new invoice with its items
+   */
+  static async create(invoiceData: Omit<Invoice, 'id' | 'created_at'>): Promise<Invoice | null> {
     try {
       // Create the invoice record
       const { data: invoiceRecord, error } = await supabase
@@ -169,17 +212,14 @@ export class InvoiceEntity {
           party_id: invoiceData.party_id,
           date: invoiceData.date,
           total_amount: invoiceData.total_amount,
-          status: invoiceData.status,
-          payment_status: invoiceData.payment_status,
+          status: invoiceData.status || 'unpaid',
+          payment_status: invoiceData.payment_status || 'draft',
           notes: invoiceData.notes
         })
         .select()
         .single();
       
-      if (error) {
-        console.error('Error creating invoice record:', error);
-        throw error;
-      }
+      if (error) throw error;
       
       // If there are items for this invoice, insert them
       if (invoiceData.items && invoiceData.items.length > 0) {
@@ -189,36 +229,61 @@ export class InvoiceEntity {
           item_type: item.item_type,
           item_name: item.item_name,
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
+          unit_price: item.unit_price
         }));
         
         const { error: itemsError } = await supabase
           .from('invoice_items')
           .insert(invoiceItems);
         
-        if (itemsError) {
-          console.error('Error adding invoice items:', itemsError);
-          throw itemsError;
-        }
+        if (itemsError) throw itemsError;
       }
       
       return {
         ...invoiceRecord,
-        invoice_type: invoiceRecord.invoice_type as 'sale' | 'purchase',
-        status: invoiceRecord.status as 'paid' | 'partial' | 'unpaid',
-        payment_status: invoiceRecord.payment_status as 'draft' | 'confirmed' | 'cancelled',
-        party_name: '', // This will be filled by the service
-        items: invoiceData.items || []
+        invoice_type: invoiceRecord.invoice_type as "sale" | "purchase",
+        status: invoiceRecord.status as "paid" | "partial" | "unpaid",
+        payment_status: invoiceRecord.payment_status as "draft" | "confirmed" | "cancelled",
+        party_name: invoiceData.party_name,
+        items: invoiceData.items
       };
     } catch (error) {
       console.error('Error creating invoice:', error);
-      throw error;
+      return null;
     }
   }
   
-  // Method to delete an invoice
-  public static async delete(id: string): Promise<boolean> {
+  /**
+   * Update an existing invoice
+   */
+  static async update(id: string, invoiceData: Partial<Invoice>): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .update({
+          invoice_type: invoiceData.invoice_type,
+          party_id: invoiceData.party_id,
+          date: invoiceData.date,
+          total_amount: invoiceData.total_amount,
+          status: invoiceData.status,
+          payment_status: invoiceData.payment_status,
+          notes: invoiceData.notes
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating invoice:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Delete an invoice and its items
+   */
+  static async delete(id: string): Promise<boolean> {
     try {
       // Delete invoice items first
       const { error: itemsError } = await supabase
@@ -239,49 +304,7 @@ export class InvoiceEntity {
       return true;
     } catch (error) {
       console.error('Error deleting invoice:', error);
-      throw error;
-    }
-  }
-  
-  // Method to update an invoice's payment status
-  public static async updatePaymentStatus(id: string, status: 'draft' | 'confirmed' | 'cancelled'): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .update({ 
-          payment_status: status,
-          // Update the updated_at timestamp
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      return true;
-    } catch (error) {
-      console.error('Error updating invoice payment status:', error);
-      throw error;
-    }
-  }
-  
-  // Method to update an invoice's status based on payment
-  public static async updateStatus(id: string, status: 'paid' | 'partial' | 'unpaid'): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .update({ 
-          status: status,
-          // Update the updated_at timestamp
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      return true;
-    } catch (error) {
-      console.error('Error updating invoice status:', error);
-      throw error;
+      return false;
     }
   }
 }

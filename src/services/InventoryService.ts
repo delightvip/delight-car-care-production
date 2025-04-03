@@ -1,12 +1,75 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-import {
-  RawMaterialWithSalesPrice as RawMaterial,
-  PackagingMaterialWithSalesPrice as PackagingMaterial,
-  SemiFinishedProductWithSalesPrice as SemiFinishedProduct,
-  FinishedProductWithSalesPrice as FinishedProduct
-} from "@/types/inventoryTypes";
+export interface RawMaterial {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+  importance?: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PackagingMaterial {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+  importance?: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface SemiFinishedProduct {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+  created_at: string | null;
+  updated_at: string | null;
+  ingredients: {
+    id: number;
+    code: string;
+    name: string;
+    percentage: number;
+  }[];
+}
+
+export interface FinishedProduct {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+  semi_finished_id: number;
+  semi_finished_quantity: number;
+  created_at: string | null;
+  updated_at: string | null;
+  // Add these properties to match expected usage
+  semiFinished: {
+    code: string;
+    name: string;
+    quantity: number;
+  };
+  packaging: {
+    code: string;
+    name: string;
+    quantity: number;
+  }[];
+}
 
 class InventoryService {
   private static instance: InventoryService;
@@ -20,6 +83,7 @@ class InventoryService {
     return InventoryService.instance;
   }
   
+  // المواد الخام
   public async getRawMaterials(): Promise<RawMaterial[]> {
     try {
       const { data, error } = await supabase
@@ -29,13 +93,7 @@ class InventoryService {
       
       if (error) throw error;
       
-      return data.map(item => ({
-        ...item,
-        quantity: Number(item.quantity),
-        min_stock: Number(item.min_stock),
-        unit_cost: Number(item.unit_cost),
-        sales_price: Number(item.sales_price) || 0
-      })) || [];
+      return data || [];
     } catch (error) {
       console.error('Error fetching raw materials:', error);
       toast.error('حدث خطأ أثناء جلب المواد الخام');
@@ -54,13 +112,7 @@ class InventoryService {
       if (error) throw error;
       
       toast.success(`تمت إضافة ${item.name} بنجاح`);
-      return {
-        ...data,
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0
-      };
+      return data;
     } catch (error) {
       console.error('Error adding raw material:', error);
       toast.error('حدث خطأ أثناء إضافة المادة الخام');
@@ -80,13 +132,7 @@ class InventoryService {
       if (error) throw error;
       
       toast.success(`تم تحديث ${data.name} بنجاح`);
-      return {
-        ...data,
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0
-      };
+      return data;
     } catch (error) {
       console.error('Error updating raw material:', error);
       toast.error('حدث خطأ أثناء تحديث المادة الخام');
@@ -112,6 +158,7 @@ class InventoryService {
     }
   }
   
+  // مواد التعبئة والتغليف
   public async getPackagingMaterials(): Promise<PackagingMaterial[]> {
     try {
       const { data, error } = await supabase
@@ -121,13 +168,7 @@ class InventoryService {
       
       if (error) throw error;
       
-      return data.map(item => ({
-        ...item,
-        quantity: Number(item.quantity),
-        min_stock: Number(item.min_stock),
-        unit_cost: Number(item.unit_cost),
-        sales_price: Number(item.sales_price) || 0
-      })) || [];
+      return data || [];
     } catch (error) {
       console.error('Error fetching packaging materials:', error);
       toast.error('حدث خطأ أثناء جلب مواد التعبئة والتغليف');
@@ -146,13 +187,7 @@ class InventoryService {
       if (error) throw error;
       
       toast.success(`تمت إضافة ${item.name} بنجاح`);
-      return {
-        ...data,
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0
-      };
+      return data;
     } catch (error) {
       console.error('Error adding packaging material:', error);
       toast.error('حدث خطأ أثناء إضافة مادة التعبئة والتغليف');
@@ -172,13 +207,7 @@ class InventoryService {
       if (error) throw error;
       
       toast.success(`تم تحديث ${data.name} بنجاح`);
-      return {
-        ...data,
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0
-      };
+      return data;
     } catch (error) {
       console.error('Error updating packaging material:', error);
       toast.error('حدث خطأ أثناء تحديث مادة التعبئة والتغليف');
@@ -204,6 +233,7 @@ class InventoryService {
     }
   }
   
+  // المنتجات نصف المصنعة
   public async getSemiFinishedProducts(): Promise<SemiFinishedProduct[]> {
     try {
       const { data, error } = await supabase
@@ -213,15 +243,12 @@ class InventoryService {
       
       if (error) throw error;
       
+      // Fetch ingredients for each product
       const productsWithIngredients = await Promise.all(
         (data || []).map(async (product) => {
           const ingredients = await this.getSemiFinishedIngredients(product.id);
           return {
             ...product,
-            quantity: Number(product.quantity),
-            min_stock: Number(product.min_stock),
-            unit_cost: Number(product.unit_cost),
-            sales_price: Number(product.sales_price) || 0,
             ingredients
           };
         })
@@ -252,7 +279,7 @@ class InventoryService {
         id: item.id,
         code: item.raw_material.code,
         name: item.raw_material.name,
-        percentage: Number(item.percentage)
+        percentage: item.percentage
       }));
     } catch (error) {
       console.error('Error fetching ingredients:', error);
@@ -271,14 +298,7 @@ class InventoryService {
       if (error) throw error;
       
       toast.success(`تمت إضافة ${item.name} بنجاح`);
-      return { 
-        ...data,
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0,
-        ingredients: [] 
-      };
+      return { ...data, ingredients: [] };
     } catch (error) {
       console.error('Error adding semi-finished product:', error);
       toast.error('حدث خطأ أثناء إضافة المنتج نصف المصنع');
@@ -299,16 +319,10 @@ class InventoryService {
       
       toast.success(`تم تحديث ${data.name} بنجاح`);
       
+      // Fetch ingredients to include in the returned data
       const ingredients = await this.getSemiFinishedIngredients(id);
       
-      return { 
-        ...data,
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0,
-        ingredients 
-      };
+      return { ...data, ingredients };
     } catch (error) {
       console.error('Error updating semi-finished product:', error);
       toast.error('حدث خطأ أثناء تحديث المنتج نصف المصنع');
@@ -334,6 +348,7 @@ class InventoryService {
     }
   }
   
+  // المنتجات تامة الصنع
   public async getFinishedProducts(): Promise<FinishedProduct[]> {
     try {
       const { data, error } = await supabase
@@ -343,21 +358,17 @@ class InventoryService {
       
       if (error) throw error;
       
+      // Fetch packaging materials for each product
       const productsWithDetails = await Promise.all(
         (data || []).map(async (product) => {
           const packaging = await this.getProductPackaging(product.id);
           
           return {
             ...product,
-            quantity: Number(product.quantity),
-            min_stock: Number(product.min_stock),
-            unit_cost: Number(product.unit_cost),
-            sales_price: Number(product.sales_price) || 0,
-            semi_finished_quantity: Number(product.semi_finished_quantity),
             semiFinished: {
               code: product.semi_finished.code,
               name: product.semi_finished.name,
-              quantity: Number(product.semi_finished_quantity)
+              quantity: product.semi_finished_quantity
             },
             packaging
           };
@@ -388,7 +399,7 @@ class InventoryService {
       return (data || []).map(item => ({
         code: item.packaging.code,
         name: item.packaging.name,
-        quantity: Number(item.quantity)
+        quantity: item.quantity
       }));
     } catch (error) {
       console.error('Error fetching product packaging:', error);
@@ -406,6 +417,7 @@ class InventoryService {
       
       if (error) throw error;
       
+      // Get the semi-finished product details
       const { data: semiFinished } = await supabase
         .from('semi_finished_products')
         .select('code, name')
@@ -416,15 +428,10 @@ class InventoryService {
       
       return { 
         ...data, 
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0,
-        semi_finished_quantity: Number(data.semi_finished_quantity),
         semiFinished: {
           code: semiFinished?.code || '',
           name: semiFinished?.name || '',
-          quantity: Number(item.semi_finished_quantity)
+          quantity: item.semi_finished_quantity
         },
         packaging: []
       };
@@ -446,21 +453,17 @@ class InventoryService {
       
       if (error) throw error;
       
+      // Fetch packaging to include in the returned data
       const packaging = await this.getProductPackaging(id);
       
       toast.success(`تم تحديث ${data.name} بنجاح`);
       
       return { 
         ...data, 
-        quantity: Number(data.quantity),
-        min_stock: Number(data.min_stock),
-        unit_cost: Number(data.unit_cost),
-        sales_price: Number(data.sales_price) || 0,
-        semi_finished_quantity: Number(data.semi_finished_quantity),
         semiFinished: {
           code: data.semi_finished.code,
           name: data.semi_finished.name,
-          quantity: Number(data.semi_finished_quantity)
+          quantity: data.semi_finished_quantity
         },
         packaging 
       };
@@ -489,6 +492,7 @@ class InventoryService {
     }
   }
 
+  // Add this method to the InventoryService class to handle inventory movements
   public async recordItemMovement(movement: {
     type: string;
     category: string;
@@ -498,6 +502,11 @@ class InventoryService {
     note: string;
   }): Promise<void> {
     try {
+      // Since we can't directly access inventory_movements table, we'll use a workaround
+      // This function simulates updating movement records by updating quantities in the existing tables
+      
+      // Here we should ideally call an API or a function that adds entries to inventory_movements
+      // But for now, we'll just log the movement
       console.log('Inventory movement recorded:', movement);
     } catch (error) {
       console.error('Error recording inventory movement:', error);
@@ -505,6 +514,9 @@ class InventoryService {
     }
   }
 
+  // Add the missing methods required by the ProductionService
+  
+  // Get a raw material by code
   public async getRawMaterialByCode(code: string): Promise<{ data: RawMaterial | null, error: any }> {
     try {
       const { data, error } = await supabase
@@ -520,6 +532,7 @@ class InventoryService {
     }
   }
   
+  // Return raw materials to inventory
   public async returnRawMaterials(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -537,6 +550,7 @@ class InventoryService {
     }
   }
   
+  // Consume raw materials from inventory
   public async consumeRawMaterials(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -559,6 +573,7 @@ class InventoryService {
     }
   }
   
+  // Update raw materials importance
   public async updateRawMaterialsImportance(codes: string[]): Promise<boolean> {
     try {
       for (const code of codes) {
@@ -576,6 +591,7 @@ class InventoryService {
     }
   }
   
+  // Add semi-finished product to inventory
   public async addSemiFinishedToInventory(
     code: string, 
     quantity: number, 
@@ -605,6 +621,7 @@ class InventoryService {
     }
   }
   
+  // Remove semi-finished product from inventory
   public async removeSemiFinishedFromInventory(code: string, quantity: number): Promise<boolean> {
     try {
       const { data: semiFinishedProduct } = await supabase
@@ -634,6 +651,7 @@ class InventoryService {
     }
   }
   
+  // Check if semi-finished product is available
   public async checkSemiFinishedAvailability(code: string, quantity: number): Promise<boolean> {
     try {
       const { data: semiFinishedProduct } = await supabase
@@ -649,6 +667,7 @@ class InventoryService {
     }
   }
   
+  // Check if packaging materials are available
   public async checkPackagingAvailability(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -670,6 +689,7 @@ class InventoryService {
     }
   }
   
+  // Return packaging materials to inventory
   public async returnPackagingMaterials(materials: { code: string, requiredQuantity: number }[]): Promise<boolean> {
     try {
       for (const material of materials) {
@@ -693,6 +713,7 @@ class InventoryService {
     }
   }
   
+  // Remove finished product from inventory
   public async removeFinishedFromInventory(code: string, quantity: number): Promise<boolean> {
     try {
       const { data: finishedProduct } = await supabase
@@ -722,6 +743,7 @@ class InventoryService {
     }
   }
   
+  // Produce finished product
   public async produceFinishedProduct(
     productCode: string,
     quantity: number,
@@ -730,6 +752,7 @@ class InventoryService {
     packagingMaterials: { code: string, requiredQuantity: number }[]
   ): Promise<boolean> {
     try {
+      // Consume semi-finished product
       const semiFinishedRemoved = await this.removeSemiFinishedFromInventory(
         semiFinishedCode, 
         semiFinishedQuantity
@@ -739,6 +762,7 @@ class InventoryService {
         return false;
       }
       
+      // Consume packaging materials
       for (const material of packagingMaterials) {
         const { data: packagingMaterial } = await supabase
           .from('packaging_materials')
@@ -747,6 +771,7 @@ class InventoryService {
           .single();
         
         if (!packagingMaterial || packagingMaterial.quantity < material.requiredQuantity) {
+          // Rollback and return semi-finished product to inventory
           await this.addSemiFinishedToInventory(semiFinishedCode, semiFinishedQuantity);
           toast.error(`مادة التعبئة ${packagingMaterial?.name || material.code} غير متوفرة بالكمية المطلوبة`);
           return false;
@@ -757,6 +782,7 @@ class InventoryService {
         });
       }
       
+      // Add finished product
       const { data: finishedProduct } = await supabase
         .from('finished_products')
         .select('*')
@@ -764,6 +790,7 @@ class InventoryService {
         .single();
       
       if (!finishedProduct) {
+        // Rollback and return all consumed materials
         await this.addSemiFinishedToInventory(semiFinishedCode, semiFinishedQuantity);
         await this.returnPackagingMaterials(packagingMaterials);
         toast.error('المنتج التام الصنع غير موجود');
@@ -778,63 +805,6 @@ class InventoryService {
     } catch (error) {
       console.error('Error producing finished product:', error);
       return false;
-    }
-  }
-
-  public async getProductDetails(itemType: string, itemId: number): Promise<{ 
-    name: string;
-    availableQuantity: number;
-    unit: string;
-    sales_price: number;
-  } | null> {
-    try {
-      let data, error;
-      
-      switch(itemType) {
-        case 'raw_materials':
-          ({ data, error } = await supabase
-            .from('raw_materials')
-            .select('name, quantity, unit, sales_price, unit_cost')
-            .eq('id', itemId)
-            .single());
-          break;
-        case 'packaging_materials':
-          ({ data, error } = await supabase
-            .from('packaging_materials')
-            .select('name, quantity, unit, sales_price, unit_cost')
-            .eq('id', itemId)
-            .single());
-          break;
-        case 'semi_finished_products':
-          ({ data, error } = await supabase
-            .from('semi_finished_products')
-            .select('name, quantity, unit, sales_price, unit_cost')
-            .eq('id', itemId)
-            .single());
-          break;
-        case 'finished_products':
-          ({ data, error } = await supabase
-            .from('finished_products')
-            .select('name, quantity, unit, sales_price, unit_cost')
-            .eq('id', itemId)
-            .single());
-          break;
-        default:
-          return null;
-      }
-      
-      if (error) throw error;
-      if (!data) return null;
-      
-      return {
-        name: data.name,
-        availableQuantity: Number(data.quantity),
-        unit: data.unit,
-        sales_price: Number(data.sales_price) || Number(data.unit_cost) * 1.2
-      };
-    } catch (error) {
-      console.error('Error fetching product details:', error);
-      return null;
     }
   }
 }
