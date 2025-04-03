@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
@@ -57,7 +58,7 @@ class InventoryService {
         .from('raw_materials')
         .insert({
           ...rawMaterial,
-          code: rawMaterial.code || generateCode('raw', 0), // Fixed: use named export
+          code: rawMaterial.code || generateCode('raw', 0),
           sales_price: rawMaterial.sales_price || (rawMaterial.unit_cost * 1.2),
         })
         .select()
@@ -110,6 +111,33 @@ class InventoryService {
       return null;
     }
   }
+
+  /**
+   * Get raw material by code
+   */
+  async getRawMaterialByCode(code: string): Promise<RawMaterial | null> {
+    try {
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .select('*')
+        .eq('code', code)
+        .single();
+      
+      if (error) throw error;
+      
+      return {
+        ...data,
+        quantity: Number(data.quantity),
+        min_stock: Number(data.min_stock),
+        unit_cost: Number(data.unit_cost),
+        sales_price: Number(data.sales_price || 0),
+        importance: data.importance || 0,
+      };
+    } catch (error) {
+      console.error(`Error fetching raw material with code ${code}:`, error);
+      return null;
+    }
+  }
   
   // Packaging Materials Methods
   
@@ -150,7 +178,7 @@ class InventoryService {
         .from('packaging_materials')
         .insert({
           ...packagingMaterial,
-          code: packagingMaterial.code || generateCode('packaging', 0), // Fixed: use named export
+          code: packagingMaterial.code || generateCode('packaging', 0),
           sales_price: packagingMaterial.sales_price || (packagingMaterial.unit_cost * 1.2),
         })
         .select()
@@ -648,7 +676,357 @@ class InventoryService {
     }
   }
 
-  // Additional utility methods as needed
+  // Additional methods needed for other services
+
+  /**
+   * Record an item movement in inventory
+   */
+  async recordItemMovement(movement: { 
+    type: 'in' | 'out', 
+    category: string, 
+    itemName: string, 
+    quantity: number, 
+    date: Date, 
+    note: string 
+  }): Promise<void> {
+    try {
+      // Log the inventory movement
+      console.log(`Recording ${movement.type} movement: ${movement.quantity} of ${movement.itemName} in ${movement.category}`);
+      
+      // Add record to inventory_movements table if it exists
+      const { error } = await supabase
+        .from('inventory_movements')
+        .insert({
+          movement_type: movement.type === 'in' ? 'add' : 'subtract',
+          item_type: movement.category,
+          item_name: movement.itemName,
+          quantity: movement.quantity,
+          reason: movement.note,
+          created_at: movement.date.toISOString()
+        });
+      
+      if (error) {
+        console.error('Failed to record inventory movement:', error);
+      }
+    } catch (error) {
+      console.error('Error recording inventory movement:', error);
+    }
+  }
+
+  /**
+   * Add quantity to semi-finished product inventory
+   */
+  async addSemiFinishedToInventory(id: string | number, quantity: number): Promise<boolean> {
+    try {
+      const numericId = typeof id === 'string' ? parseInt(id) : id;
+      
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .select('quantity')
+        .eq('id', numericId)
+        .single();
+      
+      if (error) throw error;
+      
+      const newQuantity = Number(data.quantity) + quantity;
+      
+      const { error: updateError } = await supabase
+        .from('semi_finished_products')
+        .update({ quantity: newQuantity })
+        .eq('id', numericId);
+      
+      if (updateError) throw updateError;
+      
+      return true;
+    } catch (error) {
+      console.error(`Error adding quantity to semi-finished product ${id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove quantity from semi-finished product inventory
+   */
+  async removeSemiFinishedFromInventory(id: string | number, quantity: number): Promise<boolean> {
+    try {
+      const numericId = typeof id === 'string' ? parseInt(id) : id;
+      
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .select('quantity')
+        .eq('id', numericId)
+        .single();
+      
+      if (error) throw error;
+      
+      const currentQuantity = Number(data.quantity);
+      if (currentQuantity < quantity) {
+        toast.error('الكمية المطلوبة أكبر من الكمية المتاحة');
+        return false;
+      }
+      
+      const newQuantity = currentQuantity - quantity;
+      
+      const { error: updateError } = await supabase
+        .from('semi_finished_products')
+        .update({ quantity: newQuantity })
+        .eq('id', numericId);
+      
+      if (updateError) throw updateError;
+      
+      return true;
+    } catch (error) {
+      console.error(`Error removing quantity from semi-finished product ${id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove quantity from finished product inventory
+   */
+  async removeFinishedFromInventory(id: string | number, quantity: number): Promise<boolean> {
+    try {
+      const numericId = typeof id === 'string' ? parseInt(id) : id;
+      
+      const { data, error } = await supabase
+        .from('finished_products')
+        .select('quantity')
+        .eq('id', numericId)
+        .single();
+      
+      if (error) throw error;
+      
+      const currentQuantity = Number(data.quantity);
+      if (currentQuantity < quantity) {
+        toast.error('الكمية المطلوبة أكبر من الكمية المتاحة');
+        return false;
+      }
+      
+      const newQuantity = currentQuantity - quantity;
+      
+      const { error: updateError } = await supabase
+        .from('finished_products')
+        .update({ quantity: newQuantity })
+        .eq('id', numericId);
+      
+      if (updateError) throw updateError;
+      
+      return true;
+    } catch (error) {
+      console.error(`Error removing quantity from finished product ${id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if there's enough semi-finished product available
+   */
+  async checkSemiFinishedAvailability(id: string | number, requiredQuantity: number): Promise<boolean> {
+    try {
+      const numericId = typeof id === 'string' ? parseInt(id) : id;
+      
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .select('quantity')
+        .eq('id', numericId)
+        .single();
+      
+      if (error) throw error;
+      
+      return Number(data.quantity) >= requiredQuantity;
+    } catch (error) {
+      console.error(`Error checking availability for semi-finished product ${id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if there's enough packaging material available
+   */
+  async checkPackagingAvailability(id: string | number, requiredQuantity: number): Promise<boolean> {
+    try {
+      const numericId = typeof id === 'string' ? parseInt(id) : id;
+      
+      const { data, error } = await supabase
+        .from('packaging_materials')
+        .select('quantity')
+        .eq('id', numericId)
+        .single();
+      
+      if (error) throw error;
+      
+      return Number(data.quantity) >= requiredQuantity;
+    } catch (error) {
+      console.error(`Error checking availability for packaging material ${id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Consume raw materials for production
+   */
+  async consumeRawMaterials(materials: {id: number, quantity: number}[]): Promise<boolean> {
+    try {
+      for (const material of materials) {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('quantity')
+          .eq('id', material.id)
+          .single();
+        
+        if (error) throw error;
+        
+        const currentQuantity = Number(data.quantity);
+        if (currentQuantity < material.quantity) {
+          toast.error(`المادة الخام غير متوفرة بالكمية المطلوبة`);
+          return false;
+        }
+        
+        const { error: updateError } = await supabase
+          .from('raw_materials')
+          .update({ quantity: currentQuantity - material.quantity })
+          .eq('id', material.id);
+        
+        if (updateError) throw updateError;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error consuming raw materials:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Return raw materials to inventory
+   */
+  async returnRawMaterials(materials: {id: number, quantity: number}[]): Promise<boolean> {
+    try {
+      for (const material of materials) {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('quantity')
+          .eq('id', material.id)
+          .single();
+        
+        if (error) throw error;
+        
+        const currentQuantity = Number(data.quantity);
+        
+        const { error: updateError } = await supabase
+          .from('raw_materials')
+          .update({ quantity: currentQuantity + material.quantity })
+          .eq('id', material.id);
+        
+        if (updateError) throw updateError;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error returning raw materials:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Return packaging materials to inventory
+   */
+  async returnPackagingMaterials(materials: {id: number, quantity: number}[]): Promise<boolean> {
+    try {
+      for (const material of materials) {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('quantity')
+          .eq('id', material.id)
+          .single();
+        
+        if (error) throw error;
+        
+        const currentQuantity = Number(data.quantity);
+        
+        const { error: updateError } = await supabase
+          .from('packaging_materials')
+          .update({ quantity: currentQuantity + material.quantity })
+          .eq('id', material.id);
+        
+        if (updateError) throw updateError;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error returning packaging materials:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Produce finished product
+   */
+  async produceFinishedProduct(productId: number, quantity: number): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('finished_products')
+        .select('quantity')
+        .eq('id', productId)
+        .single();
+      
+      if (error) throw error;
+      
+      const currentQuantity = Number(data.quantity);
+      
+      const { error: updateError } = await supabase
+        .from('finished_products')
+        .update({ quantity: currentQuantity + quantity })
+        .eq('id', productId);
+      
+      if (updateError) throw updateError;
+      
+      return true;
+    } catch (error) {
+      console.error(`Error producing finished product ${productId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Update raw materials importance
+   */
+  async updateRawMaterialsImportance(): Promise<void> {
+    try {
+      const { data: rawMaterials, error } = await supabase
+        .from('raw_materials')
+        .select('*');
+      
+      if (error) throw error;
+      
+      for (const material of rawMaterials) {
+        // Calculate importance based on usage, min_stock, etc.
+        const importance = this.calculateImportance(material);
+        
+        await supabase
+          .from('raw_materials')
+          .update({ importance })
+          .eq('id', material.id);
+      }
+    } catch (error) {
+      console.error('Error updating raw materials importance:', error);
+    }
+  }
+
+  /**
+   * Calculate importance of a material
+   */
+  private calculateImportance(material: any): number {
+    // Example algorithm: if stock is below min_stock, high importance
+    if (material.quantity <= material.min_stock) {
+      return 5; // High importance
+    } else if (material.quantity <= material.min_stock * 1.5) {
+      return 3; // Medium importance
+    } else {
+      return 1; // Low importance
+    }
+  }
 }
 
 export default InventoryService;
+
