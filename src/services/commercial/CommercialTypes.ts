@@ -27,16 +27,16 @@ export interface InvoiceItem {
   created_at?: string;
 }
 
-// Add Payment type to fix the errors
+// Update Payment type to match the one in CommercialTypes.ts
 export interface Payment {
   id: string;
   party_id: string;
   party_name?: string;
   amount: number;
   date: string;
-  payment_type: "receipt" | "payment";
+  payment_type: "collection" | "disbursement"; // Updated from "receipt" | "payment"
   payment_status: "draft" | "confirmed" | "cancelled";
-  method: "cash" | "bank" | "credit" | "other";
+  method: "cash" | "bank" | "check" | "bank_transfer" | "credit" | "other"; // Added "check" and "bank_transfer"
   related_invoice_id?: string;
   notes?: string;
   created_at?: string;

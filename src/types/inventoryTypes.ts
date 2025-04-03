@@ -1,5 +1,5 @@
 
-// Define inventory types for use across the application
+// Define inventory-related types for the application
 
 export interface RawMaterial {
   id: number;
@@ -10,7 +10,7 @@ export interface RawMaterial {
   min_stock: number;
   unit_cost: number;
   sales_price?: number;
-  importance?: number;
+  importance: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -24,7 +24,7 @@ export interface PackagingMaterial {
   min_stock: number;
   unit_cost: number;
   sales_price?: number;
-  importance?: number;
+  importance: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -57,7 +57,7 @@ export interface FinishedProduct {
   min_stock: number;
   unit_cost: number;
   sales_price?: number;
-  semi_finished_id?: number;
+  semi_finished_id: number;
   semi_finished_quantity: number;
   semiFinished: {
     code: string;
@@ -74,14 +74,17 @@ export interface FinishedProduct {
 }
 
 export interface InventoryMovement {
-  id?: string;
-  item_id: string;
+  id: string;
+  movement_type: 'add' | 'subtract';
   item_type: string;
-  movement_type: string;
+  item_id: string;
   quantity: number;
-  reason?: string;
   balance_after: number;
+  reason?: string;
   user_id?: string;
-  created_at?: string;
+  created_at: string;
   updated_at?: string;
 }
+
+// Export from InventoryService.ts for use in components
+export type { RawMaterial, PackagingMaterial, SemiFinishedProduct, FinishedProduct, InventoryMovement };
