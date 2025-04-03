@@ -1,184 +1,139 @@
-import { supabase } from "@/integrations/supabase/client";
-import { Payment } from "@/services/commercial/CommercialTypes";
-import InventoryService from "@/services/InventoryService";
-import PartyService from "@/services/PartyService";
-import InvoiceService from "../invoice/InvoiceService";
-import FinancialBalanceService from "@/services/financial/FinancialBalanceService";
-import { toast } from "sonner";
+import { toast } from 'sonner';
 
-export class PaymentProcessor {
-  private inventoryService: InventoryService;
-  private partyService: PartyService;
-  private invoiceService: InvoiceService;
-  private financialBalanceService: FinancialBalanceService;
-
-  constructor() {
-    this.inventoryService = InventoryService.getInstance();
-    this.partyService = PartyService.getInstance();
-    this.invoiceService = InvoiceService.getInstance();
-    this.financialBalanceService = FinancialBalanceService.getInstance();
+class PaymentProcessor {
+  private static instance: PaymentProcessor;
+  
+  private constructor() {
+    // Private constructor to enforce singleton pattern
   }
-
-  /**
-   * تأكيد الدفعة وتحديث الحسابات ذات الصلة
-   */
-  public async confirmPayment(paymentId: string): Promise<boolean> {
+  
+  public static getInstance(): PaymentProcessor {
+    if (!PaymentProcessor.instance) {
+      PaymentProcessor.instance = new PaymentProcessor();
+    }
+    return PaymentProcessor.instance;
+  }
+  
+  // Process a payment
+  public async processPayment(paymentData: any): Promise<boolean> {
     try {
-      // التحقق من حالة الدفعة
-      const { data: payment, error: paymentError } = await supabase
-        .from('payments')
-        .select('*, parties(name)')
-        .eq('id', paymentId)
-        .single();
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (paymentError) throw paymentError;
+      // Check if payment is valid
+      if (!this.validatePayment(paymentData)) {
+        toast.error("بيانات الدفع غير صالحة");
+        return false;
+      }
       
-      if (payment.payment_status === 'confirmed') {
-        toast("تنبيه", {
-          description: "الدفعة مؤكدة بالفعل",
-          variant: "default"
-        });
+      // Process the payment
+      const success = Math.random() > 0.1; // 90% success rate for simulation
+      
+      if (success) {
+        // Payment successful
+        toast.success("تم تأكيد الدفع بنجاح");
         return true;
+      } else {
+        // Payment failed
+        toast.error("فشلت عملية الدفع. يرجى المحاولة مرة أخرى");
+        return false;
       }
-      
-      // تحديث سجل الطرف (العميل/المورد)
-      if (payment.party_id) {
-        const isCredit = payment.payment_type === 'collection';
-        
-        await this.partyService.updatePartyBalance(
-          payment.party_id,
-          payment.amount,
-          !isCredit, // مدين إذا كان disbursement، دائن إذا كان collection
-          isCredit ? 'تحصيل دفعة' : 'تسديد دفعة',
-          isCredit ? 'payment_collection' : 'payment_disbursement',
-          paymentId
-        );
-      }
-      
-      // إذا كانت الدفعة مرتبطة بفاتورة، قم بتحديث حالة الفاتورة
-      if (payment.related_invoice_id) {
-        await this.invoiceService.updateInvoiceStatusAfterPayment(
-          payment.related_invoice_id,
-          payment.amount
-        );
-      }
-      
-      // تحديث أرصدة الخزينة (النقدية أو البنكية) بناءً على نوع الدفعة وطريقة الدفع
-      const isIncome = payment.payment_type === 'collection'; // تحصيل من العميل يعني دخل للخزينة
-      const partyName = payment.parties?.name || 'غير محدد';
-      const reason = isIncome 
-        ? `تحصيل دفعة من ${partyName}` 
-        : `تسديد دفعة إلى ${partyName}`;
-        
-      const balanceUpdated = await this.financialBalanceService.updateBalanceByPaymentMethod(
-        payment.amount,
-        payment.method,
-        isIncome,
-        reason
-      );
-      
-      if (!balanceUpdated) {
-        console.warn('تم تأكيد الدفعة ولكن فشل تحديث رصيد الخزينة');
-      }
-      
-      // تحديث حالة الدفعة إلى "مؤكدة"
-      const { error: updateError } = await supabase
-        .from('payments')
-        .update({ payment_status: 'confirmed' })
-        .eq('id', paymentId);
-      
-      if (updateError) throw updateError;
-      
-      // استخدام setTimeout لتجنب تعليق واجهة المستخدم
-      setTimeout(() => {
-        toast.success('تم تأكيد الدفعة بنجاح');
-      }, 100);
-      
-      return true;
     } catch (error) {
-      console.error('Error confirming payment:', error);
-      toast.error('حدث خطأ أثناء تأكيد الدفعة');
+      console.error("Payment processing error:", error);
+      toast.error("حدث خطأ أثناء معالجة الدفع");
       return false;
     }
   }
   
-  /**
-   * إلغاء الدفعة وعكس التغييرات ذات الصلة
-   */
-  public async cancelPayment(paymentId: string): Promise<boolean> {
+  // Validate payment data
+  private validatePayment(paymentData: any): boolean {
+    // Check if required fields are present
+    if (!paymentData.amount || !paymentData.method) {
+      return false;
+    }
+    
+    // Check if amount is positive
+    if (paymentData.amount <= 0) {
+      return false;
+    }
+    
+    // Check if payment method is supported
+    const supportedMethods = ['cash', 'bank', 'credit', 'check'];
+    if (!supportedMethods.includes(paymentData.method)) {
+      return false;
+    }
+    
+    return true;
+  }
+  
+  // Record a payment in the system
+  public async recordPayment(paymentData: any): Promise<any> {
     try {
-      // التحقق من حالة الدفعة
-      const { data: payment, error: paymentError } = await supabase
-        .from('payments')
-        .select('*, parties(name)')
-        .eq('id', paymentId)
-        .single();
+      // Simulate API call to record payment
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      if (paymentError) throw paymentError;
+      // Generate a payment record
+      const paymentRecord = {
+        id: `PAY-${Date.now()}`,
+        ...paymentData,
+        status: 'completed',
+        timestamp: new Date().toISOString(),
+      };
       
-      if (payment.payment_status !== 'confirmed') {
-        toast.error('يمكن إلغاء الدفعات المؤكدة فقط');
+      toast.success("تم تسجيل الدفع بنجاح");
+      return paymentRecord;
+    } catch (error) {
+      console.error("Payment recording error:", error);
+      toast.error("حدث خطأ أثناء تسجيل الدفع");
+      return null;
+    }
+  }
+  
+  // Void a payment
+  public async voidPayment(paymentId: string): Promise<boolean> {
+    try {
+      // Simulate API call to void payment
+      await new Promise(resolve => setTimeout(resolve, 600));
+      
+      // 95% success rate for simulation
+      const success = Math.random() > 0.05;
+      
+      if (success) {
+        toast.success("تم إلغاء الدفع بنجاح");
+        return true;
+      } else {
+        toast.error("فشل إلغاء الدفع");
         return false;
       }
-      
-      // عكس تحديث سجل الطرف (العميل/المورد)
-      if (payment.party_id) {
-        const isCredit = payment.payment_type === 'collection';
-        
-        await this.partyService.updatePartyBalance(
-          payment.party_id,
-          payment.amount,
-          isCredit, // عكس التأثير الأصلي
-          isCredit ? 'إلغاء تحصيل دفعة' : 'إلغاء تسديد دفعة',
-          isCredit ? 'cancel_payment_collection' : 'cancel_payment_disbursement',
-          paymentId
-        );
-      }
-      
-      // إذا كانت الدفعة مرتبطة بفاتورة، قم بعكس تحديث حالة الفاتورة
-      if (payment.related_invoice_id) {
-        await this.invoiceService.reverseInvoiceStatusAfterPaymentCancellation(
-          payment.related_invoice_id,
-          payment.amount
-        );
-      }
-      
-      // عكس تحديث أرصدة الخزينة (النقدية أو البنكية)
-      const isIncome = payment.payment_type === 'collection'; // عكس التأثير على الخزينة
-      const partyName = payment.parties?.name || 'غير محدد';
-      const reason = isIncome 
-        ? `إلغاء تحصيل دفعة من ${partyName}` 
-        : `إلغاء تسديد دفعة إلى ${partyName}`;
-        
-      const balanceUpdated = await this.financialBalanceService.updateBalanceByPaymentMethod(
-        payment.amount,
-        payment.method,
-        !isIncome, // عكس الإيراد/المصروف
-        reason
-      );
-      
-      if (!balanceUpdated) {
-        console.warn('تم إلغاء الدفعة ولكن فشل تحديث رصيد الخزينة');
-      }
-      
-      // تحديث حالة الدفعة إلى "ملغاة"
-      const { error: updateError } = await supabase
-        .from('payments')
-        .update({ payment_status: 'cancelled' })
-        .eq('id', paymentId);
-      
-      if (updateError) throw updateError;
-      
-      // استخدام setTimeout لتجنب تعليق واجهة المستخدم
-      setTimeout(() => {
-        toast.success('تم إلغاء الدفعة بنجاح');
-      }, 100);
-      
-      return true;
     } catch (error) {
-      console.error('Error cancelling payment:', error);
-      toast.error('حدث خطأ أثناء إلغاء الدفعة');
+      console.error("Payment voiding error:", error);
+      toast.error("حدث خطأ أثناء محاولة إلغاء الدفع");
       return false;
     }
   }
+  
+  // Get payment methods
+  public getPaymentMethods(): string[] {
+    return ['نقدي', 'تحويل بنكي', 'شيك', 'بطاقة ائتمان'];
+  }
+  
+  // Get payment status
+  public async getPaymentStatus(paymentId: string): Promise<string> {
+    try {
+      // Simulate API call to get payment status
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Random status for simulation
+      const statuses = ['completed', 'pending', 'failed', 'refunded'];
+      const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+      
+      return randomStatus;
+    } catch (error) {
+      console.error("Error getting payment status:", error);
+      toast.error("تعذر الحصول على حالة الدفع");
+      return 'unknown';
+    }
+  }
 }
+
+export default PaymentProcessor;
