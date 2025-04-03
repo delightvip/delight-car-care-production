@@ -57,7 +57,13 @@ export function PartyForm({ initialData, onSubmit, isEditing = false }: PartyFor
 
   // عند تقديم النموذج
   function handleSubmit(values: PartyFormValues) {
-    onSubmit(values);
+    // Ensure name is never empty/undefined
+    const formattedValues = {
+      ...values,
+      name: values.name || '',
+      type: values.type || 'customer'
+    };
+    onSubmit(formattedValues as Omit<Party, 'id' | 'balance' | 'created_at'>);
   }
 
   return (

@@ -241,7 +241,9 @@ class PartyService {
           email: party.email || null,
           address: party.address || null,
           opening_balance: party.opening_balance || 0,
-          balance_type: party.balance_type || null
+          balance_type: party.balance_type || null,
+          notes: party.notes || null,
+          code: party.code || null
         })
         .select()
         .single();

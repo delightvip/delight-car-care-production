@@ -35,11 +35,14 @@ class ProductionService {
 
       if (error) throw error;
 
-      return data?.map(order => ({
+      // Add type assertion to ensure proper type handling
+      const ordersWithTypeAssurance = (data || []).map(order => ({
         ...order,
         status: order.status as "pending" | "inProgress" | "completed" | "cancelled",
         ingredients: [] // Initialize empty ingredients array that will be populated when needed
-      })) || [];
+      }));
+
+      return ordersWithTypeAssurance;
     } catch (error: any) {
       console.error("Error fetching production orders:", error);
       toast.error("حدث خطأ أثناء جلب أوامر الإنتاج");
@@ -60,7 +63,8 @@ class ProductionService {
 
       if (error) throw error;
 
-      return data?.map(order => ({
+      // Add type assertion to ensure proper type handling
+      const ordersWithTypeAssurance = (data || []).map(order => ({
         ...order,
         status: order.status as "pending" | "inProgress" | "completed" | "cancelled",
         packagingMaterials: [], // Initialize empty array
@@ -70,7 +74,9 @@ class ProductionService {
           quantity: order.semi_finished_quantity,
           available: true
         }
-      })) || [];
+      }));
+
+      return ordersWithTypeAssurance;
     } catch (error: any) {
       console.error("Error fetching packaging orders:", error);
       toast.error("حدث خطأ أثناء جلب أوامر التعبئة");
@@ -112,7 +118,8 @@ class ProductionService {
           quantity,
           unit: semiFinishedProduct.unit,
           status: "pending",
-          total_cost: semiFinishedProduct.unit_cost * quantity
+          total_cost: semiFinishedProduct.unit_cost * quantity,
+          notes: notes // Add notes field
         })
         .select()
         .single();
@@ -408,8 +415,19 @@ class ProductionService {
     notes: string = ""
   ): Promise<PackagingOrder | null> {
     try {
-      // Fetch the finished product details
-      const finishedProduct = await this.inventoryService.getFinishedProductByCode(finishedProductCode);
+      // Fetch the finished product details by code
+      let finishedProduct = null;
+      const { data: finishedProducts, error: finishedError } = await supabase
+        .from('finished_products')
+        .select('*')
+        .eq('code', finishedProductCode)
+        .single();
+      
+      if (finishedError) {
+        throw new Error("Finished product not found.");
+      }
+      
+      finishedProduct = finishedProducts;
 
       if (!finishedProduct) {
         throw new Error("Finished product not found.");
@@ -440,7 +458,8 @@ class ProductionService {
           quantity: quantity,
           unit: finishedProduct.unit,
           status: 'pending',
-          total_cost: finishedProduct.unit_cost * quantity
+          total_cost: finishedProduct.unit_cost * quantity,
+          notes: notes // Add notes field
         })
         .select()
         .single();

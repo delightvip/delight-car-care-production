@@ -1,9 +1,35 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import CommercialService from "@/services/CommercialService";
+import CommercialService from "@/services/commercial/CommercialService";
+
+interface Invoice {
+  id: string;
+  party_id: string;
+  invoice_type: string;
+  payment_status: string;
+  status: string;
+  date: string;
+  total_amount: number;
+  notes: string;
+  created_at: string;
+}
+
+interface InvoiceItem {
+  id: string;
+  invoice_id: string;
+  item_id: number;
+  item_name: string;
+  item_type: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+}
+
+interface InvoiceWithItems extends Invoice {
+  items: InvoiceItem[];
+}
 
 export class InvoiceProcessor {
   private commercialService: CommercialService;
@@ -19,9 +45,10 @@ export class InvoiceProcessor {
   /**
    * Get invoice details by ID without using CommercialService
    */
-  private async getInvoiceById(invoiceId: string) {
+  private async getInvoiceById(invoiceId: string): Promise<InvoiceWithItems | null> {
     try {
-      const { data, error } = await supabase
+      // Fetch invoice base data
+      const { data: invoice, error } = await supabase
         .from('invoices')
         .select(`
           *,
@@ -31,7 +58,19 @@ export class InvoiceProcessor {
         .single();
       
       if (error) throw error;
-      return data;
+
+      // Fetch invoice items
+      const { data: items, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId);
+
+      if (itemsError) throw itemsError;
+      
+      return {
+        ...invoice,
+        items: items || []
+      } as InvoiceWithItems;
     } catch (error) {
       console.error(`Error fetching invoice ${invoiceId}:`, error);
       return null;
@@ -50,16 +89,16 @@ export class InvoiceProcessor {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-      
+
       if (invoice.payment_status === 'confirmed') {
         console.log('Invoice already confirmed:', invoiceId);
         toast.info('الفاتورة مؤكدة بالفعل');
         return true;
       }
-      
+
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id as string,
+        invoice.party_id,
         invoice.total_amount,
         true // isDebit=true for sales (customer's debt increases)
       );
@@ -68,9 +107,11 @@ export class InvoiceProcessor {
       for (const item of invoice.items) {
         const { error } = await supabase
           .from(item.item_type)
-          .update({ quantity: item.quantity - item.quantity })
+          .update({
+            quantity: item.quantity - item.quantity
+          })
           .eq('id', item.item_id);
-        
+          
         if (error) {
           console.error('Error updating inventory:', error);
           toast.error('حدث خطأ أثناء تحديث المخزون');
@@ -81,7 +122,9 @@ export class InvoiceProcessor {
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
-        .update({ payment_status: 'confirmed' })
+        .update({
+          payment_status: 'confirmed'
+        })
         .eq('id', invoiceId);
       
       if (statusError) {
@@ -98,7 +141,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Cancel a sale invoice
    */
@@ -120,7 +163,7 @@ export class InvoiceProcessor {
       
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id as string,
+        invoice.party_id,
         invoice.total_amount,
         false // isDebit=false to reverse the sale (customer's debt decreases)
       );
@@ -159,7 +202,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Confirm a purchase invoice
    */
@@ -181,7 +224,7 @@ export class InvoiceProcessor {
       
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id as string,
+        invoice.party_id,
         invoice.total_amount,
         false // isDebit=false for purchases (our debt to supplier increases)
       );
@@ -220,7 +263,7 @@ export class InvoiceProcessor {
       return false;
     }
   }
-  
+
   /**
    * Cancel a purchase invoice
    */
@@ -242,7 +285,7 @@ export class InvoiceProcessor {
       
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
-        invoice.party_id as string,
+        invoice.party_id,
         invoice.total_amount,
         true // isDebit=true to reverse the purchase (our debt to supplier decreases)
       );
@@ -278,6 +321,115 @@ export class InvoiceProcessor {
     } catch (error) {
       console.error('Error cancelling purchase invoice:', error);
       toast.error('حدث خطأ أثناء إلغاء فاتورة الشراء');
+      return false;
+    }
+  }
+
+  /**
+   * Combined method to confirm an invoice of any type
+   */
+  async confirmInvoice(invoiceId: string): Promise<boolean> {
+    try {
+      const { data: invoice, error } = await supabase
+        .from('invoices')
+        .select('invoice_type')
+        .eq('id', invoiceId)
+        .single();
+      
+      if (error) throw error;
+      
+      if (invoice.invoice_type === 'sale') {
+        return await this.confirmSaleInvoice(invoiceId);
+      } else if (invoice.invoice_type === 'purchase') {
+        return await this.confirmPurchaseInvoice(invoiceId);
+      } else {
+        toast.error('نوع الفاتورة غير معروف');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error confirming invoice:', error);
+      toast.error('حدث خطأ أثناء تأكيد الفاتورة');
+      return false;
+    }
+  }
+
+  /**
+   * Combined method to cancel an invoice of any type
+   */
+  async cancelInvoice(invoiceId: string): Promise<boolean> {
+    try {
+      const { data: invoice, error } = await supabase
+        .from('invoices')
+        .select('invoice_type')
+        .eq('id', invoiceId)
+        .single();
+      
+      if (error) throw error;
+      
+      if (invoice.invoice_type === 'sale') {
+        return await this.cancelSaleInvoice(invoiceId);
+      } else if (invoice.invoice_type === 'purchase') {
+        return await this.cancelPurchaseInvoice(invoiceId);
+      } else {
+        toast.error('نوع الفاتورة غير معروف');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error cancelling invoice:', error);
+      toast.error('حدث خطأ أثناء إلغاء الفاتورة');
+      return false;
+    }
+  }
+
+  /**
+   * Update invoice status after payment
+   */
+  async updateInvoiceStatusAfterPayment(invoiceId: string, amount: number): Promise<boolean> {
+    try {
+      const invoice = await this.getInvoiceById(invoiceId);
+      
+      if (!invoice) {
+        console.error('Invoice not found:', invoiceId);
+        return false;
+      }
+      
+      let status = 'unpaid';
+      
+      if (amount >= invoice.total_amount) {
+        status = 'paid';
+      } else if (amount > 0) {
+        status = 'partial';
+      }
+      
+      const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ status })
+        .eq('id', invoiceId);
+      
+      if (updateError) throw updateError;
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating invoice status after payment:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Reverse invoice status after payment cancellation
+   */
+  async reverseInvoiceStatusAfterPaymentCancellation(invoiceId: string): Promise<boolean> {
+    try {
+      const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ status: 'unpaid' })
+        .eq('id', invoiceId);
+      
+      if (updateError) throw updateError;
+      
+      return true;
+    } catch (error) {
+      console.error('Error reversing invoice status after payment cancellation:', error);
       return false;
     }
   }

@@ -1,228 +1,99 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FinancialSummary, Category, Transaction, FinancialBalance } from "./FinancialTypes";
-import FinancialTransactionService from "./FinancialTransactionService";
-import FinancialCategoryService from "./FinancialCategoryService";
-import FinancialReportService from "./FinancialReportService";
-import FinancialCommercialBridge from "./FinancialCommercialBridge";
-import { format } from "date-fns";
 
-/**
- * الخدمة المالية الرئيسية
- * تقوم بدور واجهة موحدة للوصول إلى كافة خدمات موديول الإدارة المالية
- */
+interface Transaction {
+  date: string;
+  account_id?: string;
+  type: string;
+  amount: number;
+  description: string;
+  reference_id: string;
+  reference_type: string;
+}
+
 class FinancialService {
   private static instance: FinancialService;
-  
-  private transactionService: FinancialTransactionService;
-  private categoryService: FinancialCategoryService;
-  private reportService: FinancialReportService;
-  private commercialBridge: FinancialCommercialBridge;
-  
-  private constructor() {
-    this.transactionService = FinancialTransactionService.getInstance();
-    this.categoryService = FinancialCategoryService.getInstance();
-    this.reportService = FinancialReportService.getInstance();
-    this.commercialBridge = FinancialCommercialBridge.getInstance();
-  }
-  
+
+  private constructor() {}
+
   public static getInstance(): FinancialService {
     if (!FinancialService.instance) {
       FinancialService.instance = new FinancialService();
     }
     return FinancialService.instance;
   }
-  
-  // =========== وظائف المعاملات المالية ===========
-  
+
   /**
-   * الحصول على المعاملات المالية
+   * Record a financial transaction
    */
-  public async getTransactions(
-    startDate?: string,
-    endDate?: string,
-    type?: 'income' | 'expense',
-    categoryId?: string
-  ): Promise<Transaction[]> {
-    return this.transactionService.getTransactions(startDate, endDate, type, categoryId);
-  }
-  
-  /**
-   * الحصول على معاملة مالية بواسطة المعرف
-   */
-  public async getTransactionById(id: string): Promise<Transaction | null> {
-    return this.transactionService.getTransactionById(id);
-  }
-  
-  /**
-   * إنشاء معاملة مالية جديدة
-   */
-  public async createTransaction(transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>): Promise<Transaction | null> {
-    return this.transactionService.createTransaction(transactionData);
-  }
-  
-  /**
-   * تحديث معاملة مالية
-   */
-  public async updateTransaction(id: string, transactionData: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>>): Promise<boolean> {
-    return this.transactionService.updateTransaction(id, transactionData);
-  }
-  
-  /**
-   * حذف معاملة مالية
-   */
-  public async deleteTransaction(id: string): Promise<boolean> {
-    return this.transactionService.deleteTransaction(id);
-  }
-  
-  // =========== وظائف الفئات المالية ===========
-  
-  /**
-   * الحصول على الفئات المالية
-   */
-  public async getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
-    return this.categoryService.getCategories(type);
-  }
-  
-  /**
-   * الحصول على فئة بواسطة المعرف
-   */
-  public async getCategoryById(id: string): Promise<Category | null> {
-    return this.categoryService.getCategoryById(id);
-  }
-  
-  /**
-   * إنشاء فئة جديدة
-   */
-  public async createCategory(categoryData: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
-    return this.categoryService.createCategory(categoryData);
-  }
-  
-  /**
-   * تحديث فئة
-   */
-  public async updateCategory(id: string, categoryData: Partial<Omit<Category, 'id' | 'created_at'>>): Promise<boolean> {
-    return this.categoryService.updateCategory(id, categoryData);
-  }
-  
-  /**
-   * حذف فئة
-   */
-  public async deleteCategory(id: string): Promise<boolean> {
-    return this.categoryService.deleteCategory(id);
-  }
-  
-  // =========== وظائف التقارير المالية ===========
-  
-  /**
-   * الحصول على ملخص مالي
-   */
-  public async getFinancialSummary(startDate?: string, endDate?: string): Promise<FinancialSummary> {
-    return this.reportService.getFinancialSummary(startDate, endDate);
-  }
-  
-  /**
-   * الحصول على التدفق النقدي اليومي
-   */
-  public async getDailyCashFlow(startDate: string, endDate: string): Promise<any[]> {
-    return this.reportService.getDailyCashFlow(startDate, endDate);
-  }
-  
-  /**
-   * توليد تقرير الإيرادات والمصروفات
-   */
-  public async generateIncomeExpenseReport(startDate: string, endDate: string): Promise<any> {
-    return this.reportService.generateIncomeExpenseReport(startDate, endDate);
-  }
-  
-  // =========== وظائف الربط مع المعاملات التجارية ===========
-  
-  /**
-   * معالجة تأكيد فاتورة تجارية
-   */
-  public async handleInvoiceConfirmation(invoice: any): Promise<boolean> {
-    return this.commercialBridge.handleInvoiceConfirmation(invoice);
-  }
-  
-  /**
-   * معالجة تأكيد دفعة تجارية
-   */
-  public async handlePaymentConfirmation(payment: any): Promise<boolean> {
-    return this.commercialBridge.handlePaymentConfirmation(payment);
-  }
-  
-  /**
-   * معالجة إلغاء معاملة تجارية
-   */
-  public async handleCommercialCancellation(
-    id: string,
-    type: 'invoice' | 'payment',
-    commercialType: string,
-    amount: number,
-    partyName?: string,
-    date?: string
-  ): Promise<boolean> {
-    return this.commercialBridge.handleCommercialCancellation(id, type, commercialType, amount, partyName, date);
-  }
-  
-  /**
-   * البحث عن المعاملات المالية المرتبطة بمعاملة تجارية
-   */
-  public async findLinkedFinancialTransactions(commercialId: string): Promise<any[]> {
-    return this.commercialBridge.findLinkedFinancialTransactions(commercialId);
-  }
-  
-  // =========== وظائف الأرصدة المالية ===========
-  
-  /**
-   * الحصول على أرصدة الخزينة
-   */
-  public async getFinancialBalance(): Promise<FinancialBalance | null> {
+  async recordTransaction(transactionData: Transaction): Promise<boolean> {
     try {
-      const { data, error } = await supabase
-        .from('financial_balance')
-        .select('*')
-        .eq('id', '1')
-        .maybeSingle();
+      const { error } = await supabase
+        .from('financial_transactions')
+        .insert({
+          date: transactionData.date,
+          category_id: transactionData.account_id || '00000000-0000-0000-0000-000000000000',
+          type: transactionData.type,
+          amount: transactionData.amount,
+          payment_method: 'cash', // Default value
+          reference_id: transactionData.reference_id,
+          reference_type: transactionData.reference_type,
+          notes: transactionData.description
+        });
+
+      if (error) throw error;
       
-      if (error) {
-        throw error;
-      }
+      // Update financial balance
+      await this.updateFinancialBalance(transactionData.amount, transactionData.type);
       
-      return data as FinancialBalance;
+      return true;
     } catch (error) {
-      console.error('Error fetching financial balance:', error);
-      toast.error('حدث خطأ أثناء جلب أرصدة الخزينة');
-      return null;
+      console.error('Error recording financial transaction:', error);
+      toast.error('حدث خطأ أثناء تسجيل المعاملة المالية');
+      return false;
     }
   }
   
   /**
-   * تحديث أرصدة الخزينة يدويًا
+   * Update financial balance
    */
-  public async updateFinancialBalanceManually(
-    cashBalance: number,
-    bankBalance: number
-  ): Promise<boolean> {
+  private async updateFinancialBalance(amount: number, transactionType: string): Promise<boolean> {
     try {
-      const { error } = await supabase
+      const { data: balance, error: fetchError } = await supabase
         .from('financial_balance')
-        .update({
-          cash_balance: cashBalance,
-          bank_balance: bankBalance,
-          last_updated: format(new Date(), 'yyyy-MM-dd')
+        .select('*')
+        .eq('id', '1')
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      let newCashBalance = balance?.cash_balance || 0;
+      
+      // Update cash balance based on transaction type
+      if (transactionType === 'receipt' || transactionType === 'sales_return') {
+        newCashBalance += amount;
+      } else if (transactionType === 'payment' || transactionType === 'purchase_return') {
+        newCashBalance -= amount;
+      } else if (transactionType === 'receipt_cancellation') {
+        newCashBalance -= Math.abs(amount);
+      } else if (transactionType === 'payment_cancellation') {
+        newCashBalance += Math.abs(amount);
+      }
+      
+      const { error: updateError } = await supabase
+        .from('financial_balance')
+        .update({ 
+          cash_balance: newCashBalance,
+          last_updated: new Date().toISOString()
         })
         .eq('id', '1');
       
-      if (error) {
-        throw error;
-      }
+      if (updateError) throw updateError;
       
-      toast.success('تم تحديث أرصدة الخزينة بنجاح');
       return true;
     } catch (error) {
-      console.error('Error updating financial balance manually:', error);
-      toast.error('حدث خطأ أثناء تحديث أرصدة الخزينة');
+      console.error('Error updating financial balance:', error);
       return false;
     }
   }
