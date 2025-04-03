@@ -1,221 +1,286 @@
 
-import React, { useState, useEffect } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+import React, { useEffect, useState } from 'react';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { 
+  Form, 
+  FormControl, 
+  FormField, 
+  FormItem, 
+  FormLabel, 
+  FormMessage 
+} from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
-import { InvoiceItem } from '@/services/CommercialTypes';
 import InventoryService from '@/services/InventoryService';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+
+// Define allowed item types as literals for the type system
+const ItemTypes = ['raw_materials', 'packaging_materials', 'semi_finished_products', 'finished_products'] as const;
+type ItemType = typeof ItemTypes[number];
+
+// Validate that the item_type is one of the allowed values
+const InvoiceItemSchema = z.object({
+  item_id: z.number(),
+  item_type: z.enum(['raw_materials', 'packaging_materials', 'semi_finished_products', 'finished_products']),
+  item_name: z.string(),
+  quantity: z.number().positive(),
+  unit_price: z.number().nonnegative(),
+});
+
+export type InvoiceItemFormValues = z.infer<typeof InvoiceItemSchema>;
 
 interface InvoiceItemFormProps {
+  onSubmit: (data: InvoiceItemFormValues) => void;
+  initialData?: InvoiceItemFormValues;
   invoiceType: 'sale' | 'purchase';
-  onAddItem: (item: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>) => void;
-  items: Array<{
-    id: number;
-    name: string;
-    type: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products';
-    quantity: number;
-    unit_cost: number;
-    sales_price?: number;
-  }>;
-  categorizedItems: {
-    raw_materials: Array<any>;
-    packaging_materials: Array<any>;
-    semi_finished_products: Array<any>;
-    finished_products: Array<any>;
-  };
 }
 
 const InvoiceItemForm: React.FC<InvoiceItemFormProps> = ({
-  invoiceType,
-  onAddItem,
-  categorizedItems
+  onSubmit,
+  initialData,
+  invoiceType
 }) => {
-  const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
-  const [selectedItemType, setSelectedItemType] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('finished_products');
-  const [itemQuantity, setItemQuantity] = useState<number>(1);
-  const [itemPrice, setItemPrice] = useState<number>(0);
-  const [availableQuantity, setAvailableQuantity] = useState<number | null>(null);
-  const [itemUnit, setItemUnit] = useState<string>('');
-  const [itemName, setItemName] = useState<string>('');
-  
-  const inventoryService = InventoryService.getInstance();
+  const [itemType, setItemType] = useState<ItemType>(initialData?.item_type || 'raw_materials');
+  const [items, setItems] = useState<any[]>([]);
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
+  const form = useForm<InvoiceItemFormValues>({
+    resolver: zodResolver(InvoiceItemSchema),
+    defaultValues: initialData || {
+      item_id: 0,
+      item_type: 'raw_materials' as ItemType,
+      item_name: '',
+      quantity: 1,
+      unit_price: 0,
+    },
+  });
+
+  // Fetch items based on selected type
   useEffect(() => {
-    async function fetchProductDetails() {
-      if (selectedItemId) {
-        const productDetails = await inventoryService.getProductDetails(
-          selectedCategory, 
-          Number(selectedItemId)
-        );
+    const fetchItems = async () => {
+      let fetchedItems: any[] = [];
+      
+      switch (itemType) {
+        case 'raw_materials':
+          fetchedItems = await InventoryService.getRawMaterials();
+          break;
+        case 'packaging_materials':
+          fetchedItems = await InventoryService.getPackagingMaterials();
+          break;
+        case 'semi_finished_products':
+          fetchedItems = await InventoryService.getSemiFinishedProducts();
+          break;
+        case 'finished_products':
+          fetchedItems = await InventoryService.getFinishedProducts();
+          break;
+        default:
+          fetchedItems = [];
+      }
+      
+      setItems(fetchedItems);
+    };
+    
+    fetchItems();
+  }, [itemType]);
 
-        if (productDetails) {
-          setAvailableQuantity(productDetails.availableQuantity);
-          setItemUnit(productDetails.unit);
-          setItemName(productDetails.name);
-          
-          // Use sales price for sales invoices, unit_cost for purchases
-          if (invoiceType === 'sale') {
-            setItemPrice(productDetails.sales_price);
-          } else {
-            // For purchase invoices, get the selected item and use its unit_cost
-            const selectedItem = categorizedItems[selectedCategory as keyof typeof categorizedItems]
-              .find(item => item.id === Number(selectedItemId));
-              
-            if (selectedItem) {
-              setItemPrice(selectedItem.unit_cost);
-            }
-          }
-        }
+  // Update form when item type changes
+  useEffect(() => {
+    form.setValue('item_type', itemType);
+    form.setValue('item_id', 0);
+    form.setValue('item_name', '');
+    form.setValue('unit_price', 0);
+    setSelectedItem(null);
+  }, [itemType, form]);
+
+  const handleItemTypeChange = (value: ItemType) => {
+    setItemType(value);
+  };
+
+  const handleItemChange = (value: string) => {
+    const itemId = parseInt(value);
+    const item = items.find(item => item.id === itemId);
+    
+    if (item) {
+      setSelectedItem(item);
+      form.setValue('item_id', itemId);
+      form.setValue('item_name', item.name);
+      
+      // If it's a sales invoice, auto-fill with the sales price
+      if (invoiceType === 'sale' && item.sales_price) {
+        form.setValue('unit_price', item.sales_price);
       } else {
-        setAvailableQuantity(null);
-        setItemUnit('');
+        // For purchase invoices, use the unit cost as default
+        form.setValue('unit_price', item.unit_cost || 0);
       }
     }
+  };
+
+  // Function to format the item label with its quantity
+  const formatItemLabel = (item: any): string => {
+    return `${item.name} - المتاح: ${item.quantity} ${item.unit}`;
+  };
+
+  // Function to submit the form
+  const handleFormSubmit = (data: InvoiceItemFormValues) => {
+    // Validate that the selected item exists
+    if (!selectedItem) {
+      toast.error('يرجى اختيار صنف');
+      return;
+    }
     
-    fetchProductDetails();
-  }, [selectedItemId, selectedCategory, invoiceType, categorizedItems]);
-
-  const addItemToInvoice = () => {
-    if (selectedItemId && itemQuantity > 0 && itemPrice > 0) {
-      const newItem: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'> = {
-        item_id: Number(selectedItemId),
-        item_type: selectedCategory,
-        item_name: itemName,
-        quantity: itemQuantity,
-        unit_price: itemPrice,
-        total: itemQuantity * itemPrice
-      };
-      
-      onAddItem(newItem);
-      
-      setSelectedItemId('');
-      setItemQuantity(1);
-      setItemPrice(0);
-      setAvailableQuantity(null);
-      setItemUnit('');
+    // For sales invoices, validate quantity against available stock
+    if (invoiceType === 'sale' && data.quantity > selectedItem.quantity) {
+      toast.error(`الكمية المتاحة (${selectedItem.quantity}) أقل من الكمية المطلوبة (${data.quantity})`);
+      return;
     }
+    
+    onSubmit(data);
+    
+    // Reset form for next item
+    form.reset({
+      item_id: 0,
+      item_type: itemType,
+      item_name: '',
+      quantity: 1,
+      unit_price: 0,
+    });
+    setSelectedItem(null);
   };
-
-  const getCategoryTranslation = (category: string) => {
-    switch (category) {
-      case 'raw_materials':
-        return 'المواد الخام';
-      case 'packaging_materials':
-        return 'مواد التعبئة';
-      case 'semi_finished_products':
-        return 'المنتجات نصف المصنعة';
-      case 'finished_products':
-        return 'المنتجات النهائية';
-      default:
-        return '';
-    }
-  };
-
-  // Show warning if quantity exceeds available (for sales only)
-  const quantityWarning = invoiceType === 'sale' && availableQuantity !== null && itemQuantity > availableQuantity;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 mb-4 items-end">
-      <div className="lg:col-span-1">
-        <label className="text-sm font-medium block mb-2">فئة المنتج</label>
-        <Select 
-          value={selectedCategory}
-          onValueChange={setSelectedCategory}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="اختر فئة المنتج" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="finished_products">المنتجات النهائية</SelectItem>
-            <SelectItem value="semi_finished_products">المنتجات نصف المصنعة</SelectItem>
-            <SelectItem value="raw_materials">المواد الخام</SelectItem>
-            <SelectItem value="packaging_materials">مواد التعبئة</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      
-      <div className="lg:col-span-2">
-        <label className="text-sm font-medium block mb-2">المنتج</label>
-        <Select 
-          value={selectedItemId.toString() || undefined}
-          onValueChange={(value) => setSelectedItemId(Number(value))}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="اختر المنتج" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="" disabled>اختر المنتج</SelectItem>
-              {categorizedItems[selectedCategory as keyof typeof categorizedItems].map(item => (
-                <SelectItem key={item.id} value={item.id.toString()}>
-                  {item.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
-      
-      <div className="lg:col-span-1 relative">
-        <label className="text-sm font-medium block mb-2">الكمية {itemUnit ? `(${itemUnit})` : ''}</label>
-        <Input 
-          type="number" 
-          min="0.01"
-          step="0.01"
-          value={itemQuantity} 
-          onChange={(e) => setItemQuantity(Number(e.target.value))} 
-          className={quantityWarning ? "border-red-500" : ""}
-        />
-        {availableQuantity !== null && invoiceType === 'sale' && (
-          <div className="text-xs mt-1">
-            <span className={quantityWarning ? "text-red-500 font-bold" : "text-gray-500"}>
-              متاح: {availableQuantity} {itemUnit}
-            </span>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 p-2 border rounded-md">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="item_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>نوع الصنف</FormLabel>
+                <Select
+                  onValueChange={(value) => handleItemTypeChange(value as ItemType)}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر نوع الصنف" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="raw_materials">المواد الخام</SelectItem>
+                    <SelectItem value="packaging_materials">مواد التعبئة</SelectItem>
+                    <SelectItem value="semi_finished_products">المنتجات نصف المصنعة</SelectItem>
+                    <SelectItem value="finished_products">المنتجات النهائية</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="item_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>الصنف</FormLabel>
+                <Select
+                  onValueChange={handleItemChange}
+                  value={field.value ? field.value.toString() : ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الصنف" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {items.length > 0 ? (
+                      items.map((item) => (
+                        <SelectItem key={item.id} value={item.id.toString()}>
+                          {formatItemLabel(item)}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        لا توجد أصناف متاحة
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        
+        {selectedItem && (
+          <div className="flex items-center gap-2 text-sm">
+            <Badge variant="outline">
+              السعر: {invoiceType === 'sale' ? selectedItem.sales_price : selectedItem.unit_cost} 
+            </Badge>
+            <Badge variant="outline">
+              المتاح: {selectedItem.quantity} {selectedItem.unit}
+            </Badge>
           </div>
         )}
-      </div>
-      
-      <div className="lg:col-span-1">
-        <label className="text-sm font-medium block mb-2">السعر</label>
-        <Input 
-          type="number"
-          step="0.01"
-          min="0"
-          value={itemPrice} 
-          onChange={(e) => setItemPrice(Number(e.target.value))} 
-        />
-      </div>
-      
-      <div className="lg:col-span-1">
-        <label className="text-sm font-medium block mb-2">الإجمالي</label>
-        <Input 
-          type="number"
-          value={(itemQuantity * itemPrice).toFixed(2)}
-          readOnly
-          className="bg-gray-50"
-        />
-      </div>
-      
-      <div className="lg:col-span-1">
-        <Button 
-          type="button" 
-          onClick={addItemToInvoice}
-          disabled={!selectedItemId || itemQuantity <= 0 || itemPrice <= 0}
-          className="w-full"
-        >
-          <Plus className="mr-2 h-4 w-4" /> إضافة
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>الكمية</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    min={1} 
+                    step={1} 
+                    {...field} 
+                    onChange={(e) => field.onChange(Number(e.target.value))}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="unit_price"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>السعر</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    min={0} 
+                    step={0.01} 
+                    {...field} 
+                    onChange={(e) => field.onChange(Number(e.target.value))}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <Button type="submit" className="w-full">
+          إضافة الصنف
         </Button>
-      </div>
-    </div>
+      </form>
+    </Form>
   );
 };
 
