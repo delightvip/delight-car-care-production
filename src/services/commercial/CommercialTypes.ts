@@ -26,3 +26,18 @@ export interface InvoiceItem {
   total: number;
   created_at?: string;
 }
+
+// Add Payment type to fix the errors
+export interface Payment {
+  id: string;
+  party_id: string;
+  party_name?: string;
+  amount: number;
+  date: string;
+  payment_type: "receipt" | "payment";
+  payment_status: "draft" | "confirmed" | "cancelled";
+  method: "cash" | "bank" | "credit" | "other";
+  related_invoice_id?: string;
+  notes?: string;
+  created_at?: string;
+}

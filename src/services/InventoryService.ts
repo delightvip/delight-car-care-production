@@ -1009,25 +1009,4 @@ class InventoryService {
           .update({ importance })
           .eq('id', material.id);
       }
-    } catch (error) {
-      console.error('Error updating raw materials importance:', error);
     }
-  }
-
-  /**
-   * Calculate importance of a material
-   */
-  private calculateImportance(material: any): number {
-    // Example algorithm: if stock is below min_stock, high importance
-    if (material.quantity <= material.min_stock) {
-      return 5; // High importance
-    } else if (material.quantity <= material.min_stock * 1.5) {
-      return 3; // Medium importance
-    } else {
-      return 1; // Low importance
-    }
-  }
-}
-
-export default InventoryService;
-export { RawMaterial, PackagingMaterial, SemiFinishedProduct, FinishedProduct };
