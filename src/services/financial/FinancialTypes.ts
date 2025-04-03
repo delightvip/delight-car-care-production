@@ -29,6 +29,14 @@ export interface FinancialSummary {
   incomeByCategory: CategoryAmount[];
   expenseByCategory: CategoryAmount[];
   recentTransactions: Transaction[];
+  // Additional properties used in the components
+  startDate?: string;
+  endDate?: string;
+  netIncome?: number; // Alias for netProfit for backward compatibility
+  cashBalance?: number;
+  bankBalance?: number;
+  totalBalance?: number;
+  categoryAnalysis?: any[];
 }
 
 export interface CategoryAmount {

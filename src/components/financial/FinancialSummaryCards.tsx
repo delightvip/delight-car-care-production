@@ -56,7 +56,7 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
           {loading ? (
             <Skeleton className="h-8 w-[100px]" />
           ) : (
-            <div className="text-2xl font-bold">{formatAmount(summary.totalExpenses)}</div>
+            <div className="text-2xl font-bold">{formatAmount(summary.totalExpense)}</div>
           )}
           <p className="text-xs text-muted-foreground">
             {summary.startDate && summary.endDate ? (
@@ -78,8 +78,8 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
           {loading ? (
             <Skeleton className="h-8 w-[100px]" />
           ) : (
-            <div className={`text-2xl font-bold ${summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatAmount(summary.netIncome)}
+            <div className={`text-2xl font-bold ${(summary.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatAmount(summary.netProfit)}
             </div>
           )}
           <p className="text-xs text-muted-foreground">
@@ -98,16 +98,16 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
           {loading ? (
             <Skeleton className="h-8 w-[100px]" />
           ) : (
-            <div className="text-2xl font-bold">{formatAmount(summary.totalBalance)}</div>
+            <div className="text-2xl font-bold">{formatAmount(summary.totalBalance || 0)}</div>
           )}
           <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
             <div>
               <span className="text-muted-foreground">نقدي: </span>
-              {formatAmount(summary.cashBalance)}
+              {formatAmount(summary.cashBalance || 0)}
             </div>
             <div>
               <span className="text-muted-foreground">بنكي: </span>
-              {formatAmount(summary.bankBalance)}
+              {formatAmount(summary.bankBalance || 0)}
             </div>
           </div>
         </CardContent>

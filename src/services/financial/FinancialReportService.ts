@@ -32,17 +32,17 @@ class FinancialReportService {
       
       // حساب الإجماليات
       let totalIncome = 0;
-      let totalExpenses = 0;
+      let totalExpense = 0;
       
       transactions.forEach(transaction => {
         if (transaction.type === 'income') {
           totalIncome += transaction.amount;
         } else if (transaction.type === 'expense') {
-          totalExpenses += transaction.amount;
+          totalExpense += transaction.amount;
         }
       });
       
-      const netIncome = totalIncome - totalExpenses;
+      const netProfit = totalIncome - totalExpense;
       
       // جلب أرصدة الخزينة
       const { data: balanceData, error: balanceError } = await supabase
@@ -67,15 +67,18 @@ class FinancialReportService {
       
       return {
         totalIncome,
-        totalExpenses,
-        netIncome,
+        totalExpense,
+        netProfit,
+        netIncome: netProfit, // Alias for backward compatibility
         cashBalance,
         bankBalance,
         totalBalance,
         categoryAnalysis,
         recentTransactions,
         startDate,
-        endDate
+        endDate,
+        incomeByCategory: [],
+        expenseByCategory: []
       };
     } catch (error) {
       console.error('Error getting financial summary:', error);
@@ -84,7 +87,8 @@ class FinancialReportService {
       // إرجاع ملخص فارغ في حالة الخطأ
       return {
         totalIncome: 0,
-        totalExpenses: 0,
+        totalExpense: 0,
+        netProfit: 0,
         netIncome: 0,
         cashBalance: 0,
         bankBalance: 0,
@@ -92,7 +96,9 @@ class FinancialReportService {
         categoryAnalysis: [],
         recentTransactions: [],
         startDate,
-        endDate
+        endDate,
+        incomeByCategory: [],
+        expenseByCategory: []
       };
     }
   }

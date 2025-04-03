@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Payment } from "@/services/commercial/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
@@ -35,8 +34,7 @@ export class PaymentProcessor {
       if (paymentError) throw paymentError;
       
       if (payment.payment_status === 'confirmed') {
-        toast({
-          title: "تنبيه",
+        toast("تنبيه", {
           description: "الدفعة مؤكدة بالفعل",
           variant: "default"
         });
