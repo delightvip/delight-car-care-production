@@ -1,8 +1,9 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import CommercialService from "../CommercialService";
+import CommercialService from "@/services/CommercialService";
 
 export class InvoiceProcessor {
   private commercialService: CommercialService;
