@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Return } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
@@ -205,10 +204,7 @@ export class ReturnProcessor {
             const result = await this.partyService.updatePartyBalance(
               returnData.party_id,
               returnData.amount,
-              false, // دائن لمرتجعات المبيعات (تقليل دين العميل)
-              'مرتجع مبيعات',
-              'sales_return',
-              returnId
+              false
             );
             
             if (!result) {
@@ -316,10 +312,7 @@ export class ReturnProcessor {
             const result = await this.partyService.updatePartyBalance(
               returnData.party_id,
               returnData.amount,
-              true, // مدين لمرتجعات المشتريات (زيادة دين المورد تجاهنا)
-              'مرتجع مشتريات',
-              'purchase_return',
-              returnId
+              true
             );
             
             if (!result) {
@@ -516,10 +509,7 @@ export class ReturnProcessor {
             const result = await this.partyService.updatePartyBalance(
               returnData.party_id,
               returnData.amount,
-              true, // مدين لإلغاء مرتجعات المبيعات (استعادة دين العميل)
-              'إلغاء مرتجع مبيعات',
-              'cancel_sales_return',
-              returnId
+              true
             );
             
             if (!result) {
@@ -613,10 +603,7 @@ export class ReturnProcessor {
             const result = await this.partyService.updatePartyBalance(
               returnData.party_id,
               returnData.amount,
-              false, // دائن لإلغاء مرتجعات المشتريات (استعادة دين المورد)
-              'إلغاء مرتجع مشتريات',
-              'cancel_purchase_return',
-              returnId
+              false
             );
             
             if (!result) {
@@ -790,5 +777,213 @@ export class ReturnProcessor {
       return false;
     }
   }
-}
 
+  private async confirmSalesReturn(returnId: string, returnData: any): Promise<boolean> {
+    try {
+      if (!returnData.party_id) {
+        console.error('No party_id for sales return:', returnId);
+        toast({
+          title: "خطأ",
+          description: "لا يوجد طرف تجاري للمرتجع",
+          variant: "destructive"
+        });
+        return false;
+      }
+  
+      if (!returnData.amount) {
+        console.error('No amount for sales return:', returnId);
+        toast({
+          title: "خطأ",
+          description: "لا يوجد مبلغ للمرتجع",
+          variant: "destructive"
+        });
+        return false;
+      }
+  
+      // Update party balance by reversing the sale
+      const partyUpdateResult = await this.partyService.updatePartyBalance(
+        returnData.party_id,
+        returnData.amount,
+        false
+      );
+  
+      if (!partyUpdateResult) {
+        console.error('Failed to update customer balance for sales return:', returnId);
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تحديث حساب العميل",
+          variant: "destructive"
+        });
+        return false;
+      }
+  
+      // Update inventory
+      for (const item of returnData.items) {
+        try {
+          // التأكد من وجود المنتج والحصول على الكمية الحالية
+          const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
+            item.item_type,
+            item.item_id
+          );
+  
+          if (itemError) {
+            console.error(`Error fetching item ${item.item_id}:`, itemError);
+            toast({
+              title: "خطأ",
+              description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
+              variant: "destructive"
+            });
+            return false;
+          }
+  
+          if (!currentItem) {
+            console.error(`Item not found: ${item.item_name}`);
+            toast({
+              title: "خطأ",
+              description: `لم يتم العثور على ${item.item_name} في المخزون`,
+              variant: "destructive"
+            });
+            return false;
+          }
+  
+          // حساب الكمية الجديدة
+          const currentQuantity = Number(currentItem.quantity) || 0;
+          const newQuantity = currentQuantity + Number(item.quantity);
+          console.log(`Updating ${item.item_name} quantity: ${currentQuantity} + ${item.quantity} = ${newQuantity}`);
+  
+          // تحديث المخزون
+          const { error: updateError } = await this.updateItemQuantity(
+            item.item_type,
+            item.item_id,
+            newQuantity
+          );
+  
+          if (updateError) {
+            console.error(`Error updating ${item.item_name} quantity:`, updateError);
+            toast({
+              title: "خطأ",
+              description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
+              variant: "destructive"
+            });
+            return false;
+          }
+  
+          // تسجيل حركة المخزون
+          await this.recordInventoryMovement(
+            item.item_id,
+            item.item_type,
+            Number(item.quantity),
+            newQuantity,
+            'in',
+            `مرتجع مبيعات - رقم: ${returnId}`
+          );
+        } catch (err) {
+          console.error(`Error processing item ${item.item_name}:`, err);
+          return false;
+        }
+      }
+  
+      return true;
+    } catch (error) {
+      console.error('Error confirming sales return:', error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تأكيد مرتجع المبيعات",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
+  private async cancelSalesReturn(returnId: string, returnData: any): Promise<boolean> {
+    try {
+      if (!returnData.party_id) {
+        console.error('No party_id for sales return:', returnId);
+        toast({
+          title: "خطأ",
+          description: "لا يوجد طرف تجاري للمرتجع",
+          variant: "destructive"
+        });
+        return false;
+      }
+  
+      if (!returnData.amount) {
+        console.error('No amount for sales return:', returnId);
+        toast({
+          title: "خطأ",
+          description: "لا يوجد مبلغ للمرتجع",
+          variant: "destructive"
+        });
+        return false;
+      }
+  
+      // Revert party balance changes
+      const partyUpdateResult = await this.partyService.updatePartyBalance(
+        returnData.party_id,
+        returnData.amount,
+        true
+      );
+  
+      if (!partyUpdateResult) {
+        console.error('Failed to update customer balance for cancelled sales return:', returnId);
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تحديث حساب العميل",
+          variant: "destructive"
+        });
+        return false;
+      }
+  
+      // Update inventory
+      for (const item of returnData.items) {
+        try {
+          // التأكد من وجود المنتج والحصول على الكمية الحالية
+          const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
+            item.item_type,
+            item.item_id
+          );
+  
+          if (itemError) {
+            console.error(`Error fetching item ${item.item_id}:`, itemError);
+            toast({
+              title: "خطأ",
+              description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
+              variant: "destructive"
+            });
+            return false;
+          }
+  
+          if (!currentItem) {
+            console.error(`Item not found: ${item.item_name}`);
+            toast({
+              title: "خطأ",
+              description: `لم يتم العثور على ${item.item_name} في المخزون`,
+              variant: "destructive"
+            });
+            return false;
+          }
+  
+          // التحقق من وجود كمية كافية للإلغاء
+          const currentQuantity = Number(currentItem.quantity) || 0;
+          if (currentQuantity < Number(item.quantity)) {
+            console.error(`Insufficient quantity for ${item.item_name}: ${currentQuantity} < ${item.quantity}`);
+            toast({
+              title: "خطأ",
+              description: `كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`,
+              variant: "destructive"
+            });
+            return false;
+          }
+  
+          // حساب الكمية الجديدة
+          const newQuantity = currentQuantity - Number(item.quantity);
+          console.log(`Updating ${item.item_name} quantity: ${currentQuantity} - ${item.quantity} = ${newQuantity}`);
+  
+          // تحديث المخزون
+          const { error: updateError } = await this.updateItemQuantity(
+            item.item_type,
+            item.item_id,
+            newQuantity
+          );
+  
+          if

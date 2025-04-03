@@ -53,6 +53,8 @@ class PartyService {
             return {
               ...party,
               balance: 0,
+              notes: party.notes || "",
+              code: party.code || "",
               // Ensure type is cast to the correct union type
               type: party.type as "customer" | "supplier" | "other"
             };
@@ -61,6 +63,8 @@ class PartyService {
           return {
             ...party,
             balance: balanceData?.balance || 0,
+            notes: party.notes || "",
+            code: party.code || "",
             // Ensure type is cast to the correct union type
             type: party.type as "customer" | "supplier" | "other"
           };
@@ -102,7 +106,6 @@ class PartyService {
             return { 
               ...party, 
               balance: 0,
-              // Add these properties to match Party interface
               notes: party.notes || "",
               code: party.code || "",
               // Ensure type is cast to the correct union type
@@ -113,7 +116,6 @@ class PartyService {
           return { 
             ...party, 
             balance: balanceData?.balance || 0,
-            // Add these properties to match Party interface
             notes: party.notes || "",
             code: party.code || "",
             // Ensure type is cast to the correct union type
@@ -155,6 +157,8 @@ class PartyService {
         return { 
           ...data, 
           balance: 0,
+          notes: data.notes || "",
+          code: data.code || "",
           // Ensure type is cast to the correct union type
           type: data.type as "customer" | "supplier" | "other"
         };
@@ -163,6 +167,8 @@ class PartyService {
       return { 
         ...data, 
         balance: balanceData?.balance || 0,
+        notes: data.notes || "",
+        code: data.code || "",
         // Ensure type is cast to the correct union type
         type: data.type as "customer" | "supplier" | "other"
       };
@@ -207,6 +213,19 @@ class PartyService {
       return false;
     }
   }
+  
+  /**
+   * Update party balance after a transaction
+   */
+  async updatePartyBalanceAfterTransaction(
+    partyId: string, 
+    amount: number, 
+    transactionType: string
+  ): Promise<boolean> {
+    // Determine if this is a debit or credit operation based on transaction type
+    const isDebit = ['sale', 'receipt', 'sales_return'].includes(transactionType);
+    return this.updatePartyBalance(partyId, amount, isDebit);
+  }
 
   /**
    * Add a new party
@@ -237,6 +256,8 @@ class PartyService {
       return { 
         ...data, 
         balance: party.opening_balance || 0,
+        notes: data.notes || "",
+        code: data.code || "",
         // Ensure type is cast to the correct union type
         type: data.type as "customer" | "supplier" | "other"
       };
@@ -280,6 +301,8 @@ class PartyService {
       return {
         ...data,
         balance: updates.balance,
+        notes: data.notes || "",
+        code: data.code || "",
         // Ensure type is cast to the correct union type
         type: data.type as "customer" | "supplier" | "other"
       };

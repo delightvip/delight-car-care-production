@@ -13,6 +13,7 @@ export interface ProductionOrder {
   total_cost: number;
   created_at?: string;
   updated_at?: string;
+  ingredients?: ProductionOrderIngredient[]; // Allow ingredients to be added dynamically
 }
 
 export interface ProductionOrderIngredient {
@@ -22,6 +23,7 @@ export interface ProductionOrderIngredient {
   raw_material_name: string;
   required_quantity: number;
   created_at?: string;
+  available?: boolean; // For UI display
 }
 
 export interface PackagingOrder {
@@ -39,6 +41,14 @@ export interface PackagingOrder {
   total_cost: number;
   created_at?: string;
   updated_at?: string;
+  // Additional properties for UI display
+  semiFinished?: {
+    code: string;
+    name: string;
+    quantity: number;
+    available: boolean;
+  };
+  packagingMaterials?: PackagingOrderMaterial[];
 }
 
 export interface PackagingOrderMaterial {
@@ -48,6 +58,7 @@ export interface PackagingOrderMaterial {
   packaging_material_name: string;
   required_quantity: number;
   created_at?: string;
+  available?: boolean; // For UI display
 }
 
 export interface ProductionMovement {

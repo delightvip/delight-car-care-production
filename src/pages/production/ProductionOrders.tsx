@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
-import { ProductionOrder } from '@/services/ProductionService';
+import { ProductionOrder } from '@/services/types/productionTypes';
 import { SemiFinishedProduct } from '@/types/inventoryTypes';
 
 const statusTranslations = {
@@ -192,8 +192,8 @@ const ProductionOrders = () => {
       const success = await productionService.updateProductionOrder(
         editOrder.id,
         {
-          productCode: editOrder.productCode,
-          productName: semiFinishedProducts.find(p => p.code === editOrder.productCode)?.name || '',
+          product_code: editOrder.productCode,
+          product_name: semiFinishedProducts.find(p => p.code === editOrder.productCode)?.name || '',
           quantity: editOrder.quantity,
           unit: editOrder.unit,
           ingredients: ingredients.map(ing => ({
@@ -267,8 +267,8 @@ const ProductionOrders = () => {
         onClick={() => {
           setEditOrder({
             id: record.id,
-            productCode: record.productCode,
-            productName: record.productName,
+            productCode: record.product_code,
+            productName: record.product_name,
             quantity: record.quantity,
             unit: record.unit
           });
@@ -408,7 +408,7 @@ const ProductionOrders = () => {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">المنتج</h4>
-                    <p className="font-medium">{currentOrder.productName}</p>
+                    <p className="font-medium">{currentOrder.product_name}</p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">الكمية</h4>
@@ -423,19 +423,19 @@ const ProductionOrders = () => {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">التكلفة الإجمالية</h4>
-                    <p className="font-medium">{currentOrder.totalCost} ج.م</p>
+                    <p className="font-medium">{currentOrder.total_cost} ج.م</p>
                   </div>
                 </div>
                 
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                   <div className="space-y-2">
-                    {currentOrder.ingredients.map((ingredient) => (
-                      <div key={ingredient.code} className="flex justify-between p-2 border rounded-md">
+                    {currentOrder.ingredients && currentOrder.ingredients.map((ingredient) => (
+                      <div key={ingredient.id} className="flex justify-between p-2 border rounded-md">
                         <div>
-                          <span className="font-medium">{ingredient.name}</span>
+                          <span className="font-medium">{ingredient.raw_material_name}</span>
                           <span className="text-sm text-muted-foreground mr-2">
-                            ({ingredient.requiredQuantity.toFixed(2)})
+                            ({ingredient.required_quantity.toFixed(2)})
                           </span>
                         </div>
                         {ingredient.available ? (
@@ -516,7 +516,7 @@ const ProductionOrders = () => {
             </DialogHeader>
             {currentOrder && (
               <div className="py-4">
-                <p className="font-medium">{currentOrder.code} - {currentOrder.productName}</p>
+                <p className="font-medium">{currentOrder.code} - {currentOrder.product_name}</p>
                 <p className="text-sm text-muted-foreground">الكمية: {currentOrder.quantity} {currentOrder.unit}</p>
               </div>
             )}
