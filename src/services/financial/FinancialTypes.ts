@@ -1,52 +1,42 @@
 
-/**
- * نموذج فئة المعاملات المالية
- */
 export interface Category {
   id: string;
   name: string;
-  type: 'income' | 'expense';
   description?: string;
+  type: 'income' | 'expense';
   created_at?: string;
 }
 
-/**
- * نموذج المعاملة المالية
- */
 export interface Transaction {
   id: string;
-  date: string; // Always use string for dates for consistency
-  amount: number;
   type: 'income' | 'expense';
+  amount: number;
   category_id: string;
-  category_name: string;
-  category_type: string;
+  category_name?: string;
+  category_type?: 'income' | 'expense';
+  date: string;
   payment_method: string;
+  notes?: string;
   reference_id?: string;
   reference_type?: string;
-  notes?: string;
   created_at?: string;
 }
 
-/**
- * نموذج الملخص المالي
- */
 export interface FinancialSummary {
   totalIncome: number;
-  totalExpenses: number;
-  netIncome: number;
-  cashBalance: number;
-  bankBalance: number;
-  totalBalance: number;
-  categoryAnalysis: any[];
+  totalExpense: number;
+  netProfit: number;
+  incomeByCategory: CategoryAmount[];
+  expenseByCategory: CategoryAmount[];
   recentTransactions: Transaction[];
-  startDate?: string;
-  endDate?: string;
 }
 
-/**
- * نموذج رصيد مالي
- */
+export interface CategoryAmount {
+  category: string;
+  amount: number;
+  percentage: number;
+}
+
 export interface FinancialBalance {
   id: string;
   cash_balance: number;

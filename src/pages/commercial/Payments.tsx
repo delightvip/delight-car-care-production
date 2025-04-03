@@ -1,10 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import PaymentService from '@/services/commercial/payment/PaymentService';
-import PaymentProcessingService from '@/services/commercial/PaymentProcessingService';
 import PartyService from '@/services/PartyService';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Search, FileDown } from 'lucide-react';
@@ -29,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { PaymentForm } from '@/components/commercial/PaymentForm';
 import PaymentsList from '@/components/commercial/PaymentsList';
+import FinancialBalanceSummary from '@/components/financial/FinancialBalanceSummary';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Payment } from '@/services/commercial/CommercialTypes';
@@ -47,7 +46,6 @@ const Payments = () => {
   const queryClient = useQueryClient();
   
   const paymentService = PaymentService.getInstance();
-  const paymentProcessingService = PaymentProcessingService.getInstance();
   const partyService = PartyService.getInstance();
   const invoiceService = InvoiceService.getInstance();
   
@@ -164,6 +162,7 @@ const Payments = () => {
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['payments'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
+        queryClient.invalidateQueries({ queryKey: ['financial-balance'] });
         setIsConfirmDialogOpen(false);
         setSelectedPayment(null);
       }
@@ -186,6 +185,7 @@ const Payments = () => {
       if (success) {
         queryClient.invalidateQueries({ queryKey: ['payments'] });
         queryClient.invalidateQueries({ queryKey: ['parties'] });
+        queryClient.invalidateQueries({ queryKey: ['financial-balance'] });
         setIsCancelDialogOpen(false);
         setSelectedPayment(null);
       }
@@ -278,6 +278,8 @@ const Payments = () => {
             <PlusCircle className="mr-2 h-4 w-4" /> تسجيل معاملة جديدة
           </Button>
         </div>
+        
+        <FinancialBalanceSummary className="mb-6" />
         
         <div className="flex mb-4">
           <Input

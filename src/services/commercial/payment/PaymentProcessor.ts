@@ -1,20 +1,23 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Payment } from "@/services/CommercialTypes";
+import { Payment } from "@/services/commercial/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
 import InvoiceService from "../invoice/InvoiceService";
-import { toast } from "@/hooks/use-toast";
+import FinancialBalanceService from "@/services/financial/FinancialBalanceService";
+import { toast } from "sonner";
 
 export class PaymentProcessor {
   private inventoryService: InventoryService;
   private partyService: PartyService;
   private invoiceService: InvoiceService;
+  private financialBalanceService: FinancialBalanceService;
 
   constructor() {
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
     this.invoiceService = InvoiceService.getInstance();
+    this.financialBalanceService = FinancialBalanceService.getInstance();
   }
 
   /**
@@ -25,7 +28,7 @@ export class PaymentProcessor {
       // التحقق من حالة الدفعة
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
-        .select('*')
+        .select('*, parties(name)')
         .eq('id', paymentId)
         .single();
       
@@ -62,6 +65,24 @@ export class PaymentProcessor {
         );
       }
       
+      // تحديث أرصدة الخزينة (النقدية أو البنكية) بناءً على نوع الدفعة وطريقة الدفع
+      const isIncome = payment.payment_type === 'collection'; // تحصيل من العميل يعني دخل للخزينة
+      const partyName = payment.parties?.name || 'غير محدد';
+      const reason = isIncome 
+        ? `تحصيل دفعة من ${partyName}` 
+        : `تسديد دفعة إلى ${partyName}`;
+        
+      const balanceUpdated = await this.financialBalanceService.updateBalanceByPaymentMethod(
+        payment.amount,
+        payment.method,
+        isIncome,
+        reason
+      );
+      
+      if (!balanceUpdated) {
+        console.warn('تم تأكيد الدفعة ولكن فشل تحديث رصيد الخزينة');
+      }
+      
       // تحديث حالة الدفعة إلى "مؤكدة"
       const { error: updateError } = await supabase
         .from('payments')
@@ -72,21 +93,13 @@ export class PaymentProcessor {
       
       // استخدام setTimeout لتجنب تعليق واجهة المستخدم
       setTimeout(() => {
-        toast({
-          title: "نجاح",
-          description: "تم تأكيد الدفعة بنجاح",
-          variant: "success"
-        });
+        toast.success('تم تأكيد الدفعة بنجاح');
       }, 100);
       
       return true;
     } catch (error) {
       console.error('Error confirming payment:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تأكيد الدفعة",
-        variant: "destructive"
-      });
+      toast.error('حدث خطأ أثناء تأكيد الدفعة');
       return false;
     }
   }
@@ -99,18 +112,14 @@ export class PaymentProcessor {
       // التحقق من حالة الدفعة
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
-        .select('*')
+        .select('*, parties(name)')
         .eq('id', paymentId)
         .single();
       
       if (paymentError) throw paymentError;
       
       if (payment.payment_status !== 'confirmed') {
-        toast({
-          title: "خطأ",
-          description: "يمكن إلغاء الدفعات المؤكدة فقط",
-          variant: "destructive"
-        });
+        toast.error('يمكن إلغاء الدفعات المؤكدة فقط');
         return false;
       }
       
@@ -136,6 +145,24 @@ export class PaymentProcessor {
         );
       }
       
+      // عكس تحديث أرصدة الخزينة (النقدية أو البنكية)
+      const isIncome = payment.payment_type === 'collection'; // عكس التأثير على الخزينة
+      const partyName = payment.parties?.name || 'غير محدد';
+      const reason = isIncome 
+        ? `إلغاء تحصيل دفعة من ${partyName}` 
+        : `إلغاء تسديد دفعة إلى ${partyName}`;
+        
+      const balanceUpdated = await this.financialBalanceService.updateBalanceByPaymentMethod(
+        payment.amount,
+        payment.method,
+        !isIncome, // عكس الإيراد/المصروف
+        reason
+      );
+      
+      if (!balanceUpdated) {
+        console.warn('تم إلغاء الدفعة ولكن فشل تحديث رصيد الخزينة');
+      }
+      
       // تحديث حالة الدفعة إلى "ملغاة"
       const { error: updateError } = await supabase
         .from('payments')
@@ -146,21 +173,13 @@ export class PaymentProcessor {
       
       // استخدام setTimeout لتجنب تعليق واجهة المستخدم
       setTimeout(() => {
-        toast({
-          title: "نجاح",
-          description: "تم إلغاء الدفعة بنجاح",
-          variant: "success"
-        });
+        toast.success('تم إلغاء الدفعة بنجاح');
       }, 100);
       
       return true;
     } catch (error) {
       console.error('Error cancelling payment:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إلغاء الدفعة",
-        variant: "destructive"
-      });
+      toast.error('حدث خطأ أثناء إلغاء الدفعة');
       return false;
     }
   }

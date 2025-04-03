@@ -1,8 +1,8 @@
 
-import { Payment } from '@/services/CommercialTypes';
+import { Payment } from '@/services/commercial/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
 import { PaymentProcessor } from './PaymentProcessor';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 // الخدمة الرئيسية للدفعات
 export class PaymentService {
@@ -33,22 +33,14 @@ export class PaymentService {
       const payment = await PaymentEntity.create(paymentData);
       
       if (payment) {
-        toast({
-          title: "نجاح",
-          description: "تم تسجيل المعاملة بنجاح",
-          variant: "default"
-        });
+        toast.success("تم تسجيل المعاملة بنجاح");
         return payment;
       }
       
       return null;
     } catch (error) {
       console.error('Error recording payment:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تسجيل المعاملة",
-        variant: "destructive"
-      });
+      toast.error("حدث خطأ أثناء تسجيل المعاملة");
       return null;
     }
   }
@@ -62,35 +54,27 @@ export class PaymentService {
       const confirmPromise = this.paymentProcessor.confirmPayment(paymentId);
       
       // عرض رسالة مبدئية للمستخدم
-      toast({
-        title: "جاري التنفيذ",
-        description: "جاري تأكيد المعاملة...",
-        variant: "default"
+      toast.loading("جاري تأكيد المعاملة...", {
+        id: `confirm-payment-${paymentId}`,
       });
       
       // تنفيذ العملية في الخلفية
       confirmPromise.then(result => {
         if (result) {
           console.log('Payment confirmation succeeded for:', paymentId);
-          toast({
-            title: "نجاح",
-            description: "تم تأكيد المعاملة بنجاح",
-            variant: "default"
+          toast.success("تم تأكيد المعاملة بنجاح", {
+            id: `confirm-payment-${paymentId}`,
           });
         } else {
           console.log('Payment confirmation failed for:', paymentId);
-          toast({
-            title: "خطأ",
-            description: "فشل تأكيد المعاملة",
-            variant: "destructive"
+          toast.error("فشل تأكيد المعاملة", {
+            id: `confirm-payment-${paymentId}`,
           });
         }
       }).catch(error => {
         console.error(`Error in confirmPayment(${paymentId}):`, error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تأكيد المعاملة",
-          variant: "destructive"
+        toast.error("حدث خطأ أثناء تأكيد المعاملة", {
+          id: `confirm-payment-${paymentId}`,
         });
       });
       
@@ -98,11 +82,7 @@ export class PaymentService {
       return true;
     } catch (error) {
       console.error(`Error starting confirmPayment(${paymentId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء بدء عملية تأكيد المعاملة",
-        variant: "destructive"
-      });
+      toast.error("حدث خطأ أثناء بدء عملية تأكيد المعاملة");
       return false;
     }
   }
@@ -115,35 +95,27 @@ export class PaymentService {
       const cancelPromise = this.paymentProcessor.cancelPayment(paymentId);
       
       // عرض رسالة مبدئية للمستخدم
-      toast({
-        title: "جاري التنفيذ",
-        description: "جاري إلغاء المعاملة...",
-        variant: "default"
+      toast.loading("جاري إلغاء المعاملة...", {
+        id: `cancel-payment-${paymentId}`,
       });
       
       // تنفيذ العملية في الخلفية
       cancelPromise.then(result => {
         if (result) {
           console.log('Payment cancellation succeeded for:', paymentId);
-          toast({
-            title: "نجاح",
-            description: "تم إلغاء المعاملة بنجاح",
-            variant: "default"
+          toast.success("تم إلغاء المعاملة بنجاح", {
+            id: `cancel-payment-${paymentId}`,
           });
         } else {
           console.log('Payment cancellation failed for:', paymentId);
-          toast({
-            title: "خطأ",
-            description: "فشل إلغاء المعاملة",
-            variant: "destructive"
+          toast.error("فشل إلغاء المعاملة", {
+            id: `cancel-payment-${paymentId}`,
           });
         }
       }).catch(error => {
         console.error(`Error in cancelPayment(${paymentId}):`, error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء إلغاء المعاملة",
-          variant: "destructive"
+        toast.error("حدث خطأ أثناء إلغاء المعاملة", {
+          id: `cancel-payment-${paymentId}`,
         });
       });
       
@@ -151,11 +123,7 @@ export class PaymentService {
       return true;
     } catch (error) {
       console.error(`Error starting cancelPayment(${paymentId}):`, error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء بدء عملية إلغاء المعاملة",
-        variant: "destructive"
-      });
+      toast.error("حدث خطأ أثناء بدء عملية إلغاء المعاملة");
       return false;
     }
   }
