@@ -1,3 +1,4 @@
+
 import { Payment } from '@/services/commercial/CommercialTypes';
 import { PaymentEntity } from './PaymentEntity';
 import PaymentProcessor from './PaymentProcessor';
@@ -48,9 +49,9 @@ export class PaymentService {
     try {
       console.log('Starting payment confirmation for:', paymentId);
       
-      // استخدام طريقة confirmPayment من paymentProcessor بدون انتظار
+      // استخدام طريقة processPayment من paymentProcessor بدون انتظار
       // سيتم تشغيلها في الخلفية وعدم تجميد الواجهة 
-      const confirmPromise = this.paymentProcessor.confirmPayment(paymentId);
+      const confirmPromise = this.paymentProcessor.processPayment({id: paymentId});
       
       // عرض رسالة مبدئية للمستخدم
       toast.loading("جاري تأكيد المعاملة...", {
@@ -90,8 +91,8 @@ export class PaymentService {
     try {
       console.log('Starting payment cancellation for:', paymentId);
       
-      // استخدام طريقة cancelPayment من paymentProcessor بدون انتظار
-      const cancelPromise = this.paymentProcessor.cancelPayment(paymentId);
+      // استخدام طريقة voidPayment من paymentProcessor بدون انتظار
+      const cancelPromise = this.paymentProcessor.voidPayment(paymentId);
       
       // عرض رسالة مبدئية للمستخدم
       toast.loading("جاري إلغاء المعاملة...", {
