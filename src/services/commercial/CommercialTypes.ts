@@ -1,43 +1,106 @@
 
-// Define types for commercial entities
-
 export interface Invoice {
   id: string;
-  invoice_type: "sale" | "purchase";
   party_id: string;
   party_name?: string;
+  invoice_type: 'sale' | 'purchase';
   date: string;
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  status: 'unpaid' | 'partial' | 'paid';
   total_amount: number;
-  status: "paid" | "partial" | "unpaid";
-  payment_status: "draft" | "confirmed" | "cancelled";
   notes?: string;
-  created_at: string;
+  created_at?: string;
   items: InvoiceItem[];
 }
 
 export interface InvoiceItem {
-  id: string;
-  invoice_id: string;
+  id?: string;
+  invoice_id?: string;
   item_id: number;
-  item_type: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products";
   item_name: string;
+  item_type: string;
   quantity: number;
   unit_price: number;
-  total: number;
-  created_at?: string;
+  total?: number;
 }
 
-// Update Payment type to match the one in CommercialTypes.ts
 export interface Payment {
   id: string;
   party_id: string;
   party_name?: string;
-  amount: number;
+  payment_type: 'collection' | 'payment';
   date: string;
-  payment_type: "collection" | "disbursement"; 
-  payment_status: "draft" | "confirmed" | "cancelled";
-  method: "cash" | "bank" | "check" | "bank_transfer" | "credit" | "other";
-  related_invoice_id?: string;
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  method: 'cash' | 'bank' | 'other';
+  amount: number;
   notes?: string;
+  related_invoice_id?: string;
   created_at?: string;
+}
+
+export interface Return {
+  id: string;
+  party_id: string;
+  party_name?: string;
+  return_type: 'sale' | 'purchase';
+  date: string;
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  amount: number;
+  notes?: string;
+  invoice_id?: string;
+  created_at?: string;
+  items: ReturnItem[];
+}
+
+export interface ReturnItem {
+  id?: string;
+  return_id?: string;
+  item_id: number;
+  item_name: string;
+  item_type: string;
+  quantity: number;
+  unit_price: number;
+  total?: number;
+}
+
+export interface CommercialSummary {
+  totalSales: number;
+  totalPurchases: number;
+  totalReturns: number;
+  topCustomers: {
+    id: string;
+    name: string;
+    total: number;
+  }[];
+  topProducts: {
+    id: number;
+    name: string;
+    quantity: number;
+    total: number;
+  }[];
+  recentInvoices: Invoice[];
+}
+
+export interface ProductionOrderIngredient {
+  id: number;
+  production_order_id: number;
+  raw_material_code: string;
+  raw_material_name: string;
+  required_quantity: number;
+  code?: string;
+  name?: string;
+  requiredQuantity?: number;
+  available?: number;
+}
+
+export interface PackagingOrderMaterial {
+  id: number;
+  packaging_order_id: number;
+  packaging_material_code: string;
+  packaging_material_name: string;
+  required_quantity: number;
+  code?: string;
+  name?: string;
+  requiredQuantity?: number;
+  available?: number;
 }

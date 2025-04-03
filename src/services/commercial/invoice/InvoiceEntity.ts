@@ -22,10 +22,26 @@ export class InvoiceEntity {
       
       if (error) throw error;
       
-      return data.map((invoice) => ({
-        ...invoice,
-        party_name: invoice.parties ? invoice.parties.name : 'Unknown',
-      })) as Invoice[];
+      // Fetch items for all invoices
+      const invoiceIds = data.map(invoice => invoice.id);
+      const { data: allItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .in('invoice_id', invoiceIds);
+      
+      if (itemsError) throw itemsError;
+      
+      // Map items to their respective invoices
+      const invoicesWithItems = data.map(invoice => {
+        const items = allItems.filter(item => item.invoice_id === invoice.id);
+        return {
+          ...invoice,
+          party_name: invoice.parties ? invoice.parties.name : 'Unknown',
+          items: items || []
+        };
+      });
+      
+      return invoicesWithItems as Invoice[];
     } catch (error) {
       console.error('Error fetching invoices:', error);
       toast.error('حدث خطأ أثناء جلب الفواتير');
@@ -49,10 +65,26 @@ export class InvoiceEntity {
       
       if (error) throw error;
       
-      return data.map((invoice) => ({
-        ...invoice,
-        party_name: invoice.parties ? invoice.parties.name : 'Unknown',
-      })) as Invoice[];
+      // Fetch items for all invoices
+      const invoiceIds = data.map(invoice => invoice.id);
+      const { data: allItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .in('invoice_id', invoiceIds);
+      
+      if (itemsError) throw itemsError;
+      
+      // Map items to their respective invoices
+      const invoicesWithItems = data.map(invoice => {
+        const items = allItems.filter(item => item.invoice_id === invoice.id);
+        return {
+          ...invoice,
+          party_name: invoice.parties ? invoice.parties.name : 'Unknown',
+          items: items || []
+        };
+      });
+      
+      return invoicesWithItems as Invoice[];
     } catch (error) {
       console.error('Error fetching invoices by party:', error);
       toast.error('حدث خطأ أثناء جلب فواتير الطرف');

@@ -3,39 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
-import FinancialService from "@/services/financial/FinancialService";
-
-interface Invoice {
-  id: string;
-  party_id: string;
-  invoice_type: string;
-  payment_status: string;
-  status: string;
-  date: string;
-  total_amount: number;
-  notes: string;
-  created_at: string;
-}
-
-interface InvoiceItem {
-  id: string;
-  invoice_id: string;
-  item_id: number;
-  item_name: string;
-  item_type: string;
-  quantity: number;
-  unit_price: number;
-  total: number;
-}
-
-interface InvoiceWithItems extends Invoice {
-  items: InvoiceItem[];
-}
+import { Invoice, InvoiceItem } from "@/services/commercial/CommercialTypes";
 
 export class InvoiceProcessor {
   private partyService: PartyService;
   private inventoryService: InventoryService;
-  
+
   constructor() {
     this.partyService = PartyService.getInstance();
     this.inventoryService = InventoryService.getInstance();
@@ -44,7 +17,7 @@ export class InvoiceProcessor {
   /**
    * Get invoice details by ID without using CommercialService
    */
-  async getInvoiceById(invoiceId: string): Promise<InvoiceWithItems | null> {
+  async getInvoiceById(invoiceId: string): Promise<Invoice | null> {
     try {
       // Fetch invoice base data
       const { data: invoice, error } = await supabase
@@ -68,8 +41,9 @@ export class InvoiceProcessor {
       
       return {
         ...invoice,
+        party_name: invoice.parties?.name || 'Unknown',
         items: items || []
-      } as InvoiceWithItems;
+      };
     } catch (error) {
       console.error(`Error fetching invoice ${invoiceId}:`, error);
       return null;
@@ -103,21 +77,38 @@ export class InvoiceProcessor {
       );
       
       // Update inventory
-      for (const item of invoice.items) {
-        const { error } = await supabase
-          .from(item.item_type)
-          .update({
-            quantity: item.quantity - item.quantity
-          })
-          .eq('id', item.item_id);
+      if (invoice.items) {
+        for (const item of invoice.items) {
+          // Get the current item from the database
+          const itemResult = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+            
+          if (itemResult.error) {
+            console.error('Error fetching item:', itemResult.error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
           
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
+          const currentQuantity = itemResult.data.quantity || 0;
+          const newQuantity = Math.max(0, currentQuantity - item.quantity);
+          
+          // Update the item quantity
+          const { error } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+            
+          if (error) {
+            console.error('Error updating inventory:', error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
         }
       }
-      
+
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
@@ -153,13 +144,13 @@ export class InvoiceProcessor {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-      
+
       if (invoice.payment_status !== 'confirmed') {
         console.log('Invoice is not confirmed:', invoiceId);
         toast.info('الفاتورة ليست مؤكدة');
         return true;
       }
-      
+
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
         invoice.party_id,
@@ -168,23 +159,44 @@ export class InvoiceProcessor {
       );
       
       // Update inventory
-      for (const item of invoice.items) {
-        const { error } = await supabase
-          .from(item.item_type)
-          .update({ quantity: item.quantity + item.quantity })
-          .eq('id', item.item_id);
-        
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
+      if (invoice.items) {
+        for (const item of invoice.items) {
+          // Get the current item from the database
+          const itemResult = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+            
+          if (itemResult.error) {
+            console.error('Error fetching item:', itemResult.error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
+          
+          const currentQuantity = itemResult.data.quantity || 0;
+          const newQuantity = currentQuantity + item.quantity;
+          
+          // Update the item quantity
+          const { error } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+            
+          if (error) {
+            console.error('Error updating inventory:', error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
         }
       }
-      
+
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
-        .update({ payment_status: 'cancelled' })
+        .update({
+          payment_status: 'cancelled'
+        })
         .eq('id', invoiceId);
       
       if (statusError) {
@@ -214,13 +226,13 @@ export class InvoiceProcessor {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-      
+
       if (invoice.payment_status === 'confirmed') {
         console.log('Invoice already confirmed:', invoiceId);
         toast.info('الفاتورة مؤكدة بالفعل');
         return true;
       }
-      
+
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
         invoice.party_id,
@@ -229,23 +241,44 @@ export class InvoiceProcessor {
       );
       
       // Update inventory
-      for (const item of invoice.items) {
-        const { error } = await supabase
-          .from(item.item_type)
-          .update({ quantity: item.quantity + item.quantity })
-          .eq('id', item.item_id);
-        
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
+      if (invoice.items) {
+        for (const item of invoice.items) {
+          // Get the current item from the database
+          const itemResult = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+            
+          if (itemResult.error) {
+            console.error('Error fetching item:', itemResult.error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
+          
+          const currentQuantity = itemResult.data.quantity || 0;
+          const newQuantity = currentQuantity + item.quantity;
+          
+          // Update the item quantity
+          const { error } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+            
+          if (error) {
+            console.error('Error updating inventory:', error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
         }
       }
-      
+
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
-        .update({ payment_status: 'confirmed' })
+        .update({
+          payment_status: 'confirmed'
+        })
         .eq('id', invoiceId);
       
       if (statusError) {
@@ -275,13 +308,13 @@ export class InvoiceProcessor {
         toast.error('لم يتم العثور على الفاتورة');
         return false;
       }
-      
+
       if (invoice.payment_status !== 'confirmed') {
         console.log('Invoice is not confirmed:', invoiceId);
         toast.info('الفاتورة ليست مؤكدة');
         return true;
       }
-      
+
       // Update party balance based on invoice status
       await this.partyService.updatePartyBalance(
         invoice.party_id,
@@ -290,23 +323,44 @@ export class InvoiceProcessor {
       );
       
       // Update inventory
-      for (const item of invoice.items) {
-        const { error } = await supabase
-          .from(item.item_type)
-          .update({ quantity: item.quantity - item.quantity })
-          .eq('id', item.item_id);
-        
-        if (error) {
-          console.error('Error updating inventory:', error);
-          toast.error('حدث خطأ أثناء تحديث المخزون');
-          return false;
+      if (invoice.items) {
+        for (const item of invoice.items) {
+          // Get the current item from the database
+          const itemResult = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+            
+          if (itemResult.error) {
+            console.error('Error fetching item:', itemResult.error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
+          
+          const currentQuantity = itemResult.data.quantity || 0;
+          const newQuantity = Math.max(0, currentQuantity - item.quantity);
+          
+          // Update the item quantity
+          const { error } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+            
+          if (error) {
+            console.error('Error updating inventory:', error);
+            toast.error('حدث خطأ أثناء تحديث المخزون');
+            return false;
+          }
         }
       }
-      
+
       // Update invoice status
       const { error: statusError } = await supabase
         .from('invoices')
-        .update({ payment_status: 'cancelled' })
+        .update({
+          payment_status: 'cancelled'
+        })
         .eq('id', invoiceId);
       
       if (statusError) {
@@ -393,7 +447,6 @@ export class InvoiceProcessor {
       }
       
       let status = 'unpaid';
-      
       if (amount >= invoice.total_amount) {
         status = 'paid';
       } else if (amount > 0) {
@@ -402,9 +455,11 @@ export class InvoiceProcessor {
       
       const { error: updateError } = await supabase
         .from('invoices')
-        .update({ status })
+        .update({
+          status
+        })
         .eq('id', invoiceId);
-      
+        
       if (updateError) throw updateError;
       
       return true;
@@ -421,9 +476,11 @@ export class InvoiceProcessor {
     try {
       const { error: updateError } = await supabase
         .from('invoices')
-        .update({ status: 'unpaid' })
+        .update({
+          status: 'unpaid'
+        })
         .eq('id', invoiceId);
-      
+        
       if (updateError) throw updateError;
       
       return true;

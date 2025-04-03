@@ -133,16 +133,31 @@ export class ReturnProcessor {
       
       // Update inventory by returning items
       for (const item of salesReturn.items) {
-        // Here we are returning items back to inventory
-        // Therefore we need to add the quantity back
-        await supabase
-          .from(item.item_type)
-          .update({
-            quantity: supabase.rpc('coalesce_numeric', { 
-              p1: `quantity + ${item.quantity}` 
-            })
-          })
-          .eq('id', item.item_id);
+        try {
+          // Here we are returning items back to inventory
+          // Therefore we need to add the quantity back
+          const { data: currentItem, error: fetchError } = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+          
+          if (fetchError) throw fetchError;
+          
+          const currentQuantity = currentItem.quantity || 0;
+          const newQuantity = currentQuantity + item.quantity;
+          
+          const { error: updateError } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+          
+          if (updateError) throw updateError;
+        } catch (error) {
+          console.error(`Error updating inventory for item ${item.item_id}:`, error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
+        }
       }
       
       // Update return status
@@ -187,15 +202,30 @@ export class ReturnProcessor {
       
       // Reverse inventory update by removing the items again
       for (const item of salesReturn.items) {
-        // Here we are reversing the return, so we remove the items again
-        await supabase
-          .from(item.item_type)
-          .update({
-            quantity: supabase.rpc('coalesce_numeric', { 
-              p1: `quantity - ${item.quantity}` 
-            })
-          })
-          .eq('id', item.item_id);
+        try {
+          // Here we are reversing the return, so we remove the items again
+          const { data: currentItem, error: fetchError } = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+          
+          if (fetchError) throw fetchError;
+          
+          const currentQuantity = currentItem.quantity || 0;
+          const newQuantity = Math.max(0, currentQuantity - item.quantity);
+          
+          const { error: updateError } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+          
+          if (updateError) throw updateError;
+        } catch (error) {
+          console.error(`Error updating inventory for item ${item.item_id}:`, error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
+        }
       }
       
       // Update return status
@@ -240,16 +270,31 @@ export class ReturnProcessor {
       
       // Update inventory by removing returned items
       for (const item of purchaseReturn.items) {
-        // For purchase returns, we are returning items to supplier
-        // Therefore we need to remove them from our inventory
-        await supabase
-          .from(item.item_type)
-          .update({
-            quantity: supabase.rpc('coalesce_numeric', { 
-              p1: `quantity - ${item.quantity}` 
-            })
-          })
-          .eq('id', item.item_id);
+        try {
+          // For purchase returns, we are returning items to supplier
+          // Therefore we need to remove them from our inventory
+          const { data: currentItem, error: fetchError } = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+          
+          if (fetchError) throw fetchError;
+          
+          const currentQuantity = currentItem.quantity || 0;
+          const newQuantity = Math.max(0, currentQuantity - item.quantity);
+          
+          const { error: updateError } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+          
+          if (updateError) throw updateError;
+        } catch (error) {
+          console.error(`Error updating inventory for item ${item.item_id}:`, error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
+        }
       }
       
       // Update return status
@@ -294,15 +339,30 @@ export class ReturnProcessor {
       
       // Reverse inventory update by adding the items back
       for (const item of purchaseReturn.items) {
-        // We are reversing the return to supplier, so add items back
-        await supabase
-          .from(item.item_type)
-          .update({
-            quantity: supabase.rpc('coalesce_numeric', { 
-              p1: `quantity + ${item.quantity}` 
-            })
-          })
-          .eq('id', item.item_id);
+        try {
+          // We are reversing the return to supplier, so add items back
+          const { data: currentItem, error: fetchError } = await supabase
+            .from(item.item_type)
+            .select('quantity')
+            .eq('id', item.item_id)
+            .single();
+          
+          if (fetchError) throw fetchError;
+          
+          const currentQuantity = currentItem.quantity || 0;
+          const newQuantity = currentQuantity + item.quantity;
+          
+          const { error: updateError } = await supabase
+            .from(item.item_type)
+            .update({ quantity: newQuantity })
+            .eq('id', item.item_id);
+          
+          if (updateError) throw updateError;
+        } catch (error) {
+          console.error(`Error updating inventory for item ${item.item_id}:`, error);
+          toast.error('حدث خطأ أثناء تحديث المخزون');
+          return false;
+        }
       }
       
       // Update return status
