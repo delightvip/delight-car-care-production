@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -168,12 +167,6 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
   // Define table columns
   const columns = [
     ...getCommonTableColumns(),
-    { 
-      key: 'sales_price', 
-      title: 'سعر البيع',
-      sortable: true,
-      render: (value: number) => `${value} ج.م`
-    },
     { 
       key: 'semi_finished', 
       title: 'المنتج النصف مصنع',
