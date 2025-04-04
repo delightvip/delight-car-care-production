@@ -22,33 +22,33 @@ class ProfitCalculator extends BaseCommercialService {
    */
   public async getItemCost(itemId: number, itemType: string): Promise<number> {
     try {
-      let table: string;
+      let tableName: string;
       
       switch (itemType) {
         case 'raw_materials':
-          table = 'raw_materials';
+          tableName = 'raw_materials';
           break;
         case 'packaging_materials':
-          table = 'packaging_materials';
+          tableName = 'packaging_materials';
           break;
         case 'semi_finished_products':
-          table = 'semi_finished_products';
+          tableName = 'semi_finished_products';
           break;
         case 'finished_products':
-          table = 'finished_products';
+          tableName = 'finished_products';
           break;
         default:
           return 0;
       }
       
       const { data, error } = await this.supabase
-        .from(table)
+        .from(tableName)
         .select('unit_cost')
         .eq('id', itemId)
         .single();
       
       if (error) {
-        console.error(`Error fetching cost for item ${itemId} from ${table}:`, error);
+        console.error(`Error fetching cost for item ${itemId} from ${tableName}:`, error);
         return 0;
       }
       
@@ -87,6 +87,13 @@ class ProfitCalculator extends BaseCommercialService {
       console.error('Error calculating invoice cost:', error);
       return 0;
     }
+  }
+  
+  /**
+   * Calculate item total value (quantity * unit_cost)
+   */
+  public calculateItemTotalValue(quantity: number, unitCost: number): number {
+    return Number(quantity) * Number(unitCost);
   }
 }
 
