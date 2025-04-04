@@ -65,7 +65,8 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
         const quantity = Number(product.quantity);
         const unitCost = Number(product.unit_cost);
         const totalValue = quantity * unitCost;
-        const salesPrice = Number(product.sales_price || 0);
+        // Check if sales_price exists before accessing it
+        const salesPrice = product.sales_price ? Number(product.sales_price) : 0;
         
         return {
           ...product,

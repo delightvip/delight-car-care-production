@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -97,10 +96,10 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
           newCode = `RM-${String(lastNum + 1).padStart(5, '0')}`;
         }
         
-        // Create new record
+        // Create new record - Fix: Pass a single object, not an array
         const { data, error } = await supabase
           .from('raw_materials')
-          .insert([{ ...values, code: newCode }])
+          .insert({ ...values, code: newCode })
           .select();
           
         if (error) throw error;
