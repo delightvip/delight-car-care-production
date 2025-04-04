@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Edit } from 'lucide-react';
+import { ensureNumericValue, formatCurrency } from '../common/InventoryDataFormatter';
 
 interface FinishedProductDetailsProps {
   isOpen: boolean;
@@ -25,10 +26,11 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
   onEdit
 }) => {
   // Ensure numeric values
-  const quantity = Number(product.quantity);
-  const unitCost = Number(product.unit_cost);
+  const quantity = ensureNumericValue(product.quantity);
+  const unitCost = ensureNumericValue(product.unit_cost);
   const totalValue = quantity * unitCost;
-  const salesPrice = Number(product.sales_price || 0);
+  const salesPrice = ensureNumericValue(product.sales_price);
+  const minStock = ensureNumericValue(product.min_stock);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -61,7 +63,7 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
             <div className="space-y-1">
               <h4 className="text-sm font-medium text-muted-foreground">الحد الأدنى</h4>
               <p className="font-medium">
-                {product.min_stock} {product.unit}
+                {minStock} {product.unit}
               </p>
             </div>
           </div>
@@ -71,17 +73,17 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <h4 className="text-sm font-medium text-muted-foreground">تكلفة الوحدة</h4>
-              <p className="font-medium">{unitCost} ج.م</p>
+              <p className="font-medium">{formatCurrency(unitCost)}</p>
             </div>
             <div className="space-y-1">
               <h4 className="text-sm font-medium text-muted-foreground">سعر البيع</h4>
-              <p className="font-medium">{salesPrice} ج.م</p>
+              <p className="font-medium">{salesPrice > 0 ? formatCurrency(salesPrice) : 'غير محدد'}</p>
             </div>
           </div>
           
           <div className="space-y-1">
             <h4 className="text-sm font-medium text-muted-foreground">إجمالي القيمة</h4>
-            <p className="font-medium">{totalValue.toFixed(2)} ج.م</p>
+            <p className="font-medium">{formatCurrency(totalValue)}</p>
           </div>
           
           <Separator />
@@ -98,7 +100,7 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
                 {product.packaging.map((pkg: any, index: number) => (
                   <div key={index} className="flex justify-between items-center p-2 border rounded-md">
                     <span>{pkg.name}</span>
-                    <span className="text-muted-foreground">الكمية: {pkg.quantity}</span>
+                    <span className="text-muted-foreground">الكمية: {ensureNumericValue(pkg.quantity)}</span>
                   </div>
                 ))}
               </div>

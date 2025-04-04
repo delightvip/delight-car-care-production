@@ -1,40 +1,86 @@
 
 /**
- * Formats inventory data to ensure proper numeric value display and calculation
+ * Utility functions for formatting inventory data
  */
-export const formatInventoryData = <T extends { quantity: number; unit_cost: number }>(items: T[]): (T & { totalValue: number })[] => {
-  return items.map(item => {
-    const quantity = Number(item.quantity);
-    const unitCost = Number(item.unit_cost);
+
+/**
+ * Ensures a value is a valid number
+ * 
+ * @param value - Any value that should be a number
+ * @returns The numeric value, or 0 if invalid
+ */
+export const ensureNumericValue = (value: any): number => {
+  // If null or undefined, return 0
+  if (value === null || value === undefined) return 0;
+  
+  // If already a number, return it
+  if (typeof value === 'number') return value;
+  
+  // If it's an object
+  if (typeof value === 'object') {
+    try {
+      // Convert to string and try to find a number pattern
+      const valueStr = JSON.stringify(value);
+      const match = valueStr.match(/\d+(\.\d+)?/);
+      if (match) {
+        return parseFloat(match[0]);
+      }
+    } catch (e) {
+      console.error("Error processing object value:", e);
+    }
+    return 0;
+  }
+  
+  // Try to parse as number
+  const num = parseFloat(value);
+  return !isNaN(num) ? num : 0;
+};
+
+/**
+ * Formats a numeric value as currency
+ * 
+ * @param value - The numeric value to format
+ * @returns Formatted currency string
+ */
+export const formatCurrency = (value: number): string => {
+  // Ensure we have a valid number
+  const numValue = ensureNumericValue(value);
+  
+  // Format with 2 decimal places
+  return `${numValue.toFixed(2)} ج.م`;
+};
+
+/**
+ * Converts raw inventory data for display
+ * 
+ * @param data - Raw inventory data from API
+ * @returns Formatted data for display
+ */
+export const formatInventoryData = (data: any[]): any[] => {
+  return data.map(item => {
+    const quantity = ensureNumericValue(item.quantity);
+    const unitCost = ensureNumericValue(item.unit_cost);
     const totalValue = quantity * unitCost;
     
     return {
       ...item,
       quantity,
       unit_cost: unitCost,
-      totalValue
+      totalValue,
+      // If sales_price exists, convert it to number
+      ...(item.sales_price !== undefined && { sales_price: ensureNumericValue(item.sales_price) })
     };
   });
 };
 
 /**
- * Formats a number as currency (with 2 decimal places)
+ * Format a value for display, preventing [object Object] string.
+ * 
+ * @param value - The value to format for display
+ * @returns A string safe for display
  */
-export const formatCurrency = (value: number): string => {
-  return value.toFixed(2) + " ج.م";
-};
-
-/**
- * Safely extracts numeric values from objects or strings
- */
-export const ensureNumericValue = (value: any): number => {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') return Number(value) || 0;
-  if (typeof value === 'object') {
-    // Try to convert object to number if possible
-    const str = String(value);
-    return Number(str) || 0;
-  }
-  return 0;
+export const formatDisplayValue = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
 };

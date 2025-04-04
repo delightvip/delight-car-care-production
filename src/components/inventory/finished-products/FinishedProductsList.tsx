@@ -1,10 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { getCommonTableColumns, renderInventoryActions } from '../common/InventoryTableColumns';
-import { formatInventoryData } from '../common/InventoryDataFormatter';
+import { formatInventoryData, ensureNumericValue } from '../common/InventoryDataFormatter';
 
 interface FinishedProductsListProps {
   filterType: 'all' | 'low-stock' | 'high-value';
@@ -61,11 +62,10 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
         })) || [];
         
         // Ensure numeric values
-        const quantity = Number(product.quantity);
-        const unitCost = Number(product.unit_cost);
+        const quantity = ensureNumericValue(product.quantity);
+        const unitCost = ensureNumericValue(product.unit_cost);
         const totalValue = quantity * unitCost;
-        // Check if sales_price exists before accessing it
-        const salesPrice = product.sales_price ? Number(product.sales_price) : 0;
+        const salesPrice = ensureNumericValue(product.sales_price);
         
         return {
           ...product,
@@ -92,7 +92,7 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
         
       if (fetchError) throw fetchError;
       
-      const newQuantity = Math.max(0, Number(product.quantity) + change);
+      const newQuantity = Math.max(0, ensureNumericValue(product.quantity) + change);
       
       const { data, error } = await supabase
         .from('finished_products')
@@ -130,7 +130,9 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
         filtered = filtered.filter(item => item.quantity <= item.min_stock * 1.2);
         break;
       case 'high-value':
-        filtered = [...filtered].sort((a, b) => b.totalValue - a.totalValue);
+        filtered = [...filtered].sort((a, b) => 
+          ensureNumericValue(b.totalValue) - ensureNumericValue(a.totalValue)
+        );
         break;
       default:
         // No additional filtering needed for 'all'
@@ -145,10 +147,13 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
     if (!sortConfig) return filteredProducts;
     
     return [...filteredProducts].sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
+      const valueA = ensureNumericValue(a[sortConfig.key]);
+      const valueB = ensureNumericValue(b[sortConfig.key]);
+      
+      if (valueA < valueB) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
+      if (valueA > valueB) {
         return sortConfig.direction === 'asc' ? 1 : -1;
       }
       return 0;

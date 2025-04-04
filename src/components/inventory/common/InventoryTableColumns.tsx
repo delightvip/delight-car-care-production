@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Edit, Trash, Eye, PlusCircle, MinusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { ensureNumericValue, formatCurrency } from './InventoryDataFormatter';
+import { ensureNumericValue, formatCurrency, formatDisplayValue } from './InventoryDataFormatter';
 
 export interface InventoryItem {
   id: number;
@@ -64,58 +65,18 @@ export const getCommonTableColumns = () => [
     key: 'unit_cost', 
     title: 'التكلفة',
     sortable: true,
-    render: (value: number, record: any) => {
-      // Mejorado: manejo especial para unit_cost similar a totalValue
-      let unitCost = value;
-      
-      // Si el valor no es utilizable directamente (null, undefined, o es un objeto)
-      if (!value || typeof value === 'object') {
-        // Intentar extraer el valor numérico del objeto
-        try {
-          if (typeof value === 'object' && value !== null) {
-            // Si es un objeto, intentar convertirlo a string y extraer un número
-            const costStr = JSON.stringify(value);
-            const match = costStr.match(/\d+(\.\d+)?/);
-            if (match) {
-              unitCost = parseFloat(match[0]);
-            }
-          }
-        } catch (e) {
-          console.error("Error processing unit cost:", e);
-        }
-      }
-      
-      // Aplicar el ensureNumericValue después de la extracción especial
-      return formatCurrency(ensureNumericValue(unitCost));
+    render: (value: number) => {
+      const unitCost = ensureNumericValue(value);
+      return formatCurrency(unitCost);
     }
   },
   { 
     key: 'sales_price', 
     title: 'سعر البيع',
     sortable: true,
-    render: (value: number, record: any) => {
-      // معالجة خاصة لسعر البيع مشابهة لتكلفة الوحدة
-      let salesPrice = value;
-      
-      // إذا كانت القيمة غير قابلة للاستخدام مباشرة (null، undefined، أو كائن)
-      if (!value || typeof value === 'object') {
-        // محاولة استخراج القيمة الرقمية من الكائن
-        try {
-          if (typeof value === 'object' && value !== null) {
-            // إذا كان كائناً، نحاول تحويله إلى سلسلة نصية واستخراج رقم منه
-            const priceStr = JSON.stringify(value);
-            const match = priceStr.match(/\d+(\.\d+)?/);
-            if (match) {
-              salesPrice = parseFloat(match[0]);
-            }
-          }
-        } catch (e) {
-          console.error("Error processing sales price:", e);
-        }
-      }
-      
-      // تطبيق ensureNumericValue بعد الاستخراج الخاص
-      return salesPrice ? formatCurrency(ensureNumericValue(salesPrice)) : 'غير محدد';
+    render: (value: number) => {
+      const salesPrice = ensureNumericValue(value);
+      return salesPrice > 0 ? formatCurrency(salesPrice) : 'غير محدد';
     }
   },
   { 
@@ -129,8 +90,8 @@ export const getCommonTableColumns = () => [
     title: 'إجمالي القيمة',
     sortable: true,
     render: (value: number, record: any) => {
-      // If totalValue is not calculated correctly, calculate it here
-      if (!value || typeof value === 'object') {
+      // Calculate total value if not provided
+      if (value === undefined || value === null) {
         const quantity = ensureNumericValue(record.quantity);
         const unitCost = ensureNumericValue(record.unit_cost);
         return formatCurrency(quantity * unitCost);
