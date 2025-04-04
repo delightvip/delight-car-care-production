@@ -5,7 +5,7 @@ import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { getCommonTableColumns, getImportanceColumn, renderInventoryActions } from '../common/InventoryTableColumns';
-import { formatInventoryData } from '../common/InventoryDataFormatter';
+import { formatInventoryData, ensureNumericValue } from '../common/InventoryDataFormatter';
 
 interface RawMaterialsListProps {
   filterType: 'all' | 'low-stock' | 'high-value';
@@ -36,8 +36,16 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
         
       if (error) throw error;
       
-      // Format the data to ensure proper numeric values
-      return formatInventoryData(data);
+      // Ensure all numeric values are properly formatted
+      return data.map(item => ({
+        ...item,
+        quantity: ensureNumericValue(item.quantity),
+        unit_cost: ensureNumericValue(item.unit_cost),
+        min_stock: ensureNumericValue(item.min_stock),
+        importance: ensureNumericValue(item.importance),
+        sales_price: ensureNumericValue(item.sales_price),
+        totalValue: ensureNumericValue(item.quantity) * ensureNumericValue(item.unit_cost)
+      }));
     }
   });
   
@@ -87,10 +95,10 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
     // Apply type filter
     switch (filterType) {
       case 'low-stock':
-        filtered = filtered.filter(item => item.quantity <= item.min_stock * 1.2);
+        filtered = filtered.filter(item => ensureNumericValue(item.quantity) <= ensureNumericValue(item.min_stock) * 1.2);
         break;
       case 'high-value':
-        filtered = [...filtered].sort((a, b) => b.totalValue - a.totalValue);
+        filtered = [...filtered].sort((a, b) => ensureNumericValue(b.totalValue) - ensureNumericValue(a.totalValue));
         break;
       default:
         // No additional filtering needed for 'all'
@@ -105,10 +113,13 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
     if (!sortConfig) return filteredMaterials;
     
     return [...filteredMaterials].sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
+      const aValue = ensureNumericValue(a[sortConfig.key]);
+      const bValue = ensureNumericValue(b[sortConfig.key]);
+      
+      if (aValue < bValue) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
+      if (aValue > bValue) {
         return sortConfig.direction === 'asc' ? 1 : -1;
       }
       return 0;

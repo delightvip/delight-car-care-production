@@ -37,6 +37,7 @@ const rawMaterialSchema = z.object({
   unit: z.string().min(1, { message: "يرجى اختيار وحدة القياس" }),
   quantity: z.coerce.number().min(0, { message: "الكمية يجب أن تكون 0 أو أكثر" }),
   unit_cost: z.coerce.number().min(0, { message: "التكلفة يجب أن تكون 0 أو أكثر" }),
+  sales_price: z.coerce.number().min(0, { message: "سعر البيع يجب أن يكون 0 أو أكثر" }).optional(),
   min_stock: z.coerce.number().min(0, { message: "الحد الأدنى يجب أن يكون 0 أو أكثر" }),
   importance: z.coerce.number().min(0).max(2)
 });
@@ -66,6 +67,7 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
       unit: initialData?.unit || "",
       quantity: initialData?.quantity || 0,
       unit_cost: initialData?.unit_cost || 0,
+      sales_price: initialData?.sales_price || 0,
       min_stock: initialData?.min_stock || 0,
       importance: initialData?.importance || 0
     }
@@ -97,13 +99,14 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
           newCode = `RM-${String(lastNum + 1).padStart(5, '0')}`;
         }
         
-        // Fix: Ensure all required properties are present and properly typed
+        // Ensure all required properties are present and properly typed
         const newMaterial = {
           code: newCode,
           name: values.name,
           unit: values.unit,
           quantity: values.quantity,
           unit_cost: values.unit_cost,
+          sales_price: values.sales_price || 0,
           min_stock: values.min_stock,
           importance: values.importance
         };
@@ -204,7 +207,7 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
               />
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="quantity"
@@ -221,6 +224,22 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
               
               <FormField
                 control={form.control}
+                name="min_stock"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>الحد الأدنى</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="unit_cost"
                 render={({ field }) => (
                   <FormItem>
@@ -235,10 +254,10 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
               
               <FormField
                 control={form.control}
-                name="min_stock"
+                name="sales_price"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>الحد الأدنى</FormLabel>
+                    <FormLabel>سعر البيع</FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
                     </FormControl>
