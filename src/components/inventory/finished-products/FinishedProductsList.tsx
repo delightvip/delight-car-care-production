@@ -1,11 +1,15 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { getCommonTableColumns, renderInventoryActions } from '../common/InventoryTableColumns';
-import { formatInventoryData, ensureNumericValue } from '../common/InventoryDataFormatter';
+import { 
+  formatInventoryData, 
+  ensureNumericValue, 
+  calculateFinishedProductCost 
+} from '../common/InventoryDataFormatter';
 
 interface FinishedProductsListProps {
   filterType: 'all' | 'low-stock' | 'high-value';
@@ -34,7 +38,7 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
         .from('finished_products')
         .select(`
           *,
-          semi_finished:semi_finished_id(name, code)
+          semi_finished:semi_finished_id(id, name, code, unit_cost)
         `)
         .order('created_at', { ascending: false });
         
@@ -47,7 +51,7 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
           .select(`
             id,
             quantity,
-            packaging_material:packaging_material_id(id, name, code)
+            packaging_material:packaging_material_id(id, name, code, unit_cost)
           `)
           .eq('finished_product_id', product.id);
           
@@ -58,12 +62,22 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
           id: pkg.packaging_material?.id,
           code: pkg.packaging_material?.code,
           name: pkg.packaging_material?.name,
-          quantity: pkg.quantity
+          quantity: pkg.quantity,
+          unit_cost: pkg.packaging_material?.unit_cost
         })) || [];
+        
+        // Calculate the unit cost based on the semi-finished product and packaging materials
+        const calculatedUnitCost = calculateFinishedProductCost(
+          product.semi_finished, 
+          formattedPackaging, 
+          1 // Calculate for a single unit
+        );
+
+        // Use the calculated cost if it's greater than 0, otherwise use the stored cost
+        const unitCost = calculatedUnitCost > 0 ? calculatedUnitCost : ensureNumericValue(product.unit_cost);
         
         // Ensure numeric values
         const quantity = ensureNumericValue(product.quantity);
-        const unitCost = ensureNumericValue(product.unit_cost);
         const totalValue = quantity * unitCost;
         const salesPrice = ensureNumericValue(product.sales_price);
         

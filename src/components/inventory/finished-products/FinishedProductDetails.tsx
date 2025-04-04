@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Edit } from 'lucide-react';
-import { ensureNumericValue, formatCurrency } from '../common/InventoryDataFormatter';
+import { 
+  ensureNumericValue, 
+  formatCurrency, 
+  calculateFinishedProductCost 
+} from '../common/InventoryDataFormatter';
 
 interface FinishedProductDetailsProps {
   isOpen: boolean;
@@ -25,9 +29,23 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
   product,
   onEdit
 }) => {
+  // Calculate the unit cost automatically based on components
+  const unitCost = useMemo(() => {
+    // Check if we have the necessary data to calculate cost
+    if (product.semi_finished && product.packaging) {
+      return calculateFinishedProductCost(
+        product.semi_finished,
+        product.packaging,
+        1 // Calculate for a single unit
+      );
+    }
+    
+    // Fall back to the stored unit cost if we can't calculate
+    return ensureNumericValue(product.unit_cost);
+  }, [product]);
+  
   // Ensure numeric values
   const quantity = ensureNumericValue(product.quantity);
-  const unitCost = ensureNumericValue(product.unit_cost);
   const totalValue = quantity * unitCost;
   const salesPrice = ensureNumericValue(product.sales_price);
   const minStock = ensureNumericValue(product.min_stock);

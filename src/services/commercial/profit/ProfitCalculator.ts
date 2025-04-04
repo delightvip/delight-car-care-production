@@ -2,6 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from "sonner";
 import BaseCommercialService from '../BaseCommercialService';
+import { ensureNumericValue } from '@/components/inventory/common/InventoryDataFormatter';
 
 class ProfitCalculator extends BaseCommercialService {
   private static instance: ProfitCalculator;
@@ -52,7 +53,7 @@ class ProfitCalculator extends BaseCommercialService {
         return 0;
       }
       
-      return data?.unit_cost || 0;
+      return ensureNumericValue(data?.unit_cost);
     } catch (error) {
       console.error('Error getting item cost:', error);
       return 0;
@@ -79,7 +80,7 @@ class ProfitCalculator extends BaseCommercialService {
       
       for (const item of items) {
         const itemCost = await this.getItemCost(item.item_id, item.item_type);
-        totalCost += itemCost * item.quantity;
+        totalCost += itemCost * ensureNumericValue(item.quantity);
       }
       
       return totalCost;
@@ -93,7 +94,7 @@ class ProfitCalculator extends BaseCommercialService {
    * Calculate item total value (quantity * unit_cost)
    */
   public calculateItemTotalValue(quantity: number, unitCost: number): number {
-    return Number(quantity) * Number(unitCost);
+    return ensureNumericValue(quantity) * ensureNumericValue(unitCost);
   }
 }
 
