@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for formatting inventory data
  */
@@ -7,23 +6,46 @@
  * Ensures a value is a valid number
  * 
  * @param value - Any value that should be a number
+ * @param fieldName - Optional field name to extract specific property from object
  * @returns The numeric value, or 0 if invalid
  */
-export const ensureNumericValue = (value: any): number => {
+export const ensureNumericValue = (value: any, fieldName?: string): number => {
   // If null or undefined, return 0
   if (value === null || value === undefined) return 0;
   
   // If already a number, return it
   if (typeof value === 'number') return value;
   
+  // If a specific field is requested and value is an object
+  if (fieldName && typeof value === 'object') {
+    // Try to get the specific field
+    if (fieldName in value && typeof value[fieldName] === 'number') {
+      return value[fieldName];
+    }
+  }
+  
   // If it's an object with numeric properties (like unit_cost or sales_price)
   if (typeof value === 'object') {
-    // Check for common numeric properties
-    if ('unit_cost' in value && typeof value.unit_cost === 'number') return value.unit_cost;
-    if ('cost' in value && typeof value.cost === 'number') return value.cost;
-    if ('sales_price' in value && typeof value.sales_price === 'number') return value.sales_price;
-    if ('price' in value && typeof value.price === 'number') return value.price;
-    if ('value' in value && typeof value.value === 'number') return value.value;
+    // Use different extraction logic based on context
+    // For sales_price column, prioritize sales_price property
+    if (fieldName === 'sales_price') {
+      if ('sales_price' in value && typeof value.sales_price === 'number') return value.sales_price;
+      if ('price' in value && typeof value.price === 'number') return value.price;
+    }
+    // For unit_cost column, prioritize unit_cost property
+    else if (fieldName === 'unit_cost') {
+      if ('unit_cost' in value && typeof value.unit_cost === 'number') return value.unit_cost;
+      if ('cost' in value && typeof value.cost === 'number') return value.cost;
+    }
+    // General fallback order for other fields
+    else {
+      // Generic check for known numeric properties
+      if ('sales_price' in value && typeof value.sales_price === 'number') return value.sales_price;
+      if ('price' in value && typeof value.price === 'number') return value.price;
+      if ('unit_cost' in value && typeof value.unit_cost === 'number') return value.unit_cost;
+      if ('cost' in value && typeof value.cost === 'number') return value.cost;
+      if ('value' in value && typeof value.value === 'number') return value.value;
+    }
     
     try {
       // Convert to string and try to find a number pattern
