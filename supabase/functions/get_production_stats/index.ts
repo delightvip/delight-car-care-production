@@ -31,8 +31,18 @@ serve(async (req) => {
       throw error;
     }
 
+    // Ensure all fields are present in the response
+    const formattedData = {
+      total_production_orders: data.total_production_orders || 0,
+      completed_orders: data.completed_orders || 0,
+      pending_orders: data.pending_orders || 0,
+      in_progress_orders: data.in_progress_orders || 0,
+      cancelled_orders: data.cancelled_orders || 0,
+      total_cost: data.total_cost || 0
+    };
+
     return new Response(
-      JSON.stringify({ data }), 
+      JSON.stringify({ data: formattedData }), 
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
