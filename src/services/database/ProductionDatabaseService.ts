@@ -1,10 +1,9 @@
-
 import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   ProductionOrder, 
   PackagingOrder 
-} from "../ProductionService";
+} from "../production/ProductionTypes";
 
 class ProductionDatabaseService {
   private static instance: ProductionDatabaseService;
@@ -99,7 +98,7 @@ class ProductionDatabaseService {
             code: order.semi_finished_code,
             name: order.semi_finished_name,
             quantity: order.semi_finished_quantity,
-            available: true // سيتم تحديثها لاحقاً عند التحقق من توفر المواد
+            available: true // سيتم تحديثها لاحقاً ��ند التحقق من توفر المواد
           },
           packagingMaterials: materials.map(material => ({
             code: material.packaging_material_code,

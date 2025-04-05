@@ -20,12 +20,29 @@ class ProductionStatsService {
 
   // الحصول على بيانات إحصائية للإنتاج
   public async getProductionStats(): Promise<ProductionStats> {
-    return await this.databaseService.getProductionStats();
+    const dbStats = await this.databaseService.getProductionStats();
+    
+    // Transform the database result to match the expected ProductionStats interface
+    return {
+      totalOrders: dbStats.total_production_orders,
+      pendingOrders: dbStats.pending_orders,
+      completedOrders: dbStats.completed_orders,
+      inProgressOrders: 0, // Set a default value if not available in the database
+      cancelledOrders: 0, // Set a default value if not available in the database
+      totalCost: dbStats.total_cost
+    };
   }
   
   // الحصول على بيانات الإنتاج للرسوم البيانية
   public async getProductionChartData(): Promise<MonthlyProductionStats[]> {
-    return await this.databaseService.getMonthlyProductionStats();
+    const dbChartData = await this.databaseService.getMonthlyProductionStats();
+    
+    // Transform the database result to match the expected MonthlyProductionStats interface
+    return dbChartData.map(item => ({
+      month: item.month,
+      productionCount: item.production_count,
+      packagingCount: item.packaging_count
+    }));
   }
 }
 

@@ -1,64 +1,64 @@
 
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer 
+} from 'recharts';
+import { Skeleton } from '@/components/ui/skeleton';
 import { MonthlyProductionStats } from '@/services/production/ProductionTypes';
+import { motion } from 'framer-motion';
 
-type ProductionChartProps = {
+interface ProductionChartProps {
   data: MonthlyProductionStats[];
   isLoading: boolean;
-};
+}
 
 const ProductionChart = ({ data, isLoading }: ProductionChartProps) => {
-  const chartData = data.map(item => ({
-    name: item.month,
-    إنتاج: item.productionCount,
-    تعبئة: item.packagingCount
-  }));
+  if (isLoading) {
+    return (
+      <div className="w-full h-[300px] rounded-md border p-4">
+        <Skeleton className="w-full h-full" />
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="w-full h-[300px] rounded-md border flex items-center justify-center p-4">
+        <p className="text-muted-foreground">لا توجد بيانات متاحة للعرض</p>
+      </div>
+    );
+  }
 
   return (
-    <Card className="col-span-3">
-      <CardHeader>
-        <CardTitle>إحصائيات الإنتاج الشهرية</CardTitle>
-        <CardDescription>
-          مقارنة بين عمليات الإنتاج والتعبئة خلال الأشهر الماضية
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="h-[400px]">
-        {isLoading ? (
-          <div className="w-full h-full bg-muted/50 animate-pulse rounded-md flex items-center justify-center">
-            <p className="text-muted-foreground">جاري تحميل البيانات...</p>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{
-                top: 20,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  borderRadius: '8px',
-                  border: '1px solid #eaeaea',
-                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-              <Legend />
-              <Bar dataKey="إنتاج" fill="#8884d8" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="تعبئة" fill="#82ca9d" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </CardContent>
-    </Card>
+    <motion.div 
+      className="w-full h-[300px] rounded-md border p-4"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+    >
+      <h3 className="font-medium mb-4">إحصائيات الإنتاج الشهرية</h3>
+      <ResponsiveContainer width="100%" height="90%">
+        <BarChart
+          data={data}
+          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="month" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="productionCount" name="أوامر الإنتاج" fill="#8884d8" />
+          <Bar dataKey="packagingCount" name="أوامر التعبئة" fill="#82ca9d" />
+        </BarChart>
+      </ResponsiveContainer>
+    </motion.div>
   );
 };
 

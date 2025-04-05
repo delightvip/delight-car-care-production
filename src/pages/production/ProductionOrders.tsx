@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
@@ -13,7 +12,7 @@ import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
-import { ProductionOrder } from '@/services/production/ProductionTypes';
+import { ProductionOrder, ProductionStats } from '@/services/production/ProductionTypes';
 import { SemiFinishedProduct } from '@/services/InventoryService';
 
 // Components
@@ -110,6 +109,16 @@ const ProductionOrders = () => {
     if (!product) return 0;
     
     return product.unit_cost * quantity;
+  };
+
+  // Create a default stats object for when stats is undefined
+  const defaultStats: ProductionStats = {
+    totalOrders: 0,
+    pendingOrders: 0,
+    completedOrders: 0,
+    inProgressOrders: 0,
+    cancelledOrders: 0,
+    totalCost: 0
   };
 
   // Handle add order
@@ -220,7 +229,7 @@ const ProductionOrders = () => {
         </div>
         
         {/* Stats Cards */}
-        <ProductionStatsCards stats={stats || {}} isLoading={isStatsLoading} />
+        <ProductionStatsCards stats={stats || defaultStats} isLoading={isStatsLoading} />
         
         {/* Chart */}
         <ProductionChart data={chartData} isLoading={isChartLoading} />

@@ -1,108 +1,196 @@
 
 import React from 'react';
-import { Clock, AlertTriangle, CheckCircle2, X, BarChart } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TrendingUp, Package, Clock, CheckCircle, AlertTriangle, X } from 'lucide-react';
 import { ProductionStats } from '@/services/production/ProductionTypes';
 import { motion } from 'framer-motion';
 
-type ProductionStatsCardsProps = {
+interface ProductionStatsCardsProps {
   stats: ProductionStats;
   isLoading: boolean;
-};
+}
 
 const ProductionStatsCards = ({ stats, isLoading }: ProductionStatsCardsProps) => {
-  const cards = [
-    {
-      title: 'إجمالي الأوامر',
-      value: stats?.totalOrders || 0,
-      description: 'إجمالي عدد أوامر الإنتاج',
-      icon: <BarChart className="h-5 w-5 text-blue-600" />,
-      color: 'bg-blue-100'
-    },
-    {
-      title: 'قيد الانتظار',
-      value: stats?.pendingOrders || 0,
-      description: 'أوامر بانتظار التنفيذ',
-      icon: <Clock className="h-5 w-5 text-amber-600" />,
-      color: 'bg-amber-100'
-    },
-    {
-      title: 'قيد التنفيذ',
-      value: stats?.inProgressOrders || 0,
-      description: 'أوامر جاري تنفيذها',
-      icon: <AlertTriangle className="h-5 w-5 text-blue-600" />,
-      color: 'bg-blue-100'
-    },
-    {
-      title: 'مكتملة',
-      value: stats?.completedOrders || 0,
-      description: 'أوامر تم إنجازها',
-      icon: <CheckCircle2 className="h-5 w-5 text-green-600" />,
-      color: 'bg-green-100'
-    },
-    {
-      title: 'ملغية',
-      value: stats?.cancelledOrders || 0,
-      description: 'أوامر تم إلغاؤها',
-      icon: <X className="h-5 w-5 text-red-600" />,
-      color: 'bg-red-100'
-    },
-    {
-      title: 'إجمالي التكلفة',
-      value: `${stats?.totalCost?.toFixed(2) || 0} ج.م`,
-      description: 'إجمالي تكلفة الإنتاج',
-      icon: <BarChart className="h-5 w-5 text-purple-600" />,
-      color: 'bg-purple-100'
-    }
-  ];
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('ar-EG', {
+      style: 'currency',
+      currency: 'SAR',
+      maximumFractionDigits: 0
+    }).format(value);
   };
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
+    visible: (i: number) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: i * 0.1,
+        duration: 0.4,
+        ease: "easeOut"
+      }
+    })
   };
 
   return (
-    <motion.div 
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      {cards.map((card, index) => (
-        <motion.div key={index} variants={cardVariants}>
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <CardTitle className="text-lg">{card.title}</CardTitle>
-                <div className={`p-2 rounded-full ${card.color}`}>
-                  {card.icon}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <motion.div 
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        custom={0}
+        className="col-span-1"
+      >
+        <Card className="hover:bg-primary/5 transition-colors">
+          <CardContent className="p-4 flex justify-between items-center">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">إجمالي أوامر الإنتاج</p>
+                  <h3 className="text-2xl font-bold mt-1">{stats.totalOrders}</h3>
                 </div>
-              </div>
-              <CardDescription>{card.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">
-                {isLoading ? (
-                  <span className="animate-pulse bg-muted inline-block h-8 w-24 rounded"></span>
-                ) : (
-                  card.value
-                )}
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
-    </motion.div>
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <TrendingUp className="h-6 w-6 text-primary" />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div 
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        custom={1}
+        className="col-span-1"
+      >
+        <Card className="hover:bg-amber-500/5 transition-colors">
+          <CardContent className="p-4 flex justify-between items-center">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">قيد الانتظار</p>
+                  <h3 className="text-2xl font-bold mt-1">{stats.pendingOrders}</h3>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                  <Clock className="h-6 w-6 text-amber-600" />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div 
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        custom={2}
+        className="col-span-1"
+      >
+        <Card className="hover:bg-blue-500/5 transition-colors">
+          <CardContent className="p-4 flex justify-between items-center">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">قيد التنفيذ</p>
+                  <h3 className="text-2xl font-bold mt-1">{stats.inProgressOrders}</h3>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-blue-600" />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div 
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        custom={3}
+        className="col-span-1"
+      >
+        <Card className="hover:bg-green-500/5 transition-colors">
+          <CardContent className="p-4 flex justify-between items-center">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">مكتمل</p>
+                  <h3 className="text-2xl font-bold mt-1">{stats.completedOrders}</h3>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div 
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        custom={4}
+        className="col-span-1"
+      >
+        <Card className="hover:bg-red-500/5 transition-colors">
+          <CardContent className="p-4 flex justify-between items-center">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">ملغي</p>
+                  <h3 className="text-2xl font-bold mt-1">{stats.cancelledOrders}</h3>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <X className="h-6 w-6 text-red-600" />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div 
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        custom={5}
+        className="col-span-1"
+      >
+        <Card className="hover:bg-primary/5 transition-colors border-primary/20">
+          <CardContent className="p-4 flex justify-between items-center">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">إجمالي التكلفة</p>
+                  <h3 className="text-xl font-bold mt-1">{formatCurrency(stats.totalCost)}</h3>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Package className="h-6 w-6 text-primary" />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
   );
 };
 
