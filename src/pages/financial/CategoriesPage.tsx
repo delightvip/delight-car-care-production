@@ -1,141 +1,191 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PlusCircle, Trash2, Edit, AlertCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import FinancialService from '@/services/financial/FinancialService';
 import { Category } from '@/services/financial/FinancialTypes';
-import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Edit, Plus, Trash } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { toast } from 'sonner';
+import { Spinner } from '@/components/ui/spinner';
 
 const CategoriesPage: React.FC = () => {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   
   const financialService = FinancialService.getInstance();
   
-  useEffect(() => {
-    loadCategories();
-  }, []);
+  const { data: incomeCategories, isLoading: isLoadingIncome } = useQuery({
+    queryKey: ['categories', 'income'],
+    queryFn: () => financialService.getCategories('income'),
+  });
   
-  const loadCategories = async () => {
-    setLoading(true);
-    const data = await financialService.getCategories();
-    setCategories(data);
-    setLoading(false);
+  const { data: expenseCategories, isLoading: isLoadingExpense } = useQuery({
+    queryKey: ['categories', 'expense'],
+    queryFn: () => financialService.getCategories('expense'),
+  });
+  
+  const handleAddCategory = () => {
+    navigate('/financial/categories/new');
   };
   
-  const handleEdit = (id: string) => {
-    navigate(`/financial/categories/edit/${id}`);
+  const handleEditCategory = (category: Category) => {
+    navigate(`/financial/categories/edit/${category.id}`);
   };
   
-  const handleDelete = (id: string) => {
-    setCategoryToDelete(id);
+  const handleDeleteCategory = (category: Category) => {
+    setSelectedCategory(category);
     setDeleteDialogOpen(true);
   };
   
-  const confirmDelete = async () => {
-    if (!categoryToDelete) return;
+  const confirmDeleteCategory = async () => {
+    if (!selectedCategory) return;
     
-    const success = await financialService.deleteCategory(categoryToDelete);
-    if (success) {
-      loadCategories();
+    try {
+      const result = await financialService.deleteCategory(selectedCategory.id);
+      
+      if (result) {
+        toast.success('تم حذف الفئة بنجاح');
+        queryClient.invalidateQueries({ queryKey: ['categories'] });
+      } else {
+        toast.error('تعذر حذف الفئة. قد تكون هناك معاملات مرتبطة بها.');
+      }
+    } catch (error) {
+      console.error('خطأ أثناء حذف الفئة:', error);
+      toast.error('حدث خطأ أثناء حذف الفئة');
     }
     
     setDeleteDialogOpen(false);
-    setCategoryToDelete(null);
   };
   
-  const columns = [
-    {
-      key: 'name',
-      title: 'اسم الفئة',
-    },
-    {
-      key: 'type',
-      title: 'النوع',
-      render: (value: 'income' | 'expense') => (
-        <Badge variant={value === 'income' ? 'success' : 'destructive'}>
-          {value === 'income' ? 'إيراد' : 'مصروف'}
-        </Badge>
-      )
-    },
-    {
-      key: 'description',
-      title: 'الوصف',
+  const renderCategories = (categories: Category[] | undefined, isLoading: boolean) => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center p-8">
+          <Spinner className="h-8 w-8" />
+        </div>
+      );
     }
-  ];
+    
+    if (!categories || categories.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center p-8 text-center">
+          <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">لا توجد فئات بعد</p>
+          <Button 
+            onClick={handleAddCategory} 
+            variant="outline" 
+            className="mt-4"
+          >
+            <PlusCircle className="h-4 w-4 ml-2" />
+            إضافة فئة جديدة
+          </Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {categories.map((category) => (
+          <Card key={category.id} className="overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex justify-between items-center">
+                <span>{category.name}</span>
+                <div className="flex space-x-1 rtl:space-x-reverse">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => handleEditCategory(category)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => handleDeleteCategory(category)}
+                    className="text-destructive hover:text-destructive/90"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {category.description || 'لا يوجد وصف'}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
   
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="flex justify-between items-center mb-6">
-        <Button variant="outline" onClick={() => navigate('/financial')}>
-          <ArrowLeft className="h-4 w-4 ml-2" />
-          العودة للوحة التحكم
-        </Button>
-        
-        <Button onClick={() => navigate('/financial/categories/new')}>
-          <Plus className="h-4 w-4 ml-2" />
-          فئة جديدة
+        <h1 className="text-2xl font-bold">فئات المعاملات المالية</h1>
+        <Button onClick={handleAddCategory} variant="default">
+          <PlusCircle className="h-4 w-4 ml-2" />
+          إضافة فئة جديدة
         </Button>
       </div>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>فئات المعاملات المالية</CardTitle>
-          <CardDescription>
-            إدارة فئات الإيرادات والمصروفات في النظام المالي
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTableWithLoading
-            columns={columns}
-            data={categories}
-            isLoading={loading}
-            searchable={true}
-            searchKeys={['name', 'description']}
-            actions={(record) => (
-              <div className="flex space-x-2">
-                <Button variant="ghost" size="icon" onClick={() => handleEdit(record.id)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(record.id)}>
-                  <Trash className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          />
-        </CardContent>
-      </Card>
+      <Tabs 
+        defaultValue="income" 
+        value={activeTab} 
+        onValueChange={(value) => setActiveTab(value as 'income' | 'expense')}
+        className="space-y-4"
+      >
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="income">فئات الإيرادات</TabsTrigger>
+          <TabsTrigger value="expense">فئات المصروفات</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="income" className="space-y-4">
+          {renderCategories(incomeCategories, isLoadingIncome)}
+        </TabsContent>
+        
+        <TabsContent value="expense" className="space-y-4">
+          {renderCategories(expenseCategories, isLoadingExpense)}
+        </TabsContent>
+      </Tabs>
       
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>هل أنت متأكد؟</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم حذف هذه الفئة بشكل نهائي. لا يمكنك حذف الفئات المستخدمة في معاملات موجودة.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>حذف</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تأكيد حذف الفئة</DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من رغبتك في حذف هذه الفئة؟<br />
+              لا يمكنك حذف الفئة إذا كانت هناك معاملات مرتبطة بها.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDeleteCategory}
+            >
+              تأكيد الحذف
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
