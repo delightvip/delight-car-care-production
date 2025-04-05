@@ -206,7 +206,7 @@ const BackupRestoreCard = () => {
             قم باستعادة بيانات النظام من نسخة احتياطية سابقة. سيتم استبدال جميع البيانات الحالية.
           </p>
           
-          <Alert variant="warning" className="my-4">
+          <Alert variant="destructive" className="my-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>تحذير</AlertTitle>
             <AlertDescription>
