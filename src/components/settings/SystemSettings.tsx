@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Save, Database, RefreshCw, Clock, Calendar } from 'lucide-react';
+import { Save, Database, RefreshCw, Clock, Calendar, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import BackupRestoreCard from './backup/BackupRestoreCard';
+import FactoryResetDialog from './factory-reset/FactoryResetDialog';
 
 const SystemSettings = () => {
   const [settings, setSettings] = useLocalStorage('system-settings', {
@@ -26,6 +28,7 @@ const SystemSettings = () => {
   });
   
   const [formValues, setFormValues] = useState(settings);
+  const [isFactoryResetDialogOpen, setIsFactoryResetDialogOpen] = useState(false);
   
   useEffect(() => {
     setFormValues(settings);
@@ -58,210 +61,233 @@ const SystemSettings = () => {
     toast.success('تم حفظ إعدادات النظام بنجاح');
   };
   
-  const handleBackupNow = () => {
-    toast.success('تم بدء عملية النسخ الاحتياطي');
-    setTimeout(() => {
-      toast.success('تم إكمال النسخ الاحتياطي بنجاح');
-    }, 2000);
-  };
-  
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>إعدادات النظام</CardTitle>
-        <CardDescription>
-          إعدادات عامة للنظام والنسخ الاحتياطي وصيانة البيانات
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">النسخ الاحتياطي واستعادة البيانات</h3>
-          
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="autoDatabaseBackup">النسخ الاحتياطي التلقائي</Label>
-              <p className="text-sm text-muted-foreground">
-                إنشاء نسخة احتياطية للبيانات تلقائياً
-              </p>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>إعدادات النظام</CardTitle>
+          <CardDescription>
+            إعدادات عامة للنظام والنسخ الاحتياطي وصيانة البيانات
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">النسخ الاحتياطي التلقائي</h3>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="autoDatabaseBackup">النسخ الاحتياطي التلقائي</Label>
+                <p className="text-sm text-muted-foreground">
+                  إنشاء نسخة احتياطية للبيانات تلقائياً
+                </p>
+              </div>
+              <Switch
+                id="autoDatabaseBackup"
+                checked={formValues.autoDatabaseBackup}
+                onCheckedChange={() => handleToggleChange('autoDatabaseBackup')}
+              />
             </div>
-            <Switch
-              id="autoDatabaseBackup"
-              checked={formValues.autoDatabaseBackup}
-              onCheckedChange={() => handleToggleChange('autoDatabaseBackup')}
-            />
+            
+            {formValues.autoDatabaseBackup && (
+              <div className="space-y-4 pl-6 border-l">
+                <div className="space-y-2">
+                  <Label htmlFor="backupFrequency">تكرار النسخ الاحتياطي</Label>
+                  <Select 
+                    value={formValues.backupFrequency} 
+                    onValueChange={(value) => handleSelectChange('backupFrequency', value)}
+                  >
+                    <SelectTrigger id="backupFrequency" className="w-full max-w-xs">
+                      <SelectValue placeholder="اختر تكرار النسخ الاحتياطي" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">يومياً</SelectItem>
+                      <SelectItem value="weekly">أسبوعياً</SelectItem>
+                      <SelectItem value="monthly">شهرياً</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="backupTime">وقت النسخ الاحتياطي</Label>
+                  <Input
+                    id="backupTime"
+                    name="backupTime"
+                    type="time"
+                    value={formValues.backupTime}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="dataRetentionPeriod">فترة الاحتفاظ بالنسخ الاحتياطية (بالأشهر)</Label>
+              <Input
+                id="dataRetentionPeriod"
+                name="dataRetentionPeriod"
+                type="number"
+                value={formValues.dataRetentionPeriod}
+                onChange={handleInputChange}
+                min={1}
+              />
+            </div>
           </div>
           
-          {formValues.autoDatabaseBackup && (
-            <div className="space-y-4 pl-6 border-l">
+          <Separator />
+          
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">إعدادات الوقت والتاريخ</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="backupFrequency">تكرار النسخ الاحتياطي</Label>
+                <Label htmlFor="dateFormat">تنسيق التاريخ</Label>
                 <Select 
-                  value={formValues.backupFrequency} 
-                  onValueChange={(value) => handleSelectChange('backupFrequency', value)}
+                  value={formValues.dateFormat} 
+                  onValueChange={(value) => handleSelectChange('dateFormat', value)}
                 >
-                  <SelectTrigger id="backupFrequency" className="w-full max-w-xs">
-                    <SelectValue placeholder="اختر تكرار النسخ الاحتياطي" />
+                  <SelectTrigger id="dateFormat" className="w-full">
+                    <SelectValue placeholder="اختر تنسيق التاريخ" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="daily">يومياً</SelectItem>
-                    <SelectItem value="weekly">أسبوعياً</SelectItem>
-                    <SelectItem value="monthly">شهرياً</SelectItem>
+                    <SelectItem value="yyyy-MM-dd">سنة-شهر-يوم (2023-01-31)</SelectItem>
+                    <SelectItem value="dd/MM/yyyy">يوم/شهر/سنة (31/01/2023)</SelectItem>
+                    <SelectItem value="MM/dd/yyyy">شهر/يوم/سنة (01/31/2023)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="backupTime">وقت النسخ الاحتياطي</Label>
-                <Input
-                  id="backupTime"
-                  name="backupTime"
-                  type="time"
-                  value={formValues.backupTime}
-                  onChange={handleInputChange}
-                />
+                <Label htmlFor="timeFormat">تنسيق الوقت</Label>
+                <Select 
+                  value={formValues.timeFormat} 
+                  onValueChange={(value) => handleSelectChange('timeFormat', value)}
+                >
+                  <SelectTrigger id="timeFormat" className="w-full">
+                    <SelectValue placeholder="اختر تنسيق الوقت" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="12">12 ساعة (مساءً/صباحاً)</SelectItem>
+                    <SelectItem value="24">24 ساعة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="weekStartsOn">بداية الأسبوع</Label>
+                <Select 
+                  value={formValues.weekStartsOn} 
+                  onValueChange={(value) => handleSelectChange('weekStartsOn', value)}
+                >
+                  <SelectTrigger id="weekStartsOn" className="w-full">
+                    <SelectValue placeholder="اختر بداية الأسبوع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="saturday">السبت</SelectItem>
+                    <SelectItem value="sunday">الأحد</SelectItem>
+                    <SelectItem value="monday">الاثنين</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          )}
-          
-          <div className="space-y-2">
-            <Label htmlFor="dataRetentionPeriod">فترة الاحتفاظ بالنسخ الاحتياطية (بالأشهر)</Label>
-            <Input
-              id="dataRetentionPeriod"
-              name="dataRetentionPeriod"
-              type="number"
-              value={formValues.dataRetentionPeriod}
-              onChange={handleInputChange}
-              min={1}
-            />
           </div>
           
-          <div className="flex justify-end">
-            <Button onClick={handleBackupNow} variant="outline" className="gap-2">
-              <RefreshCw size={16} />
-              إنشاء نسخة احتياطية الآن
-            </Button>
-          </div>
-        </div>
-        
-        <Separator />
-        
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">إعدادات الوقت والتاريخ</h3>
+          <Separator />
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="dateFormat">تنسيق التاريخ</Label>
-              <Select 
-                value={formValues.dateFormat} 
-                onValueChange={(value) => handleSelectChange('dateFormat', value)}
-              >
-                <SelectTrigger id="dateFormat" className="w-full">
-                  <SelectValue placeholder="اختر تنسيق التاريخ" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yyyy-MM-dd">سنة-شهر-يوم (2023-01-31)</SelectItem>
-                  <SelectItem value="dd/MM/yyyy">يوم/شهر/سنة (31/01/2023)</SelectItem>
-                  <SelectItem value="MM/dd/yyyy">شهر/يوم/سنة (01/31/2023)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">إعدادات الأمان</h3>
             
-            <div className="space-y-2">
-              <Label htmlFor="timeFormat">تنسيق الوقت</Label>
-              <Select 
-                value={formValues.timeFormat} 
-                onValueChange={(value) => handleSelectChange('timeFormat', value)}
-              >
-                <SelectTrigger id="timeFormat" className="w-full">
-                  <SelectValue placeholder="اختر تنسيق الوقت" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="12">12 ساعة (مساءً/صباحاً)</SelectItem>
-                  <SelectItem value="24">24 ساعة</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="weekStartsOn">بداية الأسبوع</Label>
-              <Select 
-                value={formValues.weekStartsOn} 
-                onValueChange={(value) => handleSelectChange('weekStartsOn', value)}
-              >
-                <SelectTrigger id="weekStartsOn" className="w-full">
-                  <SelectValue placeholder="اختر بداية الأسبوع" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="saturday">السبت</SelectItem>
-                  <SelectItem value="sunday">الأحد</SelectItem>
-                  <SelectItem value="monday">الاثنين</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-        
-        <Separator />
-        
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">إعدادات الأمان</h3>
-          
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="autoLogout">تسجيل الخروج التلقائي</Label>
-              <p className="text-sm text-muted-foreground">
-                تسجيل الخروج تلقائياً بعد فترة من عدم النشاط
-              </p>
-            </div>
-            <Switch
-              id="autoLogout"
-              checked={formValues.autoLogout}
-              onCheckedChange={() => handleToggleChange('autoLogout')}
-            />
-          </div>
-          
-          {formValues.autoLogout && (
-            <div className="space-y-2 pl-6 border-l">
-              <Label htmlFor="inactivityTimeout">مهلة عدم النشاط (بالدقائق)</Label>
-              <Input
-                id="inactivityTimeout"
-                name="inactivityTimeout"
-                type="number"
-                value={formValues.inactivityTimeout}
-                onChange={handleInputChange}
-                min={1}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="autoLogout">تسجيل الخروج التلقائي</Label>
+                <p className="text-sm text-muted-foreground">
+                  تسجيل الخروج تلقائياً بعد فترة من عدم النشاط
+                </p>
+              </div>
+              <Switch
+                id="autoLogout"
+                checked={formValues.autoLogout}
+                onCheckedChange={() => handleToggleChange('autoLogout')}
               />
             </div>
-          )}
-        </div>
-        
-        <Separator />
-        
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">إعدادات متقدمة</h3>
-          
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="enableDebugMode">تمكين وضع التصحيح</Label>
-              <p className="text-sm text-muted-foreground">
-                تفعيل وضع التصحيح لعرض معلومات إضافية للأخطاء (للمطورين فقط)
-              </p>
-            </div>
-            <Switch
-              id="enableDebugMode"
-              checked={formValues.enableDebugMode}
-              onCheckedChange={() => handleToggleChange('enableDebugMode')}
-            />
+            
+            {formValues.autoLogout && (
+              <div className="space-y-2 pl-6 border-l">
+                <Label htmlFor="inactivityTimeout">مهلة عدم النشاط (بالدقائق)</Label>
+                <Input
+                  id="inactivityTimeout"
+                  name="inactivityTimeout"
+                  type="number"
+                  value={formValues.inactivityTimeout}
+                  onChange={handleInputChange}
+                  min={1}
+                />
+              </div>
+            )}
           </div>
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button onClick={handleSave} className="gap-2">
-          <Save size={16} />
-          حفظ الإعدادات
-        </Button>
-      </CardFooter>
-    </Card>
+          
+          <Separator />
+          
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">إعدادات متقدمة</h3>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="enableDebugMode">تمكين وضع التصحيح</Label>
+                <p className="text-sm text-muted-foreground">
+                  تفعيل وضع التصحيح لعرض معلومات إضافية للأخطاء (للمطورين فقط)
+                </p>
+              </div>
+              <Switch
+                id="enableDebugMode"
+                checked={formValues.enableDebugMode}
+                onCheckedChange={() => handleToggleChange('enableDebugMode')}
+              />
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleSave} className="gap-2">
+            <Save size={16} />
+            حفظ الإعدادات
+          </Button>
+        </CardFooter>
+      </Card>
+      
+      <BackupRestoreCard />
+      
+      <Card className="border-destructive">
+        <CardHeader>
+          <CardTitle className="text-destructive flex items-center gap-2">
+            <Trash2 size={20} />
+            <span>إعادة ضبط النظام</span>
+          </CardTitle>
+          <CardDescription>
+            إعادة ضبط النظام إلى الإعدادات الافتراضية وحذف جميع البيانات
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm">
+            سيؤدي هذا الإجراء إلى إعادة ضبط جميع بيانات النظام وإزالة جميع السجلات. 
+            يرجى التأكد من إنشاء نسخة احتياطية قبل المتابعة.
+          </p>
+        </CardContent>
+        <CardFooter>
+          <Button 
+            variant="destructive" 
+            className="gap-2"
+            onClick={() => setIsFactoryResetDialogOpen(true)}
+          >
+            <Trash2 size={16} />
+            إعادة ضبط المصنع
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <FactoryResetDialog
+        open={isFactoryResetDialogOpen}
+        onOpenChange={setIsFactoryResetDialogOpen}
+      />
+    </div>
   );
 };
 
