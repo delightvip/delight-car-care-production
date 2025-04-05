@@ -119,27 +119,56 @@ serve(async (req) => {
     for (const table of tablesToClear) {
       console.log(`Clearing table: ${table}`);
       try {
+        // Try with primary parameter order first
         const { error } = await supabaseAdmin.rpc('truncate_table', {
           table_name: table,
           cascade: true
         });
           
         if (error) {
-          console.error(`Error clearing table ${table}:`, error);
-          clearErrors.push({ table, error: error.message });
+          console.error(`Error clearing table ${table} with primary param order:`, error);
           
-          // Try using DELETE as a fallback
+          // Try with alternative parameter order
           try {
-            const { error: deleteError } = await supabaseAdmin
-              .from(table)
-              .delete()
-              .neq('id', '0');
+            const { error: altError } = await supabaseAdmin.rpc('truncate_table', {
+              cascade: true,
+              table_name: table
+            });
+            
+            if (altError) {
+              console.error(`Error clearing table ${table} with alt param order:`, altError);
+              clearErrors.push({ table, error: altError.message });
               
-            if (deleteError) {
-              console.error(`Error clearing table ${table} with DELETE:`, deleteError);
+              // Try using DELETE as a fallback
+              try {
+                const { error: deleteError } = await supabaseAdmin
+                  .from(table)
+                  .delete()
+                  .neq('id', '0');
+                  
+                if (deleteError) {
+                  console.error(`Error clearing table ${table} with DELETE:`, deleteError);
+                  
+                  // Last resort: Call the more comprehensive delete function
+                  try {
+                    const { error: finalDeleteError } = await supabaseAdmin.rpc('delete_all_from_table', {
+                      table_name: table
+                    });
+                    
+                    if (finalDeleteError) {
+                      console.error(`Final attempt to clear ${table} failed:`, finalDeleteError);
+                    }
+                  } catch (finalErr) {
+                    console.error(`Exception in final delete for ${table}:`, finalErr);
+                  }
+                }
+              } catch (deleteErr) {
+                console.error(`Exception clearing table ${table} with DELETE:`, deleteErr);
+              }
             }
-          } catch (deleteErr) {
-            console.error(`Exception clearing table ${table} with DELETE:`, deleteErr);
+          } catch (altErr) {
+            console.error(`Exception during alt param order for ${table}:`, altErr);
+            clearErrors.push({ table, error: altErr.message });
           }
         }
       } catch (err) {
@@ -188,8 +217,10 @@ serve(async (req) => {
           backupData[table] = backupData[table].filter(item => {
             // Skip validation if id is not a string (e.g., integer id)
             if (typeof item.id !== 'string') return true;
+            // Skip validation if id is set to '1' for special cases like financial_balance
+            if (item.id === '1') return true;
             
-            // Validate UUID format
+            // Validate UUID format for all other string IDs
             return uuidRegex.test(item.id);
           });
           
@@ -207,7 +238,10 @@ serve(async (req) => {
             uuidFields.forEach(field => {
               if (item[field] !== undefined && item[field] !== null) {
                 // If a string doesn't match UUID format, set to null or a valid value depending on nullability
-                if (typeof item[field] === 'string' && !uuidRegex.test(item[field])) {
+                if (typeof item[field] === 'string' && 
+                    item[field] !== '1' && 
+                    !uuidRegex.test(item[field])) {
+                  console.log(`Invalid UUID in ${table}.${field}: ${item[field]}`);
                   item[field] = null;  // Set to null - will be rejected by DB if field is NOT NULL
                 }
               }
@@ -247,7 +281,7 @@ serve(async (req) => {
         }
         
         // Insert the backup data in batches to avoid request size limits
-        const batchSize = 100;
+        const batchSize = 50; // Reduced batch size for safer processing
         for (let i = 0; i < backupData[table].length; i += batchSize) {
           const batch = backupData[table].slice(i, i + batchSize);
           console.log(`Inserting batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(backupData[table].length/batchSize)} for ${table}`);
@@ -265,6 +299,24 @@ serve(async (req) => {
                 batch: Math.floor(i/batchSize) + 1, 
                 error: error.message 
               });
+              
+              // Try with individual records to isolate problematic ones
+              if (batch.length > 1) {
+                console.log(`Attempting individual inserts for ${table}`);
+                for (const record of batch) {
+                  try {
+                    const { error: individualError } = await supabaseAdmin
+                      .from(table)
+                      .upsert([record], { onConflict: 'id' });
+                      
+                    if (individualError) {
+                      console.error(`Error with individual record in ${table}:`, individualError, record);
+                    }
+                  } catch (indErr) {
+                    console.error(`Exception with individual record in ${table}:`, indErr);
+                  }
+                }
+              }
             }
           } catch (insertError) {
             console.error(`Exception restoring data for ${table}:`, insertError);

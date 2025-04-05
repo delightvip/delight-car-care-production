@@ -90,7 +90,7 @@ serve(async (req) => {
       console.log(`Resetting table: ${table}`);
       
       try {
-        // First try truncating the table with CASCADE
+        // First try using our specific truncate_table function with the correct parameter order
         const { error: truncateError } = await supabaseAdmin.rpc('truncate_table', { 
           table_name: table,
           cascade: true 
@@ -99,34 +99,49 @@ serve(async (req) => {
         if (truncateError) {
           console.error(`Error truncating table ${table}:`, truncateError);
           
-          // If that fails, try deleting all rows
+          // Try with alternative parameter order if that's what might be registered
           try {
-            const { error: deleteError } = await supabaseAdmin
-              .from(table)
-              .delete()
-              .neq('id', '0');  // Delete all rows
+            const { error: altTruncateError } = await supabaseAdmin.rpc('truncate_table', {
+              cascade: true,
+              table_name: table
+            });
             
-            if (deleteError) {
-              console.error(`Error deleting from table ${table}:`, deleteError);
+            if (altTruncateError) {
+              console.error(`Error truncating table ${table} with alt params:`, altTruncateError);
               
-              // Last resort: Call the more comprehensive delete function
+              // If truncation fails, try deleting all rows
               try {
-                const { error: finalDeleteError } = await supabaseAdmin.rpc('delete_all_from_table', {
-                  table_name: table
-                });
+                const { error: deleteError } = await supabaseAdmin
+                  .from(table)
+                  .delete()
+                  .neq('id', '0');  // Delete all rows
                 
-                if (finalDeleteError) {
-                  console.error(`Final attempt to clear ${table} failed:`, finalDeleteError);
-                  errors.push({ table, error: finalDeleteError.message });
+                if (deleteError) {
+                  console.error(`Error deleting from table ${table}:`, deleteError);
+                  
+                  // Last resort: Call the more comprehensive delete function
+                  try {
+                    const { error: finalDeleteError } = await supabaseAdmin.rpc('delete_all_from_table', {
+                      table_name: table
+                    });
+                    
+                    if (finalDeleteError) {
+                      console.error(`Final attempt to clear ${table} failed:`, finalDeleteError);
+                      errors.push({ table, error: finalDeleteError.message });
+                    }
+                  } catch (finalErr) {
+                    console.error(`Exception in final delete for ${table}:`, finalErr);
+                    errors.push({ table, error: finalErr.message });
+                  }
                 }
-              } catch (finalErr) {
-                console.error(`Exception in final delete for ${table}:`, finalErr);
-                errors.push({ table, error: finalErr.message });
+              } catch (deleteErr) {
+                console.error(`Exception during delete for ${table}:`, deleteErr);
+                errors.push({ table, error: deleteErr.message });
               }
             }
-          } catch (deleteErr) {
-            console.error(`Exception during delete for ${table}:`, deleteErr);
-            errors.push({ table, error: deleteErr.message });
+          } catch (altErr) {
+            console.error(`Exception during alt truncate for ${table}:`, altErr);
+            errors.push({ table, error: altErr.message });
           }
         }
       } catch (err) {

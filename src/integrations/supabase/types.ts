@@ -1017,6 +1017,20 @@ export type Database = {
         }
         Returns: number
       }
+      delete_all_from_table: {
+        Args: {
+          table_name: string
+        }
+        Returns: undefined
+      }
+      disable_foreign_key_constraints: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      enable_foreign_key_constraints: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       get_all_low_stock_items: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1134,6 +1148,34 @@ export type Database = {
           usage_amount: number
         }[]
       }
+      reset_sequence: {
+        Args: {
+          table_name: string
+          seq_value: number
+        }
+        Returns: undefined
+      }
+      table_exists: {
+        Args: {
+          table_name: string
+        }
+        Returns: boolean
+      }
+      truncate_table:
+        | {
+            Args: {
+              cascade: boolean
+              table_name: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              table_name: string
+              cascade?: boolean
+            }
+            Returns: undefined
+          }
     }
     Enums: {
       account_category:
