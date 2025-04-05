@@ -57,12 +57,13 @@ function App() {
             
             {/* Inventory Routes */}
             <Route path="inventory">
+              <Route index element={<Navigate to="/inventory/raw-materials" replace />} />
               <Route path="raw-materials" element={<InventoryRawMaterials />} />
               <Route path="raw-materials/:id" element={<ProductDetailsContainer />} />
               <Route path="semi-finished" element={<SemiFinishedProducts />} />
               <Route path="semi-finished/:id" element={<ProductDetailsContainer />} />
-              <Route path="packaging-materials" element={<PackagingMaterials />} />
-              <Route path="packaging-materials/:id" element={<ProductDetailsContainer />} />
+              <Route path="packaging" element={<PackagingMaterials />} />
+              <Route path="packaging/:id" element={<ProductDetailsContainer />} />
               <Route path="finished-products" element={<FinishedProducts />} />
               <Route path="finished-products/:id" element={<ProductDetailsContainer />} />
               <Route path="low-stock" element={<LowStockItems />} />
@@ -72,8 +73,9 @@ function App() {
             
             {/* Production Routes */}
             <Route path="production">
+              <Route index element={<Navigate to="/production/orders" replace />} />
               <Route path="orders" element={<ProductionOrders />} />
-              <Route path="packaging" element={<PackagingOrders />} />
+              <Route path="packaging-orders" element={<PackagingOrders />} />
               <Route path="planning" element={<ProductionPlanning />} />
             </Route>
             

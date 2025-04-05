@@ -26,7 +26,7 @@ serve(async (req) => {
   try {
     console.log('Starting factory reset...');
     
-    // First, check for and disable foreign key constraints
+    // Disable foreign key constraints first
     console.log('Temporarily disabling foreign key constraints...');
     try {
       await supabaseAdmin.rpc('disable_foreign_key_constraints');
@@ -36,10 +36,10 @@ serve(async (req) => {
       console.log('Will attempt reset with constraints enabled');
     }
     
-    // Comprehensive list of all tables to reset in proper order to respect referential integrity
-    // Carefully ordered to avoid foreign key constraints
+    // Comprehensive list of all tables to reset in proper order
+    // Order is important for handling data dependencies
     const tablesToReset = [
-      // First reset dependent tables with foreign keys
+      // First clear all tables with foreign key relationships
       // Financial module - Transactions first
       'financial_transactions',
       
@@ -51,10 +51,10 @@ serve(async (req) => {
       'invoice_items',
       'invoices',
       'payments',
+      
+      // Ledger and balance tracking
       'profits',
       'ledger',
-      
-      // Inventory and Party
       'party_balances',
       'inventory_movements',
       
@@ -68,47 +68,64 @@ serve(async (req) => {
       'finished_product_packaging',
       'semi_finished_ingredients',
       
-      // Base tables (no dependencies)
+      // Base entities
       'finished_products',
       'semi_finished_products',
       'packaging_materials',
       'raw_materials',
       'parties',
       
-      // Important: Clear financial categories after transactions
+      // Clear categories after ensuring no transactions reference them
       'financial_categories',
       
       // Reset financial balance last
       'financial_balance'
     ];
 
-    // Reset all tables
+    // Track errors but don't stop on failure
     const errors = [];
+    
+    // Try different methods to ensure all data is deleted
     for (const table of tablesToReset) {
       console.log(`Resetting table: ${table}`);
+      
       try {
-        // Use TRUNCATE instead of DELETE for faster operation and to avoid triggers
-        // Add CASCADE to force deletion even with foreign key constraints
-        const { error } = await supabaseAdmin.rpc('truncate_table', { 
+        // First try truncating the table with CASCADE
+        const { error: truncateError } = await supabaseAdmin.rpc('truncate_table', { 
           table_name: table,
           cascade: true 
         });
-
-        if (error) {
-          console.error(`Error resetting table ${table} with truncate:`, error);
-          // Fall back to DELETE if TRUNCATE fails
+        
+        if (truncateError) {
+          console.error(`Error truncating table ${table}:`, truncateError);
+          
+          // If that fails, try deleting all rows
           try {
             const { error: deleteError } = await supabaseAdmin
               .from(table)
               .delete()
-              .neq('id', 0); // Delete all rows
-              
+              .neq('id', '0');  // Delete all rows
+            
             if (deleteError) {
-              console.error(`Error resetting table ${table} with delete:`, deleteError);
-              errors.push({ table, error: deleteError.message });
+              console.error(`Error deleting from table ${table}:`, deleteError);
+              
+              // Last resort: Call the more comprehensive delete function
+              try {
+                const { error: finalDeleteError } = await supabaseAdmin.rpc('delete_all_from_table', {
+                  table_name: table
+                });
+                
+                if (finalDeleteError) {
+                  console.error(`Final attempt to clear ${table} failed:`, finalDeleteError);
+                  errors.push({ table, error: finalDeleteError.message });
+                }
+              } catch (finalErr) {
+                console.error(`Exception in final delete for ${table}:`, finalErr);
+                errors.push({ table, error: finalErr.message });
+              }
             }
           } catch (deleteErr) {
-            console.error(`Exception during delete fallback for ${table}:`, deleteErr);
+            console.error(`Exception during delete for ${table}:`, deleteErr);
             errors.push({ table, error: deleteErr.message });
           }
         }
@@ -118,7 +135,7 @@ serve(async (req) => {
       }
     }
 
-    // Re-enable foreign key constraints if we disabled them
+    // Re-enable foreign key constraints
     console.log('Re-enabling foreign key constraints...');
     try {
       await supabaseAdmin.rpc('enable_foreign_key_constraints');
@@ -161,7 +178,7 @@ serve(async (req) => {
       }
     }
 
-    // Reset the financial_balance table with initial values
+    // Initialize the financial_balance table with default values
     try {
       const { error: resetError } = await supabaseAdmin
         .from('financial_balance')
@@ -183,7 +200,7 @@ serve(async (req) => {
       errors.push({ table: 'financial_balance', error: err.message });
     }
 
-    // Insert default financial categories AFTER clearing the existing ones
+    // Insert default financial categories after clearing the existing ones
     try {
       const defaultCategories = [
         { name: 'المبيعات', type: 'income', description: 'إيرادات من المبيعات' },

@@ -46,6 +46,15 @@ serve(async (req) => {
       console.log('Backup metadata:', backupData['__metadata']);
     }
     
+    // First, disable foreign key constraints
+    console.log('Temporarily disabling foreign key constraints...');
+    try {
+      await supabaseAdmin.rpc('disable_foreign_key_constraints');
+      console.log('Foreign key constraints disabled successfully');
+    } catch (err) {
+      console.warn('Failed to disable foreign key constraints:', err);
+    }
+
     // Comprehensive list of tables to clear in order that respects referential integrity
     const tablesToClear = [
       // First clear dependent tables
@@ -110,14 +119,28 @@ serve(async (req) => {
     for (const table of tablesToClear) {
       console.log(`Clearing table: ${table}`);
       try {
-        const { error } = await supabaseAdmin
-          .from(table)
-          .delete()
-          .neq('id', 0); // Delete all rows
+        const { error } = await supabaseAdmin.rpc('truncate_table', {
+          table_name: table,
+          cascade: true
+        });
           
         if (error) {
           console.error(`Error clearing table ${table}:`, error);
           clearErrors.push({ table, error: error.message });
+          
+          // Try using DELETE as a fallback
+          try {
+            const { error: deleteError } = await supabaseAdmin
+              .from(table)
+              .delete()
+              .neq('id', '0');
+              
+            if (deleteError) {
+              console.error(`Error clearing table ${table} with DELETE:`, deleteError);
+            }
+          } catch (deleteErr) {
+            console.error(`Exception clearing table ${table} with DELETE:`, deleteErr);
+          }
         }
       } catch (err) {
         console.error(`Exception clearing table ${table}:`, err);
@@ -136,11 +159,63 @@ serve(async (req) => {
       'return_items': ['total']
     };
     
+    // Tables with UUID fields that need validation
+    const tablesWithUuids = [
+      'financial_transactions',
+      'return_items',
+      'returns',
+      'invoice_items',
+      'invoices',
+      'payments',
+      'profits',
+      'ledger',
+      'party_balances',
+      'parties'
+    ];
+    
+    // UUID validation regex
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
     for (const table of tablesToRestore) {
       if (backupData[table] && backupData[table].length > 0) {
         console.log(`Restoring table ${table} (${backupData[table].length} records)`);
         
-        // Handle sequences for tables with integer primary keys
+        // Pre-process data for tables with UUID fields
+        if (tablesWithUuids.includes(table)) {
+          // Filter out records with invalid UUID format
+          const originalCount = backupData[table].length;
+          
+          backupData[table] = backupData[table].filter(item => {
+            // Skip validation if id is not a string (e.g., integer id)
+            if (typeof item.id !== 'string') return true;
+            
+            // Validate UUID format
+            return uuidRegex.test(item.id);
+          });
+          
+          const filteredCount = originalCount - backupData[table].length;
+          if (filteredCount > 0) {
+            console.log(`Filtered out ${filteredCount} records from ${table} with invalid UUID format`);
+          }
+          
+          // Process foreign key fields
+          backupData[table].forEach(item => {
+            // Check and process all potential UUID fields
+            const uuidFields = ['id', 'party_id', 'category_id', 'invoice_id', 'return_id', 
+                               'transaction_id', 'related_invoice_id', 'reference_id'];
+            
+            uuidFields.forEach(field => {
+              if (item[field] !== undefined && item[field] !== null) {
+                // If a string doesn't match UUID format, set to null or a valid value depending on nullability
+                if (typeof item[field] === 'string' && !uuidRegex.test(item[field])) {
+                  item[field] = null;  // Set to null - will be rejected by DB if field is NOT NULL
+                }
+              }
+            });
+          });
+        }
+        
+        // Handle tables with integer primary keys
         if (['raw_materials', 'semi_finished_products', 'packaging_materials', 
              'finished_products', 'production_orders', 'packaging_orders'].includes(table)) {
           // Get the maximum ID to reset the sequence
@@ -206,6 +281,16 @@ serve(async (req) => {
       } else {
         console.log(`Skipping table ${table}: no data in backup`);
       }
+    }
+    
+    // Re-enable foreign key constraints
+    console.log('Re-enabling foreign key constraints...');
+    try {
+      await supabaseAdmin.rpc('enable_foreign_key_constraints');
+      console.log('Foreign key constraints re-enabled successfully');
+    } catch (err) {
+      console.warn('Failed to re-enable foreign key constraints:', err);
+      errors.push({ table: 'system', error: 'Failed to re-enable foreign key constraints: ' + err.message });
     }
 
     // Include results in the response

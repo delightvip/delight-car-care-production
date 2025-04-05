@@ -68,6 +68,7 @@ const SidebarMenu = () => {
     financial: [
       { icon: DollarSign, title: 'المالية', path: '/financial' },
       { icon: DollarSign, title: 'المعاملات', path: '/financial/transactions' },
+      { icon: DollarSign, title: 'الفئات', path: '/financial/categories' },
     ],
     analytics: [
       { icon: BarChart3, title: 'التقارير والتحليل', path: '/analytics' },
