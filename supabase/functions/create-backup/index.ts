@@ -26,7 +26,7 @@ serve(async (req) => {
   try {
     console.log('Starting backup creation...');
     
-    // Tables to backup in a specific order to maintain relationships
+    // Comprehensive list of all tables to backup in a specific order to maintain relationships
     const tables = [
       // Base tables first
       'raw_materials',
@@ -45,7 +45,7 @@ serve(async (req) => {
       'packaging_orders',
       'packaging_order_materials',
       'inventory_movements',
-      // Financial tables
+      // Financial and commercial tables
       'invoices',
       'invoice_items',
       'payments',

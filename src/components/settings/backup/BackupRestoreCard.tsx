@@ -9,12 +9,14 @@ import { toast } from "sonner";
 import { Download, Upload, RefreshCw, Save, Database, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const BackupRestoreCard = () => {
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [backupFile, setBackupFile] = useState<File | null>(null);
   const [backupMetadata, setBackupMetadata] = useState<any>(null);
+  const [restoreErrors, setRestoreErrors] = useState<any[]>([]);
 
   const handleCreateBackup = async () => {
     setIsCreatingBackup(true);
@@ -67,6 +69,7 @@ const BackupRestoreCard = () => {
       }
       
       setBackupFile(file);
+      setRestoreErrors([]);
       
       // Validate backup file format and read metadata
       try {
@@ -107,6 +110,8 @@ const BackupRestoreCard = () => {
     }
 
     setIsRestoring(true);
+    setRestoreErrors([]);
+    
     try {
       toast.info("جاري استعادة النسخة الاحتياطية، قد يستغرق هذا بعض الوقت...");
       
@@ -135,17 +140,21 @@ const BackupRestoreCard = () => {
       console.log("Backup restoration response:", data);
       
       if (data.success) {
-        toast.success("تمت استعادة النسخة الاحتياطية بنجاح");
-        
-        // Reload the application after a brief delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      } else {
         if (data.errors && data.errors.length > 0) {
-          toast.error(`تمت استعادة النسخة الاحتياطية مع بعض الأخطاء (${data.errors.length})`);
+          toast.warning(`تمت استعادة النسخة الاحتياطية مع وجود بعض الأخطاء (${data.errors.length})`);
+          setRestoreErrors(data.errors);
         } else {
-          toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
+          toast.success("تمت استعادة النسخة الاحتياطية بنجاح");
+          
+          // Reload the application after a brief delay
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        }
+      } else {
+        toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
+        if (data.errors) {
+          setRestoreErrors(data.errors);
         }
       }
     } catch (error) {
@@ -153,13 +162,17 @@ const BackupRestoreCard = () => {
       toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
     } finally {
       setIsRestoring(false);
-      setBackupFile(null);
-      setBackupMetadata(null);
-      // Reset the file input
-      const fileInput = document.getElementById('backupFile') as HTMLInputElement;
-      if (fileInput) {
-        fileInput.value = '';
-      }
+    }
+  };
+
+  const resetFileInput = () => {
+    setBackupFile(null);
+    setBackupMetadata(null);
+    setRestoreErrors([]);
+    // Reset the file input
+    const fileInput = document.getElementById('backupFile') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
     }
   };
 
@@ -236,7 +249,47 @@ const BackupRestoreCard = () => {
               </div>
             )}
             
-            <div className="flex justify-end">
+            {restoreErrors.length > 0 && (
+              <Alert variant="destructive" className="my-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>تم العثور على أخطاء أثناء الاستعادة ({restoreErrors.length})</AlertTitle>
+                <AlertDescription>
+                  <ScrollArea className="h-40 w-full rounded border p-2 mt-2">
+                    <ul className="list-disc list-inside space-y-1">
+                      {restoreErrors.map((error, index) => (
+                        <li key={index}>
+                          <strong>الجدول:</strong> {error.table}, <strong>العملية:</strong> {error.operation}{' '}
+                          {error.batch && <span><strong>الدفعة:</strong> {error.batch}</span>}{' '}
+                          <strong>الخطأ:</strong> {error.error}
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                  <div className="mt-2">
+                    <p>لا تزال معظم البيانات قد تمت استعادتها بنجاح. قم بإعادة تحميل الصفحة للمتابعة.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="mt-2"
+                      onClick={() => window.location.reload()}
+                    >
+                      إعادة تحميل الصفحة
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            <div className="flex justify-end gap-2">
+              {backupFile && (
+                <Button 
+                  onClick={resetFileInput} 
+                  disabled={isRestoring}
+                  variant="outline"
+                >
+                  إلغاء
+                </Button>
+              )}
               <Button 
                 onClick={handleRestoreBackup} 
                 disabled={!backupFile || isRestoring}

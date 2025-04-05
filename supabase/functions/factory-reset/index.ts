@@ -24,9 +24,9 @@ serve(async (req) => {
   );
 
   try {
-    // List of tables to reset in order that respects referential integrity
+    // Comprehensive list of all tables to reset in proper order to respect referential integrity
     const tablesToReset = [
-      // First reset dependent tables
+      // First reset dependent tables with foreign keys
       'return_items',
       'returns',
       'invoice_items',
@@ -36,7 +36,6 @@ serve(async (req) => {
       'ledger',
       'financial_transactions',
       'party_balances',
-      'parties',
       'packaging_order_materials',
       'packaging_orders',
       'production_order_ingredients',
@@ -48,8 +47,10 @@ serve(async (req) => {
       'semi_finished_products',
       'packaging_materials',
       'raw_materials',
+      'parties',
       // Then reset configuration tables
-      'financial_categories'
+      'financial_categories',
+      'financial_balance'
     ];
 
     console.log('Starting factory reset...');

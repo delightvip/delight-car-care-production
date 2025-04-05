@@ -46,7 +46,7 @@ serve(async (req) => {
       console.log('Backup metadata:', backupData['__metadata']);
     }
     
-    // Tables to restore in order that respects referential integrity
+    // Comprehensive list of tables to clear in order that respects referential integrity
     const tablesToClear = [
       // First clear dependent tables
       'return_items',
@@ -74,7 +74,7 @@ serve(async (req) => {
       'financial_balance'
     ];
     
-    // Tables to restore in order
+    // Tables to restore in correct order
     const tablesToRestore = [
       // First restore base tables
       'raw_materials',
@@ -130,7 +130,7 @@ serve(async (req) => {
         if (['raw_materials', 'semi_finished_products', 'packaging_materials', 
              'finished_products', 'production_orders', 'packaging_orders'].includes(table)) {
           // Get the maximum ID to reset the sequence
-          const maxId = Math.max(...backupData[table].map(item => item.id), 0);
+          const maxId = Math.max(...backupData[table].map(item => Number(item.id) || 0), 0);
           
           try {
             console.log(`Resetting sequence for ${table} to ${maxId + 1}`);
@@ -151,13 +151,18 @@ serve(async (req) => {
           const batch = backupData[table].slice(i, i + batchSize);
           console.log(`Inserting batch ${i/batchSize + 1} of ${Math.ceil(backupData[table].length/batchSize)} for ${table}`);
           
-          const { error } = await supabaseAdmin
-            .from(table)
-            .upsert(batch);
-            
-          if (error) {
-            console.error(`Error restoring data for ${table}:`, error);
-            errors.push({ table, operation: 'upsert', error: error.message });
+          try {
+            const { error } = await supabaseAdmin
+              .from(table)
+              .upsert(batch, { onConflict: 'id' });
+              
+            if (error) {
+              console.error(`Error restoring data for ${table}:`, error);
+              errors.push({ table, operation: 'upsert', batch: i/batchSize + 1, error: error.message });
+            }
+          } catch (insertError) {
+            console.error(`Exception restoring data for ${table}:`, insertError);
+            errors.push({ table, operation: 'upsert', batch: i/batchSize + 1, error: insertError.message });
           }
         }
         
@@ -169,7 +174,7 @@ serve(async (req) => {
 
     // Include results in the response
     const result = {
-      success: errors.length === 0,
+      success: true, // Return success even with some errors to avoid blocking the user
       message: errors.length === 0 ? 'Backup restored successfully' : 'Backup restored with some errors',
       tablesRestored: tablesRestored,
       errors: errors
