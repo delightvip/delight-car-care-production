@@ -37,7 +37,7 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
     setIsResetting(true);
     try {
       // Call the factory reset function
-      const { error } = await supabase.functions.invoke("factory-reset");
+      const { data, error } = await supabase.functions.invoke("factory-reset");
       
       if (error) {
         console.error("Factory reset error:", error);
@@ -45,7 +45,9 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
         return;
       }
       
-      // Clear local storage
+      console.log("Factory reset response:", data);
+      
+      // Clear local storage 
       localStorage.clear();
       
       toast.success("تمت إعادة ضبط النظام بنجاح");

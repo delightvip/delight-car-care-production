@@ -24,35 +24,39 @@ serve(async (req) => {
   );
 
   try {
-    // List of tables to reset
+    // List of tables to reset in order that respects referential integrity
     const tablesToReset = [
-      'raw_materials',
-      'semi_finished_products',
-      'semi_finished_ingredients',
-      'packaging_materials',
-      'finished_products',
-      'finished_product_packaging',
-      'production_orders',
-      'production_order_ingredients',
-      'packaging_orders',
-      'packaging_order_materials',
-      'inventory_movements',
-      'invoices',
-      'invoice_items',
-      'payments',
-      'returns',
+      // First reset dependent tables
       'return_items',
-      'parties',
-      'party_balances',
-      'ledger',
+      'returns',
+      'invoice_items',
+      'invoices',
+      'payments',
       'profits',
+      'ledger',
       'financial_transactions',
-      'financial_categories',
-      'financial_balance'
+      'party_balances',
+      'parties',
+      'packaging_order_materials',
+      'packaging_orders',
+      'production_order_ingredients',
+      'production_orders',
+      'inventory_movements',
+      'finished_product_packaging',
+      'finished_products',
+      'semi_finished_ingredients',
+      'semi_finished_products',
+      'packaging_materials',
+      'raw_materials',
+      // Then reset configuration tables
+      'financial_categories'
     ];
 
+    console.log('Starting factory reset...');
+    
     // Reset all tables
     for (const table of tablesToReset) {
+      console.log(`Resetting table: ${table}`);
       const { error } = await supabaseAdmin
         .from(table)
         .delete()
@@ -60,6 +64,27 @@ serve(async (req) => {
 
       if (error) {
         console.error(`Error resetting table ${table}:`, error);
+      }
+    }
+
+    // Reset sequences for tables with integer IDs
+    const sequenceTables = [
+      'raw_materials',
+      'semi_finished_products',
+      'packaging_materials',
+      'finished_products',
+      'production_orders',
+      'packaging_orders'
+    ];
+
+    for (const table of sequenceTables) {
+      const { error } = await supabaseAdmin.rpc('reset_sequence', { 
+        table_name: table, 
+        seq_value: 1 
+      });
+      
+      if (error) {
+        console.error(`Error resetting sequence for ${table}:`, error);
       }
     }
 
@@ -95,6 +120,8 @@ serve(async (req) => {
     if (categoriesError) {
       console.error('Error creating default categories:', categoriesError);
     }
+
+    console.log('Factory reset completed successfully');
 
     return new Response(
       JSON.stringify({ success: true, message: 'Factory reset completed successfully' }),

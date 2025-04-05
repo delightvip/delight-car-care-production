@@ -24,6 +24,8 @@ serve(async (req) => {
   );
 
   try {
+    console.log('Starting backup restoration...');
+    
     // Parse the request body
     const { backup } = await req.json();
     
@@ -39,14 +41,53 @@ serve(async (req) => {
       throw new Error('Invalid backup file format');
     }
     
-    // Tables to restore
-    const tables = [
-      'raw_materials',
-      'semi_finished_products',
+    // Check for backup metadata
+    if (backupData['__metadata']) {
+      console.log('Backup metadata:', backupData['__metadata']);
+    }
+    
+    // Tables to restore in order that respects referential integrity
+    const tablesToClear = [
+      // First clear dependent tables
+      'return_items',
+      'returns',
+      'invoice_items',
+      'invoices',
+      'payments',
+      'profits',
+      'ledger',
+      'financial_transactions',
+      'party_balances',
+      'packaging_order_materials',
+      'packaging_orders',
+      'production_order_ingredients',
+      'production_orders',
+      'inventory_movements',
+      'finished_product_packaging',
+      'finished_products',
       'semi_finished_ingredients',
+      'semi_finished_products',
       'packaging_materials',
+      'raw_materials',
+      'parties',
+      'financial_categories',
+      'financial_balance'
+    ];
+    
+    // Tables to restore in order
+    const tablesToRestore = [
+      // First restore base tables
+      'raw_materials',
+      'packaging_materials',
+      'semi_finished_products',
+      'parties',
+      'financial_categories',
+      'financial_balance',
+      // Then restore dependent tables
+      'semi_finished_ingredients',
       'finished_products',
       'finished_product_packaging',
+      'party_balances',
       'production_orders',
       'production_order_ingredients',
       'packaging_orders',
@@ -57,17 +98,15 @@ serve(async (req) => {
       'payments',
       'returns',
       'return_items',
-      'parties',
-      'party_balances',
       'ledger',
       'profits',
-      'financial_transactions',
-      'financial_categories',
-      'financial_balance'
+      'financial_transactions'
     ];
     
     // First, clear all existing data
-    for (const table of tables) {
+    console.log('Clearing existing data...');
+    for (const table of tablesToClear) {
+      console.log(`Clearing table: ${table}`);
       const { error } = await supabaseAdmin
         .from(table)
         .delete()
@@ -79,8 +118,14 @@ serve(async (req) => {
     }
     
     // Then restore the backup data
-    for (const table of tables) {
+    console.log('Restoring backup data...');
+    const tablesRestored = [];
+    const errors = [];
+    
+    for (const table of tablesToRestore) {
       if (backupData[table] && backupData[table].length > 0) {
+        console.log(`Restoring table ${table} (${backupData[table].length} records)`);
+        
         // Handle sequences for tables with integer primary keys
         if (['raw_materials', 'semi_finished_products', 'packaging_materials', 
              'finished_products', 'production_orders', 'packaging_orders'].includes(table)) {
@@ -88,6 +133,7 @@ serve(async (req) => {
           const maxId = Math.max(...backupData[table].map(item => item.id), 0);
           
           try {
+            console.log(`Resetting sequence for ${table} to ${maxId + 1}`);
             // Reset the sequence
             await supabaseAdmin.rpc('reset_sequence', { 
               table_name: table, 
@@ -95,6 +141,7 @@ serve(async (req) => {
             });
           } catch (seqError) {
             console.error(`Error resetting sequence for ${table}:`, seqError);
+            errors.push({ table, operation: 'reset_sequence', error: seqError.message });
           }
         }
         
@@ -102,25 +149,42 @@ serve(async (req) => {
         const batchSize = 100;
         for (let i = 0; i < backupData[table].length; i += batchSize) {
           const batch = backupData[table].slice(i, i + batchSize);
+          console.log(`Inserting batch ${i/batchSize + 1} of ${Math.ceil(backupData[table].length/batchSize)} for ${table}`);
+          
           const { error } = await supabaseAdmin
             .from(table)
             .upsert(batch);
             
           if (error) {
             console.error(`Error restoring data for ${table}:`, error);
+            errors.push({ table, operation: 'upsert', error: error.message });
           }
         }
+        
+        tablesRestored.push(table);
+      } else {
+        console.log(`Skipping table ${table}: no data in backup`);
       }
     }
 
+    // Include results in the response
+    const result = {
+      success: errors.length === 0,
+      message: errors.length === 0 ? 'Backup restored successfully' : 'Backup restored with some errors',
+      tablesRestored: tablesRestored,
+      errors: errors
+    };
+    
+    console.log('Backup restoration completed', result);
+
     return new Response(
-      JSON.stringify({ success: true, message: 'Backup restored successfully' }),
+      JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {
     console.error('Backup restoration error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

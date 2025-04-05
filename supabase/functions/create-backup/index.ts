@@ -24,48 +24,69 @@ serve(async (req) => {
   );
 
   try {
-    // Tables to backup
+    console.log('Starting backup creation...');
+    
+    // Tables to backup in a specific order to maintain relationships
     const tables = [
+      // Base tables first
       'raw_materials',
+      'packaging_materials',
       'semi_finished_products',
       'semi_finished_ingredients',
-      'packaging_materials',
       'finished_products',
       'finished_product_packaging',
+      'parties',
+      'party_balances',
+      'financial_categories',
+      'financial_balance',
+      // Transaction and operational tables
       'production_orders',
       'production_order_ingredients',
       'packaging_orders',
       'packaging_order_materials',
       'inventory_movements',
+      // Financial tables
       'invoices',
       'invoice_items',
       'payments',
       'returns',
       'return_items',
-      'parties',
-      'party_balances',
       'ledger',
       'profits',
-      'financial_transactions',
-      'financial_categories',
-      'financial_balance'
+      'financial_transactions'
     ];
 
     // Fetch data from each table
     const backupData = {};
+    const errors = [];
     
     for (const table of tables) {
+      console.log(`Backing up table: ${table}`);
       const { data, error } = await supabaseAdmin
         .from(table)
         .select('*');
         
       if (error) {
         console.error(`Error fetching data from ${table}:`, error);
+        errors.push({ table, error: error.message });
         continue;
       }
       
-      backupData[table] = data;
+      backupData[table] = data || [];
     }
+
+    // Include any errors in the backup data
+    if (errors.length > 0) {
+      backupData['__errors'] = errors;
+    }
+
+    // Add backup metadata
+    backupData['__metadata'] = {
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      tables: tables,
+      tablesCount: Object.keys(backupData).filter(k => !k.startsWith('__')).length
+    };
 
     // Create a downloadable backup file
     const backupJson = JSON.stringify(backupData, null, 2);
@@ -78,8 +99,14 @@ serve(async (req) => {
       reader.readAsDataURL(backupBlob);
     });
 
+    console.log('Backup created successfully');
+
     return new Response(
-      JSON.stringify({ success: true, url: dataUrl }),
+      JSON.stringify({ 
+        success: true, 
+        url: dataUrl,
+        metadata: backupData['__metadata']
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {
