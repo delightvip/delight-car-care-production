@@ -65,6 +65,7 @@ serve(async (req) => {
 
       if (error) {
         console.error(`Error resetting table ${table}:`, error);
+        throw new Error(`Failed to reset table ${table}: ${error.message}`);
       }
     }
 
@@ -75,7 +76,11 @@ serve(async (req) => {
       'packaging_materials',
       'finished_products',
       'production_orders',
-      'packaging_orders'
+      'packaging_orders',
+      'semi_finished_ingredients',
+      'production_order_ingredients',
+      'packaging_order_materials',
+      'finished_product_packaging'
     ];
 
     for (const table of sequenceTables) {
@@ -86,6 +91,7 @@ serve(async (req) => {
       
       if (error) {
         console.error(`Error resetting sequence for ${table}:`, error);
+        throw new Error(`Failed to reset sequence for ${table}: ${error.message}`);
       }
     }
 
@@ -103,6 +109,7 @@ serve(async (req) => {
 
     if (resetError) {
       console.error('Error resetting financial_balance:', resetError);
+      throw new Error(`Failed to reset financial_balance: ${resetError.message}`);
     }
 
     // Insert default financial categories if needed
@@ -120,6 +127,7 @@ serve(async (req) => {
 
     if (categoriesError) {
       console.error('Error creating default categories:', categoriesError);
+      throw new Error(`Failed to create default categories: ${categoriesError.message}`);
     }
 
     console.log('Factory reset completed successfully');
@@ -131,7 +139,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Factory reset error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

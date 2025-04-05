@@ -145,6 +145,16 @@ serve(async (req) => {
           }
         }
         
+        // Process data before insertion for specific tables
+        if (table === 'invoice_items' || table === 'return_items') {
+          // Remove the 'total' column from each record as it's a computed field
+          for (const item of backupData[table]) {
+            if ('total' in item) {
+              delete item.total;
+            }
+          }
+        }
+        
         // Insert the backup data in batches to avoid request size limits
         const batchSize = 100;
         for (let i = 0; i < backupData[table].length; i += batchSize) {

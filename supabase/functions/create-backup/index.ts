@@ -73,6 +73,7 @@ serve(async (req) => {
       }
       
       backupData[table] = data || [];
+      console.log(`Backed up ${data?.length || 0} rows from ${table}`);
     }
 
     // Include any errors in the backup data
@@ -112,7 +113,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Backup creation error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

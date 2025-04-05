@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Trash2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface FactoryResetDialogProps {
@@ -36,6 +36,8 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
 
     setIsResetting(true);
     try {
+      toast.info("جاري إعادة ضبط النظام، قد يستغرق هذا بعض الوقت...");
+      
       // Call the factory reset function
       const { data, error } = await supabase.functions.invoke("factory-reset");
       
@@ -46,6 +48,11 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
       }
       
       console.log("Factory reset response:", data);
+      
+      if (!data.success) {
+        toast.error(`حدث خطأ أثناء إعادة ضبط النظام: ${data.error || 'خطأ غير معروف'}`);
+        return;
+      }
       
       // Clear local storage 
       localStorage.clear();
@@ -98,9 +105,19 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
           <AlertDialogAction
             onClick={handleFactoryReset}
             disabled={isResetting || confirmText !== "إعادة ضبط"}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
           >
-            {isResetting ? "جاري إعادة الضبط..." : "إعادة ضبط النظام"}
+            {isResetting ? (
+              <>
+                <RefreshCw size={16} className="animate-spin" />
+                جاري إعادة الضبط...
+              </>
+            ) : (
+              <>
+                <Trash2 size={16} />
+                إعادة ضبط النظام
+              </>
+            )}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
