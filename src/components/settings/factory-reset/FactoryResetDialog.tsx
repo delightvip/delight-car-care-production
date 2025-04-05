@@ -13,8 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Trash2, RefreshCw } from "lucide-react";
+import { Trash2, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface FactoryResetDialogProps {
   open: boolean;
@@ -27,6 +29,7 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
 }) => {
   const [confirmText, setConfirmText] = useState("");
   const [isResetting, setIsResetting] = useState(false);
+  const [resetErrors, setResetErrors] = useState<any[]>([]);
 
   const handleFactoryReset = async () => {
     if (confirmText !== "إعادة ضبط") {
@@ -35,6 +38,8 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
     }
 
     setIsResetting(true);
+    setResetErrors([]);
+    
     try {
       toast.info("جاري إعادة ضبط النظام، قد يستغرق هذا بعض الوقت...");
       
@@ -44,13 +49,19 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
       if (error) {
         console.error("Factory reset error:", error);
         toast.error("حدث خطأ أثناء إعادة ضبط النظام");
+        setResetErrors([{ table: "general", error: error.message }]);
         return;
       }
       
       console.log("Factory reset response:", data);
       
       if (!data.success) {
-        toast.error(`حدث خطأ أثناء إعادة ضبط النظام: ${data.error || 'خطأ غير معروف'}`);
+        toast.error(`حدث خطأ أثناء إعادة ضبط النظام: ${data.message || 'خطأ غير معروف'}`);
+        
+        if (data.errors && data.errors.length > 0) {
+          setResetErrors(data.errors);
+        }
+        
         return;
       }
       
@@ -66,9 +77,9 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
     } catch (error) {
       console.error("Factory reset error:", error);
       toast.error("حدث خطأ أثناء إعادة ضبط النظام");
+      setResetErrors([{ table: "general", error: error.message }]);
     } finally {
       setIsResetting(false);
-      onOpenChange(false);
     }
   };
 
@@ -97,6 +108,24 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
                   className="mt-2"
                 />
               </div>
+
+              {resetErrors.length > 0 && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>تم العثور على أخطاء أثناء إعادة الضبط ({resetErrors.length})</AlertTitle>
+                  <AlertDescription>
+                    <ScrollArea className="h-40 w-full rounded border p-2 mt-2">
+                      <ul className="list-disc list-inside space-y-1">
+                        {resetErrors.map((error, index) => (
+                          <li key={index}>
+                            <strong>الجدول:</strong> {error.table}, <strong>الخطأ:</strong> {error.error}
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>

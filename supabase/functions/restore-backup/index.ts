@@ -105,15 +105,22 @@ serve(async (req) => {
     
     // First, clear all existing data
     console.log('Clearing existing data...');
+    const clearErrors = [];
     for (const table of tablesToClear) {
       console.log(`Clearing table: ${table}`);
-      const { error } = await supabaseAdmin
-        .from(table)
-        .delete()
-        .neq('id', 0); // Delete all rows
-        
-      if (error) {
-        console.error(`Error clearing table ${table}:`, error);
+      try {
+        const { error } = await supabaseAdmin
+          .from(table)
+          .delete()
+          .neq('id', 0); // Delete all rows
+          
+        if (error) {
+          console.error(`Error clearing table ${table}:`, error);
+          clearErrors.push({ table, error: error.message });
+        }
+      } catch (err) {
+        console.error(`Exception clearing table ${table}:`, err);
+        clearErrors.push({ table, error: err.message });
       }
     }
     
@@ -121,6 +128,12 @@ serve(async (req) => {
     console.log('Restoring backup data...');
     const tablesRestored = [];
     const errors = [];
+    
+    // Tables with computed fields that need special handling
+    const tablesWithComputedFields = {
+      'invoice_items': ['total'],
+      'return_items': ['total']
+    };
     
     for (const table of tablesToRestore) {
       if (backupData[table] && backupData[table].length > 0) {
@@ -145,12 +158,14 @@ serve(async (req) => {
           }
         }
         
-        // Process data before insertion for specific tables
-        if (table === 'invoice_items' || table === 'return_items') {
-          // Remove the 'total' column from each record as it's a computed field
+        // Clean data before insertion if this table has computed fields
+        if (table in tablesWithComputedFields) {
+          const fieldsToRemove = tablesWithComputedFields[table as keyof typeof tablesWithComputedFields];
+          console.log(`Removing computed fields ${fieldsToRemove.join(', ')} from ${table}`);
+          
           for (const item of backupData[table]) {
-            if ('total' in item) {
-              delete item.total;
+            for (const field of fieldsToRemove) {
+              delete item[field];
             }
           }
         }
@@ -159,7 +174,7 @@ serve(async (req) => {
         const batchSize = 100;
         for (let i = 0; i < backupData[table].length; i += batchSize) {
           const batch = backupData[table].slice(i, i + batchSize);
-          console.log(`Inserting batch ${i/batchSize + 1} of ${Math.ceil(backupData[table].length/batchSize)} for ${table}`);
+          console.log(`Inserting batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(backupData[table].length/batchSize)} for ${table}`);
           
           try {
             const { error } = await supabaseAdmin
@@ -168,11 +183,21 @@ serve(async (req) => {
               
             if (error) {
               console.error(`Error restoring data for ${table}:`, error);
-              errors.push({ table, operation: 'upsert', batch: i/batchSize + 1, error: error.message });
+              errors.push({ 
+                table, 
+                operation: 'upsert', 
+                batch: Math.floor(i/batchSize) + 1, 
+                error: error.message 
+              });
             }
           } catch (insertError) {
             console.error(`Exception restoring data for ${table}:`, insertError);
-            errors.push({ table, operation: 'upsert', batch: i/batchSize + 1, error: insertError.message });
+            errors.push({ 
+              table, 
+              operation: 'upsert', 
+              batch: Math.floor(i/batchSize) + 1, 
+              error: insertError.message 
+            });
           }
         }
         

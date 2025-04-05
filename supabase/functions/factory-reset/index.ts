@@ -24,7 +24,10 @@ serve(async (req) => {
   );
 
   try {
+    console.log('Starting factory reset...');
+    
     // Comprehensive list of all tables to reset in proper order to respect referential integrity
+    // Updated to include ALL tables in the correct sequence
     const tablesToReset = [
       // First reset dependent tables with foreign keys
       'return_items',
@@ -48,14 +51,12 @@ serve(async (req) => {
       'packaging_materials',
       'raw_materials',
       'parties',
-      // Then reset configuration tables
       'financial_categories',
       'financial_balance'
     ];
 
-    console.log('Starting factory reset...');
-    
     // Reset all tables
+    const errors = [];
     for (const table of tablesToReset) {
       console.log(`Resetting table: ${table}`);
       const { error } = await supabaseAdmin
@@ -65,8 +66,13 @@ serve(async (req) => {
 
       if (error) {
         console.error(`Error resetting table ${table}:`, error);
-        throw new Error(`Failed to reset table ${table}: ${error.message}`);
+        errors.push({ table, error: error.message });
       }
+    }
+
+    // If we have any errors, log them but continue
+    if (errors.length > 0) {
+      console.warn(`Completed with ${errors.length} errors:`, errors);
     }
 
     // Reset sequences for tables with integer IDs
@@ -83,7 +89,9 @@ serve(async (req) => {
       'finished_product_packaging'
     ];
 
+    const sequenceErrors = [];
     for (const table of sequenceTables) {
+      console.log(`Resetting sequence for ${table}`);
       const { error } = await supabaseAdmin.rpc('reset_sequence', { 
         table_name: table, 
         seq_value: 1 
@@ -91,7 +99,7 @@ serve(async (req) => {
       
       if (error) {
         console.error(`Error resetting sequence for ${table}:`, error);
-        throw new Error(`Failed to reset sequence for ${table}: ${error.message}`);
+        sequenceErrors.push({ table, error: error.message });
       }
     }
 
@@ -109,7 +117,7 @@ serve(async (req) => {
 
     if (resetError) {
       console.error('Error resetting financial_balance:', resetError);
-      throw new Error(`Failed to reset financial_balance: ${resetError.message}`);
+      errors.push({ table: 'financial_balance', error: resetError.message });
     }
 
     // Insert default financial categories if needed
@@ -127,10 +135,22 @@ serve(async (req) => {
 
     if (categoriesError) {
       console.error('Error creating default categories:', categoriesError);
-      throw new Error(`Failed to create default categories: ${categoriesError.message}`);
+      errors.push({ table: 'financial_categories', error: categoriesError.message });
     }
 
-    console.log('Factory reset completed successfully');
+    console.log('Factory reset completed');
+
+    // Return all errors if any
+    if (errors.length > 0 || sequenceErrors.length > 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Factory reset completed with errors',
+          errors: [...errors, ...sequenceErrors]
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
 
     return new Response(
       JSON.stringify({ success: true, message: 'Factory reset completed successfully' }),
