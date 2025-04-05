@@ -7,6 +7,8 @@ RETURNS TABLE (
   total_production_orders BIGINT,
   completed_orders BIGINT,
   pending_orders BIGINT,
+  in_progress_orders BIGINT,
+  cancelled_orders BIGINT,
   total_cost NUMERIC
 ) 
 LANGUAGE plpgsql
@@ -17,6 +19,8 @@ BEGIN
     COUNT(*) AS total_production_orders,
     COUNT(*) FILTER (WHERE status = 'completed') AS completed_orders,
     COUNT(*) FILTER (WHERE status = 'pending') AS pending_orders,
+    COUNT(*) FILTER (WHERE status = 'inProgress') AS in_progress_orders,
+    COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled_orders,
     SUM(total_cost) FILTER (WHERE status = 'completed') AS total_cost
   FROM 
     production_orders;

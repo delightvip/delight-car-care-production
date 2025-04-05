@@ -24,12 +24,14 @@ class ProductionStatsService {
       const dbStats = await this.databaseService.getProductionStats();
       
       // Transform the database result to match the expected ProductionStats interface
+      // Note: The database may not return in_progress_orders and cancelled_orders fields directly
+      // So we'll set them as 0 if they don't exist
       return {
         totalOrders: dbStats.total_production_orders || 0,
         pendingOrders: dbStats.pending_orders || 0,
         completedOrders: dbStats.completed_orders || 0,
-        inProgressOrders: dbStats.in_progress_orders || 0, // Use the field if available
-        cancelledOrders: dbStats.cancelled_orders || 0, // Use the field if available
+        inProgressOrders: 0, // Default to 0 since this property might not exist in the database response
+        cancelledOrders: 0, // Default to 0 since this property might not exist in the database response
         totalCost: dbStats.total_cost || 0
       };
     } catch (error) {

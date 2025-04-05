@@ -43,9 +43,20 @@ const OrdersTable = ({
     { 
       key: 'totalCost', 
       title: 'التكلفة الإجمالية',
-      render: (value: number) => {
+      render: (value: number | string) => {
         // Ensure value is a valid number before calling toFixed
-        const numValue = ensureNumericValue(value);
+        if (value === null || value === undefined) {
+          return '0.00 ج.م';
+        }
+        
+        // Convert to number if it's a string
+        const numValue = typeof value === 'string' ? parseFloat(value) : value;
+        
+        // Check if it's a valid number after conversion
+        if (isNaN(numValue)) {
+          return '0.00 ج.م';
+        }
+        
         return `${numValue.toFixed(2)} ج.م`;
       }
     }
