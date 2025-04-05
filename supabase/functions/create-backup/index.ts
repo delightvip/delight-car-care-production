@@ -26,16 +26,21 @@ serve(async (req) => {
   try {
     console.log('Starting backup creation...');
     
-    // Comprehensive list of all tables to back up
+    // Comprehensive list of all tables to back up in the right order
     const tablesToBackup = [
-      // Inventory tables
+      // Base tables (no dependencies)
+      'financial_categories',
       'raw_materials',
       'semi_finished_products',
       'packaging_materials',
       'finished_products',
+      'parties',
+      'financial_balance',
+      
+      // Relational tables
       'semi_finished_ingredients',
       'finished_product_packaging',
-      'inventory_movements',
+      'party_balances',
       
       // Production tables
       'production_orders',
@@ -43,21 +48,20 @@ serve(async (req) => {
       'packaging_orders',
       'packaging_order_materials',
       
+      // Financial tables
+      'financial_transactions',
+      
       // Commercial tables
-      'parties',
-      'party_balances',
       'invoices',
       'invoice_items',
       'payments',
       'returns',
       'return_items',
-      'ledger',
       'profits',
+      'ledger',
       
-      // Financial tables
-      'financial_categories',
-      'financial_transactions',
-      'financial_balance'
+      // Movement tables
+      'inventory_movements'
     ];
     
     // Initialize backup data object
@@ -106,12 +110,12 @@ serve(async (req) => {
     // Return the backup data as JSON
     const jsonData = JSON.stringify(backupData, null, 2);
     
-    // Create a temporary URL for download
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
     return new Response(
-      JSON.stringify({ success: true, url: url }),
+      JSON.stringify({ 
+        success: true, 
+        data: jsonData,
+        errors: errors.length > 0 ? errors : null 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {

@@ -1,145 +1,134 @@
-import React from 'react';
-import {
-  Routes,
-  Route,
-  Navigate,
-} from 'react-router-dom';
-import { Toaster } from 'sonner';
-import { toast } from 'sonner';
 
-import Layout from './components/layout/Layout';
-import Index from './pages/Index';
-import RawMaterials from './pages/inventory/RawMaterials';
-import SemiFinishedProducts from './pages/inventory/SemiFinishedProducts';
-import PackagingMaterials from './pages/inventory/PackagingMaterials';
-import FinishedProducts from './pages/inventory/FinishedProducts';
-import InventoryTracking from './pages/inventory/InventoryTracking';
-import LowStockItems from './pages/inventory/LowStockItems';
-import InventoryReports from './pages/inventory/InventoryReports';
-import ProductionOrders from './pages/production/ProductionOrders';
-import PackagingOrders from './pages/production/PackagingOrders';
-import ProductionPlanning from './pages/production/ProductionPlanning';
-import CommercialDashboard from './pages/commercial/CommercialDashboard';
-import Invoices from './pages/commercial/Invoices';
-import InvoiceDetails from './pages/commercial/InvoiceDetails';
-import Parties from './pages/commercial/Parties';
-import PartyDetails from './pages/commercial/PartyDetails';
-import Payments from './pages/commercial/Payments';
-import Returns from './pages/commercial/Returns';
-import CommercialLedger from './pages/commercial/CommercialLedger';
-import AccountStatements from './pages/commercial/AccountStatements';
-import FinancialDashboard from './pages/financial/FinancialDashboard';
-import TransactionPage from './pages/financial/TransactionPage';
-import CategoriesPage from './pages/financial/CategoriesPage';
-import Analytics from './pages/analytics/Analytics';
-import InventoryDistributionPage from './pages/analytics/InventoryDistributionPage';
-import Settings from './pages/settings/Settings';
-import NotFound from './pages/NotFound';
-import Profits from './pages/commercial/Profits';
+import React, { lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Helmet, HelmetProvider } from 'react-helmet-async';
+import { Toaster } from '@/components/ui/toaster';
+import { Toaster as SonnerToaster } from 'sonner';
+import { ThemeProvider } from '@/components/theme-provider';
+import Layout from '@/components/layout/Layout';
+import Index from '@/pages/Index';
+import NotFound from '@/pages/NotFound';
+import Settings from '@/pages/settings/Settings';
 
-// Properly defined error boundary component with correct TypeScript interface
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
+// Lazy loaded pages
+const Dashboard = lazy(() => import('@/pages/Index'));
+const AnalyticsPage = lazy(() => import('@/pages/analytics/Analytics'));
+const InventoryRawMaterials = lazy(() => import('@/pages/inventory/InventoryRawMaterials'));
+const SemiFinishedProducts = lazy(() => import('@/pages/inventory/SemiFinishedProducts'));
+const PackagingMaterials = lazy(() => import('@/pages/inventory/PackagingMaterials'));
+const FinishedProducts = lazy(() => import('@/pages/inventory/FinishedProducts'));
+const ProductDetailsContainer = lazy(() => import('@/pages/inventory/ProductDetailsContainer'));
+const LowStockItems = lazy(() => import('@/pages/inventory/LowStockItems'));
+const InventoryReports = lazy(() => import('@/pages/inventory/InventoryReports'));
+const InventoryTracking = lazy(() => import('@/pages/inventory/InventoryTracking'));
+const ProductionOrders = lazy(() => import('@/pages/production/ProductionOrders'));
+const PackagingOrders = lazy(() => import('@/pages/production/PackagingOrders'));
+const ProductionPlanning = lazy(() => import('@/pages/production/ProductionPlanning'));
+const InventoryDistributionPage = lazy(() => import('@/pages/analytics/InventoryDistributionPage'));
+const Parties = lazy(() => import('@/pages/commercial/Parties'));
+const Invoices = lazy(() => import('@/pages/commercial/Invoices'));
+const InvoiceDetails = lazy(() => import('@/pages/commercial/InvoiceDetails'));
+const Payments = lazy(() => import('@/pages/commercial/Payments'));
+const PartyDetails = lazy(() => import('@/pages/commercial/PartyDetails'));
+const Returns = lazy(() => import('@/pages/commercial/Returns'));
+const Profits = lazy(() => import('@/pages/commercial/Profits'));
+const AccountStatements = lazy(() => import('@/pages/commercial/AccountStatements'));
+const CommercialLedger = lazy(() => import('@/pages/commercial/CommercialLedger'));
+const CommercialDashboard = lazy(() => import('@/pages/commercial/CommercialDashboard'));
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
+// Financial pages
+const FinancialDashboard = lazy(() => import('@/pages/financial/FinancialDashboard'));
+const TransactionPage = lazy(() => import('@/pages/financial/TransactionPage'));
+const CategoriesPage = lazy(() => import('@/pages/financial/CategoriesPage'));
+const CategoryForm = lazy(() => import('@/components/financial/CategoryForm'));
 
-class AppErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error("Application error:", error, errorInfo);
-    toast.error("حدث خطأ في التطبيق. يرجى تحديث الصفحة.");
-  }
-
-  render(): React.ReactNode {
-    if (this.state.hasError) {
-      return (
-        <div className="flex min-h-screen items-center justify-center bg-background p-4">
-          <div className="rounded-lg border bg-card p-8 shadow-lg">
-            <h1 className="mb-4 text-2xl font-bold">حدث خطأ في التطبيق</h1>
-            <p className="mb-4 text-muted-foreground">
-              نعتذر عن هذا الانقطاع. يرجى تحديث الصفحة للمتابعة.
-            </p>
-            <div className="overflow-auto rounded bg-muted p-4 text-sm">
-              <pre>{this.state.error?.toString()}</pre>
-            </div>
-            <div className="mt-6">
-              <button
-                className="rounded-md bg-primary px-4 py-2 text-primary-foreground"
-                onClick={() => window.location.reload()}
-              >
-                تحديث الصفحة
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
+// Create a new QueryClient
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function App() {
-  console.log("App component rendering");
-  
   return (
-    <AppErrorBoundary>
-      <div className="App">
-        <Toaster />
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Index />} />
-            <Route path="inventory" element={<Navigate replace to="/inventory/raw-materials" />} />
-            <Route path="inventory/raw-materials" element={<RawMaterials />} />
-            <Route path="inventory/semi-finished" element={<SemiFinishedProducts />} />
-            <Route path="inventory/packaging" element={<PackagingMaterials />} />
-            <Route path="inventory/finished-products" element={<FinishedProducts />} />
-            <Route path="inventory/tracking" element={<InventoryTracking />} />
-            <Route path="inventory/low-stock" element={<LowStockItems />} />
-            <Route path="inventory/reports" element={<InventoryReports />} />
-            
-            <Route path="production" element={<Navigate replace to="/production/orders" />} />
-            <Route path="production/orders" element={<ProductionOrders />} />
-            <Route path="production/packaging-orders" element={<PackagingOrders />} />
-            <Route path="production/planning" element={<ProductionPlanning />} />
-            
-            <Route path="commercial" element={<CommercialDashboard />} />
-            <Route path="commercial/invoices" element={<Invoices />} />
-            <Route path="commercial/invoices/:id" element={<InvoiceDetails />} />
-            <Route path="commercial/parties" element={<Parties />} />
-            <Route path="commercial/parties/:id" element={<PartyDetails />} />
-            <Route path="commercial/payments" element={<Payments />} />
-            <Route path="commercial/profits" element={<Profits />} />
-            <Route path="commercial/returns" element={<Returns />} />
-            <Route path="commercial/ledger" element={<CommercialLedger />} />
-            <Route path="commercial/statements" element={<AccountStatements />} />
-            
-            <Route path="financial" element={<FinancialDashboard />} />
-            <Route path="financial/transactions" element={<TransactionPage />} />
-            <Route path="financial/transactions/new" element={<TransactionPage />} />
-            <Route path="financial/categories" element={<CategoriesPage />} />
-            
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
-            
-            <Route path="settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </div>
-    </AppErrorBoundary>
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider defaultTheme="light">
+          <BrowserRouter>
+            <Helmet>
+              <title>النظام المتكامل</title>
+              <meta name="description" content="نظام متكامل لإدارة الأعمال" />
+            </Helmet>
+            <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center">جاري التحميل...</div>}>
+              <Routes>
+                <Route path="/" element={<Layout />}>
+                  <Route index element={<Index />} />
+                  <Route path="analytics" element={<AnalyticsPage />} />
+                  <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
+                  
+                  {/* Inventory Routes */}
+                  <Route path="inventory">
+                    <Route path="raw-materials" element={<InventoryRawMaterials />} />
+                    <Route path="raw-materials/:id" element={<ProductDetailsContainer />} />
+                    <Route path="semi-finished" element={<SemiFinishedProducts />} />
+                    <Route path="semi-finished/:id" element={<ProductDetailsContainer />} />
+                    <Route path="packaging-materials" element={<PackagingMaterials />} />
+                    <Route path="packaging-materials/:id" element={<ProductDetailsContainer />} />
+                    <Route path="finished-products" element={<FinishedProducts />} />
+                    <Route path="finished-products/:id" element={<ProductDetailsContainer />} />
+                    <Route path="low-stock" element={<LowStockItems />} />
+                    <Route path="reports" element={<InventoryReports />} />
+                    <Route path="tracking" element={<InventoryTracking />} />
+                  </Route>
+                  
+                  {/* Production Routes */}
+                  <Route path="production">
+                    <Route path="orders" element={<ProductionOrders />} />
+                    <Route path="packaging" element={<PackagingOrders />} />
+                    <Route path="planning" element={<ProductionPlanning />} />
+                  </Route>
+                  
+                  {/* Commercial Routes */}
+                  <Route path="commercial">
+                    <Route index element={<CommercialDashboard />} />
+                    <Route path="parties" element={<Parties />} />
+                    <Route path="parties/:id" element={<PartyDetails />} />
+                    <Route path="invoices" element={<Invoices />} />
+                    <Route path="invoices/:id" element={<InvoiceDetails />} />
+                    <Route path="payments" element={<Payments />} />
+                    <Route path="returns" element={<Returns />} />
+                    <Route path="profits" element={<Profits />} />
+                    <Route path="account-statements" element={<AccountStatements />} />
+                    <Route path="ledger" element={<CommercialLedger />} />
+                  </Route>
+                  
+                  {/* Financial Routes */}
+                  <Route path="financial">
+                    <Route index element={<FinancialDashboard />} />
+                    <Route path="transactions" element={<TransactionPage />} />
+                    <Route path="categories" element={<CategoriesPage />} />
+                    <Route path="categories/new" element={<CategoryForm />} />
+                    <Route path="categories/edit/:id" element={<CategoryForm />} />
+                  </Route>
+                  
+                  {/* Settings */}
+                  <Route path="settings" element={<Settings />} />
+                  
+                  {/* Catch all unmatched routes */}
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
+            </Suspense>
+            <SonnerToaster position="top-left" dir="rtl" />
+            <Toaster />
+          </BrowserRouter>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
   );
 }
 

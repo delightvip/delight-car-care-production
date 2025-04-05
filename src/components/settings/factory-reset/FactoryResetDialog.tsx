@@ -50,6 +50,7 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
         console.error("Factory reset error:", error);
         toast.error("حدث خطأ أثناء إعادة ضبط النظام");
         setResetErrors([{ table: "general", error: error.message }]);
+        setIsResetting(false);
         return;
       }
       
@@ -62,6 +63,7 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
           setResetErrors(data.errors);
         }
         
+        setIsResetting(false);
         return;
       }
       
@@ -80,7 +82,6 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
       console.error("Factory reset error:", error);
       toast.error("حدث خطأ أثناء إعادة ضبط النظام");
       setResetErrors([{ table: "general", error: error.message }]);
-    } finally {
       setIsResetting(false);
     }
   };

@@ -30,17 +30,20 @@ serve(async (req) => {
     // Carefully ordered to avoid foreign key constraints
     const tablesToReset = [
       // First reset dependent tables with foreign keys
-      // Financial module
+      // Financial module - Transactions first
       'financial_transactions',
+      
       // Commercial module - Returns
       'return_items',
       'returns',
+      
       // Commercial module - Invoices and Payments
       'invoice_items',
       'invoices',
       'payments',
       'profits',
       'ledger',
+      
       // Inventory and Party
       'party_balances',
       'inventory_movements',
@@ -61,7 +64,11 @@ serve(async (req) => {
       'packaging_materials',
       'raw_materials',
       'parties',
+      
+      // Important: Clear financial categories after transactions
       'financial_categories',
+      
+      // Reset financial balance last
       'financial_balance'
     ];
 
@@ -140,7 +147,7 @@ serve(async (req) => {
       errors.push({ table: 'financial_balance', error: err.message });
     }
 
-    // Insert default financial categories
+    // Insert default financial categories AFTER clearing the existing ones
     try {
       const defaultCategories = [
         { name: 'المبيعات', type: 'income', description: 'إيرادات من المبيعات' },

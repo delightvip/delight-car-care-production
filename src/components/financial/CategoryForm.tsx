@@ -69,8 +69,7 @@ const CategoryForm: React.FC = () => {
     const loadData = async () => {
       if (isEditing && id) {
         setLoading(true);
-        const categories = await financialService.getCategories();
-        const category = categories.find(c => c.id === id);
+        const category = await financialService.getCategoryById(id);
         
         if (category) {
           form.reset({
@@ -78,6 +77,9 @@ const CategoryForm: React.FC = () => {
             type: category.type,
             description: category.description || '',
           });
+        } else {
+          toast.error('لم يتم العثور على الفئة المطلوبة');
+          navigate('/financial/categories');
         }
         
         setLoading(false);
@@ -87,7 +89,7 @@ const CategoryForm: React.FC = () => {
     };
     
     loadData();
-  }, [isEditing, id]);
+  }, [isEditing, id, navigate, form]);
   
   const onSubmit = async (data: CategoryFormValues) => {
     setSubmitting(true);
