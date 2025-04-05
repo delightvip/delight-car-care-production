@@ -27,26 +27,36 @@ serve(async (req) => {
     console.log('Starting factory reset...');
     
     // Comprehensive list of all tables to reset in proper order to respect referential integrity
-    // Updated to include ALL tables in the correct sequence
+    // Carefully ordered to avoid foreign key constraints
     const tablesToReset = [
       // First reset dependent tables with foreign keys
+      // Financial module
+      'financial_transactions',
+      // Commercial module - Returns
       'return_items',
       'returns',
+      // Commercial module - Invoices and Payments
       'invoice_items',
       'invoices',
       'payments',
       'profits',
       'ledger',
-      'financial_transactions',
+      // Inventory and Party
       'party_balances',
+      'inventory_movements',
+      
+      // Production module
       'packaging_order_materials',
       'packaging_orders',
       'production_order_ingredients',
       'production_orders',
-      'inventory_movements',
+      
+      // Product relationships
       'finished_product_packaging',
-      'finished_products',
       'semi_finished_ingredients',
+      
+      // Base tables (no dependencies)
+      'finished_products',
       'semi_finished_products',
       'packaging_materials',
       'raw_materials',
@@ -59,20 +69,20 @@ serve(async (req) => {
     const errors = [];
     for (const table of tablesToReset) {
       console.log(`Resetting table: ${table}`);
-      const { error } = await supabaseAdmin
-        .from(table)
-        .delete()
-        .neq('id', 0); // Delete all rows
+      try {
+        const { error } = await supabaseAdmin
+          .from(table)
+          .delete()
+          .neq('id', 0); // Delete all rows
 
-      if (error) {
-        console.error(`Error resetting table ${table}:`, error);
-        errors.push({ table, error: error.message });
+        if (error) {
+          console.error(`Error resetting table ${table}:`, error);
+          errors.push({ table, error: error.message });
+        }
+      } catch (err) {
+        console.error(`Exception resetting table ${table}:`, err);
+        errors.push({ table, error: err.message });
       }
-    }
-
-    // If we have any errors, log them but continue
-    if (errors.length > 0) {
-      console.warn(`Completed with ${errors.length} errors:`, errors);
     }
 
     // Reset sequences for tables with integer IDs
@@ -92,50 +102,65 @@ serve(async (req) => {
     const sequenceErrors = [];
     for (const table of sequenceTables) {
       console.log(`Resetting sequence for ${table}`);
-      const { error } = await supabaseAdmin.rpc('reset_sequence', { 
-        table_name: table, 
-        seq_value: 1 
-      });
-      
-      if (error) {
-        console.error(`Error resetting sequence for ${table}:`, error);
-        sequenceErrors.push({ table, error: error.message });
+      try {
+        const { error } = await supabaseAdmin.rpc('reset_sequence', { 
+          table_name: table, 
+          seq_value: 1 
+        });
+        
+        if (error) {
+          console.error(`Error resetting sequence for ${table}:`, error);
+          sequenceErrors.push({ table, error: error.message });
+        }
+      } catch (err) {
+        console.error(`Exception resetting sequence for ${table}:`, err);
+        sequenceErrors.push({ table, error: err.message });
       }
     }
 
     // Reset the financial_balance table with initial values
-    const { error: resetError } = await supabaseAdmin
-      .from('financial_balance')
-      .upsert([
-        {
-          id: '1',
-          cash_balance: 0,
-          bank_balance: 0,
-          last_updated: new Date().toISOString()
-        }
-      ]);
+    try {
+      const { error: resetError } = await supabaseAdmin
+        .from('financial_balance')
+        .upsert([
+          {
+            id: '1',
+            cash_balance: 0,
+            bank_balance: 0,
+            last_updated: new Date().toISOString()
+          }
+        ]);
 
-    if (resetError) {
-      console.error('Error resetting financial_balance:', resetError);
-      errors.push({ table: 'financial_balance', error: resetError.message });
+      if (resetError) {
+        console.error('Error resetting financial_balance:', resetError);
+        errors.push({ table: 'financial_balance', error: resetError.message });
+      }
+    } catch (err) {
+      console.error('Exception resetting financial_balance:', err);
+      errors.push({ table: 'financial_balance', error: err.message });
     }
 
-    // Insert default financial categories if needed
-    const defaultCategories = [
-      { name: 'المبيعات', type: 'income', description: 'إيرادات من المبيعات' },
-      { name: 'المشتريات', type: 'expense', description: 'مصروفات للمشتريات' },
-      { name: 'المرتبات', type: 'expense', description: 'مرتبات الموظفين' },
-      { name: 'إيجار', type: 'expense', description: 'إيجار المكتب أو المحل' },
-      { name: 'مرافق', type: 'expense', description: 'كهرباء، ماء، إنترنت، الخ' }
-    ];
+    // Insert default financial categories
+    try {
+      const defaultCategories = [
+        { name: 'المبيعات', type: 'income', description: 'إيرادات من المبيعات' },
+        { name: 'المشتريات', type: 'expense', description: 'مصروفات للمشتريات' },
+        { name: 'المرتبات', type: 'expense', description: 'مرتبات الموظفين' },
+        { name: 'إيجار', type: 'expense', description: 'إيجار المكتب أو المحل' },
+        { name: 'مرافق', type: 'expense', description: 'كهرباء، ماء، إنترنت، الخ' }
+      ];
 
-    const { error: categoriesError } = await supabaseAdmin
-      .from('financial_categories')
-      .upsert(defaultCategories);
+      const { error: categoriesError } = await supabaseAdmin
+        .from('financial_categories')
+        .upsert(defaultCategories);
 
-    if (categoriesError) {
-      console.error('Error creating default categories:', categoriesError);
-      errors.push({ table: 'financial_categories', error: categoriesError.message });
+      if (categoriesError) {
+        console.error('Error creating default categories:', categoriesError);
+        errors.push({ table: 'financial_categories', error: categoriesError.message });
+      }
+    } catch (err) {
+      console.error('Exception creating default categories:', err);
+      errors.push({ table: 'financial_categories', error: err.message });
     }
 
     console.log('Factory reset completed');

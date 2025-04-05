@@ -81,6 +81,7 @@ const RestoreSection = () => {
         JSON.parse(fileContent);
       } catch (e) {
         toast.error("ملف النسخة الاحتياطية غير صالح");
+        setIsRestoring(false);
         return;
       }
       
@@ -92,6 +93,7 @@ const RestoreSection = () => {
       if (error) {
         console.error("Backup restoration error:", error);
         toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
+        setIsRestoring(false);
         return;
       }
       

@@ -65,8 +65,10 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
         return;
       }
       
-      // Clear local storage 
+      // Clear local storage except for user auth data
+      const auth = localStorage.getItem('supabase.auth.token');
       localStorage.clear();
+      if (auth) localStorage.setItem('supabase.auth.token', auth);
       
       toast.success("تمت إعادة ضبط النظام بنجاح");
       
@@ -83,8 +85,16 @@ const FactoryResetDialog: React.FC<FactoryResetDialogProps> = ({
     }
   };
 
+  const handleClose = () => {
+    if (!isResetting) {
+      setConfirmText("");
+      setResetErrors([]);
+      onOpenChange(false);
+    }
+  };
+
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleClose}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-destructive">

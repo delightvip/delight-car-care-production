@@ -26,26 +26,26 @@ serve(async (req) => {
   try {
     console.log('Starting backup creation...');
     
-    // Comprehensive list of all tables to backup in a specific order to maintain relationships
-    const tables = [
-      // Base tables first
+    // Comprehensive list of all tables to back up
+    const tablesToBackup = [
+      // Inventory tables
       'raw_materials',
-      'packaging_materials',
       'semi_finished_products',
-      'semi_finished_ingredients',
+      'packaging_materials',
       'finished_products',
+      'semi_finished_ingredients',
       'finished_product_packaging',
-      'parties',
-      'party_balances',
-      'financial_categories',
-      'financial_balance',
-      // Transaction and operational tables
+      'inventory_movements',
+      
+      // Production tables
       'production_orders',
       'production_order_ingredients',
       'packaging_orders',
       'packaging_order_materials',
-      'inventory_movements',
-      // Financial and commercial tables
+      
+      // Commercial tables
+      'parties',
+      'party_balances',
       'invoices',
       'invoice_items',
       'payments',
@@ -53,61 +53,65 @@ serve(async (req) => {
       'return_items',
       'ledger',
       'profits',
-      'financial_transactions'
-    ];
-
-    // Fetch data from each table
-    const backupData = {};
-    const errors = [];
-    
-    for (const table of tables) {
-      console.log(`Backing up table: ${table}`);
-      const { data, error } = await supabaseAdmin
-        .from(table)
-        .select('*');
-        
-      if (error) {
-        console.error(`Error fetching data from ${table}:`, error);
-        errors.push({ table, error: error.message });
-        continue;
-      }
       
-      backupData[table] = data || [];
-      console.log(`Backed up ${data?.length || 0} rows from ${table}`);
-    }
-
-    // Include any errors in the backup data
-    if (errors.length > 0) {
-      backupData['__errors'] = errors;
-    }
-
-    // Add backup metadata
-    backupData['__metadata'] = {
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      tables: tables,
-      tablesCount: Object.keys(backupData).filter(k => !k.startsWith('__')).length
-    };
-
-    // Create a downloadable backup file
-    const backupJson = JSON.stringify(backupData, null, 2);
-    const backupBlob = new Blob([backupJson], { type: 'application/json' });
+      // Financial tables
+      'financial_categories',
+      'financial_transactions',
+      'financial_balance'
+    ];
     
-    // Create a data URL for the backup file
-    const reader = new FileReader();
-    const dataUrl = await new Promise<string>((resolve) => {
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(backupBlob);
-    });
-
-    console.log('Backup created successfully');
-
+    // Initialize backup data object
+    const backupData: Record<string, any[]> = {
+      '__metadata': {
+        'timestamp': new Date().toISOString(),
+        'tablesCount': tablesToBackup.length,
+        'version': '1.0'
+      }
+    };
+    
+    // Fetch data from all tables
+    const errors = [];
+    for (const table of tablesToBackup) {
+      console.log(`Backing up table: ${table}`);
+      try {
+        const { data, error } = await supabaseAdmin
+          .from(table)
+          .select('*')
+          .order('id', { ascending: true });
+          
+        if (error) {
+          console.error(`Error fetching data from ${table}:`, error);
+          errors.push({ table, error: error.message });
+          // Continue with other tables even if there's an error
+          backupData[table] = [];
+        } else {
+          backupData[table] = data || [];
+          console.log(`Backed up ${data?.length || 0} records from ${table}`);
+        }
+      } catch (err) {
+        console.error(`Exception fetching data from ${table}:`, err);
+        errors.push({ table, error: err.message });
+        backupData[table] = [];
+      }
+    }
+    
+    // Add errors to metadata if there were any
+    if (errors.length > 0) {
+      backupData['__metadata']['errors'] = errors;
+      console.warn(`Backup completed with ${errors.length} errors`);
+    }
+    
+    console.log('Backup creation completed');
+    
+    // Return the backup data as JSON
+    const jsonData = JSON.stringify(backupData, null, 2);
+    
+    // Create a temporary URL for download
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        url: dataUrl,
-        metadata: backupData['__metadata']
-      }),
+      JSON.stringify({ success: true, url: url }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {

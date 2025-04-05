@@ -49,6 +49,7 @@ serve(async (req) => {
     // Comprehensive list of tables to clear in order that respects referential integrity
     const tablesToClear = [
       // First clear dependent tables
+      'financial_transactions',
       'return_items',
       'returns',
       'invoice_items',
@@ -56,7 +57,6 @@ serve(async (req) => {
       'payments',
       'profits',
       'ledger',
-      'financial_transactions',
       'party_balances',
       'packaging_order_materials',
       'packaging_orders',
@@ -94,13 +94,14 @@ serve(async (req) => {
       'packaging_order_materials',
       'inventory_movements',
       'invoices',
-      'invoice_items',
       'payments',
       'returns',
-      'return_items',
       'ledger',
       'profits',
-      'financial_transactions'
+      'financial_transactions',
+      // Finally restore items that depend on previous tables
+      'invoice_items',
+      'return_items'
     ];
     
     // First, clear all existing data
@@ -212,7 +213,7 @@ serve(async (req) => {
       success: true, // Return success even with some errors to avoid blocking the user
       message: errors.length === 0 ? 'Backup restored successfully' : 'Backup restored with some errors',
       tablesRestored: tablesRestored,
-      errors: errors
+      errors: [...clearErrors, ...errors]
     };
     
     console.log('Backup restoration completed', result);
