@@ -1,9 +1,10 @@
+
 import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   ProductionOrder, 
   PackagingOrder 
-} from "../production/ProductionTypes";
+} from "../ProductionService";
 
 class ProductionDatabaseService {
   private static instance: ProductionDatabaseService;
@@ -98,7 +99,7 @@ class ProductionDatabaseService {
             code: order.semi_finished_code,
             name: order.semi_finished_name,
             quantity: order.semi_finished_quantity,
-            available: true // سيتم تحديثها لاحقاً عند التحديد من توفر المواد
+            available: true // سيتم تحديثها لاحقاً عند التحقق من توفر المواد
           },
           packagingMaterials: materials.map(material => ({
             code: material.packaging_material_code,
@@ -328,7 +329,7 @@ class ProductionDatabaseService {
       return true;
     } catch (error) {
       console.error('Error updating production order cost:', error);
-      toast.error('حدث خطأ أثناء تحديقة تكلفة أمر الإنتاج');
+      toast.error('حدث خطأ أثناء تحديث تكلفة أمر الإنتاج');
       return false;
     }
   }
@@ -393,26 +394,10 @@ class ProductionDatabaseService {
       const { data, error } = await rpcFunctions.getProductionStats();
         
       if (error) throw error;
-      
-      // Ensure all required fields are present, even if the SQL function hasn't been updated yet
-      return {
-        total_production_orders: data?.total_production_orders || 0,
-        completed_orders: data?.completed_orders || 0,
-        pending_orders: data?.pending_orders || 0,
-        in_progress_orders: data?.in_progress_orders || 0,
-        cancelled_orders: data?.cancelled_orders || 0,
-        total_cost: data?.total_cost || 0
-      };
+      return data || { total_production_orders: 0, completed_orders: 0, pending_orders: 0, total_cost: 0 };
     } catch (error) {
       console.error('Error fetching production stats:', error);
-      return {
-        total_production_orders: 0,
-        completed_orders: 0,
-        pending_orders: 0,
-        in_progress_orders: 0,
-        cancelled_orders: 0,
-        total_cost: 0
-      };
+      return { total_production_orders: 0, completed_orders: 0, pending_orders: 0, total_cost: 0 };
     }
   }
 
