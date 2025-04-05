@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Eye, Edit, Trash } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
 import { ProductionOrder, PackagingOrder } from '@/services/production/ProductionTypes';
+import { ensureNumericValue } from '@/components/inventory/common/InventoryDataFormatter';
 
 type OrdersTableProps = {
   data: (ProductionOrder | PackagingOrder)[];
@@ -42,7 +43,11 @@ const OrdersTable = ({
     { 
       key: 'totalCost', 
       title: 'التكلفة الإجمالية',
-      render: (value: number) => `${value.toFixed(2)} ج.م`
+      render: (value: number) => {
+        // Ensure value is a valid number before calling toFixed
+        const numValue = ensureNumericValue(value);
+        return `${numValue.toFixed(2)} ج.م`;
+      }
     }
   ];
 

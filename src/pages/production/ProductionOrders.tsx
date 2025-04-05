@@ -121,6 +121,9 @@ const ProductionOrders = () => {
     totalCost: 0
   };
 
+  // Use stats || defaultStats to ensure a valid stats object
+  const safeStats = stats || defaultStats;
+
   // Handle add order
   const handleAddOrder = async (productCode: string, quantity: number) => {
     try {
@@ -229,7 +232,7 @@ const ProductionOrders = () => {
         </div>
         
         {/* Stats Cards */}
-        <ProductionStatsCards stats={stats || defaultStats} isLoading={isStatsLoading} />
+        <ProductionStatsCards stats={safeStats} isLoading={isStatsLoading} />
         
         {/* Chart */}
         <ProductionChart data={chartData} isLoading={isChartLoading} />

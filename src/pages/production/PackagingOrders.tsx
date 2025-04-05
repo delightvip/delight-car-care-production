@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
@@ -15,6 +14,7 @@ import ProductionService from '@/services/ProductionService';
 import InventoryService from '@/services/InventoryService';
 import { PackagingOrder } from '@/services/production/ProductionTypes';
 import { FinishedProduct } from '@/services/InventoryService';
+import { ensureNumericValue } from '@/components/inventory/common/InventoryDataFormatter';
 
 // Components
 import OrdersTable from '@/components/production/orders/OrdersTable';
@@ -74,7 +74,7 @@ const PackagingOrders = () => {
       type: 'سائل',
       code: product.semiFinished.code,
       name: product.semiFinished.name,
-      requiredQuantity: product.semiFinished.quantity * quantity,
+      requiredQuantity: ensureNumericValue(product.semiFinished.quantity) * ensureNumericValue(quantity),
       available: true,
       unit: 'وحدة'
     };
@@ -83,7 +83,7 @@ const PackagingOrders = () => {
       type: 'تعبئة',
       code: item.code,
       name: item.name,
-      requiredQuantity: item.quantity * quantity,
+      requiredQuantity: ensureNumericValue(item.quantity) * ensureNumericValue(quantity),
       available: true,
       unit: 'وحدة'
     }));
@@ -95,7 +95,7 @@ const PackagingOrders = () => {
     const product = finishedProducts.find(p => p.code === productCode);
     if (!product) return 0;
     
-    return product.unit_cost * quantity;
+    return ensureNumericValue(product.unit_cost) * ensureNumericValue(quantity);
   };
 
   // Handle add order
