@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
@@ -260,28 +259,84 @@ export class ReturnProcessingService {
     quantity: number
   ): Promise<boolean> {
     try {
-      const table = this.getTableNameFromItemType(itemType);
+      // Get current quantity based on item type
+      let currentQuantity = 0;
       
-      // 1. جلب الكمية الحالية
-      const { data, error } = await supabase
-        .from(table)
-        .select('quantity')
-        .eq('id', itemId)
-        .single();
-      
-      if (error) throw error;
-      
-      // 2. حساب الكمية الجديدة
-      const currentQuantity = data.quantity || 0;
-      const newQuantity = currentQuantity + quantity;
-      
-      // 3. تحديث الكمية
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ quantity: newQuantity })
-        .eq('id', itemId);
-      
-      if (updateError) throw updateError;
+      if (itemType === 'raw_materials') {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('raw_materials')
+          .update({ quantity: currentQuantity + quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
+      } 
+      else if (itemType === 'packaging_materials') {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('packaging_materials')
+          .update({ quantity: currentQuantity + quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
+      }
+      else if (itemType === 'semi_finished_products') {
+        const { data, error } = await supabase
+          .from('semi_finished_products')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('semi_finished_products')
+          .update({ quantity: currentQuantity + quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
+      }
+      else if (itemType === 'finished_products') {
+        const { data, error } = await supabase
+          .from('finished_products')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('finished_products')
+          .update({ quantity: currentQuantity + quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
+      }
+      else {
+        throw new Error(`نوع صنف غير معروف: ${itemType}`);
+      }
       
       // 4. تسجيل حركة المخزون
       await this.recordInventoryMovement(itemType, itemId, quantity, 'in', 'return');
@@ -303,33 +358,104 @@ export class ReturnProcessingService {
     quantity: number
   ): Promise<boolean> {
     try {
-      const table = this.getTableNameFromItemType(itemType);
+      // Get current quantity based on item type
+      let currentQuantity = 0;
       
-      // 1. جلب الكمية الحالية
-      const { data, error } = await supabase
-        .from(table)
-        .select('quantity')
-        .eq('id', itemId)
-        .single();
-      
-      if (error) throw error;
-      
-      // 2. التحقق من توفر الكمية المطلوبة
-      const currentQuantity = data.quantity || 0;
-      if (currentQuantity < quantity) {
-        throw new Error(`الكمية المتوفرة (${currentQuantity}) أقل من الكمية المطلوبة (${quantity})`);
+      if (itemType === 'raw_materials') {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Check quantity
+        if (currentQuantity < quantity) {
+          throw new Error(`الكمية المتوفرة (${currentQuantity}) أقل من الكمية المطلوبة (${quantity})`);
+        }
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('raw_materials')
+          .update({ quantity: currentQuantity - quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
+      } 
+      else if (itemType === 'packaging_materials') {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Check quantity
+        if (currentQuantity < quantity) {
+          throw new Error(`الكمية المتوفرة (${currentQuantity}) أقل من الكمية المطلوبة (${quantity})`);
+        }
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('packaging_materials')
+          .update({ quantity: currentQuantity - quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
       }
-      
-      // 3. حساب الكمية الجديدة
-      const newQuantity = currentQuantity - quantity;
-      
-      // 4. تحديث الكمية
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ quantity: newQuantity })
-        .eq('id', itemId);
-      
-      if (updateError) throw updateError;
+      else if (itemType === 'semi_finished_products') {
+        const { data, error } = await supabase
+          .from('semi_finished_products')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Check quantity
+        if (currentQuantity < quantity) {
+          throw new Error(`الكمية المتوفرة (${currentQuantity}) أقل من الكمية المطلوبة (${quantity})`);
+        }
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('semi_finished_products')
+          .update({ quantity: currentQuantity - quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
+      }
+      else if (itemType === 'finished_products') {
+        const { data, error } = await supabase
+          .from('finished_products')
+          .select('quantity')
+          .eq('id', itemId)
+          .single();
+          
+        if (error) throw error;
+        currentQuantity = data.quantity || 0;
+        
+        // Check quantity
+        if (currentQuantity < quantity) {
+          throw new Error(`الكمية المتوفرة (${currentQuantity}) أقل من الكمية المطلوبة (${quantity})`);
+        }
+        
+        // Update quantity
+        const { error: updateError } = await supabase
+          .from('finished_products')
+          .update({ quantity: currentQuantity - quantity })
+          .eq('id', itemId);
+          
+        if (updateError) throw updateError;
+      }
+      else {
+        throw new Error(`نوع صنف غير معروف: ${itemType}`);
+      }
       
       // 5. تسجيل حركة المخزون
       await this.recordInventoryMovement(itemType, itemId, quantity, 'out', 'return_cancel');
