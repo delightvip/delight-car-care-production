@@ -13,21 +13,38 @@ import {
 import InvoiceService from './commercial/invoice/InvoiceService';
 import PaymentService from './commercial/payment/PaymentService';
 import LedgerService from './commercial/ledger/LedgerService';
-import ReturnService from './commercial/return/ReturnService';
 import { format } from "date-fns";
+
+// ReturnService will be imported lazily to avoid circular dependencies
+let returnServiceInstance: any = null;
 
 class CommercialService {
   private static instance: CommercialService;
   private invoiceService: InvoiceService;
   private paymentService: PaymentService;
   private ledgerService: LedgerService;
-  private returnService: ReturnService;
   
   private constructor() {
     this.invoiceService = InvoiceService.getInstance();
     this.paymentService = PaymentService.getInstance();
     this.ledgerService = LedgerService.getInstance();
-    this.returnService = ReturnService.getInstance();
+    
+    // Don't initialize returnService here to avoid circular dependencies
+  }
+  
+  // Lazy getter for returnService to avoid circular dependencies
+  private async getReturnService() {
+    if (!returnServiceInstance) {
+      try {
+        // Import dynamically using dynamic import instead of require
+        const ReturnServiceModule = await import('./commercial/return/ReturnService');
+        returnServiceInstance = ReturnServiceModule.default.getInstance();
+      } catch (error) {
+        console.error('Error importing ReturnService:', error);
+        throw error;
+      }
+    }
+    return returnServiceInstance;
   }
   
   public static getInstance(): CommercialService {
@@ -103,7 +120,11 @@ class CommercialService {
   
   public async confirmInvoice(invoiceId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد تأكيد الفاتورة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const confirmPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.invoiceService.confirmInvoice(invoiceId);
@@ -129,7 +150,11 @@ class CommercialService {
   
   public async cancelInvoice(invoiceId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد إلغاء الفاتورة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const cancelPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.invoiceService.cancelInvoice(invoiceId);
@@ -238,7 +263,11 @@ class CommercialService {
   
   public async confirmPayment(paymentId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد تأكيد الدفعة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const confirmPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية التأكيد في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.paymentService.confirmPayment(paymentId);
@@ -264,7 +293,11 @@ class CommercialService {
   
   public async cancelPayment(paymentId: string): Promise<boolean> {
     try {
+      // استخدام وعد يتم حله بعد إلغاء الدفعة
+      // هذا يسمح بتنفيذ العملية بشكل غير متزامن
       const cancelPromise = new Promise<boolean>((resolve) => {
+        // استخدام setTimeout لتنفيذ عملية الإلغاء في الخلفية
+        // وتجنب تجمد واجهة المستخدم
         setTimeout(async () => {
           try {
             const result = await this.paymentService.cancelPayment(paymentId);
@@ -319,7 +352,8 @@ class CommercialService {
   // Return methods
   public async getReturns(): Promise<Return[]> {
     try {
-      return await this.returnService.getReturns();
+      const returnService = await this.getReturnService();
+      return await returnService.getReturns();
     } catch (error) {
       console.error('Error in getReturns:', error);
       toast({
@@ -333,7 +367,8 @@ class CommercialService {
   
   public async getReturnById(id: string): Promise<Return | null> {
     try {
-      return await this.returnService.getReturnById(id);
+      const returnService = await this.getReturnService();
+      return await returnService.getReturnById(id);
     } catch (error) {
       console.error(`Error in getReturnById(${id}):`, error);
       toast({
@@ -347,7 +382,8 @@ class CommercialService {
   
   public async createReturn(returnData: Omit<Return, 'id' | 'created_at'>): Promise<Return | null> {
     try {
-      return await this.returnService.createReturn(returnData);
+      const returnService = await this.getReturnService();
+      return await returnService.createReturn(returnData);
     } catch (error) {
       console.error('Error in createReturn:', error);
       toast({
@@ -359,21 +395,25 @@ class CommercialService {
     }
   }
   
+  public async updateReturn(id: string, returnData: Partial<Return>): Promise<boolean> {
+    try {
+      const returnService = await this.getReturnService();
+      return await returnService.updateReturn(id, returnData);
+    } catch (error) {
+      console.error(`Error in updateReturn(${id}):`, error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحديث المرتجع",
+        variant: "destructive"
+      });
+      return false;
+    }
+  }
+  
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      const confirmPromise = new Promise<boolean>((resolve) => {
-        setTimeout(async () => {
-          try {
-            const result = await this.returnService.confirmReturn(returnId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in confirmReturn timeout(${returnId}):`, error);
-            resolve(false);
-          }
-        }, 100);
-      });
-      
-      return confirmPromise;
+      const returnService = await this.getReturnService();
+      return await returnService.confirmReturn(returnId);
     } catch (error) {
       console.error(`Error in confirmReturn(${returnId}):`, error);
       toast({
@@ -387,19 +427,8 @@ class CommercialService {
   
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      const cancelPromise = new Promise<boolean>((resolve) => {
-        setTimeout(async () => {
-          try {
-            const result = await this.returnService.cancelReturn(returnId);
-            resolve(result);
-          } catch (error) {
-            console.error(`Error in cancelReturn timeout(${returnId}):`, error);
-            resolve(false);
-          }
-        }, 100);
-      });
-      
-      return cancelPromise;
+      const returnService = await this.getReturnService();
+      return await returnService.cancelReturn(returnId);
     } catch (error) {
       console.error(`Error in cancelReturn(${returnId}):`, error);
       toast({
@@ -411,11 +440,12 @@ class CommercialService {
     }
   }
   
-  public async deleteReturn(returnId: string): Promise<boolean> {
+  public async deleteReturn(id: string): Promise<boolean> {
     try {
-      return await this.returnService.deleteReturn(returnId);
+      const returnService = await this.getReturnService();
+      return await returnService.deleteReturn(id);
     } catch (error) {
-      console.error(`Error in deleteReturn(${returnId}):`, error);
+      console.error(`Error in deleteReturn(${id}):`, error);
       toast({
         title: "خطأ",
         description: "حدث خطأ أثناء حذف المرتجع",
@@ -455,4 +485,15 @@ class CommercialService {
   }
 }
 
+// Re-export the CommercialTypes so they can be imported from this module as well
+export type { 
+  Invoice, 
+  InvoiceItem, 
+  Payment, 
+  Return, 
+  ReturnItem, 
+  LedgerEntry 
+};
+
 export default CommercialService;
+

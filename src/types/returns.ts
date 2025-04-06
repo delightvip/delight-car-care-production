@@ -5,7 +5,7 @@ import { z } from 'zod';
 export const returnFormSchema = z.object({
   return_type: z.enum(['sales_return', 'purchase_return']),
   invoice_id: z.string(),
-  party_id: z.string(),
+  party_id: z.string().optional(),
   date: z.date(),
   notes: z.string().optional(),
   amount: z.number().optional(),
@@ -42,11 +42,11 @@ export interface ReturnItem {
   created_at?: string;
 }
 
-// Return interface - making party_id required to match CommercialTypes
+// Return interface - making invoice_id optional to match CommercialTypes
 export interface Return {
   id: string;
-  invoice_id?: string;
-  party_id: string;
+  invoice_id?: string; // Making this optional to match CommercialTypes
+  party_id?: string;
   party_name?: string;
   date: string;
   return_type: 'sales_return' | 'purchase_return';

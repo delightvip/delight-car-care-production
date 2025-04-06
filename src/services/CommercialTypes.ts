@@ -1,5 +1,17 @@
 
-// Define commercial-related types in a central location
+export interface Invoice {
+  id: string;
+  invoice_type: 'sale' | 'purchase';
+  party_id: string;
+  party_name?: string;
+  date: string;
+  total_amount: number;
+  items: InvoiceItem[];
+  status: 'paid' | 'partial' | 'unpaid';
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  notes?: string;
+  created_at?: string;
+}
 
 export interface InvoiceItem {
   id?: string;
@@ -10,20 +22,6 @@ export interface InvoiceItem {
   quantity: number;
   unit_price: number;
   total?: number;
-  created_at?: string;
-}
-
-export interface Invoice {
-  id: string;
-  invoice_type: 'sale' | 'purchase';
-  party_id: string;
-  party_name?: string;
-  date: string;
-  total_amount: number;
-  status: 'paid' | 'partial' | 'unpaid';
-  payment_status: 'draft' | 'confirmed' | 'cancelled';
-  notes?: string;
-  items: InvoiceItem[];
   created_at?: string;
 }
 
@@ -41,6 +39,20 @@ export interface Payment {
   created_at?: string;
 }
 
+export interface Return {
+  id: string;
+  invoice_id?: string;
+  party_id?: string;
+  party_name?: string;
+  date: string;
+  return_type: 'sales_return' | 'purchase_return';
+  amount: number;
+  items?: ReturnItem[];
+  payment_status: 'draft' | 'confirmed' | 'cancelled';
+  notes?: string;
+  created_at?: string;
+}
+
 export interface ReturnItem {
   id?: string;
   return_id?: string;
@@ -50,20 +62,6 @@ export interface ReturnItem {
   quantity: number;
   unit_price: number;
   total?: number;
-  created_at?: string;
-}
-
-export interface Return {
-  id: string;
-  invoice_id?: string;
-  party_id: string;
-  party_name?: string;
-  date: string;
-  return_type: 'sales_return' | 'purchase_return';
-  amount: number;
-  items?: ReturnItem[];
-  payment_status: 'draft' | 'confirmed' | 'cancelled';
-  notes?: string;
   created_at?: string;
 }
 

@@ -1,145 +1,154 @@
-
-import { supabase } from "@/integrations/supabase/client";
+import InventoryService from "@/services/InventoryService";
 
 /**
- * خدمة مخزون المرتجعات
- * مسؤولة عن تحديث المخزون بناءً على عمليات المرتجعات
+ * خدمة التعامل مع المخزون للمرتجعات
  */
 export class ReturnInventoryService {
+  private inventoryService: InventoryService;
+
+  constructor() {
+    this.inventoryService = InventoryService.getInstance();
+  }
+
   /**
    * زيادة كمية صنف في المخزون
    */
   public async increaseItemQuantity(
-    itemType: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
+    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
     itemId: number,
     quantity: number
   ): Promise<boolean> {
     try {
-      // تحديد اسم الجدول بناءً على نوع الصنف
-      const tableName = this.getTableNameByType(itemType);
+      // أولاً، يجب الحصول على كمية المخزون الحالية
+      let currentQuantity = 0;
       
-      // الحصول على الكمية الحالية
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('quantity')
-        .eq('id', itemId)
-        .single();
-      
-      if (error) throw error;
-      
-      // حساب الكمية الجديدة
-      const newQuantity = (data.quantity || 0) + quantity;
-      
-      // تحديث الكمية
-      const { error: updateError } = await supabase
-        .from(tableName)
-        .update({ quantity: newQuantity })
-        .eq('id', itemId);
-      
-      if (updateError) throw updateError;
-      
-      // تسجيل حركة المخزون
-      await this.recordInventoryMovement(itemType, itemId, quantity, 'increase', 'return', newQuantity);
-      
-      return true;
-    } catch (error) {
-      console.error(`Error increasing quantity for ${itemType} item ${itemId}:`, error);
-      return false;
-    }
-  }
-  
-  /**
-   * تقليل كمية صنف في المخزون
-   */
-  public async decreaseItemQuantity(
-    itemType: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products',
-    itemId: number,
-    quantity: number
-  ): Promise<boolean> {
-    try {
-      // تحديد اسم الجدول بناءً على نوع الصنف
-      const tableName = this.getTableNameByType(itemType);
-      
-      // الحصول على الكمية الحالية
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('quantity')
-        .eq('id', itemId)
-        .single();
-      
-      if (error) throw error;
-      
-      // التأكد من وجود كمية كافية
-      if (data.quantity < quantity) {
-        console.error(`Not enough quantity available for ${itemType} item ${itemId}`);
-        return false;
+      // جلب كمية المخزون الحالية حسب نوع العنصر
+      switch (itemType) {
+        case 'raw_materials': {
+          const items = await this.inventoryService.getRawMaterials();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        case 'packaging_materials': {
+          const items = await this.inventoryService.getPackagingMaterials();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        case 'semi_finished_products': {
+          const items = await this.inventoryService.getSemiFinishedProducts();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        case 'finished_products': {
+          const items = await this.inventoryService.getFinishedProducts();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        default:
+          return false;
       }
       
-      // حساب الكمية الجديدة
-      const newQuantity = data.quantity - quantity;
+      // حساب الكمية الجديدة = الكمية الحالية + كمية المرتجع
+      const newQuantity = currentQuantity + Number(quantity);
+      console.log(`Increasing inventory for ${itemType} ID ${itemId}: ${currentQuantity} + ${quantity} = ${newQuantity}`);
       
-      // تحديث الكمية
-      const { error: updateError } = await supabase
-        .from(tableName)
-        .update({ quantity: newQuantity })
-        .eq('id', itemId);
-      
-      if (updateError) throw updateError;
-      
-      // تسجيل حركة المخزون
-      await this.recordInventoryMovement(itemType, itemId, quantity, 'decrease', 'return_cancel', newQuantity);
-      
+      // تحديث المخزون بالكمية الجديدة
+      switch (itemType) {
+        case 'raw_materials':
+          await this.inventoryService.updateRawMaterial(itemId, { quantity: newQuantity });
+          break;
+        case 'packaging_materials':
+          await this.inventoryService.updatePackagingMaterial(itemId, { quantity: newQuantity });
+          break;
+        case 'semi_finished_products':
+          await this.inventoryService.updateSemiFinishedProduct(itemId, { quantity: newQuantity });
+          break;
+        case 'finished_products':
+          await this.inventoryService.updateFinishedProduct(itemId, { quantity: newQuantity });
+          break;
+        default:
+          return false;
+      }
       return true;
     } catch (error) {
-      console.error(`Error decreasing quantity for ${itemType} item ${itemId}:`, error);
+      console.error(`Error increasing item quantity:`, error);
       return false;
     }
   }
-  
+
   /**
-   * تسجيل حركة مخزون
+   * تقليل كمية صنف من المخزون
    */
-  private async recordInventoryMovement(
-    itemType: string,
+  public async decreaseItemQuantity(
+    itemType: "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
     itemId: number,
-    quantity: number,
-    movementType: 'increase' | 'decrease',
-    reason: string,
-    balanceAfter: number
-  ): Promise<void> {
+    quantity: number
+  ): Promise<boolean> {
     try {
-      await supabase
-        .from('inventory_movements')
-        .insert({
-          item_type: itemType,
-          item_id: itemId.toString(),
-          quantity: movementType === 'increase' ? quantity : -quantity,
-          movement_type: movementType,
-          reason: reason,
-          balance_after: balanceAfter
-        });
+      // أولاً، يجب الحصول على كمية المخزون الحالية
+      let currentQuantity = 0;
+      
+      // جلب كمية المخزون الحالية حسب نوع العنصر
+      switch (itemType) {
+        case 'raw_materials': {
+          const items = await this.inventoryService.getRawMaterials();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        case 'packaging_materials': {
+          const items = await this.inventoryService.getPackagingMaterials();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        case 'semi_finished_products': {
+          const items = await this.inventoryService.getSemiFinishedProducts();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        case 'finished_products': {
+          const items = await this.inventoryService.getFinishedProducts();
+          const item = items.find(item => item.id === itemId);
+          if (item) currentQuantity = item.quantity;
+          break;
+        }
+        default:
+          return false;
+      }
+      
+      // حساب الكمية الجديدة = الكمية الحالية - كمية المرتجع
+      const newQuantity = Math.max(0, currentQuantity - Number(quantity)); // لمنع القيم السالبة
+      console.log(`Decreasing inventory for ${itemType} ID ${itemId}: ${currentQuantity} - ${quantity} = ${newQuantity}`);
+      
+      // تحديث المخزون بالكمية الجديدة
+      switch (itemType) {
+        case 'raw_materials':
+          await this.inventoryService.updateRawMaterial(itemId, { quantity: newQuantity });
+          break;
+        case 'packaging_materials':
+          await this.inventoryService.updatePackagingMaterial(itemId, { quantity: newQuantity });
+          break;
+        case 'semi_finished_products':
+          await this.inventoryService.updateSemiFinishedProduct(itemId, { quantity: newQuantity });
+          break;
+        case 'finished_products':
+          await this.inventoryService.updateFinishedProduct(itemId, { quantity: newQuantity });
+          break;
+        default:
+          return false;
+      }
+      return true;
     } catch (error) {
-      console.error('Error recording inventory movement:', error);
-    }
-  }
-  
-  /**
-   * الحصول على اسم الجدول بناءً على نوع الصنف
-   */
-  private getTableNameByType(itemType: string): 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products' {
-    switch (itemType) {
-      case 'raw_materials':
-        return 'raw_materials';
-      case 'packaging_materials':
-        return 'packaging_materials';
-      case 'semi_finished_products':
-        return 'semi_finished_products';
-      case 'finished_products':
-        return 'finished_products';
-      default:
-        throw new Error(`Invalid item type: ${itemType}`);
+      console.error(`Error decreasing item quantity:`, error);
+      return false;
     }
   }
 }
 
-export default ReturnInventoryService;
+export default new ReturnInventoryService();

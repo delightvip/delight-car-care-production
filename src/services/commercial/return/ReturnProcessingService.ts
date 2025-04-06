@@ -1,10 +1,9 @@
-
 import { toast } from "sonner";
 import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
-import ReturnDataService from "./ReturnDataService";
-import ReturnInventoryService from "./ReturnInventoryService";
-import ReturnValidationService from "./ReturnValidationService";
+import returnDataService from "./ReturnDataService";
+import returnInventoryService from "./ReturnInventoryService";
+import returnValidationService from "./ReturnValidationService";
 
 /**
  * خدمة معالجة المرتجعات
@@ -12,15 +11,9 @@ import ReturnValidationService from "./ReturnValidationService";
  */
 export class ReturnProcessingService {
   private financialBridge: FinancialCommercialBridge;
-  private returnDataService: ReturnDataService;
-  private returnInventoryService: ReturnInventoryService;
-  private returnValidationService: ReturnValidationService;
   
   constructor() {
     this.financialBridge = FinancialCommercialBridge.getInstance();
-    this.returnDataService = new ReturnDataService();
-    this.returnInventoryService = new ReturnInventoryService();
-    this.returnValidationService = new ReturnValidationService();
   }
 
   /**
@@ -29,14 +22,14 @@ export class ReturnProcessingService {
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
       // 1. التحقق من صحة المرتجع قبل التأكيد
-      const validationResult = await this.returnValidationService.validateBeforeConfirm(returnId);
+      const validationResult = await returnValidationService.validateBeforeConfirm(returnId);
       if (!validationResult.valid) {
         toast.error(validationResult.message || 'فشل التحقق من صحة المرتجع');
         return false;
       }
 
       // 2. جلب بيانات المرتجع كاملة
-      const returnData = await this.returnDataService.getReturnById(returnId);
+      const returnData = await returnDataService.fetchReturnById(returnId);
       
       if (!returnData || !returnData.items || returnData.items.length === 0) {
         toast.error('لا توجد بيانات كافية لتأكيد المرتجع');
@@ -46,14 +39,14 @@ export class ReturnProcessingService {
       console.log("Confirming return with data:", returnData);
 
       // 3. تحديث حالة المرتجع إلى مؤكد
-      await this.returnDataService.updateReturnStatus(returnId, 'confirmed');
+      await returnDataService.updateReturnStatus(returnId, 'confirmed');
 
       // 4. تحديث المخزون بناءً على نوع المرتجع
       try {
         await this.updateInventory(returnData, 'confirm');
       } catch (error) {
         // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مسودة
-        await this.returnDataService.updateReturnStatus(returnId, 'draft');
+        await returnDataService.updateReturnStatus(returnId, 'draft');
         throw error;
       }
 
@@ -63,7 +56,7 @@ export class ReturnProcessingService {
       } catch (error) {
         // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مسودة
         await this.updateInventory(returnData, 'reverse_confirm');
-        await this.returnDataService.updateReturnStatus(returnId, 'draft');
+        await returnDataService.updateReturnStatus(returnId, 'draft');
         throw error;
       }
 
@@ -82,14 +75,14 @@ export class ReturnProcessingService {
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
       // 1. التحقق من صحة المرتجع قبل الإلغاء
-      const validationResult = await this.returnValidationService.validateBeforeCancel(returnId);
+      const validationResult = await returnValidationService.validateBeforeCancel(returnId);
       if (!validationResult.valid) {
         toast.error(validationResult.message || 'فشل التحقق من صحة المرتجع');
         return false;
       }
 
       // 2. جلب بيانات المرتجع كاملة
-      const returnData = await this.returnDataService.getReturnById(returnId);
+      const returnData = await returnDataService.fetchReturnById(returnId);
       
       if (!returnData) {
         toast.error('لا توجد بيانات كافية لإلغاء المرتجع');
@@ -99,14 +92,14 @@ export class ReturnProcessingService {
       console.log("Cancelling return with data:", returnData);
 
       // 3. تحديث حالة المرتجع إلى ملغي
-      await this.returnDataService.updateReturnStatus(returnId, 'cancelled');
+      await returnDataService.updateReturnStatus(returnId, 'cancelled');
 
       // 4. عكس تأثير المرتجع على المخزون
       try {
         await this.updateInventory(returnData, 'cancel');
       } catch (error) {
         // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مؤكد
-        await this.returnDataService.updateReturnStatus(returnId, 'confirmed');
+        await returnDataService.updateReturnStatus(returnId, 'confirmed');
         throw error;
       }
 
@@ -116,7 +109,7 @@ export class ReturnProcessingService {
       } catch (error) {
         // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مؤكد
         await this.updateInventory(returnData, 'reverse_cancel');
-        await this.returnDataService.updateReturnStatus(returnId, 'confirmed');
+        await returnDataService.updateReturnStatus(returnId, 'confirmed');
         throw error;
       }
 
@@ -176,14 +169,14 @@ export class ReturnProcessingService {
       
       try {
         if (shouldIncrease) {
-          const result = await this.returnInventoryService.increaseItemQuantity(
+          const result = await returnInventoryService.increaseItemQuantity(
             item.item_type,
             itemId,
             quantity
           );
           console.log(`Inventory increase result: ${result ? 'Success' : 'Failed'}`);
         } else {
-          const result = await this.returnInventoryService.decreaseItemQuantity(
+          const result = await returnInventoryService.decreaseItemQuantity(
             item.item_type,
             itemId,
             quantity
@@ -236,5 +229,3 @@ export class ReturnProcessingService {
     }
   }
 }
-
-export default ReturnProcessingService;
