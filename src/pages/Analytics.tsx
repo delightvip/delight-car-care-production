@@ -37,27 +37,35 @@ const Analytics = () => {
         if (packagingError) throw packagingError;
         if (finishedError) throw finishedError;
         
+        // طباعة بيانات المنتجات النهائية للتحقق
+        console.log('Finished products in Analytics:', finishedResponse);
+        
         // Safely handle empty or null data with default values
         const rawMaterialsData = rawMaterialsResponse || [];
         const semiFinishedData = semiFinishedResponse || [];
         const packagingData = packagingResponse || [];
         const finishedData = finishedResponse || [];
         
-        // حساب إجمالي القيمة لكل نوع
+        // حساب إجمالي القيمة لكل نوع مع التأكد من التعامل مع القيم الصفرية
         const rawMaterialsValue = rawMaterialsData.reduce(
-          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+          (sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unit_cost) || 0)), 0
         );
         
         const semiFinishedValue = semiFinishedData.reduce(
-          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+          (sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unit_cost) || 0)), 0
         );
         
         const packagingValue = packagingData.reduce(
-          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+          (sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unit_cost) || 0)), 0
         );
         
+        // تحسين حساب قيمة المنتجات النهائية
         const finishedValue = finishedData.reduce(
-          (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
+          (sum, item) => {
+            const quantity = Number(item.quantity) || 0;
+            const unitCost = Number(item.unit_cost) || 0;
+            return sum + (quantity * unitCost);
+          }, 0
         );
         
         const totalValue = rawMaterialsValue + semiFinishedValue + packagingValue + finishedValue;
@@ -72,7 +80,8 @@ const Analytics = () => {
           rawMaterialsValue,
           semiFinishedValue,
           packagingValue,
-          finishedValue
+          finishedValue,
+          totalValue
         });
         
         return {
@@ -118,6 +127,13 @@ const Analytics = () => {
   // بيانات توزيع المخزون للتمريرها إلى مكون الرسم البياني
   const distributionData = React.useMemo(() => {
     if (!inventoryStats) return [];
+    
+    console.log('Inventory distribution data:', {
+      rawMaterialsValue: inventoryStats.values.rawMaterials,
+      semiFinishedValue: inventoryStats.values.semiFinished,
+      packagingValue: inventoryStats.values.packaging,
+      finishedValue: inventoryStats.values.finished
+    });
     
     return [
       { name: 'المواد الأولية', value: inventoryStats.values.rawMaterials },

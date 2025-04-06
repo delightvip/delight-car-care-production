@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { toast } from 'sonner';
@@ -33,65 +33,75 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
   const { data: finishedProducts = [], isLoading, error } = useQuery({
     queryKey: ['finishedProducts'],
     queryFn: async () => {
-      // Get the finished products
-      const { data: products, error: productsError } = await supabase
-        .from('finished_products')
-        .select(`
-          *,
-          semi_finished:semi_finished_id(id, name, code, unit_cost)
-        `)
-        .order('created_at', { ascending: false });
-        
-      if (productsError) throw new Error(productsError.message);
-
-      // Get packaging materials for each product
-      const productsWithPackaging = await Promise.all(products.map(async (product) => {
-        const { data: packaging, error: packagingError } = await supabase
-          .from('finished_product_packaging')
+      try {
+        // Get the finished products
+        const { data: products, error: productsError } = await supabase
+          .from('finished_products')
           .select(`
-            id,
-            quantity,
-            packaging_material:packaging_material_id(id, name, code, unit_cost)
+            *,
+            semi_finished:semi_finished_id(id, name, code, unit_cost)
           `)
-          .eq('finished_product_id', product.id);
+          .order('created_at', { ascending: false });
           
-        if (packagingError) throw new Error(packagingError.message);
-        
-        // Format packaging materials
-        const formattedPackaging = packaging?.map((pkg) => ({
-          id: pkg.packaging_material?.id,
-          code: pkg.packaging_material?.code,
-          name: pkg.packaging_material?.name,
-          quantity: pkg.quantity,
-          unit_cost: pkg.packaging_material?.unit_cost
-        })) || [];
-        
-        // Calculate the unit cost based on the semi-finished product and packaging materials
-        const calculatedUnitCost = calculateFinishedProductCost(
-          product.semi_finished, 
-          formattedPackaging, 
-          1 // Calculate for a single unit
-        );
+        if (productsError) throw new Error(productsError.message);
 
-        // Use the calculated cost if it's greater than 0, otherwise use the stored cost
-        const unitCost = calculatedUnitCost > 0 ? calculatedUnitCost : ensureNumericValue(product.unit_cost);
+        console.log('Fetched finished products:', products);
+
+        // Get packaging materials for each product
+        const productsWithPackaging = await Promise.all(products.map(async (product) => {
+          const { data: packaging, error: packagingError } = await supabase
+            .from('finished_product_packaging')
+            .select(`
+              id,
+              quantity,
+              packaging_material:packaging_material_id(id, name, code, unit_cost)
+            `)
+            .eq('finished_product_id', product.id);
+            
+          if (packagingError) throw new Error(packagingError.message);
+          
+          // Format packaging materials
+          const formattedPackaging = packaging?.map((pkg) => ({
+            id: pkg.packaging_material?.id,
+            code: pkg.packaging_material?.code,
+            name: pkg.packaging_material?.name,
+            quantity: pkg.quantity,
+            unit_cost: pkg.packaging_material?.unit_cost
+          })) || [];
+          
+          // Calculate the unit cost based on the semi-finished product and packaging materials
+          const calculatedUnitCost = calculateFinishedProductCost(
+            product.semi_finished, 
+            formattedPackaging, 
+            1 // Calculate for a single unit
+          );
+
+          // Use the calculated cost if it's greater than 0, otherwise use the stored cost
+          const unitCost = calculatedUnitCost > 0 ? calculatedUnitCost : ensureNumericValue(product.unit_cost);
+          
+          // Ensure numeric values
+          const quantity = ensureNumericValue(product.quantity);
+          const totalValue = quantity * unitCost;
+          const salesPrice = ensureNumericValue(product.sales_price);
+          
+          return {
+            ...product,
+            quantity,
+            unit_cost: unitCost,
+            sales_price: salesPrice,
+            totalValue,
+            packaging: formattedPackaging
+          };
+        }));
         
-        // Ensure numeric values
-        const quantity = ensureNumericValue(product.quantity);
-        const totalValue = quantity * unitCost;
-        const salesPrice = ensureNumericValue(product.sales_price);
+        // طباعة بيانات المنتجات النهائية المعدلة
+        console.log('Processed finished products with values:', productsWithPackaging);
         
-        return {
-          ...product,
-          quantity,
-          unit_cost: unitCost,
-          sales_price: salesPrice,
-          totalValue,
-          packaging: formattedPackaging
-        };
-      }));
-      
-      return productsWithPackaging;
+        return productsWithPackaging;
+      } catch (error) {
+        console.error('Error fetching finished products:', error);
+        throw error;
+      }
     }
   });
   
