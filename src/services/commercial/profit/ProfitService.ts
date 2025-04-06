@@ -1,227 +1,81 @@
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import BaseCommercialService from '../BaseCommercialService';
+
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import ProfitCalculator from './ProfitCalculator';
 import ProfitCalculationService from './ProfitCalculationService';
 import { ProfitData, ProfitFilter, ProfitSummary } from './ProfitTypes';
+import { ReturnItem } from '@/types/returns';
 
 /**
  * خدمة الأرباح
- * مسؤولة عن حساب وإدارة بيانات الأرباح للمبيعات
+ * مسؤولة عن جميع العمليات المتعلقة بالأرباح
  */
-class ProfitService extends BaseCommercialService {
+class ProfitService {
   private static instance: ProfitService;
-  private profitCalculationService: ProfitCalculationService;
-  
+  private profitCalculator: ProfitCalculator;
+  private calculationService: ProfitCalculationService;
+
   private constructor() {
-    super();
-    this.profitCalculationService = ProfitCalculationService.getInstance();
+    this.profitCalculator = ProfitCalculator.getInstance();
+    this.calculationService = ProfitCalculationService.getInstance();
   }
-  
+
   public static getInstance(): ProfitService {
     if (!ProfitService.instance) {
       ProfitService.instance = new ProfitService();
     }
     return ProfitService.instance;
   }
-  
-  /**
-   * حساب وحفظ ربح فاتورة مبيعات
-   * @param invoiceId معرف الفاتورة
-   */
-  public async calculateInvoiceProfit(invoiceId: string): Promise<ProfitData | null> {
-    try {
-      return await this.profitCalculationService.calculateAndSaveProfit(invoiceId);
-    } catch (error) {
-      console.error('Error in calculateInvoiceProfit:', error);
-      toast.error('حدث خطأ أثناء حساب ربح الفاتورة');
-      return null;
-    }
-  }
-  
-  /**
-   * حذف بيانات الربح المرتبطة بفاتورة
-   * @param invoiceId معرف الفاتورة
-   */
-  public async removeProfitData(invoiceId: string): Promise<boolean> {
-    try {
-      return await this.profitCalculationService.deleteProfitByInvoiceId(invoiceId);
-    } catch (error) {
-      console.error('Error in removeProfitData:', error);
-      toast.error('حدث خطأ أثناء حذف بيانات الربح');
-      return false;
-    }
-  }
-  
-  /**
-   * تحديث بيانات الربح عند عملية الإرجاع
-   * يتم استدعاؤها عند تأكيد مرتجع مبيعات لخصم الربح المتعلق بالمنتجات المرتجعة
-   * @param invoiceId معرف الفاتورة الأصلية
-   * @param returnItems بنود المرتجع
-   * @param totalReturnAmount إجمالي مبلغ المرتجع
-   */
-  public async updateProfitForReturn(
-    invoiceId: string, 
-    returnItems: any[], 
-    totalReturnAmount: number
-  ): Promise<boolean> {
-    try {
-      // 1. التحقق من وجود بيانات ربح للفاتورة
-      const profitData = await this.profitCalculationService.getProfitByInvoiceId(invoiceId);
-      
-      if (!profitData) {
-        console.log(`لا توجد بيانات ربح للفاتورة رقم ${invoiceId}`);
-        return false;
-      }
-      
-      console.log('بيانات الربح الحالية:', profitData);
-      
-      // 2. حساب متوسط نسبة الربح للفاتورة
-      const profitPercentage = profitData.profit_percentage;
-      
-      // 3. حساب قيمة الربح التي سيتم خصمها (باستخدام نفس نسبة الربح)
-      const profitAmountToDeduct = (totalReturnAmount * profitPercentage) / 100;
-      
-      console.log(`قيمة الربح التي سيتم خصمها: ${profitAmountToDeduct}`);
-      
-      // 4. تحديث بيانات الربح
-      const newTotalSales = profitData.total_sales - totalReturnAmount;
-      const newProfitAmount = profitData.profit_amount - profitAmountToDeduct;
-      // نسبة الربح تظل كما هي لأننا نخصم بنفس النسبة
-      
-      // 5. حفظ البيانات المحدثة
-      const { error } = await this.supabase
-        .from('profits')
-        .update({
-          total_sales: newTotalSales,
-          profit_amount: newProfitAmount
-        })
-        .eq('id', profitData.id);
-      
-      if (error) throw error;
-      
-      console.log('تم تحديث بيانات الربح بنجاح بعد المرتجع');
-      return true;
-    } catch (error) {
-      console.error('Error updating profit for return:', error);
-      toast.error('حدث خطأ أثناء تحديث بيانات الربح للمرتجع');
-      return false;
-    }
-  }
-  
-  /**
-   * استرجاع بيانات الربح عند إلغاء عملية الإرجاع
-   * يتم استدعاؤها عند إلغاء مرتجع مبيعات لإعادة الربح المتعلق بالمنتجات إلى قيمته الأصلية
-   * @param invoiceId معرف الفاتورة الأصلية
-   * @param returnItems بنود المرتجع
-   * @param totalReturnAmount إجمالي مبلغ المرتجع
-   */
-  public async restoreProfitAfterReturnCancellation(
-    invoiceId: string, 
-    returnItems: any[], 
-    totalReturnAmount: number
-  ): Promise<boolean> {
-    try {
-      // 1. التحقق من وجود بيانات ربح للفاتورة
-      const profitData = await this.profitCalculationService.getProfitByInvoiceId(invoiceId);
-      
-      if (!profitData) {
-        console.log(`لا توجد بيانات ربح للفاتورة رقم ${invoiceId}`);
-        return false;
-      }
-      
-      console.log('بيانات الربح الحالية قبل إلغاء المرتجع:', profitData);
-      
-      // 2. استخدام نفس نسبة الربح لحساب الربح الذي سيتم إعادته
-      const profitPercentage = profitData.profit_percentage;
-      const profitAmountToRestore = (totalReturnAmount * profitPercentage) / 100;
-      
-      console.log(`قيمة الربح التي سيتم إعادتها: ${profitAmountToRestore}`);
-      
-      // 3. تحديث بيانات الربح
-      const newTotalSales = profitData.total_sales + totalReturnAmount;
-      const newProfitAmount = profitData.profit_amount + profitAmountToRestore;
-      
-      // 4. حفظ البيانات المحدثة
-      const { error } = await this.supabase
-        .from('profits')
-        .update({
-          total_sales: newTotalSales,
-          profit_amount: newProfitAmount
-        })
-        .eq('id', profitData.id);
-      
-      if (error) throw error;
-      
-      console.log('تم استرجاع بيانات الربح بنجاح بعد إلغاء المرتجع');
-      return true;
-    } catch (error) {
-      console.error('Error restoring profit after return cancellation:', error);
-      toast.error('حدث خطأ أثناء استرجاع بيانات الربح بعد إلغاء المرتجع');
-      return false;
-    }
-  }
 
   /**
-   * الحصول على قائمة الأرباح بناءً على مرشحات محددة
-   * @param filters مرشحات البحث
+   * الحصول على جميع بيانات الأرباح
    */
-  public async getProfits(filters?: ProfitFilter): Promise<ProfitData[]> {
+  public async getProfits(filter?: ProfitFilter): Promise<ProfitData[]> {
     try {
-      let query = this.supabase
+      let query = supabase
         .from('profits')
         .select(`
           *,
-          invoices!inner (date, invoice_type),
           parties (name)
-        `)
-        .eq('invoices.invoice_type', 'sale');
-      
-      // تطبيق المرشحات إذا وجدت
-      if (filters) {
-        if (filters.startDate) {
-          query = query.gte('invoices.date', filters.startDate);
+        `);
+
+      // تطبيق مرشحات البحث إذا وجدت
+      if (filter) {
+        if (filter.startDate) {
+          query = query.gte('invoice_date', filter.startDate);
         }
-        
-        if (filters.endDate) {
-          query = query.lte('invoices.date', filters.endDate);
+        if (filter.endDate) {
+          query = query.lte('invoice_date', filter.endDate);
         }
-        
-        if (filters.minProfit && !isNaN(Number(filters.minProfit))) {
-          query = query.gte('profit_amount', Number(filters.minProfit));
+        if (filter.minProfit) {
+          query = query.gte('profit_amount', parseFloat(filter.minProfit));
         }
-        
-        if (filters.maxProfit && !isNaN(Number(filters.maxProfit))) {
-          query = query.lte('profit_amount', Number(filters.maxProfit));
+        if (filter.maxProfit) {
+          query = query.lte('profit_amount', parseFloat(filter.maxProfit));
         }
-        
-        if (filters.partyId) {
-          query = query.eq('party_id', filters.partyId);
+        if (filter.partyId) {
+          query = query.eq('party_id', filter.partyId);
         }
-        
-        // تطبيق ترتيب النتائج إذا تم تحديده
-        if (filters.sortBy) {
-          const orderField = filters.sortBy === 'date' ? 'invoices.date' : filters.sortBy;
-          query = query.order(orderField, { ascending: filters.sortOrder === 'asc' });
+        if (filter.sortBy) {
+          const order = filter.sortOrder || 'desc';
+          query = query.order(filter.sortBy, { ascending: order === 'asc' });
         } else {
-          // الترتيب الافتراضي
-          query = query.order('invoices.date', { ascending: false });
+          query = query.order('invoice_date', { ascending: false });
         }
       } else {
-        // الترتيب الافتراضي
-        query = query.order('invoices.date', { ascending: false });
+        query = query.order('invoice_date', { ascending: false });
       }
-      
+
       const { data, error } = await query;
-      
+
       if (error) throw error;
-      
-      // تحويل البيانات إلى الشكل المطلوب
+
       return data.map(profit => ({
         id: profit.id,
         invoice_id: profit.invoice_id,
-        invoice_date: profit.invoices?.date || '',
+        invoice_date: profit.invoice_date,
         party_id: profit.party_id,
-        party_name: profit.parties?.name || '',
+        party_name: profit.parties?.name,
         total_sales: profit.total_sales,
         total_cost: profit.total_cost,
         profit_amount: profit.profit_amount,
@@ -236,61 +90,38 @@ class ProfitService extends BaseCommercialService {
   }
 
   /**
-   * الحصول على ملخص الأرباح لفترة محددة
-   * @param startDate تاريخ البداية
-   * @param endDate تاريخ النهاية
-   * @param partyId معرف الطرف (اختياري)
+   * الحصول على ملخص الأرباح
    */
-  public async getProfitSummary(
-    startDate?: string,
-    endDate?: string,
-    partyId?: string
-  ): Promise<ProfitSummary> {
+  public async getProfitSummary(filter?: ProfitFilter): Promise<ProfitSummary> {
     try {
-      let query = this.supabase
-        .from('profits')
-        .select(`
-          *,
-          invoices!inner (date, invoice_type)
-        `)
-        .eq('invoices.invoice_type', 'sale');
-      
-      // تطبيق المرشحات إذا وجدت
-      if (startDate) {
-        query = query.gte('invoices.date', startDate);
-      }
-      
-      if (endDate) {
-        query = query.lte('invoices.date', endDate);
-      }
-      
-      if (partyId) {
-        query = query.eq('party_id', partyId);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      // حساب القيم الإجمالية
-      const totalSales = data.reduce((sum, profit) => sum + profit.total_sales, 0);
-      const totalCost = data.reduce((sum, profit) => sum + profit.total_cost, 0);
-      const totalProfit = data.reduce((sum, profit) => sum + profit.profit_amount, 0);
-      const invoiceCount = data.length;
-      
-      // حساب متوسط نسبة الربح
-      const averageProfitPercentage = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
-      
-      return {
-        total_sales: totalSales,
-        total_cost: totalCost,
-        total_profit: totalProfit,
-        average_profit_percentage: averageProfitPercentage,
-        invoice_count: invoiceCount
+      let profits = await this.getProfits(filter);
+
+      // البيانات الافتراضية
+      let summary: ProfitSummary = {
+        total_sales: 0,
+        total_cost: 0,
+        total_profit: 0,
+        average_profit_percentage: 0,
+        invoice_count: profits.length
       };
+
+      // الحساب إذا كانت هناك بيانات
+      if (profits.length > 0) {
+        summary.total_sales = profits.reduce((sum, profit) => sum + profit.total_sales, 0);
+        summary.total_cost = profits.reduce((sum, profit) => sum + profit.total_cost, 0);
+        summary.total_profit = profits.reduce((sum, profit) => sum + profit.profit_amount, 0);
+        
+        // حساب متوسط نسبة الربح
+        const totalPercentage = profits.reduce((sum, profit) => sum + profit.profit_percentage, 0);
+        summary.average_profit_percentage = profits.length ? totalPercentage / profits.length : 0;
+      }
+
+      return summary;
     } catch (error) {
-      console.error('Error fetching profit summary:', error);
-      toast.error('حدث خطأ أثناء جلب ملخص الأرباح');
+      console.error('Error calculating profit summary:', error);
+      toast.error('حدث خطأ أثناء حساب ملخص الأرباح');
+      
+      // إرجاع ملخص فارغ في حالة الخطأ
       return {
         total_sales: 0,
         total_cost: 0,
@@ -302,45 +133,181 @@ class ProfitService extends BaseCommercialService {
   }
 
   /**
-   * إعادة حساب جميع الأرباح
+   * إعادة حساب الأرباح لفاتورة محددة
    */
-  public async recalculateAllProfits(): Promise<void> {
+  public async recalculateProfitForInvoice(invoiceId: string): Promise<ProfitData | null> {
     try {
-      // 1. الحصول على جميع فواتير المبيعات المؤكدة
-      const { data: salesInvoices, error: invoicesError } = await this.supabase
-        .from('invoices')
-        .select('id')
-        .eq('invoice_type', 'sale')
-        .eq('payment_status', 'confirmed');
-      
-      if (invoicesError) throw invoicesError;
-      
-      if (!salesInvoices || salesInvoices.length === 0) {
-        toast.info('لا توجد فواتير مبيعات لإعادة حساب الأرباح');
-        return;
-      }
-      
-      // 2. إعادة حساب الربح لكل فاتورة
-      let successCount = 0;
-      let failCount = 0;
-      
-      for (const invoice of salesInvoices) {
-        const result = await this.calculateInvoiceProfit(invoice.id);
-        if (result) {
-          successCount++;
-        } else {
-          failCount++;
-        }
-      }
-      
-      if (failCount > 0) {
-        toast.warning(`تم إعادة حساب ${successCount} فاتورة بنجاح، وفشل حساب ${failCount} فاتورة`);
-      } else {
-        toast.success(`تم إعادة حساب أرباح ${successCount} فاتورة بنجاح`);
-      }
+      return await this.calculationService.calculateAndSaveProfit(invoiceId);
     } catch (error) {
-      console.error('Error recalculating all profits:', error);
-      toast.error('حدث خطأ أثناء إعادة حساب جميع الأرباح');
+      console.error('Error recalculating profit:', error);
+      toast.error('حدث خطأ أثناء إعادة حساب الأرباح');
+      return null;
+    }
+  }
+
+  /**
+   * تحديث بيانات الربح عند تسجيل مرتجع مبيعات
+   * @param invoiceId معرف الفاتورة المرتبطة
+   * @param returnItems عناصر المرتجع
+   * @param returnAmount مبلغ المرتجع الإجمالي
+   */
+  public async updateProfitForReturn(
+    invoiceId: string,
+    returnItems: ReturnItem[],
+    returnAmount: number
+  ): Promise<boolean> {
+    try {
+      console.log(`Updating profit for invoice ${invoiceId} after return with amount ${returnAmount}`);
+      
+      // 1. الحصول على بيانات الربح الحالية للفاتورة
+      const { data: profitData, error } = await supabase
+        .from('profits')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching profit data:', error);
+        
+        if (error.code === 'PGRST116') { // Error: no rows returned
+          console.warn(`No profit record found for invoice ${invoiceId}`);
+          return false;
+        }
+        
+        throw error;
+      }
+      
+      // 2. حساب مجموع تكلفة الأصناف المرتجعة
+      let returnItemsCost = 0;
+      for (const item of returnItems) {
+        // حساب تكلفة الصنف المرتجع - يمكن تحسين هذا بجلب التكلفة الفعلية من قاعدة البيانات
+        const itemUnitCost = await this.profitCalculator.getItemCost(
+          item.item_id,
+          item.item_type
+        );
+        returnItemsCost += itemUnitCost * item.quantity;
+      }
+      
+      console.log(`Return items cost: ${returnItemsCost}, Return amount: ${returnAmount}`);
+      
+      // 3. حساب القيم الجديدة بعد المرتجع
+      const newTotalSales = profitData.total_sales - returnAmount;
+      const newTotalCost = profitData.total_cost - returnItemsCost;
+      const newProfitAmount = newTotalSales - newTotalCost;
+      const newProfitPercentage = newTotalSales > 0 ? (newProfitAmount / newTotalSales) * 100 : 0;
+      
+      console.log('Updated profit values:', {
+        oldTotalSales: profitData.total_sales,
+        newTotalSales,
+        oldTotalCost: profitData.total_cost,
+        newTotalCost,
+        oldProfitAmount: profitData.profit_amount,
+        newProfitAmount,
+        oldProfitPercentage: profitData.profit_percentage,
+        newProfitPercentage
+      });
+      
+      // 4. تحديث سجل الربح
+      const { error: updateError } = await supabase
+        .from('profits')
+        .update({
+          total_sales: newTotalSales,
+          total_cost: newTotalCost,
+          profit_amount: newProfitAmount,
+          profit_percentage: newProfitPercentage
+        })
+        .eq('id', profitData.id);
+      
+      if (updateError) throw updateError;
+      
+      console.log(`Successfully updated profit for invoice ${invoiceId} after return`);
+      return true;
+    } catch (error) {
+      console.error('Error updating profit for return:', error);
+      return false;
+    }
+  }
+
+  /**
+   * استعادة بيانات الربح بعد إلغاء مرتجع مبيعات
+   * @param invoiceId معرف الفاتورة المرتبطة
+   * @param returnItems عناصر المرتجع
+   * @param returnAmount مبلغ المرتجع الإجمالي
+   */
+  public async restoreProfitAfterReturnCancellation(
+    invoiceId: string,
+    returnItems: ReturnItem[],
+    returnAmount: number
+  ): Promise<boolean> {
+    try {
+      console.log(`Restoring profit for invoice ${invoiceId} after return cancellation with amount ${returnAmount}`);
+      
+      // 1. الحصول على بيانات الربح الحالية للفاتورة
+      const { data: profitData, error } = await supabase
+        .from('profits')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching profit data:', error);
+        
+        if (error.code === 'PGRST116') { // Error: no rows returned
+          console.warn(`No profit record found for invoice ${invoiceId}`);
+          return false;
+        }
+        
+        throw error;
+      }
+      
+      // 2. حساب مجموع تكلفة الأصناف المرتجعة
+      let returnItemsCost = 0;
+      for (const item of returnItems) {
+        // حساب تكلفة الصنف المرتجع
+        const itemUnitCost = await this.profitCalculator.getItemCost(
+          item.item_id,
+          item.item_type
+        );
+        returnItemsCost += itemUnitCost * item.quantity;
+      }
+      
+      console.log(`Return items cost: ${returnItemsCost}, Return amount: ${returnAmount}`);
+      
+      // 3. حساب القيم الجديدة بعد إلغاء المرتجع (إضافة القيم مرة أخرى)
+      const newTotalSales = profitData.total_sales + returnAmount;
+      const newTotalCost = profitData.total_cost + returnItemsCost;
+      const newProfitAmount = newTotalSales - newTotalCost;
+      const newProfitPercentage = newTotalSales > 0 ? (newProfitAmount / newTotalSales) * 100 : 0;
+      
+      console.log('Restored profit values:', {
+        oldTotalSales: profitData.total_sales,
+        newTotalSales,
+        oldTotalCost: profitData.total_cost,
+        newTotalCost,
+        oldProfitAmount: profitData.profit_amount,
+        newProfitAmount,
+        oldProfitPercentage: profitData.profit_percentage,
+        newProfitPercentage
+      });
+      
+      // 4. تحديث سجل الربح
+      const { error: updateError } = await supabase
+        .from('profits')
+        .update({
+          total_sales: newTotalSales,
+          total_cost: newTotalCost,
+          profit_amount: newProfitAmount,
+          profit_percentage: newProfitPercentage
+        })
+        .eq('id', profitData.id);
+      
+      if (updateError) throw updateError;
+      
+      console.log(`Successfully restored profit for invoice ${invoiceId} after return cancellation`);
+      return true;
+    } catch (error) {
+      console.error('Error restoring profit after return cancellation:', error);
+      return false;
     }
   }
 }

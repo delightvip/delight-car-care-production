@@ -233,13 +233,51 @@ export class ReturnService {
       // 2. استخدام معالج المرتجعات لتأكيد المرتجع
       const success = await this.returnProcessor.confirmReturn(returnId);
       
-      if (success && returnData.return_type === 'sales_return' && returnData.invoice_id) {
-        // 3. تحديث بيانات الربح للفاتورة المرتبطة (لمرتجعات المبيعات فقط)
-        await this.profitService.updateProfitForReturn(
-          returnData.invoice_id,
-          returnData.items || [],
-          returnData.amount
-        );
+      if (success && returnData.return_type === 'sales_return') {
+        try {
+          // 3. تحديث بيانات الربح للفاتورة المرتبطة (لمرتجعات المبيعات فقط)
+          if (returnData.invoice_id) {
+            console.log('Updating profit data for invoice:', returnData.invoice_id);
+            await this.profitService.updateProfitForReturn(
+              returnData.invoice_id,
+              returnData.items || [],
+              returnData.amount
+            );
+          }
+          
+          // 4. تحديث حساب العميل
+          if (returnData.party_id) {
+            console.log('Updating customer balance for return:', returnId);
+            await this.partyService.updatePartyBalance(
+              returnData.party_id,
+              returnData.amount,
+              false, // دائن لمرتجعات المبيعات (تقليل دين العميل)
+              'مرتجع مبيعات',
+              'sales_return',
+              returnId
+            );
+          }
+        } catch (err) {
+          console.error('Error updating financial records:', err);
+          // لا نريد إلغاء العملية بأكملها إذا فشل تحديث السجلات المالية
+          toast.warning('تم تأكيد المرتجع لكن قد تكون هناك مشكلة في تحديث السجلات المالية');
+        }
+      } else if (success && returnData.return_type === 'purchase_return' && returnData.party_id) {
+        try {
+          // 5. تحديث حساب المورد لمرتجعات المشتريات
+          console.log('Updating supplier balance for return:', returnId);
+          await this.partyService.updatePartyBalance(
+            returnData.party_id,
+            returnData.amount,
+            true, // مدين لمرتجعات المشتريات (زيادة دين المورد)
+            'مرتجع مشتريات',
+            'purchase_return',
+            returnId
+          );
+        } catch (err) {
+          console.error('Error updating supplier balance:', err);
+          toast.warning('تم تأكيد المرتجع لكن قد تكون هناك مشكلة في تحديث حساب المورد');
+        }
       }
       
       return success;
@@ -265,13 +303,50 @@ export class ReturnService {
       // 2. استخدام معالج المرتجعات لإلغاء المرتجع
       const success = await this.returnProcessor.cancelReturn(returnId);
       
-      if (success && returnData.return_type === 'sales_return' && returnData.invoice_id) {
-        // 3. استعادة بيانات الربح للفاتورة المرتبطة (لمرتجعات المبيعات فقط)
-        await this.profitService.restoreProfitAfterReturnCancellation(
-          returnData.invoice_id,
-          returnData.items || [],
-          returnData.amount
-        );
+      if (success && returnData.return_type === 'sales_return') {
+        try {
+          // 3. استعادة بيانات الربح للفاتورة المرتبطة (لمرتجعات المبيعات فقط)
+          if (returnData.invoice_id) {
+            console.log('Restoring profit data for invoice after return cancellation:', returnData.invoice_id);
+            await this.profitService.restoreProfitAfterReturnCancellation(
+              returnData.invoice_id,
+              returnData.items || [],
+              returnData.amount
+            );
+          }
+          
+          // 4. تحديث حساب العميل (عكس التغيير السابق)
+          if (returnData.party_id) {
+            console.log('Updating customer balance after return cancellation:', returnId);
+            await this.partyService.updatePartyBalance(
+              returnData.party_id,
+              returnData.amount,
+              true, // مدين لإلغاء مرتجعات المبيعات (استعادة دين العميل)
+              'إلغاء مرتجع مبيعات',
+              'cancel_sales_return',
+              returnId
+            );
+          }
+        } catch (err) {
+          console.error('Error updating financial records after cancellation:', err);
+          toast.warning('تم إلغاء المرتجع لكن قد تكون هناك مشكلة في تحديث السجلات المالية');
+        }
+      } else if (success && returnData.return_type === 'purchase_return' && returnData.party_id) {
+        try {
+          // 5. تحديث حساب المورد لإلغاء مرتجعات المشتريات (عكس التغيير السابق)
+          console.log('Updating supplier balance after return cancellation:', returnId);
+          await this.partyService.updatePartyBalance(
+            returnData.party_id,
+            returnData.amount,
+            false, // دائن لإلغاء مرتجعات المشتريات (استعادة دين المورد)
+            'إلغاء مرتجع مشتريات',
+            'cancel_purchase_return',
+            returnId
+          );
+        } catch (err) {
+          console.error('Error updating supplier balance after cancellation:', err);
+          toast.warning('تم إلغاء المرتجع لكن قد تكون هناك مشكلة في تحديث حساب المورد');
+        }
       }
       
       return success;
