@@ -1,4 +1,3 @@
-
 import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
@@ -427,22 +426,39 @@ class ProductionDatabaseService {
         name: string;
         requiredQuantity: number;
       }[];
+      totalCost?: number;
     }
   ): Promise<boolean> {
     try {
+      console.log(`[DEBUG] تحديث أمر إنتاج ${orderId}. التكلفة المستلمة:`, orderData.totalCost);
+      
+      // تكوين كائن التحديث
+      const updateData: any = {
+        product_code: orderData.productCode,
+        product_name: orderData.productName,
+        quantity: orderData.quantity,
+        unit: orderData.unit,
+        updated_at: new Date().toISOString()
+      };
+      
+      // إضافة التكلفة الإجمالية بشكل صريح دائمًا، حتى لو كانت قيمتها صفر
+      if (orderData.totalCost !== undefined) {
+        updateData.total_cost = orderData.totalCost;
+        console.log(`[DEBUG] سيتم تحديث التكلفة الإجمالية إلى: ${updateData.total_cost}`);
+      }
+      
       // تحديث بيانات الأمر
       const { error: orderError } = await supabase
         .from('production_orders')
-        .update({
-          product_code: orderData.productCode,
-          product_name: orderData.productName,
-          quantity: orderData.quantity,
-          unit: orderData.unit,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', orderId);
         
-      if (orderError) throw orderError;
+      if (orderError) {
+        console.error(`[ERROR] خطأ في تحديث الأمر: ${JSON.stringify(orderError)}`);
+        throw orderError;
+      }
+      
+      console.log(`[DEBUG] تم تحديث بيانات الأمر بنجاح`);
       
       // حذف المكونات القديمة
       const { error: deleteIngredientsError } = await supabase
@@ -465,6 +481,17 @@ class ProductionDatabaseService {
         .insert(ingredientsToInsert);
         
       if (insertIngredientsError) throw insertIngredientsError;
+      
+      // التحقق من تحديث التكلفة بنجاح
+      if (orderData.totalCost !== undefined) {
+        const { data: checkOrder } = await supabase
+          .from('production_orders')
+          .select('total_cost')
+          .eq('id', orderId)
+          .single();
+          
+        console.log(`[DEBUG] التحقق من التكلفة المحدثة: ${checkOrder?.total_cost}`);
+      }
       
       return true;
     } catch (error) {
@@ -492,25 +519,42 @@ class ProductionDatabaseService {
         name: string;
         quantity: number;
       }[];
+      totalCost?: number;
     }
   ): Promise<boolean> {
     try {
+      console.log(`[DEBUG] تحديث أمر تعبئة ${orderId}. التكلفة المستلمة:`, orderData.totalCost);
+      
+      // تكوين كائن التحديث
+      const updateData: any = {
+        product_code: orderData.productCode,
+        product_name: orderData.productName,
+        quantity: orderData.quantity,
+        unit: orderData.unit,
+        semi_finished_code: orderData.semiFinished.code,
+        semi_finished_name: orderData.semiFinished.name,
+        semi_finished_quantity: orderData.semiFinished.quantity,
+        updated_at: new Date().toISOString()
+      };
+      
+      // إضافة التكلفة الإجمالية بشكل صريح دائمًا، حتى لو كانت قيمتها صفر
+      if (orderData.totalCost !== undefined) {
+        updateData.total_cost = orderData.totalCost;
+        console.log(`[DEBUG] سيتم تحديث التكلفة الإجمالية لأمر التعبئة إلى: ${updateData.total_cost}`);
+      }
+      
       // تحديث بيانات الأمر
       const { error: orderError } = await supabase
         .from('packaging_orders')
-        .update({
-          product_code: orderData.productCode,
-          product_name: orderData.productName,
-          quantity: orderData.quantity,
-          unit: orderData.unit,
-          semi_finished_code: orderData.semiFinished.code,
-          semi_finished_name: orderData.semiFinished.name,
-          semi_finished_quantity: orderData.semiFinished.quantity,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', orderId);
         
-      if (orderError) throw orderError;
+      if (orderError) {
+        console.error(`[ERROR] خطأ في تحديث أمر التعبئة: ${JSON.stringify(orderError)}`);
+        throw orderError;
+      }
+      
+      console.log(`[DEBUG] تم تحديث بيانات أمر التعبئة بنجاح`);
       
       // حذف مواد التعبئة القديمة
       const { error: deleteMaterialsError } = await supabase
@@ -533,6 +577,17 @@ class ProductionDatabaseService {
         .insert(materialsToInsert);
         
       if (insertMaterialsError) throw insertMaterialsError;
+      
+      // التحقق من تحديث التكلفة بنجاح
+      if (orderData.totalCost !== undefined) {
+        const { data: checkOrder } = await supabase
+          .from('packaging_orders')
+          .select('total_cost')
+          .eq('id', orderId)
+          .single();
+          
+        console.log(`[DEBUG] التحقق من التكلفة المحدثة في أمر التعبئة: ${checkOrder?.total_cost}`);
+      }
       
       return true;
     } catch (error) {

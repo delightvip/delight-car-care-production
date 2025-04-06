@@ -76,7 +76,11 @@ class ProductionService {
   }
   
   // إنشاء أمر إنتاج جديد
-  public async createProductionOrder(productCode: string, quantity: number): Promise<ProductionOrder | null> {
+  public async createProductionOrder(
+    productCode: string, 
+    quantity: number,
+    totalCost?: number
+  ): Promise<ProductionOrder | null> {
     try {
       const semiFinishedProducts = await this.inventoryService.getSemiFinishedProducts();
       const product = semiFinishedProducts.find(p => p.code === productCode);
@@ -101,17 +105,24 @@ class ProductionService {
         };
       });
       
-      // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
-      let unitCost = 0;
-      if (typeof product.unit_cost === 'number') {
-        unitCost = product.unit_cost;
-      } else if (typeof (product as any).unitCost === 'number') {
-        // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
-        unitCost = (product as any).unitCost;
+      // تحديد التكلفة الإجمالية (استخدام القيمة المرسلة إذا تم توفيرها)
+      let finalTotalCost = totalCost;
+      
+      // إذا لم يتم تمرير التكلفة، قم بحسابها
+      if (finalTotalCost === undefined) {
+        // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
+        let unitCost = 0;
+        if (typeof product.unit_cost === 'number') {
+          unitCost = product.unit_cost;
+        } else if (typeof (product as any).unitCost === 'number') {
+          // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
+          unitCost = (product as any).unitCost;
+        }
+        
+        finalTotalCost = unitCost * quantity;
       }
       
-      const totalCost = unitCost * quantity;
-      console.log(`حساب تكلفة الإنتاج: وحدة التكلفة = ${unitCost}, الكمية = ${quantity}, الإجمالي = ${totalCost}`);
+      console.log(`إنشاء أمر إنتاج: الكمية=${quantity}, التكلفة المستخدمة=${finalTotalCost}`);
       
       // إنشاء أمر الإنتاج في قاعدة البيانات
       const newOrder = await this.databaseService.createProductionOrder(
@@ -120,7 +131,7 @@ class ProductionService {
         quantity,
         product.unit,
         ingredients,
-        totalCost
+        finalTotalCost
       );
       
       if (!newOrder) return null;
@@ -256,7 +267,8 @@ class ProductionService {
   // إنشاء أمر تعبئة جديد
   public async createPackagingOrder(
     finishedProductCode: string,
-    quantity: number
+    quantity: number,
+    totalCost?: number
   ): Promise<PackagingOrder | null> {
     try {
       const finishedProducts = await this.inventoryService.getFinishedProducts();
@@ -288,17 +300,24 @@ class ProductionService {
         };
       }));
       
-      // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
-      let unitCost = 0;
-      if (typeof product.unit_cost === 'number') {
-        unitCost = product.unit_cost;
-      } else if (typeof (product as any).unitCost === 'number') {
-        // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
-        unitCost = (product as any).unitCost;
+      // تحديد التكلفة الإجمالية (استخدام القيمة المرسلة إذا تم توفيرها)
+      let finalTotalCost = totalCost;
+      
+      // إذا لم يتم تمرير التكلفة، قم بحسابها
+      if (finalTotalCost === undefined) {
+        // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
+        let unitCost = 0;
+        if (typeof product.unit_cost === 'number') {
+          unitCost = product.unit_cost;
+        } else if (typeof (product as any).unitCost === 'number') {
+          // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
+          unitCost = (product as any).unitCost;
+        }
+        
+        finalTotalCost = unitCost * quantity;
       }
       
-      const totalCost = unitCost * quantity;
-      console.log(`حساب تكلفة التعبئة: وحدة التكلفة = ${unitCost}, الكمية = ${quantity}, الإجمالي = ${totalCost}`);
+      console.log(`إنشاء أمر تعبئة: الكمية=${quantity}, التكلفة المستخدمة=${finalTotalCost}`);
       
       // إنشاء أمر التعبئة في قاعدة البيانات
       const newOrder = await this.databaseService.createPackagingOrder(
@@ -312,7 +331,7 @@ class ProductionService {
           quantity: semiFinishedQuantity
         },
         packagingMaterials,
-        totalCost
+        finalTotalCost
       );
       
       if (!newOrder) return null;
@@ -524,10 +543,45 @@ class ProductionService {
         name: string;
         requiredQuantity: number;
       }[];
+      totalCost?: number;
     }
   ): Promise<boolean> {
     try {
-      const result = await this.databaseService.updateProductionOrder(orderId, orderData);
+      // الحصول على أمر الإنتاج الحالي للحفاظ على التكلفة الإجمالية
+      const orders = await this.getProductionOrders();
+      const currentOrder = orders.find(o => o.id === orderId);
+      
+      if (!currentOrder) {
+        toast.error('أمر الإنتاج غير موجود');
+        return false;
+      }
+
+      // حساب التكلفة الجديدة إذا تغيرت الكمية
+      let totalCost = currentOrder.totalCost;
+      if (orderData.totalCost !== undefined) {
+        // استخدام التكلفة المرسلة إذا تم تحديدها
+        totalCost = orderData.totalCost;
+        console.log(`تحديث أمر إنتاج: استخدام التكلفة المحددة: ${totalCost}`);
+      } else if (currentOrder.quantity !== orderData.quantity) {
+        // حساب متوسط تكلفة الوحدة ثم حساب التكلفة الجديدة بناءً على الكمية الجديدة
+        const unitCost = currentOrder.totalCost / currentOrder.quantity;
+        totalCost = unitCost * orderData.quantity;
+        console.log(`تحديث أمر إنتاج: حساب التكلفة الجديدة: ${totalCost} (سعر الوحدة: ${unitCost} × الكمية: ${orderData.quantity})`);
+      } else {
+        console.log(`تحديث أمر إنتاج: الاحتفاظ بالتكلفة الحالية: ${totalCost}`);
+      }
+      
+      // طباعة البيانات قبل الإرسال لقاعدة البيانات
+      console.log('بيانات تحديث أمر الإنتاج:', {
+        id: orderId,
+        ...orderData,
+        totalCost
+      });
+      
+      const result = await this.databaseService.updateProductionOrder(orderId, {
+        ...orderData,
+        totalCost
+      });
       
       if (result) {
         toast.success(`تم تحديث أمر الإنتاج بنجاح`);
@@ -559,10 +613,45 @@ class ProductionService {
         name: string;
         quantity: number;
       }[];
+      totalCost?: number; // إضافة معامل التكلفة الإجمالية الاختياري
     }
   ): Promise<boolean> {
     try {
-      const result = await this.databaseService.updatePackagingOrder(orderId, orderData);
+      // الحصول على أمر التعبئة الحالي للحفاظ على التكلفة الإجمالية
+      const orders = await this.getPackagingOrders();
+      const currentOrder = orders.find(o => o.id === orderId);
+      
+      if (!currentOrder) {
+        toast.error('أمر التعبئة غير موجود');
+        return false;
+      }
+
+      // حساب التكلفة الجديدة إذا تغيرت الكمية
+      let totalCost = currentOrder.totalCost;
+      if (orderData.totalCost !== undefined) {
+        // استخدام التكلفة المرسلة إذا تم تحديدها
+        totalCost = orderData.totalCost;
+        console.log(`تحديث أمر تعبئة: استخدام التكلفة المحددة: ${totalCost}`);
+      } else if (currentOrder.quantity !== orderData.quantity) {
+        // حساب متوسط تكلفة الوحدة ثم حساب التكلفة الجديدة بناءً على الكمية الجديدة
+        const unitCost = currentOrder.totalCost / currentOrder.quantity;
+        totalCost = unitCost * orderData.quantity;
+        console.log(`تحديث أمر تعبئة: حساب التكلفة الجديدة: ${totalCost} (سعر الوحدة: ${unitCost} × الكمية: ${orderData.quantity})`);
+      } else {
+        console.log(`تحديث أمر تعبئة: الاحتفاظ بالتكلفة الحالية: ${totalCost}`);
+      }
+      
+      // طباعة البيانات قبل الإرسال لقاعدة البيانات
+      console.log('بيانات تحديث أمر التعبئة:', {
+        id: orderId,
+        ...orderData,
+        totalCost
+      });
+      
+      const result = await this.databaseService.updatePackagingOrder(orderId, {
+        ...orderData,
+        totalCost // تمرير التكلفة الإجمالية الحالية أو المحسوبة
+      });
       
       if (result) {
         toast.success(`تم تحديث أمر التعبئة بنجاح`);

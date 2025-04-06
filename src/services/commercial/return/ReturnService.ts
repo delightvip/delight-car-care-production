@@ -1,4 +1,3 @@
-
 import { Return, ReturnItem } from "@/types/returns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -238,11 +237,18 @@ export class ReturnService {
           // 3. تحديث بيانات الربح للفاتورة المرتبطة (لمرتجعات المبيعات فقط)
           if (returnData.invoice_id) {
             console.log('Updating profit data for invoice:', returnData.invoice_id);
-            await this.profitService.updateProfitForReturn(
+            const profitUpdateResult = await this.profitService.updateProfitForReturn(
               returnData.invoice_id,
               returnData.items || [],
               returnData.amount
             );
+            
+            if (!profitUpdateResult) {
+              console.warn(`Failed to update profit data for invoice ${returnData.invoice_id} after return confirmation`);
+              toast.warning('تم تأكيد المرتجع لكن قد تكون هناك مشكلة في تحديث بيانات الأرباح');
+            } else {
+              console.log(`Successfully updated profit and revenue data for invoice ${returnData.invoice_id}`);
+            }
           }
           
           // 4. تحديث حساب العميل
@@ -308,11 +314,18 @@ export class ReturnService {
           // 3. استعادة بيانات الربح للفاتورة المرتبطة (لمرتجعات المبيعات فقط)
           if (returnData.invoice_id) {
             console.log('Restoring profit data for invoice after return cancellation:', returnData.invoice_id);
-            await this.profitService.restoreProfitAfterReturnCancellation(
+            const restoreResult = await this.profitService.restoreProfitAfterReturnCancellation(
               returnData.invoice_id,
               returnData.items || [],
               returnData.amount
             );
+            
+            if (!restoreResult) {
+              console.warn(`Failed to restore profit data for invoice ${returnData.invoice_id} after return cancellation`);
+              toast.warning('تم إلغاء المرتجع لكن قد تكون هناك مشكلة في استعادة بيانات الأرباح');
+            } else {
+              console.log(`Successfully restored profit and revenue data for invoice ${returnData.invoice_id}`);
+            }
           }
           
           // 4. تحديث حساب العميل (عكس التغيير السابق)

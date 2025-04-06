@@ -239,6 +239,10 @@ const PackagingOrders = () => {
         }
       }
       
+      // حساب التكلفة الإجمالية للأمر الجديد
+      const calculatedTotalCost = calculateTotalCost(newOrder.productCode, newOrder.quantity);
+      console.log(`إنشاء أمر تعبئة: الكمية=${newOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
+      
       // إظهار مؤشر تحميل
       toast.loading("جاري إنشاء أمر التعبئة...");
       
@@ -252,24 +256,24 @@ const PackagingOrders = () => {
         try {
           const createdOrder = await productionService.createPackagingOrder(
             newOrder.productCode, 
-            newOrder.quantity
+            newOrder.quantity,
+            calculatedTotalCost // إضافة التكلفة المحسوبة
           );
           
           if (createdOrder) {
             success = true;
             // تجنب استدعاء مباشر لـ refetchOrders قبل إغلاق نافذة الحوار
+            toast.dismiss();
             setTimeout(() => {
               refetchOrders();
-            }, 500);
-            
-            setNewOrder({
-              productCode: '',
-              quantity: 0
-            });
-            setComponentsAvailability([]);
-            toast.dismiss();
-            toast.success(`تم إنشاء أمر تعبئة ${createdOrder.productName} بنجاح`);
-            setIsAddDialogOpen(false);
+              setNewOrder({
+                productCode: '',
+                quantity: 0
+              });
+              setComponentsAvailability([]);
+              toast.success(`تم إنشاء أمر تعبئة ${createdOrder.productName} بنجاح`);
+              setIsAddDialogOpen(false);
+            }, 300);
           }
         } catch (innerError: any) {
           attempts++;
@@ -361,6 +365,13 @@ const PackagingOrders = () => {
           name: material.name,
           quantity: material.requiredQuantity
         }));
+
+      // حساب التكلفة الإجمالية الجديدة
+      const calculatedTotalCost = calculateTotalCost(editOrder.productCode, editOrder.quantity);
+      console.log(`تحديث أمر تعبئة: الكمية=${editOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
+      
+      // عرض مؤشر تحميل
+      toast.loading("جاري تحديث أمر التعبئة...");
       
       const success = await productionService.updatePackagingOrder(
         editOrder.id,
@@ -370,17 +381,28 @@ const PackagingOrders = () => {
           quantity: editOrder.quantity,
           unit: editOrder.unit,
           semiFinished,
-          packagingMaterials
+          packagingMaterials,
+          totalCost: calculatedTotalCost // إضافة قيمة التكلفة المحسوبة
         }
       );
       
       if (success) {
-        refetchOrders();
-        setComponentsAvailability([]);
+        // إغلاق نافذة التعديل وإلغاء مؤشر التحميل
         setIsEditDialogOpen(false);
-        toast.success("تم تحديث أمر التعبئة بنجاح");
+        setComponentsAvailability([]);
+        toast.dismiss();
+        
+        // انتظار قليلاً ثم تحديث البيانات للتأكد من جلبها مجدداً من قاعدة البيانات
+        setTimeout(() => {
+          refetchOrders();
+          toast.success("تم تحديث أمر التعبئة بنجاح");
+        }, 300); // تأخير لضمان اكتمال عملية التحديث في قاعدة البيانات
+      } else {
+        toast.dismiss();
+        toast.error("فشل تحديث أمر التعبئة");
       }
     } catch (error) {
+      toast.dismiss();
       console.error("Error updating packaging order:", error);
       toast.error("حدث خطأ أثناء تحديث أمر التعبئة");
     }

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -230,17 +229,41 @@ const ProductionOrders = () => {
         }
       }
       
-      const createdOrder = await productionService.createProductionOrder(newOrder.productCode, newOrder.quantity);
+      // حساب التكلفة الإجمالية للأمر الجديد
+      const calculatedTotalCost = calculateTotalCost(newOrder.productCode, newOrder.quantity);
+      console.log(`إنشاء أمر إنتاج: الكمية=${newOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
+
+      // عرض مؤشر تحميل
+      toast.loading("جاري إنشاء أمر الإنتاج...");
+      
+      // إرسال التكلفة الإجمالية المحسوبة مع بيانات الأمر الجديد
+      const createdOrder = await productionService.createProductionOrder(
+        newOrder.productCode, 
+        newOrder.quantity,
+        calculatedTotalCost // إضافة التكلفة المحسوبة
+      );
+      
       if (createdOrder) {
-        refetchOrders();
-        setNewOrder({
-          productCode: '',
-          quantity: 0
-        });
-        setIngredients([]);
-        setIsAddDialogOpen(false);
+        // إغلاق مؤشر التحميل
+        toast.dismiss();
+        
+        // تحديث البيانات بعد تأخير قصير
+        setTimeout(() => {
+          refetchOrders();
+          setNewOrder({
+            productCode: '',
+            quantity: 0
+          });
+          setIngredients([]);
+          setIsAddDialogOpen(false);
+          toast.success(`تم إنشاء أمر إنتاج ${createdOrder.productName} بنجاح`);
+        }, 300);
+      } else {
+        toast.dismiss();
+        toast.error("فشل إنشاء أمر الإنتاج");
       }
     } catch (error) {
+      toast.dismiss();
       console.error("Error creating order:", error);
       toast.error("حدث خطأ أثناء إنشاء أمر الإنتاج");
     }
@@ -279,8 +302,8 @@ const ProductionOrders = () => {
     }
   };
   
-  const handleEditOrder = async () => {
-    if (!editOrder.id || !editOrder.productCode || editOrder.quantity <= 0) {
+  const handleUpdateOrder = async () => {
+    if (!editOrder.productCode || editOrder.quantity <= 0) {
       toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
       return;
     }
@@ -295,6 +318,13 @@ const ProductionOrders = () => {
         }
       }
       
+      // حساب التكلفة الإجمالية الجديدة
+      const calculatedTotalCost = calculateTotalCost(editOrder.productCode, editOrder.quantity);
+      console.log(`تحديث أمر إنتاج: الكمية=${editOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
+      
+      // عرض مؤشر تحميل
+      toast.loading("جاري تحديث أمر الإنتاج...");
+      
       const success = await productionService.updateProductionOrder(
         editOrder.id,
         {
@@ -306,17 +336,28 @@ const ProductionOrders = () => {
             code: ing.code,
             name: ing.name,
             requiredQuantity: ing.requiredQuantity
-          }))
+          })),
+          totalCost: calculatedTotalCost // إضافة التكلفة المحسوبة
         }
       );
       
       if (success) {
-        refetchOrders();
-        setIngredients([]);
+        // إغلاق نافذة التعديل
         setIsEditDialogOpen(false);
-        toast.success("تم تحديث أمر الإنتاج بنجاح");
+        setIngredients([]);
+        
+        // انتظار قليلاً ثم تحديث البيانات
+        toast.dismiss();
+        setTimeout(() => {
+          refetchOrders();
+          toast.success("تم تحديث أمر الإنتاج بنجاح");
+        }, 300); // تأخير لضمان اكتمال عملية التحديث في قاعدة البيانات
+      } else {
+        toast.dismiss();
+        toast.error("فشل تحديث أمر الإنتاج");
       }
     } catch (error) {
+      toast.dismiss();
       console.error("Error updating order:", error);
       toast.error("حدث خطأ أثناء تحديث أمر الإنتاج");
     }
@@ -721,7 +762,7 @@ const ProductionOrders = () => {
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button onClick={handleEditOrder}>
+              <Button onClick={handleUpdateOrder}>
                 تحديث
               </Button>
             </DialogFooter>

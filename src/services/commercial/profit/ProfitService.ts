@@ -1,8 +1,8 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import ProfitCalculator from './ProfitCalculator';
 import ProfitCalculationService from './ProfitCalculationService';
+import ProfitRevenueService from './ProfitRevenueService'; // إضافة استيراد لخدمة ربط الإيرادات بالأرباح
 import { ProfitData, ProfitFilter, ProfitSummary } from './ProfitTypes';
 import { ReturnItem } from '@/types/returns';
 
@@ -14,10 +14,12 @@ class ProfitService {
   private static instance: ProfitService;
   private profitCalculator: ProfitCalculator;
   private calculationService: ProfitCalculationService;
+  private revenueService: ProfitRevenueService; // إضافة مرجع لخدمة ربط الإيرادات بالأرباح
 
   private constructor() {
     this.profitCalculator = ProfitCalculator.getInstance();
     this.calculationService = ProfitCalculationService.getInstance();
+    this.revenueService = ProfitRevenueService.getInstance(); // تهيئة خدمة ربط الإيرادات بالأرباح
   }
 
   public static getInstance(): ProfitService {
@@ -285,6 +287,17 @@ class ProfitService {
       
       if (updateError) throw updateError;
       
+      // 5. تحديث الإيرادات المرتبطة بالأرباح (إضافة جديدة)
+      const updatedProfitData = {
+        ...profitData,
+        total_sales: newTotalSales,
+        total_cost: newTotalCost,
+        profit_amount: newProfitAmount,
+        profit_percentage: newProfitPercentage
+      };
+      
+      await this.revenueService.updateProfitRevenue(profitData.id, updatedProfitData);
+      
       console.log(`Successfully updated profit for invoice ${invoiceId} after return`);
       return true;
     } catch (error) {
@@ -367,6 +380,17 @@ class ProfitService {
         .eq('id', profitData.id);
       
       if (updateError) throw updateError;
+      
+      // 5. تحديث الإيرادات المرتبطة بالأرباح (إضافة جديدة)
+      const updatedProfitData = {
+        ...profitData,
+        total_sales: newTotalSales,
+        total_cost: newTotalCost,
+        profit_amount: newProfitAmount,
+        profit_percentage: newProfitPercentage
+      };
+      
+      await this.revenueService.updateProfitRevenue(profitData.id, updatedProfitData);
       
       console.log(`Successfully restored profit for invoice ${invoiceId} after return cancellation`);
       return true;
