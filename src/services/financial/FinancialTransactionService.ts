@@ -73,7 +73,7 @@ class FinancialTransactionService {
         id: item.id,
         date: item.date,
         amount: item.amount,
-        type: item.type,
+        type: item.type as 'income' | 'expense',
         category_id: item.category_id,
         category_name: item.financial_categories.name,
         category_type: item.financial_categories.type,
@@ -82,7 +82,7 @@ class FinancialTransactionService {
         reference_type: item.reference_type,
         notes: item.notes,
         created_at: item.created_at,
-        is_reduction: item.is_reduction
+        is_reduction: item.is_reduction || false
       }));
     } catch (error) {
       console.error('Error fetching transactions:', error);
@@ -115,7 +115,7 @@ class FinancialTransactionService {
         id: data.id,
         date: data.date,
         amount: data.amount,
-        type: data.type,
+        type: data.type as 'income' | 'expense',
         category_id: data.category_id,
         category_name: data.financial_categories.name,
         category_type: data.financial_categories.type,
@@ -124,7 +124,7 @@ class FinancialTransactionService {
         reference_type: data.reference_type,
         notes: data.notes,
         created_at: data.created_at,
-        is_reduction: data.is_reduction
+        is_reduction: data.is_reduction || false
       };
     } catch (error) {
       console.error('Error fetching transaction:', error);
@@ -259,7 +259,7 @@ class FinancialTransactionService {
         id: data.id,
         date: data.date,
         amount: data.amount,
-        type: data.type,
+        type: data.type as 'income' | 'expense',
         category_id: data.category_id,
         category_name: category.name,
         category_type: category.type,
@@ -372,6 +372,32 @@ class FinancialTransactionService {
       toast.error('حدث خطأ أثناء حذف المعاملة المالية');
       return false;
     }
+  }
+
+  /**
+   * إنشاء معاملة مالية من معاملة تجارية
+   */
+  public async createTransactionFromCommercial(
+    amount: number,
+    type: 'income' | 'expense',
+    categoryId: string,
+    paymentMethod: string,
+    referenceId: string,
+    referenceType: string,
+    notes: string,
+    date: Date
+  ): Promise<Transaction | null> {
+    return this.createTransaction({
+      amount,
+      type,
+      category_id: categoryId,
+      payment_method: paymentMethod,
+      reference_id: referenceId,
+      reference_type: referenceType,
+      notes,
+      date: date.toISOString().split('T')[0],
+      is_reduction: false
+    });
   }
 }
 

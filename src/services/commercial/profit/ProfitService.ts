@@ -1,6 +1,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import ProfitCalculationService from './ProfitCalculationService';
+import ProfitRepository from './ProfitRepository';
+import { ProfitData, ProfitFilter, ProfitSummary } from './ProfitTypes';
 
 /**
  * خدمة إدارة الأرباح
@@ -8,8 +11,13 @@ import { toast } from "sonner";
  */
 class ProfitService {
   private static instance: ProfitService;
+  private profitCalculationService: ProfitCalculationService;
+  private profitRepository: ProfitRepository;
   
-  private constructor() {}
+  private constructor() {
+    this.profitCalculationService = ProfitCalculationService.getInstance();
+    this.profitRepository = ProfitRepository.getInstance();
+  }
   
   public static getInstance(): ProfitService {
     if (!ProfitService.instance) {
@@ -115,6 +123,60 @@ class ProfitService {
       return true;
     } catch (error) {
       console.error(`Error deleting profit record for invoice ${invoiceId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * احتساب ربح الفاتورة
+   */
+  public async calculateInvoiceProfit(invoiceId: string): Promise<any> {
+    return await this.profitCalculationService.calculateAndSaveProfit(invoiceId);
+  }
+
+  /**
+   * إزالة بيانات الربح
+   */
+  public async removeProfitData(invoiceId: string): Promise<boolean> {
+    return await this.profitCalculationService.deleteProfitByInvoiceId(invoiceId);
+  }
+
+  /**
+   * الحصول على جميع سجلات الأرباح مع إمكانية التصفية
+   */
+  public async getProfits(filters?: ProfitFilter): Promise<ProfitData[]> {
+    return await this.profitRepository.getProfits(filters);
+  }
+
+  /**
+   * الحصول على ملخص الأرباح
+   */
+  public async getProfitSummary(startDate?: string, endDate?: string, partyId?: string): Promise<ProfitSummary> {
+    return await this.profitRepository.getProfitSummary(startDate, endDate, partyId);
+  }
+
+  /**
+   * إعادة حساب جميع الأرباح
+   */
+  public async recalculateAllProfits(): Promise<boolean> {
+    try {
+      // الحصول على جميع فواتير البيع المؤكدة
+      const { data: invoices, error } = await supabase
+        .from('invoices')
+        .select('id, date, party_id, total_amount')
+        .eq('invoice_type', 'sale')
+        .eq('payment_status', 'confirmed');
+      
+      if (error) throw error;
+      
+      // إعادة حساب الربح لكل فاتورة
+      for (const invoice of invoices) {
+        await this.calculateInvoiceProfit(invoice.id);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error recalculating all profits:', error);
       return false;
     }
   }
