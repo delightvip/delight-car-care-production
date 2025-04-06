@@ -1,794 +1,191 @@
 
-import { supabase } from "@/integrations/supabase/client";
-import { Return } from "@/services/CommercialTypes";
-import InventoryService from "@/services/InventoryService";
-import PartyService from "@/services/PartyService";
-import { ReturnEntity } from "./ReturnEntity";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
+import { Return } from "@/types/returns";
+import ReturnDataService from "./ReturnDataService";
+import ReturnInventoryService from "./ReturnInventoryService";
+import ReturnValidationService from "./ReturnValidationService";
+import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
 
-interface InventoryItem {
-  id: number;
-  quantity: number;
-  min_stock: number;
-  unit_cost: number;
-  name: string;
-  code: string;
-  [key: string]: any;
-}
-
+/**
+ * معالج المرتجعات
+ * مسؤول عن عمليات تأكيد وإلغاء وحذف المرتجعات
+ */
 export class ReturnProcessor {
-  private inventoryService: InventoryService;
-  private partyService: PartyService;
-
+  private returnDataService: ReturnDataService;
+  private returnInventoryService: ReturnInventoryService;
+  private returnValidationService: ReturnValidationService;
+  private financialBridge: FinancialCommercialBridge;
+  
   constructor() {
-    this.inventoryService = InventoryService.getInstance();
-    this.partyService = PartyService.getInstance();
+    this.returnDataService = new ReturnDataService();
+    this.returnInventoryService = new ReturnInventoryService();
+    this.returnValidationService = new ReturnValidationService();
+    this.financialBridge = FinancialCommercialBridge.getInstance();
   }
-
+  
   /**
-   * Get invoice details by ID without using CommercialService
-   */
-  private async getInvoiceById(invoiceId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          parties:party_id (name)
-        `)
-        .eq('id', invoiceId)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error(`Error fetching invoice ${invoiceId}:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * تأكيد مرتجع، تحديث المخزون والسجلات المالية
+   * تأكيد مرتجع وتطبيق التأثيرات المرتبطة
    */
   public async confirmReturn(returnId: string): Promise<boolean> {
     try {
-      const returnData = await ReturnEntity.fetchById(returnId);
-      
-      if (!returnData) {
-        console.error('Return not found:', returnId);
-        toast({
-          title: "خطأ",
-          description: "لم يتم العثور على المرتجع",
-          variant: "destructive"
-        });
+      // 1. التحقق من صحة المرتجع
+      const validationResult = await this.returnValidationService.validateBeforeConfirm(returnId);
+      if (!validationResult.valid) {
+        toast.error(validationResult.message || 'فشل التحقق من صحة المرتجع');
         return false;
       }
       
-      if (returnData.payment_status === 'confirmed') {
-        console.log('Return already confirmed:', returnId);
-        toast({
-          title: "تنبيه",
-          description: "المرتجع مؤكد بالفعل",
-          variant: "default"
-        });
-        return true;
-      }
-
-      console.log('Processing return confirmation:', returnId, returnData);
+      // 2. جلب بيانات المرتجع
+      const returnData = await this.returnDataService.getReturnById(returnId);
       
-      // إذا كان المرتجع مرتبط بفاتورة، تحقق من صحة الأصناف
-      if (returnData.invoice_id) {
-        const invoice = await this.getInvoiceById(returnData.invoice_id);
-        
-        if (!invoice) {
-          console.error('Invoice not found for return:', returnData.invoice_id);
-          toast({
-            title: "خطأ",
-            description: "لم يتم العثور على الفاتورة المرتبطة بالمرتجع",
-            variant: "destructive"
-          });
-          return false;
-        }
-
-        // تعيين طرف المرتجع إذا لم يكن موجوداً
-        if (!returnData.party_id && invoice.party_id) {
-          const { error } = await supabase
-            .from('returns')
-            .update({ party_id: invoice.party_id })
-            .eq('id', returnId);
-          
-          if (error) {
-            console.error('Error updating return party_id:', error);
-            toast({
-              title: "خطأ",
-              description: "حدث خطأ أثناء تحديث بيانات المرتجع",
-              variant: "destructive"
-            });
-            return false;
-          }
-          
-          // تحديث معلومات المرتجع
-          returnData.party_id = invoice.party_id;
-        }
-      }
-      
-      // التحقق من وجود أصناف
-      if (!returnData.items || returnData.items.length === 0) {
-        console.error('No items in return:', returnId);
-        toast({
-          title: "خطأ",
-          description: "لا توجد أصناف في المرتجع",
-          variant: "destructive"
-        });
-        return false;
-      }
-
-      console.log('Return items:', returnData.items);
-      
-      // تحديث المخزون وفقاً لنوع المرتجع
-      let allUpdatesSuccessful = true;
-      
-      if (returnData.return_type === 'sales_return') {
-        // زيادة المخزون لمرتجعات المبيعات (استلام بضاعة)
-        for (const item of returnData.items) {
-          try {
-            // التأكد من وجود المنتج والحصول على الكمية الحالية
-            const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
-              item.item_type,
-              item.item_id
-            );
-            
-            if (itemError) {
-              console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            if (!currentItem) {
-              console.error(`Item not found: ${item.item_name}`);
-              toast({
-                title: "خطأ", 
-                description: `لم يتم العثور على ${item.item_name} في المخزون`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // حساب الكمية الجديدة
-            const currentQuantity = Number(currentItem.quantity) || 0;
-            const newQuantity = currentQuantity + Number(item.quantity);
-            console.log(`Updating ${item.item_name} quantity: ${currentQuantity} + ${item.quantity} = ${newQuantity}`);
-            
-            // تحديث المخزون
-            const { error: updateError } = await this.updateItemQuantity(
-              item.item_type,
-              item.item_id,
-              newQuantity
-            );
-            
-            if (updateError) {
-              console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              Number(item.quantity),
-              newQuantity,
-              'in',
-              `مرتجع مبيعات - رقم: ${returnId}`
-            );
-          } catch (err) {
-            console.error(`Error processing item ${item.item_name}:`, err);
-            allUpdatesSuccessful = false;
-          }
-        }
-        
-        // تحديث حساب العميل لمرتجعات المبيعات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating customer balance for return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              false, // دائن لمرتجعات المبيعات (تقليل دين العميل)
-              'مرتجع مبيعات',
-              'sales_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update customer balance for return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب العميل",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating customer balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        } else {
-          console.warn('No party_id or amount for sales return:', returnId, returnData.party_id, returnData.amount);
-        }
-      } else if (returnData.return_type === 'purchase_return') {
-        // خفض المخزون لمرتجعات المشتريات (إرجاع بضاعة للمورد)
-        for (const item of returnData.items) {
-          try {
-            // التأكد من وجود المنتج والحصول على الكمية الحالية
-            const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
-              item.item_type,
-              item.item_id
-            );
-            
-            if (itemError) {
-              console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            if (!currentItem) {
-              console.error(`Item not found: ${item.item_name}`);
-              toast({
-                title: "خطأ",
-                description: `لم يتم العثور على ${item.item_name} في المخزون`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // التحقق من وجود كمية كافية للإرجاع
-            const currentQuantity = Number(currentItem.quantity) || 0;
-            if (currentQuantity < Number(item.quantity)) {
-              console.error(`Insufficient quantity for ${item.item_name}: ${currentQuantity} < ${item.quantity}`);
-              toast({
-                title: "خطأ",
-                description: `كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إرجاعها (${item.quantity})`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // حساب الكمية الجديدة
-            const newQuantity = currentQuantity - Number(item.quantity);
-            console.log(`Updating ${item.item_name} quantity: ${currentQuantity} - ${item.quantity} = ${newQuantity}`);
-            
-            // تحديث المخزون
-            const { error: updateError } = await this.updateItemQuantity(
-              item.item_type,
-              item.item_id,
-              newQuantity
-            );
-            
-            if (updateError) {
-              console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              -Number(item.quantity),
-              newQuantity,
-              'out',
-              `مرتجع مشتريات - رقم: ${returnId}`
-            );
-          } catch (err) {
-            console.error(`Error processing item ${item.item_name}:`, err);
-            allUpdatesSuccessful = false;
-          }
-        }
-        
-        // تحديث حساب المورد لمرتجعات المشتريات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating supplier balance for return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              true, // مدين لمرتجعات المشتريات (زيادة دين المورد تجاهنا)
-              'مرتجع مشتريات',
-              'purchase_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update supplier balance for return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب المورد",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating supplier balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        } else {
-          console.warn('No party_id or amount for purchase return:', returnId, returnData.party_id, returnData.amount);
-        }
-      }
-      
-      if (!allUpdatesSuccessful) {
-        console.error('Some updates failed for return:', returnId);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تحديث بعض البيانات. يرجى التحقق من سجلات النظام.",
-          variant: "destructive"
-        });
-      }
-      
-      // تحديث حالة المرتجع إلى مؤكد حتى لو كانت هناك بعض الأخطاء في التحديثات
-      const { error } = await supabase
-        .from('returns')
-        .update({ payment_status: 'confirmed' })
-        .eq('id', returnId);
-      
-      if (error) {
-        console.error('Error updating return status:', error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تحديث حالة المرتجع",
-          variant: "destructive"
-        });
+      if (!returnData || !returnData.items || returnData.items.length === 0) {
+        toast.error('لا توجد بيانات كافية لتأكيد المرتجع');
         return false;
       }
       
-      console.log('Return confirmed successfully:', returnId);
-      toast({
-        title: "نجاح",
-        description: "تم تأكيد المرتجع بنجاح",
-        variant: "success"
-      });
+      // 3. تحديث حالة المرتجع إلى مؤكد
+      await this.returnDataService.updateReturnStatus(returnId, 'confirmed');
       
+      // 4. تحديث المخزون
+      await this.updateInventory(returnData, 'confirm');
+      
+      // 5. تسجيل التأثيرات المالية
+      await this.financialBridge.handleReturnConfirmation(returnData);
+      
+      toast.success('تم تأكيد المرتجع بنجاح');
       return true;
     } catch (error) {
-      console.error('Error confirming return:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء تأكيد المرتجع",
-        variant: "destructive"
-      });
+      console.error(`Error confirming return ${returnId}:`, error);
+      toast.error('حدث خطأ أثناء تأكيد المرتجع');
+      
+      // محاولة التراجع إذا حدث خطأ
+      try {
+        await this.returnDataService.updateReturnStatus(returnId, 'draft');
+      } catch (err) {
+        console.error('Error reverting return status:', err);
+      }
+      
       return false;
     }
   }
   
   /**
-   * إلغاء مرتجع، عكس تغييرات المخزون والتغييرات المالية
+   * إلغاء مرتجع وعكس تأثيراته
    */
   public async cancelReturn(returnId: string): Promise<boolean> {
     try {
-      const returnData = await ReturnEntity.fetchById(returnId);
+      // 1. التحقق من صحة الإلغاء
+      const validationResult = await this.returnValidationService.validateBeforeCancel(returnId);
+      if (!validationResult.valid) {
+        toast.error(validationResult.message || 'فشل التحقق من صحة إلغاء المرتجع');
+        return false;
+      }
+      
+      // 2. جلب بيانات المرتجع
+      const returnData = await this.returnDataService.getReturnById(returnId);
       
       if (!returnData) {
-        console.error('Return not found:', returnId);
-        toast({
-          title: "خطأ",
-          description: "لم يتم العثور على المرتجع",
-          variant: "destructive"
-        });
+        toast.error('لا توجد بيانات كافية لإلغاء المرتجع');
         return false;
       }
       
-      if (returnData.payment_status !== 'confirmed') {
-        console.error('Cannot cancel unconfirmed return:', returnId, returnData.payment_status);
-        toast({
-          title: "خطأ",
-          description: "يمكن إلغاء المرتجعات المؤكدة فقط",
-          variant: "destructive"
-        });
-        return false;
-      }
-
-      console.log('Processing return cancellation:', returnId, returnData);
+      // 3. تحديث حالة المرتجع إلى ملغي
+      await this.returnDataService.updateReturnStatus(returnId, 'cancelled');
       
-      // التحقق من وجود أصناف
-      if (!returnData.items || returnData.items.length === 0) {
-        console.error('No items in return:', returnId);
-        toast({
-          title: "خطأ",
-          description: "لا توجد أصناف في المرتجع",
-          variant: "destructive"
-        });
-        return false;
+      // 4. عكس تأثيرات المخزون
+      if (returnData.items && returnData.items.length > 0) {
+        await this.updateInventory(returnData, 'cancel');
       }
       
-      // تحديث المخزون وفقاً لنوع المرتجع
-      let allUpdatesSuccessful = true;
+      // 5. إلغاء التأثيرات المالية
+      await this.financialBridge.handleReturnCancellation(returnData);
+      
+      toast.success('تم إلغاء المرتجع بنجاح');
+      return true;
+    } catch (error) {
+      console.error(`Error cancelling return ${returnId}:`, error);
+      toast.error('حدث خطأ أثناء إلغاء المرتجع');
+      
+      // محاولة التراجع إذا حدث خطأ
+      try {
+        await this.returnDataService.updateReturnStatus(returnId, 'confirmed');
+      } catch (err) {
+        console.error('Error reverting return status:', err);
+      }
+      
+      return false;
+    }
+  }
+  
+  /**
+   * حذف مرتجع (فقط إذا كان مسودة)
+   */
+  public async deleteReturn(returnId: string): Promise<boolean> {
+    try {
+      // التحقق من حالة المرتجع
+      const returnData = await this.returnDataService.getReturnById(returnId);
+      
+      if (!returnData) {
+        toast.error('لم يتم العثور على المرتجع');
+        return false;
+      }
+      
+      if (returnData.payment_status !== 'draft') {
+        toast.error('لا يمكن حذف المرتجع إلا إذا كان في حالة مسودة');
+        return false;
+      }
+      
+      // حذف بنود المرتجع أولاً
+      await this.returnDataService.deleteReturnItems(returnId);
+      
+      // حذف المرتجع نفسه
+      await this.returnDataService.deleteReturn(returnId);
+      
+      toast.success('تم حذف المرتجع بنجاح');
+      return true;
+    } catch (error) {
+      console.error(`Error deleting return ${returnId}:`, error);
+      toast.error('حدث خطأ أثناء حذف المرتجع');
+      return false;
+    }
+  }
+  
+  /**
+   * تحديث المخزون بناءً على المرتجع
+   */
+  private async updateInventory(returnData: Return, action: 'confirm' | 'cancel'): Promise<void> {
+    if (!returnData.items || returnData.items.length === 0) {
+      return;
+    }
+    
+    for (const item of returnData.items) {
+      // تحديد نوع عملية المخزون بناءً على نوع المرتجع والإجراء
+      let shouldIncrease = false;
       
       if (returnData.return_type === 'sales_return') {
-        // خفض المخزون لمرتجعات المبيعات الملغاة (إرجاع البضاعة المستلمة)
-        for (const item of returnData.items) {
-          try {
-            // التأكد من وجود المنتج والحصول على الكمية الحالية
-            const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
-              item.item_type,
-              item.item_id
-            );
-            
-            if (itemError) {
-              console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            if (!currentItem) {
-              console.error(`Item not found: ${item.item_name}`);
-              toast({
-                title: "خطأ",
-                description: `لم يتم العثور على ${item.item_name} في المخزون`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // التحقق من وجود كمية كافية للإلغاء
-            const currentQuantity = Number(currentItem.quantity) || 0;
-            if (currentQuantity < Number(item.quantity)) {
-              console.error(`Insufficient quantity for ${item.item_name}: ${currentQuantity} < ${item.quantity}`);
-              toast({
-                title: "خطأ",
-                description: `كمية ${item.item_name} في المخزون (${currentQuantity}) أقل من الكمية المطلوب إلغاء إرجاعها (${item.quantity})`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // حساب الكمية الجديدة
-            const newQuantity = currentQuantity - Number(item.quantity);
-            console.log(`Updating ${item.item_name} quantity: ${currentQuantity} - ${item.quantity} = ${newQuantity}`);
-            
-            // تحديث المخزون
-            const { error: updateError } = await this.updateItemQuantity(
-              item.item_type,
-              item.item_id,
-              newQuantity
-            );
-            
-            if (updateError) {
-              console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              -Number(item.quantity),
-              newQuantity,
-              'out',
-              `إلغاء مرتجع مبيعات - رقم: ${returnId}`
-            );
-          } catch (err) {
-            console.error(`Error processing item ${item.item_name}:`, err);
-            allUpdatesSuccessful = false;
-          }
-        }
-        
-        // تحديث حساب العميل لإلغاء مرتجعات المبيعات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating customer balance for cancelled return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              true, // مدين لإلغاء مرتجعات المبيعات (استعادة دين العميل)
-              'إلغاء مرتجع مبيعات',
-              'cancel_sales_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update customer balance for cancelled return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب العميل",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating customer balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        }
-      } else if (returnData.return_type === 'purchase_return') {
-        // زيادة المخزون لمرتجعات المشتريات الملغاة (استعادة البضاعة المرجعة)
-        for (const item of returnData.items) {
-          try {
-            // التأكد من وجود المنتج والحصول على الكمية الحالية
-            const { data: currentItem, error: itemError } = await this.getItemByTypeAndId(
-              item.item_type,
-              item.item_id
-            );
-            
-            if (itemError) {
-              console.error(`Error fetching item ${item.item_id}:`, itemError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء جلب معلومات ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            if (!currentItem) {
-              console.error(`Item not found: ${item.item_name}`);
-              toast({
-                title: "خطأ",
-                description: `لم يتم العثور على ${item.item_name} في المخزون`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // حساب الكمية الجديدة
-            const currentQuantity = Number(currentItem.quantity) || 0;
-            const newQuantity = currentQuantity + Number(item.quantity);
-            console.log(`Updating ${item.item_name} quantity: ${currentQuantity} + ${item.quantity} = ${newQuantity}`);
-            
-            // تحديث المخزون
-            const { error: updateError } = await this.updateItemQuantity(
-              item.item_type,
-              item.item_id,
-              newQuantity
-            );
-            
-            if (updateError) {
-              console.error(`Error updating ${item.item_name} quantity:`, updateError);
-              toast({
-                title: "خطأ",
-                description: `حدث خطأ أثناء تحديث مخزون ${item.item_name}`,
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-              continue;
-            }
-            
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              Number(item.quantity),
-              newQuantity,
-              'in',
-              `إلغاء مرتجع مشتريات - رقم: ${returnId}`
-            );
-          } catch (err) {
-            console.error(`Error processing item ${item.item_name}:`, err);
-            allUpdatesSuccessful = false;
-          }
-        }
-        
-        // تحديث حساب المورد لإلغاء مرتجعات المشتريات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating supplier balance for cancelled return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              false, // دائن لإلغاء مرتجعات المشتريات (استعادة دين المورد)
-              'إلغاء مرتجع مشتريات',
-              'cancel_purchase_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update supplier balance for cancelled return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب المورد",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating supplier balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        }
+        // مرتجع مبيعات: عند التأكيد نزيد المخزون، عند الإلغاء ننقص المخزون
+        shouldIncrease = (action === 'confirm');
+      } else {
+        // مرتجع مشتريات: عند التأكيد ننقص المخزون، عند الإلغاء نزيد المخزون
+        shouldIncrease = (action === 'cancel');
       }
       
-      if (!allUpdatesSuccessful) {
-        console.error('Some updates failed for cancelled return:', returnId);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تحديث بعض البيانات. يرجى التحقق من سجلات النظام.",
-          variant: "destructive"
-        });
+      // تنفيذ عملية المخزون
+      const itemId = Number(item.item_id);
+      const quantity = Math.abs(Number(item.quantity));
+      
+      if (isNaN(itemId) || itemId <= 0 || isNaN(quantity) || quantity <= 0) {
+        console.error(`Invalid item data: ${JSON.stringify(item)}`);
+        continue;
       }
       
-      // تحديث حالة المرتجع إلى ملغى حتى لو كانت هناك بعض الأخطاء في التحديثات
-      const { error } = await supabase
-        .from('returns')
-        .update({ payment_status: 'cancelled' })
-        .eq('id', returnId);
-      
-      if (error) {
-        console.error('Error updating return status:', error);
-        toast({
-          title: "خطأ",
-          description: "حدث خطأ أثناء تحديث حالة المرتجع",
-          variant: "destructive"
-        });
-        return false;
+      if (shouldIncrease) {
+        await this.returnInventoryService.increaseItemQuantity(item.item_type, itemId, quantity);
+      } else {
+        await this.returnInventoryService.decreaseItemQuantity(item.item_type, itemId, quantity);
       }
-      
-      console.log('Return cancelled successfully:', returnId);
-      toast({
-        title: "نجاح",
-        description: "تم إلغاء المرتجع بنجاح",
-        variant: "success"
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error cancelling return:', error);
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إلغاء المرتجع",
-        variant: "destructive"
-      });
-      return false;
-    }
-  }
-  
-  /**
-   * الحصول على عنصر المخزون حسب النوع والمعرف
-   */
-  private async getItemByTypeAndId(itemType: string, itemId: string | number) {
-    try {
-      let tableName = '';
-      
-      switch (itemType) {
-        case 'raw_materials':
-          tableName = 'raw_materials';
-          break;
-        case 'packaging_materials':
-          tableName = 'packaging_materials';
-          break;
-        case 'semi_finished_products':
-          tableName = 'semi_finished_products';
-          break;
-        case 'finished_products':
-          tableName = 'finished_products';
-          break;
-        default:
-          return { data: null, error: new Error('نوع المنتج غير معروف') };
-      }
-      
-      const result = await supabase
-        .from(tableName as any) // Cast to any to fix TypeScript error
-        .select('*')
-        .eq('id', itemId)
-        .single();
-        
-      console.log(`Fetched item ${itemId} from ${tableName}:`, result.data);
-      
-      return result;
-    } catch (error) {
-      console.error(`Error in getItemByTypeAndId(${itemType}, ${itemId}):`, error);
-      return { data: null, error };
-    }
-  }
-  
-  /**
-   * تحديث كمية العنصر في المخزون
-   */
-  private async updateItemQuantity(itemType: string, itemId: string | number, newQuantity: number) {
-    try {
-      let tableName = '';
-      
-      switch (itemType) {
-        case 'raw_materials':
-          tableName = 'raw_materials';
-          break;
-        case 'packaging_materials':
-          tableName = 'packaging_materials';
-          break;
-        case 'semi_finished_products':
-          tableName = 'semi_finished_products';
-          break;
-        case 'finished_products':
-          tableName = 'finished_products';
-          break;
-        default:
-          return { error: new Error('نوع المنتج غير معروف') };
-      }
-      
-      console.log(`Updating ${tableName} item ${itemId} to quantity ${newQuantity}`);
-      
-      return await supabase
-        .from(tableName as any) // Cast to any to fix TypeScript error
-        .update({ quantity: newQuantity })
-        .eq('id', itemId);
-    } catch (error) {
-      console.error(`Error in updateItemQuantity(${itemType}, ${itemId}, ${newQuantity}):`, error);
-      return { error };
-    }
-  }
-  
-  /**
-   * تسجيل حركة مخزون
-   */
-  private async recordInventoryMovement(
-    itemId: string | number, 
-    itemType: string, 
-    quantity: number, 
-    balanceAfter: number, 
-    movementType: 'in' | 'out' | 'adjustment', 
-    reason: string
-  ) {
-    try {
-      console.log(`Recording inventory movement: ${itemType} ${itemId}, ${movementType}, ${quantity}, balance: ${balanceAfter}`);
-      
-      const { error } = await supabase
-        .from('inventory_movements')
-        .insert({
-          item_id: itemId.toString(),
-          item_type: itemType,
-          quantity: quantity,
-          balance_after: balanceAfter,
-          movement_type: movementType,
-          reason: reason
-        });
-      
-      if (error) {
-        console.error('Error recording inventory movement:', error);
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error recording inventory movement:', error);
-      return false;
     }
   }
 }
 
+export default ReturnProcessor;

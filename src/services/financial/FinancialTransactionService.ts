@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Transaction } from "./FinancialTypes";
@@ -133,18 +134,25 @@ class FinancialTransactionService {
       const formattedDate = typeof transactionData.date === 'object' 
         ? format(new Date(transactionData.date as any), 'yyyy-MM-dd')
         : transactionData.date;
+      
+      // التعامل مع معاملات التخفيض (إذا كانت تخفيضًا، نجعل القيمة سالبة)
+      let amount = transactionData.amount;
+      if (transactionData.is_reduction) {
+        amount = -Math.abs(amount); // نجعل القيمة سالبة
+      }
         
       const { data, error } = await supabase
         .from('financial_transactions')
         .insert({
           date: formattedDate,
-          amount: transactionData.amount,
+          amount: amount,
           type: transactionData.type,
           category_id: transactionData.category_id,
           payment_method: transactionData.payment_method,
           reference_id: transactionData.reference_id,
           reference_type: transactionData.reference_type,
-          notes: transactionData.notes
+          notes: transactionData.notes,
+          is_reduction: transactionData.is_reduction || false
         })
         .select()
         .single();
@@ -164,8 +172,21 @@ class FinancialTransactionService {
         console.error('Error fetching category details:', categoryError);
       }
       
-      // تحديث رصيد الخزينة
-      await this.updateFinancialBalance(transactionData.amount, transactionData.type, transactionData.payment_method);
+      // تحديث رصيد الخزينة - نتعامل مع التخفيضات بشكل مختلف
+      // إذا كان تخفيضًا للإيرادات (سالب)، نقلل الرصيد
+      // إذا كان تخفيضًا للمصروفات (سالب)، نزيد الرصيد
+      if (transactionData.is_reduction) {
+        if (transactionData.type === 'income') {
+          // تخفيض الإيرادات يعني تقليل الرصيد
+          await this.updateFinancialBalance(Math.abs(amount), 'expense', transactionData.payment_method);
+        } else {
+          // تخفيض المصروفات يعني زيادة الرصيد
+          await this.updateFinancialBalance(Math.abs(amount), 'income', transactionData.payment_method);
+        }
+      } else {
+        // معاملة طبيعية
+        await this.updateFinancialBalance(Math.abs(amount), transactionData.type, transactionData.payment_method);
+      }
       
       toast.success('تم تسجيل المعاملة المالية بنجاح');
       
@@ -181,7 +202,8 @@ class FinancialTransactionService {
         reference_id: data.reference_id,
         reference_type: data.reference_type,
         notes: data.notes,
-        created_at: data.created_at
+        created_at: data.created_at,
+        is_reduction: data.is_reduction
       } as Transaction;
     } catch (error) {
       console.error('Error creating transaction:', error);
@@ -388,7 +410,8 @@ class FinancialTransactionService {
     referenceId: string,
     referenceType: string,
     notes?: string,
-    date?: Date
+    date?: Date,
+    isReduction: boolean = false
   ): Promise<Transaction | null> {
     const formattedDate = date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
     
@@ -400,7 +423,8 @@ class FinancialTransactionService {
       payment_method: paymentMethod,
       reference_id: referenceId,
       reference_type: referenceType,
-      notes: notes || 'تم إنشاؤها تلقائيًا من معاملة تجارية'
+      notes: notes || 'تم إنشاؤها تلقائيًا من معاملة تجارية',
+      is_reduction: isReduction
     };
     
     return this.createTransaction(transactionData);

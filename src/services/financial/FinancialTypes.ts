@@ -1,53 +1,48 @@
 
+export interface FinancialSummary {
+  totalIncome: number;
+  totalExpense: number;
+  netProfit: number;
+  periodIncome: number;
+  periodExpense: number;
+  periodProfit: number;
+  previousPeriodIncome?: number;
+  previousPeriodExpense?: number;
+  previousPeriodProfit?: number;
+  incomeGrowth?: number;
+  expenseGrowth?: number;
+  profitGrowth?: number;
+  cashBalance?: number;
+  bankBalance?: number;
+}
+
 export interface Category {
   id: string;
   name: string;
-  description?: string;
   type: 'income' | 'expense';
+  description?: string;
   created_at?: string;
 }
 
 export interface Transaction {
   id: string;
-  type: 'income' | 'expense';
-  amount: number;
-  category_id: string;
-  category_name?: string;
-  category_type?: 'income' | 'expense';
   date: string;
+  amount: number;
+  type: 'income' | 'expense';
+  category_id: string;
+  category_name: string;
+  category_type: string;
   payment_method: string;
-  notes?: string;
   reference_id?: string;
   reference_type?: string;
+  notes?: string;
   created_at?: string;
-}
-
-export interface FinancialSummary {
-  totalIncome: number;
-  totalExpense: number;
-  netProfit: number;
-  incomeByCategory: CategoryAmount[];
-  expenseByCategory: CategoryAmount[];
-  recentTransactions: Transaction[];
-  // Additional properties used in the components
-  startDate?: string;
-  endDate?: string;
-  netIncome?: number; // Alias for netProfit for backward compatibility
-  cashBalance?: number;
-  bankBalance?: number;
-  totalBalance?: number;
-  categoryAnalysis?: any[];
-}
-
-export interface CategoryAmount {
-  category: string;
-  amount: number;
-  percentage: number;
+  is_reduction?: boolean;
 }
 
 export interface FinancialBalance {
   id: string;
   cash_balance: number;
   bank_balance: number;
-  last_updated?: string;
+  last_updated: string;
 }
