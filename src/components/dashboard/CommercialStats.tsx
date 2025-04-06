@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,6 +58,20 @@ export function CommercialStats() {
         
         console.log("Recent invoices:", recentInvoices?.length);
         
+        // جلب بيانات المرتجعات المؤكدة للفترة نفسها
+        const { data: confirmedReturns, error: returnsError } = await supabase
+          .from('returns')
+          .select('*')
+          .gte('date', dateStr)
+          .eq('payment_status', 'confirmed');
+        
+        if (returnsError) {
+          console.error('Error fetching returns:', returnsError);
+          throw returnsError;
+        }
+        
+        console.log("Recent confirmed returns:", confirmedReturns?.length);
+        
         // Calculate sales and purchases from recent invoices
         const sales = recentInvoices
           ? recentInvoices
@@ -72,7 +85,25 @@ export function CommercialStats() {
               .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
           : 0;
         
-        console.log("Calculated sales:", sales, "and purchases:", purchases);
+        // حساب قيم المرتجعات للمبيعات والمشتريات
+        const salesReturns = confirmedReturns
+          ? confirmedReturns
+              .filter(returnData => returnData.return_type === 'sales_return')
+              .reduce((sum, returnData) => sum + (returnData.amount || 0), 0)
+          : 0;
+          
+        const purchaseReturns = confirmedReturns
+          ? confirmedReturns
+              .filter(returnData => returnData.return_type === 'purchase_return')
+              .reduce((sum, returnData) => sum + (returnData.amount || 0), 0)
+          : 0;
+        
+        // خصم قيم المرتجعات من إجمالي المبيعات والمشتريات
+        const netSales = sales - salesReturns;
+        const netPurchases = purchases - purchaseReturns;
+        
+        console.log("Calculated gross sales:", sales, "and returns:", salesReturns, "net sales:", netSales);
+        console.log("Calculated gross purchases:", purchases, "and returns:", purchaseReturns, "net purchases:", netPurchases);
         
         // Get party balances with customer/supplier data joined
         const { data: partyBalances, error: balancesError } = await supabase
@@ -116,8 +147,8 @@ export function CommercialStats() {
         return {
           customersCount: customersCount || 0,
           suppliersCount: suppliersCount || 0,
-          recentSales: sales,
-          recentPurchases: purchases,
+          recentSales: netSales, // استخدام صافي المبيعات بعد خصم المرتجعات
+          recentPurchases: netPurchases, // استخدام صافي المشتريات بعد خصم المرتجعات
           receivables,
           payables
         };
@@ -178,7 +209,7 @@ export function CommercialStats() {
           ) : (
             <div className="text-2xl font-bold">{stats?.recentSales.toLocaleString('ar-EG')} ج.م</div>
           )}
-          <p className="text-xs text-muted-foreground">قيمة المبيعات خلال ٣٠ يوم</p>
+          <p className="text-xs text-muted-foreground">صافي المبيعات خلال ٣٠ يوم</p>
         </CardContent>
       </Card>
       
@@ -193,7 +224,7 @@ export function CommercialStats() {
           ) : (
             <div className="text-2xl font-bold">{stats?.recentPurchases.toLocaleString('ar-EG')} ج.م</div>
           )}
-          <p className="text-xs text-muted-foreground">قيمة المشتريات خلال ٣٠ يوم</p>
+          <p className="text-xs text-muted-foreground">صافي المشتريات خلال ٣٠ يوم</p>
         </CardContent>
       </Card>
       

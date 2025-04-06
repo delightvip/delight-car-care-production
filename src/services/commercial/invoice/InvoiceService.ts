@@ -1,4 +1,3 @@
-
 import { Invoice } from '@/services/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
@@ -69,6 +68,9 @@ export class InvoiceService {
         if (invoice && invoice.invoice_type === 'sale') {
           const profitData = await this.profitCalculationService.calculateAndSaveProfit(invoiceId);
           console.log('Profit calculated:', profitData);
+          
+          // بعد حساب الربح، قم بتنشيط البيانات المالية لتحديث لوحة التحكم
+          this.invalidateFinancialData();
         }
       }
       
@@ -77,6 +79,25 @@ export class InvoiceService {
       console.error('Error confirming invoice:', error);
       toast.error('حدث خطأ أثناء تأكيد الفاتورة');
       return false;
+    }
+  }
+
+  /**
+   * تنشيط بيانات النظام المالي بعد التغييرات في الأرباح
+   */
+  private invalidateFinancialData(): void {
+    try {
+      // تنشيط بيانات React Query إذا كانت متاحة
+      // هذه محاولة للوصول إلى queryClient خارج مكون React
+      // تنبيه: استخدم طريقة أخرى لتنشيط البيانات لأن هذا النهج قد لا يعمل
+      const event = new CustomEvent('financial-data-change', { 
+        detail: { source: 'invoice_confirmation' }
+      });
+      window.dispatchEvent(event);
+
+      console.log("تم إرسال إشعار بتغيير البيانات المالية");
+    } catch (error) {
+      console.error("خطأ في تنشيط بيانات النظام المالي:", error);
     }
   }
   

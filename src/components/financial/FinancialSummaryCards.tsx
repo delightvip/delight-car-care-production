@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowDown, ArrowUp, CreditCard, DollarSign, Wallet } from 'lucide-react';
+import { ArrowDown, ArrowUp, CreditCard, DollarSign, Wallet, TrendingUp, ShoppingBag } from 'lucide-react';
 import { FinancialSummary } from '@/services/financial/FinancialTypes';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -23,9 +22,9 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
   };
   
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
       {/* بطاقة الإيرادات */}
-      <Card>
+      <Card className="lg:col-span-1">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">إجمالي الإيرادات</CardTitle>
           <ArrowUp className="h-4 w-4 text-green-500" />
@@ -46,8 +45,26 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
         </CardContent>
       </Card>
       
+      {/* بطاقة أرباح المبيعات (جديدة) */}
+      <Card className="lg:col-span-1 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">أرباح المبيعات</CardTitle>
+          <TrendingUp className="h-4 w-4 text-emerald-500" />
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-8 w-[100px]" />
+          ) : (
+            <div className="text-2xl font-bold">{formatAmount(summary.salesProfit || 0)}</div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            صافي الأرباح من فواتير البيع والمرتجعات
+          </p>
+        </CardContent>
+      </Card>
+      
       {/* بطاقة المصروفات */}
-      <Card>
+      <Card className="lg:col-span-1">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">إجمالي المصروفات</CardTitle>
           <ArrowDown className="h-4 w-4 text-red-500" />
@@ -69,7 +86,7 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
       </Card>
       
       {/* بطاقة صافي الدخل */}
-      <Card>
+      <Card className="lg:col-span-1">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">صافي الدخل</CardTitle>
           <DollarSign className="h-4 w-4 text-blue-500" />
@@ -89,7 +106,7 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
       </Card>
       
       {/* بطاقة الأرصدة */}
-      <Card>
+      <Card className="lg:col-span-1">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">إجمالي الأرصدة</CardTitle>
           <Wallet className="h-4 w-4 text-purple-500" />

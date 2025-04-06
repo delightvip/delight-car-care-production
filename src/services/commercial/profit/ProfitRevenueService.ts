@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import BaseCommercialService from '../BaseCommercialService';
@@ -60,6 +59,25 @@ class ProfitRevenueService extends BaseCommercialService {
         categoryId = categories[0].id;
       }
       
+      // فحص إذا كان هناك إيراد مسجل بالفعل لهذا الربح
+      const { data: existingRevenue, error: checkError } = await this.supabase
+        .from('financial_transactions')
+        .select('id')
+        .eq('reference_id', profitData.id)
+        .eq('reference_type', 'profit')
+        .limit(1);
+        
+      if (checkError) {
+        throw checkError;
+      }
+      
+      // إذا كان هناك إيراد مسجل بالفعل، نتخطى هذه الخطوة
+      if (existingRevenue && existingRevenue.length > 0) {
+        console.log('Revenue already exists for profit:', profitData.id);
+        this.notifyFinancialDataChange('profit_revenue_already_exists');
+        return true;
+      }
+      
       // إنشاء سجل الإيراد
       const { data: transaction, error: transactionError } = await this.supabase
         .from('financial_transactions')
@@ -79,6 +97,9 @@ class ProfitRevenueService extends BaseCommercialService {
       if (transactionError) {
         throw transactionError;
       }
+      
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange('profit_revenue_created');
       
       console.log('Revenue transaction created successfully for profit:', profitData.id);
       return true;
@@ -145,6 +166,9 @@ class ProfitRevenueService extends BaseCommercialService {
         // نستمر في التنفيذ حتى لو فشل الحذف، لأن المعاملات العكسية تم إنشاؤها بنجاح
       }
       
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange('profit_revenue_cancelled');
+      
       console.log('Profit revenue cancelled successfully for profit:', profitId);
       return true;
     } catch (error) {
@@ -166,7 +190,14 @@ class ProfitRevenueService extends BaseCommercialService {
       await this.cancelProfitRevenue(oldProfitId);
       
       // إنشاء إيراد جديد
-      return await this.createRevenueFromProfit(newProfitData);
+      const result = await this.createRevenueFromProfit(newProfitData);
+      
+      if (result) {
+        // إرسال إشعار بتغيير البيانات المالية
+        this.notifyFinancialDataChange('profit_revenue_updated');
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error updating profit revenue:', error);
       toast.error('حدث خطأ أثناء تحديث الإيراد من الربح');
@@ -196,6 +227,22 @@ class ProfitRevenueService extends BaseCommercialService {
     } catch (error) {
       console.error('Error checking profit revenue:', error);
       return false;
+    }
+  }
+  
+  /**
+   * إرسال إشعار بتغيير البيانات المالية
+   * @param source مصدر التغيير
+   */
+  private notifyFinancialDataChange(source: string): void {
+    try {
+      const event = new CustomEvent('financial-data-change', { 
+        detail: { source: source }
+      });
+      window.dispatchEvent(event);
+      console.log(`تم إرسال إشعار بتغيير البيانات المالية من مصدر: ${source}`);
+    } catch (error) {
+      console.error('خطأ في إرسال إشعار بتغيير البيانات المالية:', error);
     }
   }
 }

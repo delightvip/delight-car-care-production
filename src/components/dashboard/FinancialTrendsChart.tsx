@@ -144,15 +144,16 @@ export function FinancialTrendsChart({
         
         // استعلامات متوازية لتسريع جلب البيانات
         const [invoicesResponse, profitsSummaryResponse] = await Promise.all([
-          // استعلام الفواتير
+          // استعلام الفواتير (للمشتريات فقط لأن المبيعات ستعتمد على جدول الأرباح)
           supabase
             .from('invoices')
             .select('*, invoice_items(*)')
+            .eq('invoice_type', 'purchase') // فقط فواتير المشتريات
             .in('status', ['confirmed', 'completed', 'paid', 'delivered', 'done'])
             .gte('date', periods[0].start)
             .lte('date', periods[periods.length - 1].end),
           
-          // استعلام بيانات الأرباح
+          // استعلام بيانات الأرباح والمبيعات
           Promise.all(periods.map(async period => {
             // استعلام ملخص الأرباح لكل فترة
             const { data, error } = await supabase
@@ -167,7 +168,7 @@ export function FinancialTrendsChart({
               
             if (error) throw error;
             
-            // حساب القيم الإجمالية
+            // حساب القيم الإجمالية (باستخدام قيم محدثة تعكس المرتجعات)
             const totalSales = data.reduce((sum, profit) => sum + profit.total_sales, 0);
             const totalCost = data.reduce((sum, profit) => sum + profit.total_cost, 0);
             const totalProfit = data.reduce((sum, profit) => sum + profit.profit_amount, 0);
@@ -184,54 +185,90 @@ export function FinancialTrendsChart({
         
         // التحقق من نجاح استعلام الفواتير
         if (invoicesResponse.error) {
-          console.error(`خطأ في جلب الفواتير:`, invoicesResponse.error);
+          console.error(`خطأ في جلب فواتير المشتريات:`, invoicesResponse.error);
           throw invoicesResponse.error;
         }
         
-        const allInvoices = invoicesResponse.data || [];
-        console.log(`تم العثور على ${allInvoices.length || 0} فاتورة للفترة المحددة`);
+        // جلب بيانات المرتجعات للفترة المحددة
+        const { data: returns, error: returnsError } = await supabase
+          .from('returns')
+          .select('*, return_items(*)')
+          .eq('payment_status', 'confirmed')
+          .gte('date', periods[0].start)
+          .lte('date', periods[periods.length - 1].end);
+        
+        if (returnsError) {
+          console.error(`خطأ في جلب بيانات المرتجعات:`, returnsError);
+          throw returnsError;
+        }
+        
+        console.log(`تم العثور على ${returns?.length || 0} مرتجع للفترة المحددة`);
+        
+        const purchaseInvoices = invoicesResponse.data || [];
+        console.log(`تم العثور على ${purchaseInvoices.length || 0} فاتورة مشتريات للفترة المحددة`);
         
         // معالجة البيانات لكل فترة
         for (let i = 0; i < periods.length; i++) {
           const period = periods[i];
           const prevPeriod = i > 0 ? periods[i-1] : null;
           
-          // فلترة الفواتير للفترة الحالية
-          const periodInvoices = allInvoices?.filter(invoice => {
+          // فلترة فواتير المشتريات للفترة الحالية
+          const periodPurchaseInvoices = purchaseInvoices?.filter(invoice => {
             const invoiceDate = invoice.date;
             return invoiceDate >= period.start && invoiceDate <= period.end;
           }) || [];
           
-          // فصل المبيعات والمشتريات
-          const sales = periodInvoices.filter(invoice => 
-            invoice.invoice_type === 'sale' || invoice.invoice_type === 'sales'
-          );
+          // حساب المشتريات من الفواتير
+          const purchasesTotal = calculateTotal(periodPurchaseInvoices);
           
-          const purchases = periodInvoices.filter(invoice => 
-            invoice.invoice_type === 'purchase' || invoice.invoice_type === 'purchases'
-          );
-          
-          // حساب الإجماليات
-          const salesTotal = calculateTotal(sales);
-          const purchasesTotal = calculateTotal(purchases);
-          
-          // الحصول على الأرباح من نظام حساب الأرباح
+          // الحصول على المبيعات والأرباح من بيانات الأرباح (التي تعكس المرتجعات)
           const periodProfits = profitsSummaryResponse[i];
-          // استخدام بيانات الأرباح من الخدمة المخصصة
+          const salesTotal = periodProfits.total_sales; // استخدام المبيعات من جدول الأرباح
           const profitTotal = periodProfits.total_profit;
           
-          // تجميع بيانات المنتجات الأكثر مبيعاً
+          // فلترة المرتجعات للفترة الحالية
+          const periodReturns = returns?.filter(ret => {
+            const returnDate = ret.date;
+            return returnDate >= period.start && returnDate <= period.end;
+          }) || [];
+          
+          // فلترة مرتجعات المشتريات للفترة الحالية
+          const purchaseReturns = periodReturns.filter(ret => 
+            ret.return_type === 'purchase_return'
+          );
+          
+          // حساب قيمة مرتجعات المشتريات
+          const purchaseReturnsTotal = purchaseReturns.reduce(
+            (sum, ret) => sum + (ret.amount || 0), 0
+          );
+          
+          // تعديل إجمالي المشتريات بخصم قيمة المرتجعات
+          const netPurchasesTotal = purchasesTotal - purchaseReturnsTotal;
+          
+          // تجميع بيانات المنتجات الأكثر مبيعاً (نستمر في استخدام البيانات من الفواتير)
           const productSales = new Map<string, number>();
-          sales.forEach(invoice => {
-            (invoice.invoice_items || []).forEach((item: any) => {
-              const productName = item.product_name || item.name || 'منتج غير معروف';
-              const amount = extractAmount(item);
-              productSales.set(
-                productName, 
-                (productSales.get(productName) || 0) + amount
-              );
+          
+          // جلب بيانات المنتجات من فواتير البيع للفترة الحالية
+          const { data: saleInvoices, error: saleInvoicesError } = await supabase
+            .from('invoices')
+            .select('*, invoice_items(*)')
+            .eq('invoice_type', 'sale')
+            .in('status', ['confirmed', 'completed', 'paid', 'delivered', 'done'])
+            .gte('date', period.start)
+            .lte('date', period.end);
+            
+          if (!saleInvoicesError && saleInvoices) {
+            saleInvoices.forEach(invoice => {
+              (invoice.invoice_items || []).forEach((item: any) => {
+                const productName = item.product_name || item.name || 'منتج غير معروف';
+                const amount = extractAmount(item);
+                productSales.set(
+                  productName, 
+                  (productSales.get(productName) || 0) + amount
+                );
+              });
             });
-          });
+          }
           
           // ترتيب المنتجات حسب المبيعات
           const sortedProducts = Array.from(productSales.entries())
@@ -257,16 +294,16 @@ export function FinancialTrendsChart({
             period: period.period,
             periodStart: period.start,
             periodEnd: period.end,
-            sales: salesTotal,
-            purchases: purchasesTotal,
-            profit: profitTotal,
-            invoiceCount: sales.length,
+            sales: salesTotal, // المبيعات من جدول الأرباح (تعكس المرتجعات)
+            purchases: netPurchasesTotal, // المشتريات بعد خصم المرتجعات
+            profit: profitTotal, // الأرباح من جدول الأرباح
+            invoiceCount: saleInvoices?.length || 0,
             topProducts: sortedProducts,
             profitMargin: profitMargin,
             growth: growth
           });
           
-          console.log(`${period.label}: المبيعات=${salesTotal}, المشتريات=${purchasesTotal}, الأرباح=${profitTotal}, عدد الفواتير=${sales.length}`);
+          console.log(`${period.label}: المبيعات=${salesTotal}, المشتريات=${netPurchasesTotal}, الأرباح=${profitTotal}`);
         }
         
         return results;
@@ -482,7 +519,7 @@ export function FinancialTrendsChart({
     </ResponsiveContainer>
   );
   
-  // رسم بياني خ��ي للبيانات المالية
+  // رسم بياني خطي للبيانات المالية
   const renderLineChart = () => (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={margin}>
@@ -748,7 +785,7 @@ export function FinancialTrendsChart({
               <div className={`text-xs mt-1 ${overallGrowth >= 0 ? 'text-emerald-500' : 'text-red-500'} flex items-center`}>
                 {overallGrowth >= 0 ? <ArrowUpIcon className="h-3 w-3 mr-1" /> : <ArrowDownIcon className="h-3 w-3 mr-1" />}
                 <span>{Math.abs(overallGrowth).toFixed(1)}% </span>
-                <span className="text-muted-foreground mr-1">خلال الفت��ة</span>
+                <span className="text-muted-foreground mr-1">خلال الفترة</span>
               </div>
             </div>
             <div className="bg-background p-3 border rounded-lg">

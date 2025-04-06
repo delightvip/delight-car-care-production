@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +12,7 @@ import { PlusCircle, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ar } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const FinancialDashboard = () => {
   const navigate = useNavigate();
@@ -30,6 +30,25 @@ const FinancialDashboard = () => {
   
   useEffect(() => {
     loadData();
+    
+    // إضافة مستمع للتغييرات في البيانات المالية (مثل تأكيد الفواتير)
+    const handleFinancialDataChange = (event: any) => {
+      console.log('تم استلام إشعار بتغيير البيانات المالية', event.detail);
+      toast.info('جاري تحديث البيانات المالية...');
+      loadData();
+      // تنشيط بيانات React Query المتعلقة بالمالية
+      queryClient.invalidateQueries({ queryKey: ['financial'] });
+      queryClient.invalidateQueries({ queryKey: ['financial-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['profits'] });
+    };
+
+    // تسجيل المستمع للحدث المخصص
+    window.addEventListener('financial-data-change', handleFinancialDataChange);
+    
+    // إزالة المستمع عند تفكيك المكون
+    return () => {
+      window.removeEventListener('financial-data-change', handleFinancialDataChange);
+    };
   }, [dateRange]);
   
   const loadData = async () => {
@@ -38,16 +57,24 @@ const FinancialDashboard = () => {
     const startDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined;
     const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined;
     
-    const financialSummary = await financialService.getFinancialSummary(startDate, endDate);
-    setSummary(financialSummary);
-    
-    setLoading(false);
+    try {
+      const financialSummary = await financialService.getFinancialSummary(startDate, endDate);
+      setSummary(financialSummary);
+    } catch (error) {
+      console.error('خطأ في تحميل البيانات المالية:', error);
+      toast.error('حدث خطأ أثناء تحميل البيانات المالية');
+    } finally {
+      setLoading(false);
+    }
   };
   
   const handleRefresh = () => {
+    toast.info('جاري تحديث البيانات...');
     loadData();
-    // Invalidate any React Query caches related to financial data
+    // تنشيط أي ذاكرة تخزين مؤقت لـ React Query متعلقة بالبيانات المالية
     queryClient.invalidateQueries({ queryKey: ['financial'] });
+    queryClient.invalidateQueries({ queryKey: ['financial-balance'] });
+    queryClient.invalidateQueries({ queryKey: ['profits'] });
   };
   
   return (

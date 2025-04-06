@@ -30,6 +30,24 @@ class FinancialCommercialBridge {
         ? format(invoice.invoice_date, 'yyyy-MM-dd')
         : invoice.invoice_date;
 
+      // فحص ما إذا كانت هناك معاملة مالية مرتبطة بالفعل
+      const { data: existingTransactions, error: checkError } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .eq('reference_id', invoice.id)
+        .eq('reference_type', 'invoice');
+      
+      if (checkError) {
+        throw checkError;
+      }
+      
+      // إذا كانت هناك معاملة موجودة بالفعل، فلا نضيف معاملة جديدة
+      if (existingTransactions && existingTransactions.length > 0) {
+        console.log(`معاملة مالية موجودة بالفعل للفاتورة رقم ${invoice.invoice_number}`);
+        this.notifyFinancialDataChange('invoice_already_processed');
+        return true;
+      }
+
       const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
         type: 'income',
         amount: invoice.total_amount,
@@ -50,6 +68,9 @@ class FinancialCommercialBridge {
       if (transactionError) {
         throw transactionError;
       }
+      
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange('invoice_confirmation');
       
       toast.success(`تم تسجيل إيراد فاتورة رقم ${invoice.invoice_number} تلقائيًا`);
       return true;
@@ -73,13 +94,31 @@ class FinancialCommercialBridge {
         ? format(payment.payment_date, 'yyyy-MM-dd')
         : payment.payment_date;
 
+      // فحص ما إذا كانت هناك معاملة مالية مرتبطة بالفعل
+      const { data: existingTransactions, error: checkError } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .eq('reference_id', payment.id)
+        .eq('reference_type', 'payment');
+      
+      if (checkError) {
+        throw checkError;
+      }
+      
+      // إذا كانت هناك معاملة موجودة بالفعل، فلا نضيف معاملة جديدة
+      if (existingTransactions && existingTransactions.length > 0) {
+        console.log(`معاملة مالية موجودة بالفعل للدفعة رقم ${payment.payment_number}`);
+        this.notifyFinancialDataChange('payment_already_processed');
+        return true;
+      }
+
       const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
         type: transactionType,
         amount: payment.amount,
         category_id: categoryId,
         date: formattedDate,
         payment_method: payment.payment_method,
-        notes: `دفعة ${payment.type === 'receipt' ? 'مستلمة' : 'مدفوعة'} رق�� ${payment.payment_number} من/إلى ${payment.party_name}`,
+        notes: `دفعة ${payment.type === 'receipt' ? 'مستلمة' : 'مدفوعة'} رقم ${payment.payment_number} من/إلى ${payment.party_name}`,
         reference_id: payment.id,
         reference_type: 'payment'
       };
@@ -93,6 +132,9 @@ class FinancialCommercialBridge {
       if (transactionError) {
         throw transactionError;
       }
+      
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange('payment_confirmation');
       
       toast.success(`تم تسجيل معاملة دفعة رقم ${payment.payment_number} تلقائيًا`);
       return true;
@@ -111,6 +153,24 @@ class FinancialCommercialBridge {
     try {
       // 1. تحديد نوع المعاملة والفئة المالية المناسبة
       const isSalesReturn = returnData.return_type === 'sales_return';
+      
+      // فحص ما إذا كانت هناك معاملة مالية مرتبطة بالفعل
+      const { data: existingTransactions, error: checkError } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .eq('reference_id', returnData.id)
+        .eq('reference_type', 'return');
+      
+      if (checkError) {
+        throw checkError;
+      }
+      
+      // إذا كانت هناك معاملة موجودة بالفعل، فلا نضيف معاملة جديدة
+      if (existingTransactions && existingTransactions.length > 0) {
+        console.log(`معاملة مالية موجودة بالفعل للمرتجع رقم ${returnData.id}`);
+        this.notifyFinancialDataChange('return_already_processed');
+        return true;
+      }
       
       // البحث عن فئة مالية صالحة حسب النوع
       const { data: categories, error: categoriesError } = await supabase
@@ -197,6 +257,9 @@ class FinancialCommercialBridge {
           returnData.return_type
         );
       }
+      
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange('return_confirmation');
       
       toast.success(`تم تسجيل معاملة مالية لمرتجع تلقائيًا`);
       return true;
@@ -360,6 +423,9 @@ class FinancialCommercialBridge {
         );
       }
       
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange('return_cancellation');
+      
       toast.success(`تم تسجيل معاملة عكسية لمرتجع ملغي رقم ${returnData.id}`);
       return true;
     } catch (error) {
@@ -508,6 +574,9 @@ class FinancialCommercialBridge {
         return false;
       }
       
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange(`${type}_cancellation`);
+      
       toast.success(`تم تسجيل معاملة عكسية ل${commercialType} ملغاة رقم ${id}`);
       return true;
     } catch (error) {
@@ -536,6 +605,22 @@ class FinancialCommercialBridge {
       console.error('Error finding linked financial transactions:', error);
       toast.error('حدث خطأ أثناء البحث عن المعاملات المالية المرتبطة');
       return [];
+    }
+  }
+  
+  /**
+   * إرسال إشعار بتغيير البيانات المالية
+   * @param source مصدر التغيير
+   */
+  private notifyFinancialDataChange(source: string): void {
+    try {
+      const event = new CustomEvent('financial-data-change', { 
+        detail: { source: source }
+      });
+      window.dispatchEvent(event);
+      console.log(`تم إرسال إشعار بتغيير البيانات المالية من مصدر: ${source}`);
+    } catch (error) {
+      console.error('خطأ في إرسال إشعار بتغيير البيانات المالية:', error);
     }
   }
 }

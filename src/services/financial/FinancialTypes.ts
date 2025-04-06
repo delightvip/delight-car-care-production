@@ -1,4 +1,3 @@
-
 export interface Category {
   id: string;
   name: string;
@@ -37,6 +36,7 @@ export interface FinancialSummary {
   bankBalance?: number;
   totalBalance?: number;
   categoryAnalysis?: any[];
+  salesProfit?: number; // صافي الربح من المبيعات (من جدول profits)
 }
 
 export interface CategoryAmount {
