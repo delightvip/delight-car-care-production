@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
@@ -482,12 +483,12 @@ export class ReturnProcessingService {
       const { error } = await supabase
         .from('inventory_movements')
         .insert({
-          item_id: itemId.toString(), // Convert to string as expected by the API
+          item_id: itemId.toString(), // تحويل إلى نص كما هو متوقع من قبل API
           item_type: itemType,
           quantity: direction === 'in' ? quantity : -quantity,
           movement_type: direction,
           reason: source,
-          balance_after: 0, // This will be updated by a trigger/function
+          balance_after: 0, // سيتم تحديثه بواسطة trigger/function
           date: new Date().toISOString().split('T')[0]
         });
       
