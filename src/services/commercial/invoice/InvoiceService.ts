@@ -1,3 +1,4 @@
+
 import { Invoice } from '@/services/CommercialTypes';
 import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
@@ -59,12 +60,12 @@ export class InvoiceService {
     try {
       const result = await this.invoiceProcessor.confirmInvoice(invoiceId);
       
-      // If this is a sales invoice and was confirmed, calculate profits and update revenues
+      // If this is a sales invoice and was confirmed, calculate profits
       if (result) {
         const invoice = await this.getInvoiceById(invoiceId);
         if (invoice && invoice.invoice_type === 'sale') {
           const profitData = await this.profitService.calculateInvoiceProfit(invoiceId);
-          console.log('Profit calculated and revenue updated:', profitData);
+          console.log('Profit calculated:', profitData);
         }
       }
       
@@ -83,10 +84,10 @@ export class InvoiceService {
       
       const result = await this.invoiceProcessor.cancelInvoice(invoiceId);
       
-      // If this was a sales invoice, remove profit data and related revenue
+      // If this was a sales invoice, remove profit data
       if (result && invoice && invoice.invoice_type === 'sale') {
         await this.profitService.removeProfitData(invoiceId);
-        console.log('Profit data and related revenue removed after invoice cancellation');
+        console.log('Profit data removed after invoice cancellation');
       }
       
       return result;
@@ -104,10 +105,10 @@ export class InvoiceService {
       
       const result = await InvoiceEntity.delete(id);
       
-      // If this was a sales invoice, remove profit data and related revenue
+      // If this was a sales invoice, remove profit data
       if (result && invoice && invoice.invoice_type === 'sale') {
         await this.profitService.removeProfitData(id);
-        console.log('Profit data and related revenue removed after invoice deletion');
+        console.log('Profit data removed after invoice deletion');
       }
       
       return result;

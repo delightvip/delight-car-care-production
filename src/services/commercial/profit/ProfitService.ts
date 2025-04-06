@@ -1,26 +1,21 @@
 
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ProfitData, ProfitFilter, ProfitSummary } from './ProfitTypes';
 import BaseCommercialService from '../BaseCommercialService';
-import ProfitRevenueService from './ProfitRevenueService';
 import ProfitCalculationService from './ProfitCalculationService';
-import ProfitRepository from './ProfitRepository';
+import { ProfitData } from './ProfitTypes';
 
 /**
- * خدمة الأرباح الرئيسية
- * تتولى هذه الخدمة تنسيق العمليات بين مختلف مكونات نظام الأرباح
+ * خدمة الأرباح
+ * مسؤولة عن حساب وإدارة بيانات الأرباح للمبيعات
  */
 class ProfitService extends BaseCommercialService {
   private static instance: ProfitService;
   private profitCalculationService: ProfitCalculationService;
-  private profitRevenueService: ProfitRevenueService;
-  private profitRepository: ProfitRepository;
   
   private constructor() {
     super();
     this.profitCalculationService = ProfitCalculationService.getInstance();
-    this.profitRevenueService = ProfitRevenueService.getInstance();
-    this.profitRepository = ProfitRepository.getInstance();
   }
   
   public static getInstance(): ProfitService {
@@ -31,88 +26,138 @@ class ProfitService extends BaseCommercialService {
   }
   
   /**
-   * حساب الربح لفاتورة محددة وتحديث الإيرادات المرتبطة
+   * حساب وحفظ ربح فاتورة مبيعات
+   * @param invoiceId معرف الفاتورة
    */
   public async calculateInvoiceProfit(invoiceId: string): Promise<ProfitData | null> {
     try {
-      // حساب وحفظ بيانات الربح
-      const profitData = await this.profitCalculationService.calculateAndSaveProfit(invoiceId);
-      
-      if (profitData && profitData.profit_amount > 0) {
-        // إنشاء إيراد مرتبط بالربح إذا كان هناك ربح إيجابي
-        await this.profitRevenueService.createRevenueFromProfit(profitData);
-      }
-      
-      return profitData;
+      return await this.profitCalculationService.calculateAndSaveProfit(invoiceId);
     } catch (error) {
-      console.error('Error calculating invoice profit:', error);
-      toast.error('حدث خطأ أثناء حساب الأرباح');
+      console.error('Error in calculateInvoiceProfit:', error);
+      toast.error('حدث خطأ أثناء حساب ربح الفاتورة');
       return null;
     }
   }
   
   /**
-   * الحصول على بيانات الأرباح مع خيارات التصفية
-   */
-  public async getProfits(filters?: ProfitFilter): Promise<ProfitData[]> {
-    return this.profitRepository.getProfits(filters);
-  }
-  
-  /**
-   * الحصول على ملخص الأرباح
-   */
-  public async getProfitSummary(startDate?: string, endDate?: string, partyId?: string): Promise<ProfitSummary> {
-    return this.profitRepository.getProfitSummary(startDate, endDate, partyId);
-  }
-  
-  /**
-   * إزالة بيانات الربح والإيراد المرتبط به لفاتورة محددة (عند حذف/إلغاء الفاتورة)
+   * حذف بيانات الربح المرتبطة بفاتورة
+   * @param invoiceId معرف الفاتورة
    */
   public async removeProfitData(invoiceId: string): Promise<boolean> {
     try {
-      // الحصول على معرف سجل الربح أولاً
-      const profitData = await this.profitCalculationService.getProfitByInvoiceId(invoiceId);
-      
-      if (profitData) {
-        // إلغاء الإيراد المرتبط بالربح
-        await this.profitRevenueService.cancelProfitRevenue(profitData.id);
-      }
-      
-      // حذف سجل الربح
       return await this.profitCalculationService.deleteProfitByInvoiceId(invoiceId);
     } catch (error) {
-      console.error('Error removing profit data:', error);
-      toast.error('حدث خطأ أثناء إزالة بيانات الربح');
+      console.error('Error in removeProfitData:', error);
+      toast.error('حدث خطأ أثناء حذف بيانات الربح');
       return false;
     }
   }
   
   /**
-   * إعادة حساب الأرباح لجميع فواتير المبيعات وتحديث الإيرادات المرتبطة
+   * تحديث بيانات الربح عند عملية الإرجاع
+   * يتم استدعاؤها عند تأكيد مرتجع مبيعات لخصم الربح المتعلق بالمنتجات المرتجعة
+   * @param invoiceId معرف الفاتورة الأصلية
+   * @param returnItems بنود المرتجع
+   * @param totalReturnAmount إجمالي مبلغ المرتجع
    */
-  public async recalculateAllProfits(): Promise<boolean> {
+  public async updateProfitForReturn(
+    invoiceId: string, 
+    returnItems: any[], 
+    totalReturnAmount: number
+  ): Promise<boolean> {
     try {
-      // الحصول على جميع فواتير المبيعات المؤكدة
-      const { data: invoices, error } = await this.supabase
-        .from('invoices')
-        .select('id')
-        .eq('invoice_type', 'sale')
-        .eq('payment_status', 'confirmed');
+      // 1. التحقق من وجود بيانات ربح للفاتورة
+      const profitData = await this.profitCalculationService.getProfitByInvoiceId(invoiceId);
+      
+      if (!profitData) {
+        console.log(`لا توجد بيانات ربح للفاتورة رقم ${invoiceId}`);
+        return false;
+      }
+      
+      console.log('بيانات الربح الحالية:', profitData);
+      
+      // 2. حساب متوسط نسبة الربح للفاتورة
+      const profitPercentage = profitData.profit_percentage;
+      
+      // 3. حساب قيمة الربح التي سيتم خصمها (باستخدام نفس نسبة الربح)
+      const profitAmountToDeduct = (totalReturnAmount * profitPercentage) / 100;
+      
+      console.log(`قيمة الربح التي سيتم خصمها: ${profitAmountToDeduct}`);
+      
+      // 4. تحديث بيانات الربح
+      const newTotalSales = profitData.total_sales - totalReturnAmount;
+      const newProfitAmount = profitData.profit_amount - profitAmountToDeduct;
+      // نسبة الربح تظل كما هي لأننا نخصم بنفس النسبة
+      
+      // 5. حفظ البيانات المحدثة
+      const { error } = await this.supabase
+        .from('profits')
+        .update({
+          total_sales: newTotalSales,
+          profit_amount: newProfitAmount
+        })
+        .eq('id', profitData.id);
       
       if (error) throw error;
       
-      // معالجة كل فاتورة
-      let successCount = 0;
-      for (const invoice of invoices) {
-        const result = await this.calculateInvoiceProfit(invoice.id);
-        if (result) successCount++;
-      }
-      
-      toast.success(`تم إعادة حساب الأرباح بنجاح لعدد ${successCount} من الفواتير`);
+      console.log('تم تحديث بيانات الربح بنجاح بعد المرتجع');
       return true;
     } catch (error) {
-      console.error('Error recalculating all profits:', error);
-      toast.error('حدث خطأ أثناء إعادة حساب الأرباح');
+      console.error('Error updating profit for return:', error);
+      toast.error('حدث خطأ أثناء تحديث بيانات الربح للمرتجع');
+      return false;
+    }
+  }
+  
+  /**
+   * استرجاع بيانات الربح عند إلغاء عملية الإرجاع
+   * يتم استدعاؤها عند إلغاء مرتجع مبيعات لإعادة الربح المتعلق بالمنتجات إلى قيمته الأصلية
+   * @param invoiceId معرف الفاتورة الأصلية
+   * @param returnItems بنود المرتجع
+   * @param totalReturnAmount إجمالي مبلغ المرتجع
+   */
+  public async restoreProfitAfterReturnCancellation(
+    invoiceId: string, 
+    returnItems: any[], 
+    totalReturnAmount: number
+  ): Promise<boolean> {
+    try {
+      // 1. التحقق من وجود بيانات ربح للفاتورة
+      const profitData = await this.profitCalculationService.getProfitByInvoiceId(invoiceId);
+      
+      if (!profitData) {
+        console.log(`لا توجد بيانات ربح للفاتورة رقم ${invoiceId}`);
+        return false;
+      }
+      
+      console.log('بيانات الربح الحالية قبل إلغاء المرتجع:', profitData);
+      
+      // 2. استخدام نفس نسبة الربح لحساب الربح الذي سيتم إعادته
+      const profitPercentage = profitData.profit_percentage;
+      const profitAmountToRestore = (totalReturnAmount * profitPercentage) / 100;
+      
+      console.log(`قيمة الربح التي سيتم إعادتها: ${profitAmountToRestore}`);
+      
+      // 3. تحديث بيانات الربح
+      const newTotalSales = profitData.total_sales + totalReturnAmount;
+      const newProfitAmount = profitData.profit_amount + profitAmountToRestore;
+      
+      // 4. حفظ البيانات المحدثة
+      const { error } = await this.supabase
+        .from('profits')
+        .update({
+          total_sales: newTotalSales,
+          profit_amount: newProfitAmount
+        })
+        .eq('id', profitData.id);
+      
+      if (error) throw error;
+      
+      console.log('تم استرجاع بيانات الربح بنجاح بعد إلغاء المرتجع');
+      return true;
+    } catch (error) {
+      console.error('Error restoring profit after return cancellation:', error);
+      toast.error('حدث خطأ أثناء استرجاع بيانات الربح بعد إلغاء المرتجع');
       return false;
     }
   }

@@ -79,7 +79,7 @@ class FinancialCommercialBridge {
         category_id: categoryId,
         date: formattedDate,
         payment_method: payment.payment_method,
-        notes: `دفعة ${payment.type === 'receipt' ? 'مستلمة' : 'مدفوعة'} رقم ${payment.payment_number} من/إلى ${payment.party_name}`,
+        notes: `دفعة ${payment.type === 'receipt' ? 'مستلمة' : 'مدفوعة'} رق�� ${payment.payment_number} من/إلى ${payment.party_name}`,
         reference_id: payment.id,
         reference_type: 'payment'
       };
@@ -105,46 +105,74 @@ class FinancialCommercialBridge {
   
   /**
    * معالجة تأكيد مرتجع
-   * عند تأكيد مرتجع، يتم إنشاء معاملة مالية مقابلة (مصروف لمرتجع المبيعات، إيراد لمرتجع المشتريات)
+   * عند تأكيد مرتجع، يتم إنشاء معاملة مالية مقابلة (خصم من الإيرادات لمرتجع المبيعات، خصم من المصروفات لمرتجع المشتريات)
    */
   public async handleReturnConfirmation(returnData: any): Promise<boolean> {
     try {
       // 1. تحديد نوع المعاملة والفئة المالية المناسبة
       const isSalesReturn = returnData.return_type === 'sales_return';
-      const transactionType = isSalesReturn ? 'expense' : 'income';
       
-      // البحث عن فئة مالية صالحة حسب النوع بدلاً من استخدام معرفات ثابتة
+      // البحث عن فئة مالية صالحة حسب النوع
       const { data: categories, error: categoriesError } = await supabase
         .from('financial_categories')
-        .select('id')
-        .eq('type', transactionType)
+        .select('id, name')
+        .eq('type', isSalesReturn ? 'negative_income' : 'negative_expense') // استخدام أنواع جديدة تعبر عن الخصومات
         .limit(1);
       
       if (categoriesError) {
         console.error("Error fetching financial categories:", categoriesError);
-        throw new Error("فشل في العثور على فئة مالية مناسبة للمرتجع");
+        
+        // إذا لم يكن هناك تصنيفات من النوع negative_income/negative_expense، نبحث عن التصنيفات العادية
+        const { data: fallbackCategories, error: fallbackError } = await supabase
+          .from('financial_categories')
+          .select('id, name')
+          .eq('type', isSalesReturn ? 'income' : 'expense')
+          .limit(1);
+          
+        if (fallbackError || !fallbackCategories || fallbackCategories.length === 0) {
+          throw new Error("فشل في العثور على فئة مالية مناسبة للمرتجع");
+        }
+        
+        console.log(`استخدام فئة مالية بديلة: ${fallbackCategories[0].name}`);
+        var categoryId = fallbackCategories[0].id;
+      } else if (!categories || categories.length === 0) {
+        console.error("No financial categories found for type:", isSalesReturn ? 'negative_income' : 'negative_expense');
+        
+        // البحث عن فئات عادية كبديل
+        const { data: fallbackCategories, error: fallbackError } = await supabase
+          .from('financial_categories')
+          .select('id, name')
+          .eq('type', isSalesReturn ? 'income' : 'expense')
+          .limit(1);
+          
+        if (fallbackError || !fallbackCategories || fallbackCategories.length === 0) {
+          throw new Error(`لا توجد فئات مالية مناسبة للمرتجع`);
+        }
+        
+        console.log(`استخدام فئة مالية بديلة: ${fallbackCategories[0].name}`);
+        var categoryId = fallbackCategories[0].id;
+      } else {
+        // استخدام أول فئة مالية صالحة من النوع المحدد
+        var categoryId = categories[0].id;
+        console.log(`استخدام فئة مالية: ${categories[0].name} للمرتجع`);
       }
       
-      if (!categories || categories.length === 0) {
-        console.error("No financial categories found for type:", transactionType);
-        throw new Error(`لا توجد فئات مالية من نوع ${transactionType === 'income' ? 'الإيرادات' : 'المصروفات'}`);
-      }
-      
-      // استخدام أول فئة مالية صالحة
-      const categoryId = categories[0].id;
-      console.log(`Using financial category: ${categoryId} for ${transactionType} transaction`);
-      
-      // 2. إنشاء المعاملة المالية
+      // 2. إنشاء المعاملة المالية - الآن نستخدم نوع معاملة مالية يعبر عن التخفيض بدلاً من المصروف
       const formattedDate = typeof returnData.date === 'object' 
         ? format(returnData.date, 'yyyy-MM-dd')
         : returnData.date;
 
-      const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
+      // استخدام نوع المعاملة المناسب للمرتجع
+      // مرتجع المبيعات يعتبر خصم من الإيرادات وليس مصروف
+      // مرتجع المشتريات يعتبر خصم من المصروفات وليس إيراد
+      const transactionType = isSalesReturn ? 'negative_income' : 'negative_expense';
+      
+      const transactionData = {
         type: transactionType,
         amount: returnData.amount,
         category_id: categoryId,
         date: formattedDate,
-        payment_method: 'cash', // افتراضي، يمكن تعديله لاحقًا
+        payment_method: 'cash', // افتراضي
         notes: returnData.notes || `مرتجع ${isSalesReturn ? 'مبيعات' : 'مشتريات'} من/إلى ${returnData.party_name || 'غير محدد'}`,
         reference_id: returnData.id,
         reference_type: 'return'
@@ -195,8 +223,7 @@ class FinancialCommercialBridge {
         .eq('party_id', partyId)
         .single();
       
-      if (balanceError && balanceError.code !== 'PGRST116') {
-        // خطأ غير "لا توجد نتائج"
+      if (balanceError) {
         throw balanceError;
       }
       
@@ -297,13 +324,19 @@ class FinancialCommercialBridge {
         ? format(returnData.date, 'yyyy-MM-dd')
         : returnData.date;
 
-      const reverseTransactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
-        type: transaction.type === 'income' ? 'expense' : 'income', // عكس النوع
+      // عكس نوع المعاملة بشكل منطقي
+      // إذا كان المرتجع من نوع negative_income (خصم من الإيرادات) فالعكس هو income (إيراد)
+      // إذا كان المرتجع من نوع negative_expense (خصم من المصروفات) فالعكس هو expense (مصروف)
+      const reverseType = transaction.type === 'negative_income' || transaction.type === 'income' ? 
+                          'income' : 'expense';
+      
+      const reverseTransactionData = {
+        type: reverseType,
         amount: returnData.amount,
         category_id: transaction.category_id,
         date: currentDate,
         payment_method: transaction.payment_method,
-        notes: `عكس ${transaction.type === 'income' ? 'إيراد' : 'مصروف'} مرتجع ملغي رقم ${returnData.id} ${returnData.party_name ? 'لـ/من ' + returnData.party_name : ''}`,
+        notes: `عكس معاملة مرتجع ملغي رقم ${returnData.id} ${returnData.party_name ? 'لـ/من ' + returnData.party_name : ''}`,
         reference_id: returnData.id,
         reference_type: `reverse_return` // نوع مرجعي يشير إلى أنها معاملة عكسية
       };
