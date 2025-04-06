@@ -1,196 +1,178 @@
-
 import React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Edit, 
-  Trash2, 
-  Eye, 
-  Plus, 
-  Minus,
-  AlertTriangle
-} from 'lucide-react';
-import { 
-  formatCurrency, 
-  ensureNumericValue, 
-  isLowStock 
-} from './InventoryDataFormatter';
+import { Edit, Trash, Eye, PlusCircle, MinusCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ensureNumericValue, formatCurrency, formatDisplayValue } from './InventoryDataFormatter';
 
-/**
- * Returns the common columns used across different inventory tables
- */
+export interface InventoryItem {
+  id: number;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  unit_cost: number;
+  min_stock: number;
+  totalValue?: number;
+  importance?: number;
+  sales_price?: number;
+}
+
 export const getCommonTableColumns = () => [
-  {
-    key: 'code',
-    title: 'الكود',
-    sortable: true,
-    width: '120px'
-  },
-  {
-    key: 'name',
-    title: 'الاسم',
-    sortable: true,
-    minWidth: '200px'
-  },
-  {
-    key: 'unit',
-    title: 'الوحدة',
-    sortable: false,
-    width: '100px'
-  },
-  {
-    key: 'quantity',
+  { key: 'code', title: 'الكود', sortable: true },
+  { key: 'name', title: 'الاسم', sortable: true },
+  { key: 'unit', title: 'وحدة القياس', sortable: true },
+  { 
+    key: 'quantity', 
     title: 'الكمية',
     sortable: true,
-    width: '120px',
-    render: (value: any, record: any) => (
-      <div className="flex items-center">
-        <span className="mr-2">{value}</span>
-        {isLowStock(record) && (
-          <span className="inline-flex">
-            <AlertTriangle size={16} className="text-amber-500" />
-          </span>
-        )}
-      </div>
-    )
+    render: (value: number, record: any) => {
+      // Ensure values are numeric
+      const quantity = ensureNumericValue(value, 'quantity');
+      const minStock = ensureNumericValue(record.min_stock, 'min_stock');
+      
+      return (
+        <div className="flex items-center">
+          <div className="flex items-center gap-2 min-w-[120px]">
+            <div 
+              className={`w-3 h-3 rounded-full ${
+                quantity <= minStock ? 'bg-red-500' : 
+                quantity <= minStock * 1.5 ? 'bg-amber-500' : 
+                'bg-green-500'
+              }`} 
+            />
+            <div className="relative w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`absolute top-0 left-0 h-full rounded-full ${
+                  quantity <= minStock ? 'bg-red-500' : 
+                  quantity <= minStock * 1.5 ? 'bg-amber-500' : 
+                  'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.round((quantity / (minStock * 2)) * 100))}%` }}
+              ></div>
+            </div>
+            <span className={`font-medium ${
+              quantity <= minStock ? 'text-red-700' : 
+              quantity <= minStock * 1.5 ? 'text-amber-700' : 
+              'text-green-700'
+            }`}>{quantity} {record.unit}</span>
+          </div>
+        </div>
+      );
+    }
   },
-  {
-    key: 'min_stock',
-    title: 'الحد الأدنى',
-    sortable: true,
-    width: '120px'
-  },
-  {
-    key: 'unit_cost',
+  { 
+    key: 'unit_cost', 
     title: 'التكلفة',
     sortable: true,
-    width: '120px',
-    render: (value: any) => formatCurrency(ensureNumericValue(value))
+    render: (value: number) => {
+      const unitCost = ensureNumericValue(value, 'unit_cost');
+      return formatCurrency(unitCost);
+    }
   },
-  {
-    key: 'totalValue',
-    title: 'القيمة الإجمالية',
+  { 
+    key: 'sales_price', 
+    title: 'سعر البيع',
     sortable: true,
-    width: '150px',
-    render: (value: any, record: any) => {
-      const quantity = ensureNumericValue(record.quantity);
-      const unitCost = ensureNumericValue(record.unit_cost);
-      const totalValue = quantity * unitCost;
-      
-      return formatCurrency(totalValue);
+    render: (value: number) => {
+      const salesPrice = ensureNumericValue(value, 'sales_price');
+      return salesPrice > 0 ? formatCurrency(salesPrice) : 'غير محدد';
+    }
+  },
+  { 
+    key: 'min_stock', 
+    title: 'الحد الأدنى',
+    sortable: true,
+    render: (value: number, record: any) => `${ensureNumericValue(value, 'min_stock')} ${record.unit}`
+  },
+  { 
+    key: 'totalValue', 
+    title: 'إجمالي القيمة',
+    sortable: true,
+    render: (value: number, record: any) => {
+      // Calculate total value if not provided
+      if (value === undefined || value === null) {
+        const quantity = ensureNumericValue(record.quantity, 'quantity');
+        const unitCost = ensureNumericValue(record.unit_cost, 'unit_cost');
+        return formatCurrency(quantity * unitCost);
+      }
+      return formatCurrency(ensureNumericValue(value, 'totalValue'));
     }
   }
 ];
 
-/**
- * Returns an importance column for inventory tables
- */
 export const getImportanceColumn = () => ({
   key: 'importance',
   title: 'الأهمية',
   sortable: true,
-  width: '100px',
-  render: (value: any) => {
-    const importance = ensureNumericValue(value);
-    
-    if (importance === 0) {
-      return <Badge variant="outline">عادي</Badge>;
-    } else if (importance <= 3) {
-      return <Badge variant="secondary">متوسط</Badge>;
-    } else if (importance <= 5) {
-      return <Badge variant="default">مهم</Badge>;
-    } else {
-      return <Badge variant="destructive">حرج</Badge>;
-    }
+  render: (value: number) => {
+    const importanceValue = ensureNumericValue(value);
+    const labels = {
+      0: 'منخفضة',
+      1: 'متوسطة',
+      2: 'عالية'
+    };
+    const colors = {
+      0: 'bg-blue-100 text-blue-800',
+      1: 'bg-amber-100 text-amber-800',
+      2: 'bg-red-100 text-red-800'
+    };
+    return (
+      <Badge className={`${colors[importanceValue as keyof typeof colors]}`}>
+        {labels[importanceValue as keyof typeof labels]}
+      </Badge>
+    );
   }
 });
 
-/**
- * Returns the common actions used across different inventory tables
- */
 export const renderInventoryActions = (
-  record: any,
-  onEdit: (record: any) => void,
-  onDelete: (record: any) => void,
+  record: any, 
+  onEdit: (record: any) => void, 
+  onDelete: (record: any) => void, 
   onView: (record: any) => void,
   onIncrement?: (record: any) => void,
   onDecrement?: (record: any) => void
-) => {
-  return (
-    <div className="flex justify-end gap-2">
-      {onIncrement && (
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={(e) => {
-            e.stopPropagation();
-            onIncrement(record);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      )}
-      
-      {onDecrement && record.quantity > 0 && (
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={(e) => {
-            e.stopPropagation();
-            onDecrement(record);
-          }}
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
-      )}
-      
-      <Button 
-        variant="ghost" 
-        size="icon" 
-        onClick={(e) => {
-          e.stopPropagation();
-          onView(record);
-        }}
+) => (
+  <div className="flex space-x-2 rtl:space-x-reverse">
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => onEdit(record)}
+    >
+      <Edit size={16} />
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => onDelete(record)}
+    >
+      <Trash size={16} />
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => onView(record)}
+    >
+      <Eye size={16} />
+    </Button>
+    {onIncrement && (
+      <Button
+        variant="ghost"
+        size="icon"
+        title="زيادة الكمية"
+        onClick={() => onIncrement(record)}
       >
-        <Eye className="h-4 w-4" />
+        <PlusCircle size={16} />
       </Button>
-      
-      <Button 
-        variant="ghost" 
-        size="icon" 
-        onClick={(e) => {
-          e.stopPropagation();
-          onEdit(record);
-        }}
+    )}
+    {onDecrement && (
+      <Button
+        variant="ghost"
+        size="icon"
+        title="نقص الكمية"
+        onClick={() => onDecrement(record)}
       >
-        <Edit className="h-4 w-4" />
+        <MinusCircle size={16} />
       </Button>
-      
-      <Button 
-        variant="ghost" 
-        size="icon" 
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(record);
-        }}
-      >
-        <Trash2 className="h-4 w-4 text-destructive" />
-      </Button>
-    </div>
-  );
-};
-
-export const getInventoryStatusBadge = (record: any) => {
-  const quantity = ensureNumericValue(record.quantity);
-  const minStock = ensureNumericValue(record.min_stock);
-  
-  if (quantity <= 0) {
-    return <Badge variant="destructive">نفد من المخزون</Badge>;
-  } else if (quantity <= minStock) {
-    return <Badge variant="destructive">أقل من الحد الأدنى</Badge>;
-  } else if (quantity <= minStock * 1.2) {
-    return <Badge variant="warning">مخزون منخفض</Badge>;
-  } else {
-    return <Badge variant="success">متوفر</Badge>;
-  }
-};
+    )}
+  </div>
+);

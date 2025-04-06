@@ -1,13 +1,10 @@
+
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  getCommonTableColumns, 
-  getImportanceColumn, 
-  renderInventoryActions 
-} from '../common/InventoryTableColumns';
+import { getCommonTableColumns, getImportanceColumn, renderInventoryActions } from '../common/InventoryTableColumns';
 import { formatInventoryData, ensureNumericValue } from '../common/InventoryDataFormatter';
 
 interface RawMaterialsListProps {
@@ -28,6 +25,7 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const queryClient = useQueryClient();
 
+  // Fetch raw materials data
   const { data: rawMaterials = [], isLoading, error } = useQuery({
     queryKey: ['rawMaterials'],
     queryFn: async () => {
@@ -38,6 +36,7 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
         
       if (error) throw error;
       
+      // Ensure all numeric values are properly formatted
       return data.map(item => ({
         ...item,
         quantity: ensureNumericValue(item.quantity),
@@ -50,6 +49,7 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
     }
   });
   
+  // Quick update quantity mutation
   const quickUpdateQuantityMutation = useMutation({
     mutationFn: async ({ id, change }: { id: number, change: number }) => {
       const { data: material, error: fetchError } = await supabase
@@ -80,9 +80,11 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
     }
   });
 
+  // Filter and sort the data
   const filteredMaterials = useMemo(() => {
     let filtered = [...rawMaterials];
     
+    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(item => 
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -90,6 +92,7 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
       );
     }
     
+    // Apply type filter
     switch (filterType) {
       case 'low-stock':
         filtered = filtered.filter(item => ensureNumericValue(item.quantity) <= ensureNumericValue(item.min_stock) * 1.2);
@@ -98,12 +101,14 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
         filtered = [...filtered].sort((a, b) => ensureNumericValue(b.totalValue) - ensureNumericValue(a.totalValue));
         break;
       default:
+        // No additional filtering needed for 'all'
         break;
     }
     
     return filtered;
   }, [rawMaterials, filterType, searchQuery]);
   
+  // Apply sorting
   const sortedMaterials = useMemo(() => {
     if (!sortConfig) return filteredMaterials;
     
@@ -121,6 +126,7 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
     });
   }, [filteredMaterials, sortConfig]);
   
+  // Handle row actions
   const handleIncrement = (record: any) => {
     quickUpdateQuantityMutation.mutate({ id: record.id, change: 1 });
   };
@@ -129,11 +135,13 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
     quickUpdateQuantityMutation.mutate({ id: record.id, change: -1 });
   };
   
+  // Define table columns
   const columns = [
     ...getCommonTableColumns(),
     getImportanceColumn()
   ];
 
+  // Render row actions
   const renderActions = (record: any) => renderInventoryActions(
     record, 
     onEdit, 
