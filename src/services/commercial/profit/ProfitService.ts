@@ -146,6 +146,71 @@ class ProfitService {
   }
 
   /**
+   * إعادة حساب جميع الأرباح
+   */
+  public async recalculateAllProfits(): Promise<boolean> {
+    try {
+      // الحصول على جميع فواتير المبيعات المؤكدة
+      const { data: invoices, error } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('invoice_type', 'sale')
+        .eq('payment_status', 'confirmed');
+      
+      if (error) throw error;
+      
+      if (!invoices || invoices.length === 0) {
+        toast.info('لا توجد فواتير مبيعات مؤكدة لإعادة حساب أرباحها');
+        return true;
+      }
+      
+      // إعادة حساب الربح لكل فاتورة
+      let successCount = 0;
+      for (const invoice of invoices) {
+        try {
+          await this.recalculateProfitForInvoice(invoice.id);
+          successCount++;
+        } catch (error) {
+          console.error(`Error recalculating profit for invoice ${invoice.id}:`, error);
+          // استمر في المعالجة حتى مع وجود أخطاء لفواتير فردية
+        }
+      }
+      
+      console.log(`Successfully recalculated profits for ${successCount} out of ${invoices.length} invoices`);
+      
+      return true;
+    } catch (error) {
+      console.error('Error recalculating all profits:', error);
+      toast.error('حدث خطأ أثناء إعادة حساب جميع الأرباح');
+      return false;
+    }
+  }
+
+  /**
+   * حساب وحفظ بيانات الربح لفاتورة مبيعات
+   */
+  public async calculateInvoiceProfit(invoiceId: string): Promise<ProfitData | null> {
+    try {
+      return await this.calculationService.calculateAndSaveProfit(invoiceId);
+    } catch (error) {
+      console.error('Error calculating invoice profit:', error);
+      return null;
+    }
+  }
+
+  /**
+   * حذف بيانات الربح لفاتورة محددة
+   */
+  public async removeProfitData(invoiceId: string): Promise<boolean> {
+    try {
+      return await this.calculationService.deleteProfitByInvoiceId(invoiceId);
+    } catch (error) {
+      console.error('Error removing profit data:', error);
+      return false;
+    }
+  }
+
+  /**
    * تحديث بيانات الربح عند تسجيل مرتجع مبيعات
    * @param invoiceId معرف الفاتورة المرتبطة
    * @param returnItems عناصر المرتجع

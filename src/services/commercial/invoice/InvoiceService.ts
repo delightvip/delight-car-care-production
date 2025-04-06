@@ -4,16 +4,19 @@ import { InvoiceEntity } from './InvoiceEntity';
 import { InvoiceProcessor } from './InvoiceProcessor';
 import { toast } from "sonner";
 import ProfitService from '../profit/ProfitService';
+import ProfitCalculationService from '../profit/ProfitCalculationService';
 
 // خدمة الفواتير الرئيسية
 export class InvoiceService {
   private static instance: InvoiceService;
   private invoiceProcessor: InvoiceProcessor;
   private profitService: ProfitService;
+  private profitCalculationService: ProfitCalculationService;
   
   private constructor() {
     this.invoiceProcessor = new InvoiceProcessor();
     this.profitService = ProfitService.getInstance();
+    this.profitCalculationService = ProfitCalculationService.getInstance();
   }
   
   public static getInstance(): InvoiceService {
@@ -64,7 +67,7 @@ export class InvoiceService {
       if (result) {
         const invoice = await this.getInvoiceById(invoiceId);
         if (invoice && invoice.invoice_type === 'sale') {
-          const profitData = await this.profitService.calculateInvoiceProfit(invoiceId);
+          const profitData = await this.profitCalculationService.calculateAndSaveProfit(invoiceId);
           console.log('Profit calculated:', profitData);
         }
       }
@@ -86,7 +89,7 @@ export class InvoiceService {
       
       // If this was a sales invoice, remove profit data
       if (result && invoice && invoice.invoice_type === 'sale') {
-        await this.profitService.removeProfitData(invoiceId);
+        await this.profitCalculationService.deleteProfitByInvoiceId(invoiceId);
         console.log('Profit data removed after invoice cancellation');
       }
       
@@ -107,7 +110,7 @@ export class InvoiceService {
       
       // If this was a sales invoice, remove profit data
       if (result && invoice && invoice.invoice_type === 'sale') {
-        await this.profitService.removeProfitData(id);
+        await this.profitCalculationService.deleteProfitByInvoiceId(id);
         console.log('Profit data removed after invoice deletion');
       }
       

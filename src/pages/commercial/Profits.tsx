@@ -40,11 +40,7 @@ const Profits = () => {
   const { data: summary, isLoading: isSummaryLoading } = useQuery({
     queryKey: ['profitsSummary', filters],
     queryFn: () => {
-      return ProfitService.getInstance().getProfitSummary(
-        filters.startDate, 
-        filters.endDate, 
-        filters.partyId
-      );
+      return ProfitService.getInstance().getProfitSummary(filters);
     },
   });
   

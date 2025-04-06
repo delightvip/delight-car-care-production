@@ -65,19 +65,37 @@ class ProfitCalculator {
         return 0;
       }
 
-      let table: string;
+      // تحديد الجدول المناسب بناءً على نوع الصنف
+      let query;
+      
       switch (itemType) {
         case 'finished_products':
-          table = 'finished_products';
+          query = supabase
+            .from('finished_products')
+            .select('unit_cost')
+            .eq('id', itemId)
+            .single();
           break;
         case 'semi_finished_products':
-          table = 'semi_finished_products';
+          query = supabase
+            .from('semi_finished_products')
+            .select('unit_cost')
+            .eq('id', itemId)
+            .single();
           break;
         case 'raw_materials':
-          table = 'raw_materials';
+          query = supabase
+            .from('raw_materials')
+            .select('unit_cost')
+            .eq('id', itemId)
+            .single();
           break;
         case 'packaging_materials':
-          table = 'packaging_materials';
+          query = supabase
+            .from('packaging_materials')
+            .select('unit_cost')
+            .eq('id', itemId)
+            .single();
           break;
         default:
           console.error('Unknown item type:', itemType);
@@ -85,18 +103,14 @@ class ProfitCalculator {
       }
 
       // جلب تكلفة الصنف من الجدول المناسب
-      const { data, error } = await supabase
-        .from(table)
-        .select('unit_cost')
-        .eq('id', itemId)
-        .single();
+      const { data, error } = await query;
 
       if (error) {
         console.error(`Error fetching cost for ${itemType} item ${itemId}:`, error);
         return 0;
       }
 
-      return data.unit_cost || 0;
+      return data?.unit_cost || 0;
     } catch (error) {
       console.error(`Error getting unit cost for ${itemType} item ${itemId}:`, error);
       return 0;
