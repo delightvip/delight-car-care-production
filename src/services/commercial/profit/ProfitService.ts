@@ -1,9 +1,8 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import BaseCommercialService from '../BaseCommercialService';
 import ProfitCalculationService from './ProfitCalculationService';
-import { ProfitData, ProfitFilter } from './ProfitTypes';
+import { ProfitData, ProfitFilter, ProfitSummary } from './ProfitTypes';
 
 /**
  * خدمة الأرباح
@@ -198,10 +197,19 @@ class ProfitService extends BaseCommercialService {
         if (filters.partyId) {
           query = query.eq('party_id', filters.partyId);
         }
+        
+        // تطبيق ترتيب النتائج إذا تم تحديده
+        if (filters.sortBy) {
+          const orderField = filters.sortBy === 'date' ? 'invoices.date' : filters.sortBy;
+          query = query.order(orderField, { ascending: filters.sortOrder === 'asc' });
+        } else {
+          // الترتيب الافتراضي
+          query = query.order('invoices.date', { ascending: false });
+        }
+      } else {
+        // الترتيب الافتراضي
+        query = query.order('invoices.date', { ascending: false });
       }
-      
-      // ترتيب النتائج حسب التاريخ
-      query = query.order('invoices.date', { ascending: false });
       
       const { data, error } = await query;
       
@@ -237,13 +245,7 @@ class ProfitService extends BaseCommercialService {
     startDate?: string,
     endDate?: string,
     partyId?: string
-  ): Promise<{
-    total_sales: number;
-    total_cost: number;
-    total_profit: number;
-    average_profit_percentage: number;
-    profit_trend: number;
-  }> {
+  ): Promise<ProfitSummary> {
     try {
       let query = this.supabase
         .from('profits')
@@ -274,21 +276,17 @@ class ProfitService extends BaseCommercialService {
       const totalSales = data.reduce((sum, profit) => sum + profit.total_sales, 0);
       const totalCost = data.reduce((sum, profit) => sum + profit.total_cost, 0);
       const totalProfit = data.reduce((sum, profit) => sum + profit.profit_amount, 0);
+      const invoiceCount = data.length;
       
       // حساب متوسط نسبة الربح
       const averageProfitPercentage = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
-      
-      // حساب اتجاه الأرباح (مقارنة الفترة الحالية بالفترة السابقة)
-      let profitTrend = 0;
-      
-      // ...هنا يمكن إضافة حساب الاتجاه بمقارنة الفترة الحالية بفترة سابقة مماثلة
       
       return {
         total_sales: totalSales,
         total_cost: totalCost,
         total_profit: totalProfit,
         average_profit_percentage: averageProfitPercentage,
-        profit_trend: profitTrend
+        invoice_count: invoiceCount
       };
     } catch (error) {
       console.error('Error fetching profit summary:', error);
@@ -298,7 +296,7 @@ class ProfitService extends BaseCommercialService {
         total_cost: 0,
         total_profit: 0,
         average_profit_percentage: 0,
-        profit_trend: 0
+        invoice_count: 0
       };
     }
   }

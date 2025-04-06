@@ -358,7 +358,7 @@ export class ReturnProcessingService {
         .insert({
           item_id: itemId.toString(), // Convert to string as expected by the API
           item_type: itemType,
-          quantity: quantity,
+          quantity: direction === 'in' ? quantity : -quantity,
           movement_type: direction,
           reason: source,
           balance_after: 0, // This will be updated by a trigger/function
