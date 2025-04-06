@@ -1,9 +1,8 @@
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Transaction, Category } from './FinancialTypes';
 
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { Transaction } from "./FinancialTypes";
-
-// Add the is_reduction property to the Transaction interface in the model
+// Interface for transaction creation
 export interface TransactionCreateData {
   date: string;
   amount: number;
@@ -16,9 +15,6 @@ export interface TransactionCreateData {
   is_reduction?: boolean;
 }
 
-/**
- * خدمة مخصصة للتعامل مع المعاملات المالية
- */
 class FinancialTransactionService {
   private static instance: FinancialTransactionService;
   
@@ -31,58 +27,35 @@ class FinancialTransactionService {
     return FinancialTransactionService.instance;
   }
   
-  /**
-   * الحصول على جميع المعاملات المالية مع امكانية التصفية
-   */
-  public async getTransactions(
-    startDate?: string,
-    endDate?: string,
-    type?: 'income' | 'expense',
-    categoryId?: string
-  ): Promise<Transaction[]> {
+  public async getTransactions(): Promise<Transaction[]> {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('financial_transactions')
-        .select('*, financial_categories!inner(name, type)')
+        .select(`
+          *,
+          financial_categories:category_id (
+            name,
+            type
+          )
+        `)
         .order('date', { ascending: false });
       
-      if (startDate) {
-        query = query.gte('date', startDate);
-      }
+      if (error) throw error;
       
-      if (endDate) {
-        query = query.lte('date', endDate);
-      }
-      
-      if (type) {
-        query = query.eq('type', type);
-      }
-      
-      if (categoryId) {
-        query = query.eq('category_id', categoryId);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        throw error;
-      }
-      
-      // تنسيق البيانات للواجهة
-      return data.map(item => ({
-        id: item.id,
-        date: item.date,
-        amount: item.amount,
-        type: item.type as 'income' | 'expense',
-        category_id: item.category_id,
-        category_name: item.financial_categories.name,
-        category_type: item.financial_categories.type,
-        payment_method: item.payment_method,
-        reference_id: item.reference_id,
-        reference_type: item.reference_type,
-        notes: item.notes,
-        created_at: item.created_at,
-        is_reduction: item.is_reduction || false
+      return data.map(transaction => ({
+        id: transaction.id,
+        date: transaction.date,
+        amount: transaction.amount,
+        type: transaction.type as 'income' | 'expense',
+        category_id: transaction.category_id,
+        category_name: transaction.financial_categories?.name || '',
+        category_type: transaction.financial_categories?.type || '',
+        payment_method: transaction.payment_method,
+        reference_id: transaction.reference_id,
+        reference_type: transaction.reference_type,
+        notes: transaction.notes,
+        created_at: transaction.created_at,
+        is_reduction: transaction.is_reduction || false
       }));
     } catch (error) {
       console.error('Error fetching transactions:', error);
@@ -91,34 +64,30 @@ class FinancialTransactionService {
     }
   }
   
-  /**
-   * الحصول على معاملة مالية بواسطة المعرف
-   */
   public async getTransactionById(id: string): Promise<Transaction | null> {
     try {
       const { data, error } = await supabase
         .from('financial_transactions')
-        .select('*, financial_categories!inner(name, type)')
+        .select(`
+          *,
+          financial_categories:category_id (
+            name,
+            type
+          )
+        `)
         .eq('id', id)
-        .maybeSingle();
+        .single();
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
-      if (!data) {
-        return null;
-      }
-      
-      // تنسيق البيانات للواجهة
       return {
         id: data.id,
         date: data.date,
         amount: data.amount,
         type: data.type as 'income' | 'expense',
         category_id: data.category_id,
-        category_name: data.financial_categories.name,
-        category_type: data.financial_categories.type,
+        category_name: data.financial_categories?.name || '',
+        category_type: data.financial_categories?.type || '',
         payment_method: data.payment_method,
         reference_id: data.reference_id,
         reference_type: data.reference_type,
@@ -127,91 +96,11 @@ class FinancialTransactionService {
         is_reduction: data.is_reduction || false
       };
     } catch (error) {
-      console.error('Error fetching transaction:', error);
-      toast.error('حدث خطأ أثناء جلب بيانات المعاملة المالية');
-      return null;
-    }
-  }
-
-  /**
-   * الحصول على فئة بواسطة المعرف
-   * وظيفة مساعدة داخلية
-   */
-  private async getCategoryById(id: string) {
-    try {
-      const { data, error } = await supabase
-        .from('financial_categories')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      
-      if (error) {
-        throw error;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error fetching category:', error);
+      console.error(`Error fetching transaction ${id}:`, error);
       return null;
     }
   }
   
-  /**
-   * تحديث أرصدة الخزينة
-   * وظيفة مساعدة داخلية
-   */
-  private async updateFinancialBalance(cashAmount: number, bankAmount: number) {
-    try {
-      const { data: existingBalance, error: fetchError } = await supabase
-        .from('financial_balance')
-        .select('*')
-        .eq('id', '1')
-        .maybeSingle();
-      
-      if (fetchError) {
-        throw fetchError;
-      }
-      
-      if (!existingBalance) {
-        // إنشاء سجل الأرصدة إذا لم يكن موجودًا
-        const { error: insertError } = await supabase
-          .from('financial_balance')
-          .insert({
-            id: '1',
-            cash_balance: cashAmount,
-            bank_balance: bankAmount,
-            last_updated: new Date().toISOString()
-          });
-        
-        if (insertError) {
-          throw insertError;
-        }
-      } else {
-        // تحديث سجل الأرصدة الموجود
-        const { error: updateError } = await supabase
-          .from('financial_balance')
-          .update({
-            cash_balance: existingBalance.cash_balance + cashAmount,
-            bank_balance: existingBalance.bank_balance + bankAmount,
-            last_updated: new Date().toISOString()
-          })
-          .eq('id', '1');
-        
-        if (updateError) {
-          throw updateError;
-        }
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error updating financial balance:', error);
-      return false;
-    }
-  }
-  
-  /**
-   * إنشاء معاملة مالية جديدة
-   */
   public async createTransaction(transactionData: TransactionCreateData): Promise<Transaction | null> {
     try {
       // Check if category exists
@@ -268,7 +157,7 @@ class FinancialTransactionService {
         reference_type: data.reference_type,
         notes: data.notes,
         created_at: data.created_at,
-        is_reduction: data.is_reduction
+        is_reduction: data.is_reduction || false
       };
     } catch (error) {
       console.error('Error creating transaction:', error);
@@ -277,70 +166,213 @@ class FinancialTransactionService {
     }
   }
   
-  /**
-   * تحديث معاملة مالية
-   */
-  public async updateTransaction(
-    id: string,
-    transactionData: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>>
-  ): Promise<boolean> {
+  // Add the createTransactionFromCommercial method that was missing
+  public async createTransactionFromCommercial(
+    amount: number,
+    type: 'income' | 'expense',
+    categoryId: string,
+    referenceId: string,
+    referenceType: string,
+    notes?: string,
+    isReduction?: boolean
+  ): Promise<Transaction | null> {
     try {
-      // Get existing transaction to calculate balance adjustment
-      const existingTransaction = await this.getTransactionById(id);
+      // Get today's date in ISO format
+      const today = new Date().toISOString().split('T')[0];
       
-      if (!existingTransaction) {
-        toast.error('المعاملة المالية غير موجودة');
-        return false;
+      // Create transaction data
+      const transactionData: TransactionCreateData = {
+        date: today,
+        amount,
+        type,
+        category_id: categoryId,
+        payment_method: 'cash',
+        reference_id: referenceId,
+        reference_type: referenceType,
+        notes,
+        is_reduction: isReduction
+      };
+      
+      // Create transaction
+      return await this.createTransaction(transactionData);
+    } catch (error) {
+      console.error('Error creating transaction from commercial:', error);
+      toast.error('حدث خطأ أثناء إنشاء المعاملة المالية من التجارية');
+      return null;
+    }
+  }
+  
+  public async updateFinancialBalance(income: number, expense: number): Promise<void> {
+    try {
+      // Get current balance
+      const { data: balanceData, error: balanceError } = await supabase
+        .from('financial_balance')
+        .select('*')
+        .single();
+      
+      if (balanceError) throw balanceError;
+      
+      let cashBalance = balanceData?.cash_balance || 0;
+      let bankBalance = balanceData?.bank_balance || 0;
+      
+      // Update balance
+      cashBalance += income - expense;
+      
+      // Update database
+      const { error: updateError } = await supabase
+        .from('financial_balance')
+        .update({
+          cash_balance: cashBalance,
+          bank_balance: bankBalance,
+          last_updated: new Date().toISOString()
+        })
+        .eq('id', balanceData?.id);
+      
+      if (updateError) throw updateError;
+    } catch (error) {
+      console.error('Error updating financial balance:', error);
+      toast.error('حدث خطأ أثناء تحديث الرصيد المالي');
+    }
+  }
+  
+  public async getCategoryById(id: string): Promise<Category | null> {
+    try {
+      const { data, error } = await supabase
+        .from('financial_categories')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) throw error;
+      
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type as 'income' | 'expense',
+        description: data.description,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error(`Error fetching category ${id}:`, error);
+      return null;
+    }
+  }
+  
+  public async getCategories(): Promise<Category[]> {
+    try {
+      const { data, error } = await supabase
+        .from('financial_categories')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      
+      return data.map(category => ({
+        id: category.id,
+        name: category.name,
+        type: category.type as 'income' | 'expense',
+        description: category.description,
+        created_at: category.created_at
+      }));
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('حدث خطأ أثناء جلب فئات المعاملات المالية');
+      return [];
+    }
+  }
+  
+  public async createCategory(name: string, type: 'income' | 'expense', description?: string): Promise<Category | null> {
+    try {
+      // Validate category name
+      if (!name) {
+        toast.error('يجب إدخال اسم الفئة');
+        return null;
       }
       
-      const updateData: any = { ...transactionData };
+      // Add category
+      const { data, error } = await supabase
+        .from('financial_categories')
+        .insert({
+          name: name,
+          type: type,
+          description: description
+        })
+        .select('*')
+        .single();
       
-      if (transactionData.category_id) {
-        // التحقق من وجود الفئة الجديدة
-        const category = await this.getCategoryById(transactionData.category_id);
-        
-        if (!category) {
-          toast.error('فئة المعاملة غير موجودة');
-          return false;
-        }
+      if (error) throw error;
+      
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type as 'income' | 'expense',
+        description: data.description,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error('Error creating category:', error);
+      toast.error('حدث خطأ أثناء إنشاء فئة المعاملة المالية');
+      return null;
+    }
+  }
+  
+  public async updateCategory(id: string, name: string, type: 'income' | 'expense', description?: string): Promise<Category | null> {
+    try {
+      // Validate category name
+      if (!name) {
+        toast.error('يجب إدخال اسم الفئة');
+        return null;
       }
       
-      // تحديث المعاملة
+      // Update category
+      const { data, error } = await supabase
+        .from('financial_categories')
+        .update({
+          name: name,
+          type: type,
+          description: description
+        })
+        .eq('id', id)
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type as 'income' | 'expense',
+        description: data.description,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error(`Error updating category ${id}:`, error);
+      toast.error('حدث خطأ أثناء تحديث فئة المعاملة المالية');
+      return null;
+    }
+  }
+  
+  public async deleteCategory(id: string): Promise<boolean> {
+    try {
+      // Delete category
       const { error } = await supabase
-        .from('financial_transactions')
-        .update(updateData)
+        .from('financial_categories')
+        .delete()
         .eq('id', id);
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
-      // تعديل الرصيد المالي إذا تم تغيير المبلغ أو النوع
-      if (transactionData.amount && transactionData.amount !== existingTransaction.amount) {
-        const amountDifference = transactionData.amount - existingTransaction.amount;
-        
-        if (existingTransaction.type === 'income') {
-          await this.updateFinancialBalance(amountDifference, 0);
-        } else {
-          await this.updateFinancialBalance(-amountDifference, 0);
-        }
-      }
-      
-      toast.success('تم تحديث المعاملة المالية بنجاح');
       return true;
     } catch (error) {
-      console.error('Error updating transaction:', error);
-      toast.error('حدث خطأ أثناء تحديث المعاملة المالية');
+      console.error(`Error deleting category ${id}:`, error);
+      toast.error('حدث خطأ أثناء حذف فئة المعاملة المالية');
       return false;
     }
   }
   
-  /**
-   * حذف معاملة مالية
-   */
   public async deleteTransaction(id: string): Promise<boolean> {
     try {
-      // الحصول على بيانات المعاملة قبل الحذف لتعديل الرصيد المالي
+      // Get transaction
       const transaction = await this.getTransactionById(id);
       
       if (!transaction) {
@@ -348,56 +380,27 @@ class FinancialTransactionService {
         return false;
       }
       
-      // حذف المعاملة
+      // Delete transaction
       const { error } = await supabase
         .from('financial_transactions')
         .delete()
         .eq('id', id);
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
-      // تعديل الرصيد المالي
+      // Update financial balance
       if (transaction.type === 'income') {
         await this.updateFinancialBalance(-transaction.amount, 0);
       } else {
         await this.updateFinancialBalance(transaction.amount, 0);
       }
       
-      toast.success('تم حذف المعاملة المالية بنجاح');
       return true;
     } catch (error) {
-      console.error('Error deleting transaction:', error);
+      console.error(`Error deleting transaction ${id}:`, error);
       toast.error('حدث خطأ أثناء حذف المعاملة المالية');
       return false;
     }
-  }
-
-  /**
-   * إنشاء معاملة مالية من معاملة تجارية
-   */
-  public async createTransactionFromCommercial(
-    amount: number,
-    type: 'income' | 'expense',
-    categoryId: string,
-    paymentMethod: string,
-    referenceId: string,
-    referenceType: string,
-    notes: string,
-    date: Date
-  ): Promise<Transaction | null> {
-    return this.createTransaction({
-      amount,
-      type,
-      category_id: categoryId,
-      payment_method: paymentMethod,
-      reference_id: referenceId,
-      reference_type: referenceType,
-      notes,
-      date: date.toISOString().split('T')[0],
-      is_reduction: false
-    });
   }
 }
 
