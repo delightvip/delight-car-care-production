@@ -15,61 +15,18 @@ export async function clearExistingData(supabaseAdmin: any) {
   for (const table of tablesToClear) {
     console.log(`Clearing table: ${table}`);
     try {
-      // Try with primary parameter order first
-      const { error } = await supabaseAdmin.rpc('truncate_table', {
-        table_name: table,
-        cascade: true
+      // Call with positional parameters to avoid ambiguity
+      const { error } = await supabaseAdmin.rpc('delete_all_from_table', {
+        table_name: table
       });
         
       if (error) {
-        console.error(`Error clearing table ${table} with primary param order:`, error);
-        
-        // Try with alternative parameter order
-        try {
-          const { error: altError } = await supabaseAdmin.rpc('truncate_table', {
-            cascade: true,
-            table_name: table
-          });
-          
-          if (altError) {
-            console.error(`Error clearing table ${table} with alt param order:`, altError);
-            errors.push({ table, error: altError.message });
-            
-            // Try using DELETE as a fallback
-            try {
-              const { error: deleteError } = await supabaseAdmin
-                .from(table)
-                .delete()
-                .neq('id', '0');
-                
-              if (deleteError) {
-                console.error(`Error clearing table ${table} with DELETE:`, deleteError);
-                
-                // Last resort: Call the more comprehensive delete function
-                try {
-                  const { error: finalDeleteError } = await supabaseAdmin.rpc('delete_all_from_table', {
-                    table_name: table
-                  });
-                  
-                  if (finalDeleteError) {
-                    console.error(`Final attempt to clear ${table} failed:`, finalDeleteError);
-                  }
-                } catch (finalErr) {
-                  console.error(`Exception in final delete for ${table}:`, finalErr);
-                }
-              }
-            } catch (deleteErr) {
-              console.error(`Exception clearing table ${table} with DELETE:`, deleteErr);
-            }
-          }
-        } catch (altErr) {
-          console.error(`Exception during alt param order for ${table}:`, altErr);
-          errors.push({ table, error: altErr.message });
-        }
+        console.error(`Error clearing table ${table}:`, error);
+        errors.push({ table, operation: 'clear', error: error.message });
       }
     } catch (err) {
       console.error(`Exception clearing table ${table}:`, err);
-      errors.push({ table, error: err.message });
+      errors.push({ table, operation: 'clear', error: err.message });
     }
   }
   

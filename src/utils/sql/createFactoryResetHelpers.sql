@@ -23,24 +23,25 @@ BEGIN
 END;
 $$;
 
--- Function to truncate a table with CASCADE option if needed
-CREATE OR REPLACE FUNCTION truncate_table(table_name text, cascade boolean DEFAULT false)
+-- Function to truncate a table with CASCADE option
+-- Using specific parameter names to avoid ambiguity
+CREATE OR REPLACE FUNCTION truncate_table(IN p_table_name text, IN p_cascade boolean DEFAULT false)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
   -- Use the CASCADE option if requested
-  IF cascade THEN
-    EXECUTE format('TRUNCATE TABLE %I CASCADE', table_name);
+  IF p_cascade THEN
+    EXECUTE format('TRUNCATE TABLE %I CASCADE', p_table_name);
   ELSE
-    EXECUTE format('TRUNCATE TABLE %I', table_name);
+    EXECUTE format('TRUNCATE TABLE %I', p_table_name);
   END IF;
 END;
 $$;
 
 -- Function to delete all data from a table with better error handling
-CREATE OR REPLACE FUNCTION delete_all_from_table(table_name text)
+CREATE OR REPLACE FUNCTION delete_all_from_table(IN p_table_name text)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -48,21 +49,21 @@ AS $$
 BEGIN
   BEGIN
     -- Try to use TRUNCATE first (faster)
-    EXECUTE format('TRUNCATE TABLE %I CASCADE', table_name);
+    EXECUTE format('TRUNCATE TABLE %I CASCADE', p_table_name);
   EXCEPTION WHEN OTHERS THEN
     BEGIN
       -- If truncate fails, fall back to DELETE
-      EXECUTE format('DELETE FROM %I', table_name);
+      EXECUTE format('DELETE FROM %I', p_table_name);
     EXCEPTION WHEN OTHERS THEN
       -- If both fail, log the error but don't stop the process
-      RAISE NOTICE 'Could not clear table %: %', table_name, SQLERRM;
+      RAISE NOTICE 'Could not clear table %: %', p_table_name, SQLERRM;
     END;
   END;
 END;
 $$;
 
 -- Function to check if a table exists
-CREATE OR REPLACE FUNCTION table_exists(table_name text)
+CREATE OR REPLACE FUNCTION table_exists(IN p_table_name text)
 RETURNS boolean
 LANGUAGE plpgsql
 STABLE
@@ -73,7 +74,7 @@ BEGIN
   SELECT EXISTS (
     SELECT FROM information_schema.tables 
     WHERE table_schema = 'public' 
-    AND table_name = table_name
+    AND table_name = p_table_name
   ) INTO exists_bool;
   
   RETURN exists_bool;
