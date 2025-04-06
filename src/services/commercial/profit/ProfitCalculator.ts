@@ -73,28 +73,28 @@ class ProfitCalculator {
           query = supabase
             .from('finished_products')
             .select('unit_cost')
-            .eq('id', itemId)
+            .eq('id', Number(itemId))
             .single();
           break;
         case 'semi_finished_products':
           query = supabase
             .from('semi_finished_products')
             .select('unit_cost')
-            .eq('id', itemId)
+            .eq('id', Number(itemId))
             .single();
           break;
         case 'raw_materials':
           query = supabase
             .from('raw_materials')
             .select('unit_cost')
-            .eq('id', itemId)
+            .eq('id', Number(itemId))
             .single();
           break;
         case 'packaging_materials':
           query = supabase
             .from('packaging_materials')
             .select('unit_cost')
-            .eq('id', itemId)
+            .eq('id', Number(itemId))
             .single();
           break;
         default:
