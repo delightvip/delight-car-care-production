@@ -93,11 +93,10 @@ export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
     ? pagination.pageSize
     : itemsPerPage || 10;
 
-  // Make sure all needed props are properly passed to DataTable
   return (
     <DataTable
       columns={columns}
-      data={data || []}
+      data={data}
       searchable={searchable}
       searchKeys={searchKeys}
       actions={actions}

@@ -24,11 +24,8 @@ const ProductionOrders = lazy(() => import('@/pages/production/ProductionOrders'
 const PackagingOrders = lazy(() => import('@/pages/production/PackagingOrders'));
 const ProductionPlanning = lazy(() => import('@/pages/production/ProductionPlanning'));
 const InventoryDistributionPage = lazy(() => import('@/pages/analytics/InventoryDistributionPage'));
-
-// Commercial pages - change the way Invoices is imported to avoid the dynamic import error
 const Parties = lazy(() => import('@/pages/commercial/Parties'));
-// Import Invoices directly instead of using dynamic import
-import Invoices from '@/pages/commercial/Invoices';
+const Invoices = lazy(() => import('@/pages/commercial/Invoices'));
 const InvoiceDetails = lazy(() => import('@/pages/commercial/InvoiceDetails'));
 const Payments = lazy(() => import('@/pages/commercial/Payments'));
 const PartyDetails = lazy(() => import('@/pages/commercial/PartyDetails'));
@@ -88,7 +85,6 @@ function App() {
               <Route index element={<CommercialDashboard />} />
               <Route path="parties" element={<Parties />} />
               <Route path="parties/:id" element={<PartyDetails />} />
-              {/* Use the directly imported Invoices component */}
               <Route path="invoices" element={<Invoices />} />
               <Route path="invoices/:id" element={<InvoiceDetails />} />
               <Route path="payments" element={<Payments />} />

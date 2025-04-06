@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,16 +48,7 @@ const DataTable: React.FC<DataTableProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  let sidebarContext = { isExpanded: true };
-  
-  // Safely access the sidebar context with error handling
-  try {
-    sidebarContext = useSidebar();
-  } catch (error) {
-    console.error("Error accessing sidebar context in DataTable:", error);
-  }
-  
-  const { isExpanded } = sidebarContext;
+  const { isExpanded } = useSidebar();
 
   const safeData = Array.isArray(data) ? data : [];
 
