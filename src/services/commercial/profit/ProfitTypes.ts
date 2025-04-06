@@ -24,4 +24,15 @@ export interface ProfitFilter {
   minProfit?: string;
   maxProfit?: string;
   partyId?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+// ملخص الأرباح
+export interface ProfitSummary {
+  total_sales: number;
+  total_cost: number;
+  total_profit: number;
+  average_profit_percentage: number;
+  invoice_count: number;
 }

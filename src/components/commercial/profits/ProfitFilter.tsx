@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -20,7 +19,6 @@ interface Party {
   name: string;
 }
 
-// Renamed to ProfitFilterComponent to avoid naming conflicts
 const ProfitFilterComponent = ({ onFilterChange }: ProfitFilterProps) => {
   const [dateRange, setDateRange] = useState<DateRange>({
     from: new Date(new Date().setDate(new Date().getDate() - 30)), // Last 30 days
@@ -73,8 +71,8 @@ const ProfitFilterComponent = ({ onFilterChange }: ProfitFilterProps) => {
     }
     
     if (sortBy) {
-      filters.sortBy = sortBy as any;
-      filters.sortOrder = sortOrder as any;
+      filters.sortBy = sortBy;
+      filters.sortOrder = sortOrder as 'asc' | 'desc';
     }
     
     console.log("Applying filters:", filters);

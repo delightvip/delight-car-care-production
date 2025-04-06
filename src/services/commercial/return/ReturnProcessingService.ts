@@ -356,11 +356,12 @@ export class ReturnProcessingService {
       const { error } = await supabase
         .from('inventory_movements')
         .insert({
+          item_id: itemId.toString(), // Convert to string as expected by the API
           item_type: itemType,
-          item_id: itemId,
           quantity: quantity,
-          direction: direction,
-          source: source,
+          movement_type: direction,
+          reason: source,
+          balance_after: 0, // This will be updated by a trigger/function
           date: new Date().toISOString().split('T')[0]
         });
       
