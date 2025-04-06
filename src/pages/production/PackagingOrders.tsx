@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -68,6 +69,14 @@ const PackagingOrders = () => {
     quantity: 0,
     unit: ''
   });
+  const [componentsAvailability, setComponentsAvailability] = useState<{
+    code: string;
+    name: string;
+    requiredQuantity: number;
+    available: boolean;
+    unit: string;
+    type: string;
+  }[]>([]);
   
   const productionService = ProductionService.getInstance();
   const inventoryService = InventoryService.getInstance();
@@ -116,6 +125,79 @@ const PackagingOrders = () => {
     toast.info("جاري تحديث البيانات...");
   }, [refetchOrders, refetchProducts]);
   
+  // دالة لفحص توافر المكونات في الوقت الفعلي
+  const checkRealTimeAvailability = useCallback(async (productCode: string, quantity: number) => {
+    if (!productCode || quantity <= 0) {
+      setComponentsAvailability([]);
+      return;
+    }
+    
+    const product = finishedProducts.find(p => p.code === productCode);
+    if (!product) {
+      setComponentsAvailability([]);
+      return;
+    }
+    
+    // التحقق من توفر المنتج النصف مصنع
+    const semiFinishedCode = product.semiFinished.code;
+    const semiFinishedQuantity = product.semiFinished.quantity * quantity;
+    const semiAvailable = await inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
+    
+    // التحقق من توفر مواد التعبئة
+    const packagingRequirements = product.packaging.map(pkg => ({
+      code: pkg.code,
+      requiredQuantity: pkg.quantity * quantity
+    }));
+    
+    const packagingAvailabilityResults = await Promise.all(
+      product.packaging.map(async (pkg) => {
+        const pkgQuantity = pkg.quantity * quantity;
+        const available = await inventoryService.checkPackagingAvailability([{
+          code: pkg.code,
+          requiredQuantity: pkgQuantity
+        }]);
+        
+        return {
+          code: pkg.code,
+          name: pkg.name,
+          requiredQuantity: pkgQuantity,
+          available,
+          unit: 'وحدة',
+          type: 'packaging'
+        };
+      })
+    );
+    
+    // تجميع نتائج التوافر
+    const availabilityResults = [
+      {
+        code: product.semiFinished.code,
+        name: product.semiFinished.name,
+        requiredQuantity: semiFinishedQuantity,
+        available: semiAvailable,
+        unit: 'وحدة',
+        type: 'semi'
+      },
+      ...packagingAvailabilityResults
+    ];
+    
+    setComponentsAvailability(availabilityResults);
+  }, [finishedProducts, inventoryService]);
+  
+  // مراقبة التغييرات في المنتج المحدد أو الكمية لتحديث توفر المكونات
+  useEffect(() => {
+    if (newOrder.productCode && newOrder.quantity > 0) {
+      checkRealTimeAvailability(newOrder.productCode, newOrder.quantity);
+    }
+  }, [newOrder.productCode, newOrder.quantity, checkRealTimeAvailability]);
+  
+  // نفس الشيء للنموذج التعديل
+  useEffect(() => {
+    if (editOrder.productCode && editOrder.quantity > 0) {
+      checkRealTimeAvailability(editOrder.productCode, editOrder.quantity);
+    }
+  }, [editOrder.productCode, editOrder.quantity, checkRealTimeAvailability]);
+  
   const columns = [
     { key: 'code', title: 'كود الأمر' },
     { key: 'productName', title: 'المنتج' },
@@ -138,7 +220,7 @@ const PackagingOrders = () => {
     { 
       key: 'totalCost', 
       title: 'التكلفة الإجمالية',
-      render: (value: number) => `${value} ج.م`
+      render: (value: number) => `${typeof value === 'number' ? value.toFixed(2) : 0} ج.م`
     }
   ];
   
@@ -149,6 +231,15 @@ const PackagingOrders = () => {
     }
     
     try {
+      // التحقق من توفر جميع المكونات
+      const allAvailable = componentsAvailability.every(item => item.available);
+      if (!allAvailable) {
+        const confirmation = window.confirm("بعض المكونات غير متوفرة. هل ترغب في المتابعة على أي حال؟");
+        if (!confirmation) {
+          return;
+        }
+      }
+      
       const createdOrder = await productionService.createPackagingOrder(
         newOrder.productCode, 
         newOrder.quantity
@@ -159,6 +250,7 @@ const PackagingOrders = () => {
           productCode: '',
           quantity: 0
         });
+        setComponentsAvailability([]);
         setIsAddDialogOpen(false);
       }
     } catch (error) {
@@ -207,6 +299,15 @@ const PackagingOrders = () => {
     }
     
     try {
+      // التحقق من توفر جميع المكونات
+      const allAvailable = componentsAvailability.every(item => item.available);
+      if (!allAvailable) {
+        const confirmation = window.confirm("بعض المكونات غير متوفرة. هل ترغب في المتابعة على أي حال؟");
+        if (!confirmation) {
+          return;
+        }
+      }
+      
       const product = finishedProducts.find(p => p.code === editOrder.productCode);
       if (!product) {
         toast.error("المنتج غير موجود");
@@ -219,8 +320,7 @@ const PackagingOrders = () => {
         quantity: product.semiFinished.quantity * editOrder.quantity
       };
       
-      const components = checkComponentsAvailability(editOrder.productCode, editOrder.quantity);
-      const packagingMaterials = components
+      const packagingMaterials = componentsAvailability
         .filter(comp => comp.type === 'packaging')
         .map(material => ({
           code: material.code,
@@ -242,6 +342,7 @@ const PackagingOrders = () => {
       
       if (success) {
         refetchOrders();
+        setComponentsAvailability([]);
         setIsEditDialogOpen(false);
         toast.success("تم تحديث أمر التعبئة بنجاح");
       }
@@ -249,31 +350,6 @@ const PackagingOrders = () => {
       console.error("Error updating packaging order:", error);
       toast.error("حدث خطأ أثناء تحديث أمر التعبئة");
     }
-  };
-  
-  const checkComponentsAvailability = (productCode: string, quantity: number) => {
-    const product = finishedProducts.find(p => p.code === productCode);
-    if (!product) return [];
-    
-    const semiFinishedComponent = {
-      type: 'semi',
-      code: product.semiFinished.code,
-      name: product.semiFinished.name,
-      requiredQuantity: product.semiFinished.quantity * quantity,
-      available: true,
-      unit: 'وحدة'
-    };
-    
-    const packagingComponents = product.packaging.map(item => ({
-      type: 'packaging',
-      code: item.code,
-      name: item.name,
-      requiredQuantity: item.quantity * quantity,
-      available: true,
-      unit: 'وحدة'
-    }));
-    
-    return [semiFinishedComponent, ...packagingComponents];
   };
   
   const calculateTotalCost = (productCode: string, quantity: number) => {
@@ -317,6 +393,8 @@ const PackagingOrders = () => {
             quantity: record.quantity,
             unit: record.unit
           });
+          // تحديث توافر المكونات
+          checkRealTimeAvailability(record.productCode, record.quantity);
           setIsEditDialogOpen(true);
         }}
         disabled={record.status !== 'pending'}
@@ -357,7 +435,7 @@ const PackagingOrders = () => {
                   أمر تعبئة جديد
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-4xl">
                 <DialogHeader>
                   <DialogTitle>إضافة أمر تعبئة جديد</DialogTitle>
                   <DialogDescription>
@@ -365,39 +443,41 @@ const PackagingOrders = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="product">المنتج</Label>
-                    <Select 
-                      value={newOrder.productCode} 
-                      onValueChange={value => setNewOrder({...newOrder, productCode: value})}
-                    >
-                      <SelectTrigger id="product">
-                        <SelectValue placeholder="اختر المنتج" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {finishedProducts.map(product => (
-                          <SelectItem key={product.code} value={product.code}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="quantity">الكمية</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      value={newOrder.quantity}
-                      onChange={e => setNewOrder({...newOrder, quantity: Number(e.target.value)})}
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="product">المنتج</Label>
+                      <Select 
+                        value={newOrder.productCode} 
+                        onValueChange={value => setNewOrder({...newOrder, productCode: value})}
+                      >
+                        <SelectTrigger id="product">
+                          <SelectValue placeholder="اختر المنتج" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {finishedProducts.map(product => (
+                            <SelectItem key={product.code} value={product.code}>
+                              {product.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="quantity">الكمية</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        value={newOrder.quantity}
+                        onChange={e => setNewOrder({...newOrder, quantity: Number(e.target.value)})}
+                      />
+                    </div>
                   </div>
                   
                   {newOrder.productCode && newOrder.quantity > 0 && (
                     <div className="border-t pt-4">
                       <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                       <div className="space-y-2">
-                        {checkComponentsAvailability(newOrder.productCode, newOrder.quantity).map((component, index) => (
+                        {componentsAvailability.map((component, index) => (
                           <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
                             <div>
                               <span className="font-medium">{component.name}</span>
@@ -411,7 +491,11 @@ const PackagingOrders = () => {
                                 {component.type === 'semi' ? 'سائل' : 'تعبئة'}
                               </Badge>
                             </div>
-                            <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
+                            {component.available ? (
+                              <Badge className="bg-green-100 text-green-800">متوفر</Badge>
+                            ) : (
+                              <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -419,7 +503,7 @@ const PackagingOrders = () => {
                       <div className="mt-4 p-2 border rounded-md bg-muted/50">
                         <div className="flex justify-between">
                           <span className="font-medium">التكلفة الإجمالية:</span>
-                          <span>{calculateTotalCost(newOrder.productCode, newOrder.quantity)} ج.م</span>
+                          <span>{calculateTotalCost(newOrder.productCode, newOrder.quantity).toFixed(2)} ج.م</span>
                         </div>
                       </div>
                     </div>
@@ -480,7 +564,11 @@ const PackagingOrders = () => {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-1">التكلفة الإجمالية</h4>
-                    <p className="font-medium">{currentOrder.totalCost} ج.م</p>
+                    <p className="font-medium">
+                      {typeof currentOrder.totalCost === 'number' 
+                        ? `${currentOrder.totalCost.toFixed(2)} ج.م` 
+                        : '0 ج.م'}
+                    </p>
                   </div>
                 </div>
                 
@@ -605,7 +693,7 @@ const PackagingOrders = () => {
         </Dialog>
         
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>تعديل أمر تعبئة</DialogTitle>
               <DialogDescription>
@@ -613,47 +701,49 @@ const PackagingOrders = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-product">المنتج</Label>
-                <Select 
-                  value={editOrder.productCode} 
-                  onValueChange={value => setEditOrder({...editOrder, productCode: value})}
-                >
-                  <SelectTrigger id="edit-product">
-                    <SelectValue placeholder="اختر المنتج" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {finishedProducts.map(product => (
-                      <SelectItem key={product.code} value={product.code}>
-                        {product.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-quantity">الكمية</Label>
-                <Input
-                  id="edit-quantity"
-                  type="number"
-                  value={editOrder.quantity}
-                  onChange={e => setEditOrder({...editOrder, quantity: Number(e.target.value)})}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-unit">الوحدة</Label>
-                <Input
-                  id="edit-unit"
-                  value={editOrder.unit}
-                  onChange={e => setEditOrder({...editOrder, unit: e.target.value})}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-product">المنتج</Label>
+                  <Select 
+                    value={editOrder.productCode} 
+                    onValueChange={value => setEditOrder({...editOrder, productCode: value})}
+                  >
+                    <SelectTrigger id="edit-product">
+                      <SelectValue placeholder="اختر المنتج" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {finishedProducts.map(product => (
+                        <SelectItem key={product.code} value={product.code}>
+                          {product.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-quantity">الكمية</Label>
+                  <Input
+                    id="edit-quantity"
+                    type="number"
+                    value={editOrder.quantity}
+                    onChange={e => setEditOrder({...editOrder, quantity: Number(e.target.value)})}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-unit">الوحدة</Label>
+                  <Input
+                    id="edit-unit"
+                    value={editOrder.unit}
+                    onChange={e => setEditOrder({...editOrder, unit: e.target.value})}
+                  />
+                </div>
               </div>
               
               {editOrder.productCode && editOrder.quantity > 0 && (
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
                   <div className="space-y-2">
-                    {checkComponentsAvailability(editOrder.productCode, editOrder.quantity).map((component, index) => (
+                    {componentsAvailability.map((component, index) => (
                       <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
                         <div>
                           <span className="font-medium">{component.name}</span>
@@ -667,7 +757,11 @@ const PackagingOrders = () => {
                             {component.type === 'semi' ? 'سائل' : 'تعبئة'}
                           </Badge>
                         </div>
-                        <Badge className="bg-gray-100 text-gray-800">معلق</Badge>
+                        {component.available ? (
+                          <Badge className="bg-green-100 text-green-800">متوفر</Badge>
+                        ) : (
+                          <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -675,7 +769,7 @@ const PackagingOrders = () => {
                   <div className="mt-4 p-2 border rounded-md bg-muted/50">
                     <div className="flex justify-between">
                       <span className="font-medium">التكلفة الإجمالية:</span>
-                      <span>{calculateTotalCost(editOrder.productCode, editOrder.quantity)} ج.م</span>
+                      <span>{calculateTotalCost(editOrder.productCode, editOrder.quantity).toFixed(2)} ج.م</span>
                     </div>
                   </div>
                 </div>
