@@ -83,6 +83,29 @@ export const getCommonTableColumns = () => [
 ];
 
 /**
+ * Returns an importance column for inventory tables
+ */
+export const getImportanceColumn = () => ({
+  key: 'importance',
+  title: 'الأهمية',
+  sortable: true,
+  width: '100px',
+  render: (value: any) => {
+    const importance = ensureNumericValue(value);
+    
+    if (importance === 0) {
+      return <Badge variant="outline">عادي</Badge>;
+    } else if (importance <= 3) {
+      return <Badge variant="secondary">متوسط</Badge>;
+    } else if (importance <= 5) {
+      return <Badge variant="default">مهم</Badge>;
+    } else {
+      return <Badge variant="destructive">حرج</Badge>;
+    }
+  }
+});
+
+/**
  * Returns the common actions used across different inventory tables
  */
 export const renderInventoryActions = (

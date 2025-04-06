@@ -1,4 +1,3 @@
-
 // تعريف أنواع البيانات المستخدمة في نظام المخزون
 
 export interface InventoryMovement {
@@ -12,6 +11,7 @@ export interface InventoryMovement {
   created_at: string;
   updated_at?: string;
   user_id?: string;
+  user_name?: string; // Added the missing property
 }
 
 export interface InventoryItem {
