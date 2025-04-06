@@ -14,6 +14,12 @@ export interface FinancialSummary {
   profitGrowth?: number;
   cashBalance?: number;
   bankBalance?: number;
+  // Add missing properties
+  startDate?: string;
+  endDate?: string;
+  totalBalance?: number;
+  recentTransactions?: any[];
+  netIncome?: number;
 }
 
 export interface Category {

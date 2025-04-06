@@ -113,7 +113,7 @@ export class ReturnInventoryService {
         .insert({
           item_type: itemType,
           item_id: itemId.toString(),
-          quantity: quantity,
+          quantity: movementType === 'increase' ? quantity : -quantity,
           movement_type: movementType,
           reason: reason,
           balance_after: balanceAfter
@@ -126,7 +126,7 @@ export class ReturnInventoryService {
   /**
    * الحصول على اسم الجدول بناءً على نوع الصنف
    */
-  private getTableNameByType(itemType: string): string {
+  private getTableNameByType(itemType: string): 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products' {
     switch (itemType) {
       case 'raw_materials':
         return 'raw_materials';

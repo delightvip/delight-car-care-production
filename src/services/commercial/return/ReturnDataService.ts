@@ -27,12 +27,12 @@ export class ReturnDataService {
       return data.map(item => ({
         id: item.id,
         date: item.date,
-        return_type: item.return_type,
+        return_type: item.return_type as 'sales_return' | 'purchase_return',
         invoice_id: item.invoice_id,
         party_id: item.party_id,
         party_name: item.parties?.name,
         amount: item.amount,
-        payment_status: item.payment_status,
+        payment_status: item.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: item.notes,
         created_at: item.created_at
       }));
@@ -71,12 +71,12 @@ export class ReturnDataService {
       return {
         id: data.id,
         date: data.date,
-        return_type: data.return_type,
+        return_type: data.return_type as 'sales_return' | 'purchase_return',
         invoice_id: data.invoice_id,
         party_id: data.party_id,
         party_name: data.parties?.name,
         amount: data.amount,
-        payment_status: data.payment_status,
+        payment_status: data.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: data.notes,
         created_at: data.created_at,
         items: items as ReturnItem[]
@@ -194,6 +194,13 @@ export class ReturnDataService {
       console.error(`Error deleting return ${id}:`, error);
       return false;
     }
+  }
+  
+  /**
+   * الحصول على مرتجع محدد (نفس وظيفة getReturnById ولكن باسم آخر للتوافق)
+   */
+  public async fetchReturnById(id: string): Promise<Return | null> {
+    return this.getReturnById(id);
   }
 }
 

@@ -1,27 +1,15 @@
 
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ProfitData, ProfitFilter, ProfitSummary } from './ProfitTypes';
-import BaseCommercialService from '../BaseCommercialService';
-import ProfitRevenueService from './ProfitRevenueService';
-import ProfitCalculationService from './ProfitCalculationService';
-import ProfitRepository from './ProfitRepository';
 
 /**
- * خدمة الأرباح الرئيسية
- * تتولى هذه الخدمة تنسيق العمليات بين مختلف مكونات نظام الأرباح
+ * خدمة إدارة الأرباح
+ * مسؤولة عن حساب وتخزين وإدارة بيانات الأرباح
  */
-class ProfitService extends BaseCommercialService {
+class ProfitService {
   private static instance: ProfitService;
-  private profitCalculationService: ProfitCalculationService;
-  private profitRevenueService: ProfitRevenueService;
-  private profitRepository: ProfitRepository;
   
-  private constructor() {
-    super();
-    this.profitCalculationService = ProfitCalculationService.getInstance();
-    this.profitRevenueService = ProfitRevenueService.getInstance();
-    this.profitRepository = ProfitRepository.getInstance();
-  }
+  private constructor() {}
   
   public static getInstance(): ProfitService {
     if (!ProfitService.instance) {
@@ -31,88 +19,102 @@ class ProfitService extends BaseCommercialService {
   }
   
   /**
-   * حساب الربح لفاتورة محددة وتحديث الإيرادات المرتبطة
+   * الحصول على سجل الربح بواسطة معرف الفاتورة
    */
-  public async calculateInvoiceProfit(invoiceId: string): Promise<ProfitData | null> {
+  public async getProfitByInvoiceId(invoiceId: string): Promise<any | null> {
     try {
-      // حساب وحفظ بيانات الربح
-      const profitData = await this.profitCalculationService.calculateAndSaveProfit(invoiceId);
+      const { data, error } = await supabase
+        .from('profits')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .single();
       
-      if (profitData && profitData.profit_amount > 0) {
-        // إنشاء إيراد مرتبط بالربح إذا كان هناك ربح إيجابي
-        await this.profitRevenueService.createRevenueFromProfit(profitData);
+      if (error) {
+        if (error.code === 'PGRST116') { // no rows returned
+          return null;
+        }
+        throw error;
       }
       
-      return profitData;
+      return data;
     } catch (error) {
-      console.error('Error calculating invoice profit:', error);
-      toast.error('حدث خطأ أثناء حساب الأرباح');
+      console.error(`Error fetching profit for invoice ${invoiceId}:`, error);
       return null;
     }
   }
   
   /**
-   * الحصول على بيانات الأرباح مع خيارات التصفية
+   * تسجيل الربح لفاتورة بيع
    */
-  public async getProfits(filters?: ProfitFilter): Promise<ProfitData[]> {
-    return this.profitRepository.getProfits(filters);
-  }
-  
-  /**
-   * الحصول على ملخص الأرباح
-   */
-  public async getProfitSummary(startDate?: string, endDate?: string, partyId?: string): Promise<ProfitSummary> {
-    return this.profitRepository.getProfitSummary(startDate, endDate, partyId);
-  }
-  
-  /**
-   * إزالة بيانات الربح والإيراد المرتبط به لفاتورة محددة (عند حذف/إلغاء الفاتورة)
-   */
-  public async removeProfitData(invoiceId: string): Promise<boolean> {
+  public async recordInvoiceProfit(
+    invoiceId: string,
+    invoiceDate: string,
+    partyId: string,
+    totalSales: number,
+    totalCost: number
+  ): Promise<boolean> {
     try {
-      // الحصول على معرف سجل الربح أولاً
-      const profitData = await this.profitCalculationService.getProfitByInvoiceId(invoiceId);
+      // حساب مبلغ الربح ونسبة الربح
+      const profit = totalSales - totalCost;
+      const profitPercentage = totalSales > 0 ? (profit / totalSales) * 100 : 0;
       
-      if (profitData) {
-        // إلغاء الإيراد المرتبط بالربح
-        await this.profitRevenueService.cancelProfitRevenue(profitData.id);
+      // التحقق من وجود سجل ربح سابق لهذه الفاتورة
+      const existingProfit = await this.getProfitByInvoiceId(invoiceId);
+      
+      if (existingProfit) {
+        // تحديث السجل الموجود
+        const { error } = await supabase
+          .from('profits')
+          .update({
+            total_sales: totalSales,
+            total_cost: totalCost,
+            profit_amount: profit,
+            profit_percentage: profitPercentage,
+            invoice_date: invoiceDate
+          })
+          .eq('invoice_id', invoiceId);
+        
+        if (error) throw error;
+      } else {
+        // إنشاء سجل جديد
+        const { error } = await supabase
+          .from('profits')
+          .insert({
+            invoice_id: invoiceId,
+            party_id: partyId,
+            invoice_date: invoiceDate,
+            total_sales: totalSales,
+            total_cost: totalCost,
+            profit_amount: profit,
+            profit_percentage: profitPercentage
+          });
+        
+        if (error) throw error;
       }
       
-      // حذف سجل الربح
-      return await this.profitCalculationService.deleteProfitByInvoiceId(invoiceId);
+      return true;
     } catch (error) {
-      console.error('Error removing profit data:', error);
-      toast.error('حدث خطأ أثناء إزالة بيانات الربح');
+      console.error(`Error recording profit for invoice ${invoiceId}:`, error);
+      toast.error('حدث خطأ أثناء تسجيل بيانات الربح');
       return false;
     }
   }
   
   /**
-   * إعادة حساب الأرباح لجميع فواتير المبيعات وتحديث الإيرادات المرتبطة
+   * حذف سجل الربح لفاتورة معينة
    */
-  public async recalculateAllProfits(): Promise<boolean> {
+  public async deleteProfitRecord(invoiceId: string): Promise<boolean> {
     try {
-      // الحصول على جميع فواتير المبيعات المؤكدة
-      const { data: invoices, error } = await this.supabase
-        .from('invoices')
-        .select('id')
-        .eq('invoice_type', 'sale')
-        .eq('payment_status', 'confirmed');
+      const { error } = await supabase
+        .from('profits')
+        .delete()
+        .eq('invoice_id', invoiceId);
       
       if (error) throw error;
       
-      // معالجة كل فاتورة
-      let successCount = 0;
-      for (const invoice of invoices) {
-        const result = await this.calculateInvoiceProfit(invoice.id);
-        if (result) successCount++;
-      }
-      
-      toast.success(`تم إعادة حساب الأرباح بنجاح لعدد ${successCount} من الفواتير`);
       return true;
     } catch (error) {
-      console.error('Error recalculating all profits:', error);
-      toast.error('حدث خطأ أثناء إعادة حساب الأرباح');
+      console.error(`Error deleting profit record for invoice ${invoiceId}:`, error);
       return false;
     }
   }
