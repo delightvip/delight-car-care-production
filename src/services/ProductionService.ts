@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
 import ProductionDatabaseService from "./database/ProductionDatabaseService";
@@ -102,8 +101,17 @@ class ProductionService {
         };
       });
       
-      // حساب التكلفة الإجمالية - Fix here: Changed unitCost to unit_cost
-      const totalCost = product.unit_cost * quantity;
+      // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
+      let unitCost = 0;
+      if (typeof product.unit_cost === 'number') {
+        unitCost = product.unit_cost;
+      } else if (typeof (product as any).unitCost === 'number') {
+        // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
+        unitCost = (product as any).unitCost;
+      }
+      
+      const totalCost = unitCost * quantity;
+      console.log(`حساب تكلفة الإنتاج: وحدة التكلفة = ${unitCost}, الكمية = ${quantity}, الإجمالي = ${totalCost}`);
       
       // إنشاء أمر الإنتاج في قاعدة البيانات
       const newOrder = await this.databaseService.createProductionOrder(
@@ -280,8 +288,17 @@ class ProductionService {
         };
       }));
       
-      // حساب التكلفة الإجمالية - Fix here: Changed unitCost to unit_cost
-      const totalCost = product.unit_cost * quantity;
+      // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
+      let unitCost = 0;
+      if (typeof product.unit_cost === 'number') {
+        unitCost = product.unit_cost;
+      } else if (typeof (product as any).unitCost === 'number') {
+        // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
+        unitCost = (product as any).unitCost;
+      }
+      
+      const totalCost = unitCost * quantity;
+      console.log(`حساب تكلفة التعبئة: وحدة التكلفة = ${unitCost}, الكمية = ${quantity}, الإجمالي = ${totalCost}`);
       
       // إنشاء أمر التعبئة في قاعدة البيانات
       const newOrder = await this.databaseService.createPackagingOrder(

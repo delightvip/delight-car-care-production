@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -240,20 +239,55 @@ const PackagingOrders = () => {
         }
       }
       
-      const createdOrder = await productionService.createPackagingOrder(
-        newOrder.productCode, 
-        newOrder.quantity
-      );
-      if (createdOrder) {
-        refetchOrders();
-        setNewOrder({
-          productCode: '',
-          quantity: 0
-        });
-        setComponentsAvailability([]);
-        setIsAddDialogOpen(false);
+      // إظهار مؤشر تحميل
+      toast.loading("جاري إنشاء أمر التعبئة...");
+      
+      // إضافة جلسة محاولة لضمان نجاح العملية
+      let attempts = 0;
+      const maxAttempts = 3;
+      let success = false;
+      let errorMsg = "";
+      
+      while (attempts < maxAttempts && !success) {
+        try {
+          const createdOrder = await productionService.createPackagingOrder(
+            newOrder.productCode, 
+            newOrder.quantity
+          );
+          
+          if (createdOrder) {
+            success = true;
+            // تجنب استدعاء مباشر لـ refetchOrders قبل إغلاق نافذة الحوار
+            setTimeout(() => {
+              refetchOrders();
+            }, 500);
+            
+            setNewOrder({
+              productCode: '',
+              quantity: 0
+            });
+            setComponentsAvailability([]);
+            toast.dismiss();
+            toast.success(`تم إنشاء أمر تعبئة ${createdOrder.productName} بنجاح`);
+            setIsAddDialogOpen(false);
+          }
+        } catch (innerError: any) {
+          attempts++;
+          errorMsg = innerError?.message || "حدث خطأ أثناء إنشاء أمر التعبئة";
+          if (attempts < maxAttempts) {
+            console.log(`محاولة إنشاء أمر التعبئة: ${attempts}/${maxAttempts}`);
+            // انتظر قليلاً قبل المحاولة مرة أخرى
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+      
+      if (!success) {
+        toast.dismiss();
+        toast.error(errorMsg || "حدث خطأ أثناء إنشاء أمر التعبئة");
       }
     } catch (error) {
+      toast.dismiss();
       console.error("Error creating order:", error);
       toast.error("حدث خطأ أثناء إنشاء أمر التعبئة");
     }
