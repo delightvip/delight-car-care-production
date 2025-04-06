@@ -1,8 +1,8 @@
+
 import { toast } from "sonner";
 import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
-import returnDataService from "./ReturnDataService";
-import returnInventoryService from "./ReturnInventoryService";
+import { supabase } from "@/integrations/supabase/client";
 import returnValidationService from "./ReturnValidationService";
 
 /**
@@ -29,7 +29,7 @@ export class ReturnProcessingService {
       }
 
       // 2. جلب بيانات المرتجع كاملة
-      const returnData = await returnDataService.fetchReturnById(returnId);
+      const returnData = await this.fetchReturnById(returnId);
       
       if (!returnData || !returnData.items || returnData.items.length === 0) {
         toast.error('لا توجد بيانات كافية لتأكيد المرتجع');
@@ -39,14 +39,14 @@ export class ReturnProcessingService {
       console.log("Confirming return with data:", returnData);
 
       // 3. تحديث حالة المرتجع إلى مؤكد
-      await returnDataService.updateReturnStatus(returnId, 'confirmed');
+      await this.updateReturnStatus(returnId, 'confirmed');
 
       // 4. تحديث المخزون بناءً على نوع المرتجع
       try {
         await this.updateInventory(returnData, 'confirm');
       } catch (error) {
         // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مسودة
-        await returnDataService.updateReturnStatus(returnId, 'draft');
+        await this.updateReturnStatus(returnId, 'draft');
         throw error;
       }
 
@@ -56,7 +56,7 @@ export class ReturnProcessingService {
       } catch (error) {
         // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مسودة
         await this.updateInventory(returnData, 'reverse_confirm');
-        await returnDataService.updateReturnStatus(returnId, 'draft');
+        await this.updateReturnStatus(returnId, 'draft');
         throw error;
       }
 
@@ -82,7 +82,7 @@ export class ReturnProcessingService {
       }
 
       // 2. جلب بيانات المرتجع كاملة
-      const returnData = await returnDataService.fetchReturnById(returnId);
+      const returnData = await this.fetchReturnById(returnId);
       
       if (!returnData) {
         toast.error('لا توجد بيانات كافية لإلغاء المرتجع');
@@ -92,14 +92,14 @@ export class ReturnProcessingService {
       console.log("Cancelling return with data:", returnData);
 
       // 3. تحديث حالة المرتجع إلى ملغي
-      await returnDataService.updateReturnStatus(returnId, 'cancelled');
+      await this.updateReturnStatus(returnId, 'cancelled');
 
       // 4. عكس تأثير المرتجع على المخزون
       try {
         await this.updateInventory(returnData, 'cancel');
       } catch (error) {
         // في حالة حدوث خطأ، نعيد حالة المرتجع إلى مؤكد
-        await returnDataService.updateReturnStatus(returnId, 'confirmed');
+        await this.updateReturnStatus(returnId, 'confirmed');
         throw error;
       }
 
@@ -109,7 +109,7 @@ export class ReturnProcessingService {
       } catch (error) {
         // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مؤكد
         await this.updateInventory(returnData, 'reverse_cancel');
-        await returnDataService.updateReturnStatus(returnId, 'confirmed');
+        await this.updateReturnStatus(returnId, 'confirmed');
         throw error;
       }
 
@@ -120,6 +120,75 @@ export class ReturnProcessingService {
       toast.error('حدث خطأ أثناء إلغاء المرتجع');
       return false;
     }
+  }
+
+  /**
+   * جلب بيانات المرتجع بواسطة المعرف
+   * @private
+   */
+  private async fetchReturnById(returnId: string): Promise<Return | null> {
+    try {
+      // 1. جلب بيانات المرتجع
+      const { data: returnData, error: returnError } = await supabase
+        .from('returns')
+        .select(`
+          *,
+          parties (name)
+        `)
+        .eq('id', returnId)
+        .single();
+
+      if (returnError) throw returnError;
+
+      // 2. جلب عناصر المرتجع
+      const { data: items, error: itemsError } = await supabase
+        .from('return_items')
+        .select('*')
+        .eq('return_id', returnId);
+
+      if (itemsError) throw itemsError;
+
+      // 3. إنشاء كائن المرتجع كامل
+      return {
+        id: returnData.id,
+        return_type: returnData.return_type as 'sales_return' | 'purchase_return',
+        invoice_id: returnData.invoice_id,
+        party_id: returnData.party_id,
+        party_name: returnData.parties?.name,
+        date: returnData.date,
+        amount: returnData.amount,
+        payment_status: returnData.payment_status as 'draft' | 'confirmed' | 'cancelled',
+        notes: returnData.notes,
+        created_at: returnData.created_at,
+        items: items ? items.map(item => ({
+          id: item.id,
+          return_id: item.return_id,
+          item_id: item.item_id,
+          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total: item.total,
+          created_at: item.created_at
+        })) : []
+      };
+    } catch (error) {
+      console.error(`Error fetching return with id ${returnId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * تحديث حالة المرتجع
+   * @private
+   */
+  private async updateReturnStatus(returnId: string, status: 'draft' | 'confirmed' | 'cancelled'): Promise<void> {
+    const { error } = await supabase
+      .from('returns')
+      .update({ payment_status: status })
+      .eq('id', returnId);
+
+    if (error) throw error;
   }
 
   /**
@@ -168,25 +237,156 @@ export class ReturnProcessingService {
       console.log(`${shouldIncrease ? 'Increasing' : 'Decreasing'} inventory for item ${itemId} (${item.item_type}) by ${quantity}`);
       
       try {
+        // تنفيذ تحديث المخزون من خلال استدعاء الدالة المناسبة
         if (shouldIncrease) {
-          const result = await returnInventoryService.increaseItemQuantity(
-            item.item_type,
-            itemId,
-            quantity
-          );
-          console.log(`Inventory increase result: ${result ? 'Success' : 'Failed'}`);
+          await this.increaseItemQuantity(item.item_type, itemId, quantity);
         } else {
-          const result = await returnInventoryService.decreaseItemQuantity(
-            item.item_type,
-            itemId,
-            quantity
-          );
-          console.log(`Inventory decrease result: ${result ? 'Success' : 'Failed'}`);
+          await this.decreaseItemQuantity(item.item_type, itemId, quantity);
         }
       } catch (error) {
         console.error(`Error updating inventory for item ${itemId}:`, error);
         throw new Error(`فشل تحديث المخزون للصنف: ${item.item_name}`);
       }
+    }
+  }
+
+  /**
+   * زيادة كمية الصنف في المخزون
+   * @private
+   */
+  private async increaseItemQuantity(
+    itemType: string,
+    itemId: number,
+    quantity: number
+  ): Promise<boolean> {
+    try {
+      const table = this.getTableNameFromItemType(itemType);
+      
+      // 1. جلب الكمية الحالية
+      const { data, error } = await supabase
+        .from(table)
+        .select('quantity')
+        .eq('id', itemId)
+        .single();
+      
+      if (error) throw error;
+      
+      // 2. حساب الكمية الجديدة
+      const currentQuantity = data.quantity || 0;
+      const newQuantity = currentQuantity + quantity;
+      
+      // 3. تحديث الكمية
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({ quantity: newQuantity })
+        .eq('id', itemId);
+      
+      if (updateError) throw updateError;
+      
+      // 4. تسجيل حركة المخزون
+      await this.recordInventoryMovement(itemType, itemId, quantity, 'in', 'return');
+      
+      return true;
+    } catch (error) {
+      console.error(`Error increasing quantity for ${itemType} item ${itemId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * خفض كمية الصنف في المخزون
+   * @private
+   */
+  private async decreaseItemQuantity(
+    itemType: string,
+    itemId: number,
+    quantity: number
+  ): Promise<boolean> {
+    try {
+      const table = this.getTableNameFromItemType(itemType);
+      
+      // 1. جلب الكمية الحالية
+      const { data, error } = await supabase
+        .from(table)
+        .select('quantity')
+        .eq('id', itemId)
+        .single();
+      
+      if (error) throw error;
+      
+      // 2. التحقق من توفر الكمية المطلوبة
+      const currentQuantity = data.quantity || 0;
+      if (currentQuantity < quantity) {
+        throw new Error(`الكمية المتوفرة (${currentQuantity}) أقل من الكمية المطلوبة (${quantity})`);
+      }
+      
+      // 3. حساب الكمية الجديدة
+      const newQuantity = currentQuantity - quantity;
+      
+      // 4. تحديث الكمية
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({ quantity: newQuantity })
+        .eq('id', itemId);
+      
+      if (updateError) throw updateError;
+      
+      // 5. تسجيل حركة المخزون
+      await this.recordInventoryMovement(itemType, itemId, quantity, 'out', 'return_cancel');
+      
+      return true;
+    } catch (error) {
+      console.error(`Error decreasing quantity for ${itemType} item ${itemId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * تسجيل حركة في المخزون
+   * @private
+   */
+  private async recordInventoryMovement(
+    itemType: string,
+    itemId: number,
+    quantity: number,
+    direction: 'in' | 'out',
+    source: string
+  ): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('inventory_movements')
+        .insert({
+          item_type: itemType,
+          item_id: itemId,
+          quantity: quantity,
+          direction: direction,
+          source: source,
+          date: new Date().toISOString().split('T')[0]
+        });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error recording inventory movement:', error);
+      // تجاهل الخطأ هنا لأنه ثانوي
+    }
+  }
+
+  /**
+   * الحصول على اسم الجدول من نوع الصنف
+   * @private
+   */
+  private getTableNameFromItemType(itemType: string): string {
+    switch (itemType) {
+      case 'raw_materials':
+        return 'raw_materials';
+      case 'packaging_materials':
+        return 'packaging_materials';
+      case 'semi_finished_products':
+        return 'semi_finished_products';
+      case 'finished_products':
+        return 'finished_products';
+      default:
+        throw new Error(`نوع صنف غير معروف: ${itemType}`);
     }
   }
 

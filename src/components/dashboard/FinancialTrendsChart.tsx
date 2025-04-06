@@ -39,7 +39,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import ProfitService from '@/services/commercial/profit/ProfitService';
 
 interface FinancialTrendsChartProps {
   variant?: 'default' | 'compact';
@@ -155,10 +154,31 @@ export function FinancialTrendsChart({
           
           // استعلام بيانات الأرباح
           Promise.all(periods.map(async period => {
-            return await ProfitService.getInstance().getProfitSummary(
-              period.start,
-              period.end
-            );
+            // استعلام ملخص الأرباح لكل فترة
+            const { data, error } = await supabase
+              .from('profits')
+              .select(`
+                *,
+                invoices!inner (date, invoice_type)
+              `)
+              .eq('invoices.invoice_type', 'sale')
+              .gte('invoices.date', period.start)
+              .lte('invoices.date', period.end);
+              
+            if (error) throw error;
+            
+            // حساب القيم الإجمالية
+            const totalSales = data.reduce((sum, profit) => sum + profit.total_sales, 0);
+            const totalCost = data.reduce((sum, profit) => sum + profit.total_cost, 0);
+            const totalProfit = data.reduce((sum, profit) => sum + profit.profit_amount, 0);
+            
+            return {
+              total_sales: totalSales,
+              total_cost: totalCost,
+              total_profit: totalProfit,
+              average_profit_percentage: totalSales > 0 ? (totalProfit / totalSales) * 100 : 0,
+              profit_trend: 0
+            };
           }))
         ]);
         
@@ -462,7 +482,7 @@ export function FinancialTrendsChart({
     </ResponsiveContainer>
   );
   
-  // رسم بياني خطي للبيانات المالية
+  // رسم بياني خ��ي للبيانات المالية
   const renderLineChart = () => (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={margin}>
@@ -728,7 +748,7 @@ export function FinancialTrendsChart({
               <div className={`text-xs mt-1 ${overallGrowth >= 0 ? 'text-emerald-500' : 'text-red-500'} flex items-center`}>
                 {overallGrowth >= 0 ? <ArrowUpIcon className="h-3 w-3 mr-1" /> : <ArrowDownIcon className="h-3 w-3 mr-1" />}
                 <span>{Math.abs(overallGrowth).toFixed(1)}% </span>
-                <span className="text-muted-foreground mr-1">خلال الفترة</span>
+                <span className="text-muted-foreground mr-1">خلال الفت��ة</span>
               </div>
             </div>
             <div className="bg-background p-3 border rounded-lg">

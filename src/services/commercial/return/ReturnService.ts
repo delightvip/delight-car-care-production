@@ -2,7 +2,6 @@
 import { Return, ReturnItem } from "@/types/returns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import InventoryService from "@/services/inventory/InventoryService";
 import PartyService from "@/services/PartyService";
 import { ReturnProcessingService } from "./ReturnProcessingService";
 import ProfitService from "../profit/ProfitService";
@@ -13,13 +12,11 @@ import ProfitService from "../profit/ProfitService";
  */
 export class ReturnService {
   private static instance: ReturnService;
-  private inventoryService: InventoryService;
   private partyService: PartyService;
   private returnProcessor: ReturnProcessingService;
   private profitService: ProfitService;
 
   private constructor() {
-    this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
     this.returnProcessor = new ReturnProcessingService();
     this.profitService = ProfitService.getInstance();
@@ -54,13 +51,13 @@ export class ReturnService {
       // 2. تحويل البيانات إلى النوع المطلوب
       return data.map(returnItem => ({
         id: returnItem.id,
-        return_type: returnItem.return_type,
+        return_type: returnItem.return_type as 'sales_return' | 'purchase_return',
         invoice_id: returnItem.invoice_id,
         party_id: returnItem.party_id,
         party_name: returnItem.parties?.name,
         date: returnItem.date,
         amount: returnItem.amount,
-        payment_status: returnItem.payment_status,
+        payment_status: returnItem.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: returnItem.notes,
         created_at: returnItem.created_at
       }));
@@ -99,16 +96,26 @@ export class ReturnService {
       // 3. إنشاء كائن المرتجع كامل
       return {
         id: returnData.id,
-        return_type: returnData.return_type,
+        return_type: returnData.return_type as 'sales_return' | 'purchase_return',
         invoice_id: returnData.invoice_id,
         party_id: returnData.party_id,
         party_name: returnData.parties?.name,
         date: returnData.date,
         amount: returnData.amount,
-        payment_status: returnData.payment_status,
+        payment_status: returnData.payment_status as 'draft' | 'confirmed' | 'cancelled',
         notes: returnData.notes,
         created_at: returnData.created_at,
-        items: items
+        items: items ? items.map(item => ({
+          id: item.id,
+          return_id: item.return_id,
+          item_id: item.item_id,
+          item_type: item.item_type as "raw_materials" | "packaging_materials" | "semi_finished_products" | "finished_products",
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total: item.total,
+          created_at: item.created_at
+        })) : []
       };
     } catch (error) {
       console.error(`Error fetching return with id ${id}:`, error);
@@ -145,7 +152,7 @@ export class ReturnService {
           party_id: returnData.party_id,
           date: returnData.date,
           amount: totalAmount,
-          payment_status: 'draft',
+          payment_status: 'draft' as 'draft' | 'confirmed' | 'cancelled',
           notes: returnData.notes
         })
         .select()
