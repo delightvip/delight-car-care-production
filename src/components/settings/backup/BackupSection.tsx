@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Download, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useBackupDownloader } from "./hooks/useBackupDownloader";
 
 const BackupSection = () => {
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const { downloadBackup } = useBackupDownloader();
 
   const handleCreateBackup = async () => {
     setIsCreatingBackup(true);
@@ -22,21 +24,16 @@ const BackupSection = () => {
         return;
       }
       
-      if (!data?.url) {
-        toast.error("حدث خطأ أثناء إنشاء النسخة الاحتياطية");
+      console.log("Backup creation response:", data);
+      
+      // If no data or URL is returned, show an error
+      if (!data) {
+        toast.error("حدث خطأ أثناء إنشاء النسخة الاحتياطية: لم يتم استلام بيانات");
         return;
       }
       
-      console.log("Backup creation response:", data);
-      
-      // Create a temporary link to download the backup
-      const timestamp = new Date().toISOString().split("T")[0];
-      const link = document.createElement("a");
-      link.href = data.url;
-      link.download = `backup-${timestamp}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Process and download the backup data
+      await downloadBackup(data);
       
       toast.success("تم إنشاء وتنزيل النسخة الاحتياطية بنجاح");
     } catch (error) {

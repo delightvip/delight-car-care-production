@@ -5,55 +5,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Upload, RefreshCw, AlertTriangle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useBackupRestore } from "./hooks/useBackupRestore";
+import { BackupMetadata } from "./types";
+import { ErrorDisplay } from "./components/ErrorDisplay";
+import { BackupMetadataDisplay } from "./components/BackupMetadataDisplay";
 
 const RestoreSection = () => {
   const [isRestoring, setIsRestoring] = useState(false);
   const [backupFile, setBackupFile] = useState<File | null>(null);
-  const [backupMetadata, setBackupMetadata] = useState<any>(null);
+  const [backupMetadata, setBackupMetadata] = useState<BackupMetadata | null>(null);
   const [restoreErrors, setRestoreErrors] = useState<any[]>([]);
+  
+  const { validateFile, restoreBackup } = useBackupRestore();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const { valid, metadata, error } = await validateFile(file);
       
-      // Check file size
-      if (file.size > 20 * 1024 * 1024) { // 20MB limit
-        toast.error("حجم الملف كبير جداً. الحد الأقصى هو 20 ميجابايت");
+      if (!valid) {
+        toast.error(error || "ملف النسخة الاحتياطية غير صالح");
         e.target.value = '';
         return;
       }
       
       setBackupFile(file);
+      setBackupMetadata(metadata);
       setRestoreErrors([]);
-      
-      // Validate backup file format and read metadata
-      try {
-        const fileContent = await file.text();
-        try {
-          const jsonData = JSON.parse(fileContent);
-          if (jsonData['__metadata']) {
-            setBackupMetadata(jsonData['__metadata']);
-          } else {
-            // If no metadata, check if it at least has some tables
-            const tableKeys = Object.keys(jsonData).filter(key => !key.startsWith('__'));
-            if (tableKeys.length === 0) {
-              toast.warning("الملف لا يحتوي على بيانات صالحة للاستعادة");
-              setBackupFile(null);
-              e.target.value = '';
-              return;
-            }
-          }
-        } catch (e) {
-          toast.error("ملف النسخة الاحتياطية غير صالح");
-          setBackupFile(null);
-          e.target.value = '';
-        }
-      } catch (e) {
-        console.error("Error reading backup file:", e);
-      }
     }
   };
 
@@ -73,36 +53,13 @@ const RestoreSection = () => {
     try {
       toast.info("جاري استعادة النسخة الاحتياطية، قد يستغرق هذا بعض الوقت...");
       
-      // Read the file
-      const fileContent = await backupFile.text();
+      // Call the restore function
+      const { success, errors } = await restoreBackup(backupFile);
       
-      try {
-        // Validate JSON
-        JSON.parse(fileContent);
-      } catch (e) {
-        toast.error("ملف النسخة الاحتياطية غير صالح");
-        setIsRestoring(false);
-        return;
-      }
-      
-      // Call the restore backup function
-      const { data, error } = await supabase.functions.invoke("restore-backup", {
-        body: { backup: fileContent }
-      });
-      
-      if (error) {
-        console.error("Backup restoration error:", error);
-        toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
-        setIsRestoring(false);
-        return;
-      }
-      
-      console.log("Backup restoration response:", data);
-      
-      if (data.success) {
-        if (data.errors && data.errors.length > 0) {
-          toast.warning(`تمت استعادة النسخة الاحتياطية مع وجود بعض الأخطاء (${data.errors.length})`);
-          setRestoreErrors(data.errors);
+      if (success) {
+        if (errors && errors.length > 0) {
+          toast.warning(`تمت استعادة النسخة الاحتياطية مع وجود بعض الأخطاء (${errors.length})`);
+          setRestoreErrors(errors);
         } else {
           toast.success("تمت استعادة النسخة الاحتياطية بنجاح");
           
@@ -113,8 +70,8 @@ const RestoreSection = () => {
         }
       } else {
         toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
-        if (data.errors) {
-          setRestoreErrors(data.errors);
+        if (errors) {
+          setRestoreErrors(errors);
         }
       }
     } catch (error) {
@@ -165,43 +122,11 @@ const RestoreSection = () => {
         </div>
         
         {backupMetadata && (
-          <div className="bg-muted p-4 rounded-md text-sm">
-            <p><strong>معلومات النسخة الاحتياطية:</strong></p>
-            <p>تاريخ الإنشاء: {new Date(backupMetadata.timestamp).toLocaleString('ar-SA')}</p>
-            <p>عدد الجداول: {backupMetadata.tablesCount}</p>
-            <p>الإصدار: {backupMetadata.version}</p>
-          </div>
+          <BackupMetadataDisplay metadata={backupMetadata} />
         )}
         
         {restoreErrors.length > 0 && (
-          <Alert variant="destructive" className="my-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>تم العثور على أخطاء أثناء الاستعادة ({restoreErrors.length})</AlertTitle>
-            <AlertDescription>
-              <ScrollArea className="h-40 w-full rounded border p-2 mt-2">
-                <ul className="list-disc list-inside space-y-1">
-                  {restoreErrors.map((error, index) => (
-                    <li key={index}>
-                      <strong>الجدول:</strong> {error.table}, <strong>العملية:</strong> {error.operation}{' '}
-                      {error.batch && <span><strong>الدفعة:</strong> {error.batch}</span>}{' '}
-                      <strong>الخطأ:</strong> {error.error}
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
-              <div className="mt-2">
-                <p>قد تمت استعادة بعض البيانات بنجاح. يمكنك إعادة تحميل الصفحة للمتابعة.</p>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  className="mt-2"
-                  onClick={() => window.location.reload()}
-                >
-                  إعادة تحميل الصفحة
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
+          <ErrorDisplay errors={restoreErrors} />
         )}
         
         <div className="flex justify-end gap-2">

@@ -8,7 +8,7 @@ export interface InventoryMovement {
   balance_after: number;
   reason?: string;
   created_at: string;
-  updated_at?: string; // جعل الخاصية اختيارية
+  updated_at?: string; 
   user_id?: string;
-  user_name?: string; // إضافة خاصية اسم المستخدم
+  user_name?: string; // اسم المستخدم الذي قام بالحركة
 }
