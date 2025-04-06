@@ -18,7 +18,7 @@ export interface FinancialSummary {
   startDate?: string;
   endDate?: string;
   totalBalance?: number;
-  recentTransactions?: any[];
+  recentTransactions?: Transaction[];
   netIncome?: number;
   categoryAnalysis?: any[];
   incomeByCategory?: any[];

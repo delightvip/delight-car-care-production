@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import FinancialTransactionService from "./FinancialTransactionService";
@@ -74,8 +75,7 @@ class FinancialCommercialBridge {
         paymentMethod,
         invoice.id,
         'invoice',
-        notes,
-        new Date(invoice.date)
+        notes
       );
       
       return true;
@@ -135,8 +135,7 @@ class FinancialCommercialBridge {
         paymentMethod,
         payment.id,
         'payment',
-        notes,
-        new Date(payment.date)
+        notes
       );
       
       return true;

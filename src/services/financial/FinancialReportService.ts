@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { FinancialSummary, Transaction } from './FinancialTypes';
 import { format, subMonths, parseISO } from 'date-fns';
@@ -154,6 +155,164 @@ class FinancialReportService {
         endDate: effectiveEndDate,
         incomeByCategory: [],
         expenseByCategory: []
+      };
+    }
+  }
+
+  // Add the missing methods that FinancialService is trying to call
+  public async getDailyCashFlow(startDate: string, endDate: string): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+        
+      if (error) throw error;
+      
+      // Group transactions by date
+      const cashFlowByDate = new Map();
+      
+      // Initialize with all dates in the range
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const dayMilliseconds = 24 * 60 * 60 * 1000;
+      
+      for (let date = start; date <= end; date = new Date(date.getTime() + dayMilliseconds)) {
+        const dateString = format(date, 'yyyy-MM-dd');
+        cashFlowByDate.set(dateString, {
+          date: dateString,
+          income: 0,
+          expense: 0,
+          balance: 0
+        });
+      }
+      
+      // Sum transactions by date
+      data.forEach(transaction => {
+        const dateKey = transaction.date;
+        const entry = cashFlowByDate.get(dateKey) || {
+          date: dateKey,
+          income: 0,
+          expense: 0,
+          balance: 0
+        };
+        
+        if (transaction.type === 'income') {
+          entry.income += transaction.amount;
+        } else {
+          entry.expense += transaction.amount;
+        }
+        
+        cashFlowByDate.set(dateKey, entry);
+      });
+      
+      // Convert map to array and calculate balance
+      let runningBalance = 0;
+      const result = Array.from(cashFlowByDate.values())
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(day => {
+          runningBalance += day.income - day.expense;
+          return {
+            ...day,
+            balance: runningBalance
+          };
+        });
+      
+      return result;
+      
+    } catch (error) {
+      console.error('Error getting daily cash flow:', error);
+      return [];
+    }
+  }
+  
+  public async generateIncomeExpenseReport(startDate: string, endDate: string): Promise<any> {
+    try {
+      // Get transactions within date range
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .select(`
+          *,
+          financial_categories:category_id (
+            name,
+            type
+          )
+        `)
+        .gte('date', startDate)
+        .lte('date', endDate);
+        
+      if (error) throw error;
+      
+      // Group transactions by category
+      const incomeByCategory = new Map();
+      const expenseByCategory = new Map();
+      
+      data.forEach(transaction => {
+        const categoryName = transaction.financial_categories?.name || 'غير مصنف';
+        const categoryId = transaction.category_id;
+        
+        if (transaction.type === 'income') {
+          const current = incomeByCategory.get(categoryId) || { 
+            id: categoryId,
+            name: categoryName,
+            amount: 0,
+            count: 0
+          };
+          
+          current.amount += transaction.amount;
+          current.count += 1;
+          incomeByCategory.set(categoryId, current);
+        } else {
+          const current = expenseByCategory.get(categoryId) || { 
+            id: categoryId,
+            name: categoryName,
+            amount: 0,
+            count: 0
+          };
+          
+          current.amount += transaction.amount;
+          current.count += 1;
+          expenseByCategory.set(categoryId, current);
+        }
+      });
+      
+      // Calculate totals
+      const totalIncome = Array.from(incomeByCategory.values()).reduce((sum, cat) => sum + cat.amount, 0);
+      const totalExpense = Array.from(expenseByCategory.values()).reduce((sum, cat) => sum + cat.amount, 0);
+      
+      // Add percentage to each category
+      const incomeCategories = Array.from(incomeByCategory.values()).map(cat => ({
+        ...cat,
+        percentage: totalIncome > 0 ? (cat.amount / totalIncome) * 100 : 0
+      }));
+      
+      const expenseCategories = Array.from(expenseByCategory.values()).map(cat => ({
+        ...cat,
+        percentage: totalExpense > 0 ? (cat.amount / totalExpense) * 100 : 0
+      }));
+      
+      return {
+        startDate,
+        endDate,
+        incomeByCategory: incomeCategories,
+        expenseByCategory: expenseCategories,
+        totalIncome,
+        totalExpense,
+        netProfit: totalIncome - totalExpense
+      };
+      
+    } catch (error) {
+      console.error('Error generating income expense report:', error);
+      return {
+        startDate,
+        endDate,
+        incomeByCategory: [],
+        expenseByCategory: [],
+        totalIncome: 0,
+        totalExpense: 0,
+        netProfit: 0
       };
     }
   }

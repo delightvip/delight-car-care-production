@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FinancialSummary, Category, Transaction, FinancialBalance } from "./FinancialTypes";
@@ -58,7 +59,7 @@ class FinancialService {
    * إنشاء معاملة مالية جديدة
    */
   public async createTransaction(transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>): Promise<Transaction | null> {
-    return this.transactionService.createTransaction(transactionData);
+    return this.transactionService.createTransaction(transactionData as any);
   }
   
   /**
@@ -81,7 +82,11 @@ class FinancialService {
    * الحصول على الفئات المالية
    */
   public async getCategories(type?: 'income' | 'expense'): Promise<Category[]> {
-    return this.categoryService.getCategories(type);
+    const categories = await this.categoryService.getCategories();
+    if (type) {
+      return categories.filter(cat => cat.type === type);
+    }
+    return categories;
   }
   
   /**

@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Transaction, Category } from './FinancialTypes';
@@ -27,9 +28,14 @@ class FinancialTransactionService {
     return FinancialTransactionService.instance;
   }
   
-  public async getTransactions(): Promise<Transaction[]> {
+  public async getTransactions(
+    startDate?: string, 
+    endDate?: string, 
+    type?: 'income' | 'expense',
+    categoryId?: string
+  ): Promise<Transaction[]> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('financial_transactions')
         .select(`
           *,
@@ -39,6 +45,25 @@ class FinancialTransactionService {
           )
         `)
         .order('date', { ascending: false });
+      
+      // Apply filters if provided
+      if (startDate) {
+        query = query.gte('date', startDate);
+      }
+      
+      if (endDate) {
+        query = query.lte('date', endDate);
+      }
+      
+      if (type) {
+        query = query.eq('type', type);
+      }
+      
+      if (categoryId) {
+        query = query.eq('category_id', categoryId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       
@@ -166,31 +191,32 @@ class FinancialTransactionService {
     }
   }
   
-  // Add the createTransactionFromCommercial method that was missing
+  // Add the createTransactionFromCommercial method with correct parameters
   public async createTransactionFromCommercial(
     amount: number,
     type: 'income' | 'expense',
     categoryId: string,
+    paymentMethod: string,
     referenceId: string,
     referenceType: string,
     notes?: string,
-    isReduction?: boolean
+    date?: Date
   ): Promise<Transaction | null> {
     try {
-      // Get today's date in ISO format
-      const today = new Date().toISOString().split('T')[0];
+      // Get today's date in ISO format or use provided date
+      const transactionDate = date ? date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
       
       // Create transaction data
       const transactionData: TransactionCreateData = {
-        date: today,
+        date: transactionDate,
         amount,
         type,
         category_id: categoryId,
-        payment_method: 'cash',
+        payment_method: paymentMethod || 'cash',
         reference_id: referenceId,
         reference_type: referenceType,
         notes,
-        is_reduction: isReduction
+        is_reduction: false
       };
       
       // Create transaction
@@ -199,6 +225,60 @@ class FinancialTransactionService {
       console.error('Error creating transaction from commercial:', error);
       toast.error('حدث خطأ أثناء إنشاء المعاملة المالية من التجارية');
       return null;
+    }
+  }
+  
+  // Add the updateTransaction method
+  public async updateTransaction(
+    id: string, 
+    transactionData: Partial<Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'>>
+  ): Promise<boolean> {
+    try {
+      // Get existing transaction
+      const existingTransaction = await this.getTransactionById(id);
+      
+      if (!existingTransaction) {
+        toast.error('المعاملة المالية غير موجودة');
+        return false;
+      }
+      
+      // Update financial balance for old transaction
+      if (existingTransaction.type === 'income') {
+        await this.updateFinancialBalance(-existingTransaction.amount, 0);
+      } else {
+        await this.updateFinancialBalance(existingTransaction.amount, 0);
+      }
+      
+      // Update transaction
+      const { error } = await supabase
+        .from('financial_transactions')
+        .update({
+          date: transactionData.date,
+          amount: transactionData.amount,
+          type: transactionData.type,
+          category_id: transactionData.category_id,
+          payment_method: transactionData.payment_method,
+          reference_id: transactionData.reference_id,
+          reference_type: transactionData.reference_type,
+          notes: transactionData.notes,
+          is_reduction: transactionData.is_reduction
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Update financial balance for new transaction values
+      if (transactionData.type === 'income' || (existingTransaction.type === 'income' && transactionData.type === undefined)) {
+        await this.updateFinancialBalance(transactionData.amount || existingTransaction.amount, 0);
+      } else {
+        await this.updateFinancialBalance(-(transactionData.amount || existingTransaction.amount), 0);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error(`Error updating transaction ${id}:`, error);
+      toast.error('حدث خطأ أثناء تحديث المعاملة المالية');
+      return false;
     }
   }
   
