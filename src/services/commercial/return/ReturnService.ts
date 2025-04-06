@@ -169,14 +169,15 @@ export class ReturnService {
       if (returnData.items && returnData.items.length > 0) {
         console.log('Adding return items:', returnData.items);
 
+        // Important: Do not include total field as it's a computed column
         const returnItems = returnData.items.map(item => ({
           return_id: returnRecord.id,
           item_id: item.item_id,
           item_type: item.item_type,
           item_name: item.item_name,
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
+          unit_price: item.unit_price
+          // Don't include total as it's computed in the database
         }));
 
         const { error: itemsError } = await supabase
