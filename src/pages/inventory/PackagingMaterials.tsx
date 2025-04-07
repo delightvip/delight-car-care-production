@@ -25,6 +25,7 @@ import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle } from 'lucide-
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import InventoryService from '@/services/InventoryService';
 
 const units = ['قطعة', 'علبة', 'كرتونة', 'رول', 'متر'];
 
@@ -300,7 +301,15 @@ const PackagingMaterials = () => {
   
   const handleDeleteMaterial = () => {
     if (!currentMaterial) return;
-    deleteMutation.mutate(currentMaterial.id);
+    
+    const inventoryService = InventoryService.getInstance();
+    inventoryService.deletePackagingMaterial(currentMaterial.id).then((success) => {
+      if (success) {
+        // لا داعي لاستدعاء toast.success لأن الدالة في InventoryService تقوم بذلك
+        setIsDeleteDialogOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
+      }
+    });
   };
   
   const columns = [
@@ -652,8 +661,8 @@ const PackagingMaterials = () => {
               <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button variant="destructive" onClick={handleDeleteMaterial} disabled={deleteMutation.isPending}>
-                {deleteMutation.isPending ? 'جاري الحذف...' : 'حذف'}
+              <Button variant="destructive" onClick={handleDeleteMaterial}>
+                حذف
               </Button>
             </DialogFooter>
           </DialogContent>

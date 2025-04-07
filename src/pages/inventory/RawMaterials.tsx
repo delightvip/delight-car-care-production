@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
@@ -11,6 +10,8 @@ import RawMaterialForm from '@/components/inventory/raw-materials/RawMaterialFor
 import DeleteConfirmDialog from '@/components/inventory/common/DeleteConfirmDialog';
 import ImportMaterialsDialog from '@/components/inventory/raw-materials/ImportMaterialsDialog';
 import RawMaterialDetails from '@/components/inventory/raw-materials/RawMaterialDetails';
+import InventoryService from '@/services/InventoryService';
+import { toast } from 'sonner';
 
 const RawMaterials = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -113,9 +114,17 @@ const RawMaterials = () => {
             isOpen={isDeleteDialogOpen}
             onClose={() => setIsDeleteDialogOpen(false)}
             onConfirm={() => {
-              // Delete logic here
-              setIsDeleteDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ['rawMaterials'] });
+              // استدعاء خدمة المخزون لحذف المادة الخام
+              const inventoryService = InventoryService.getInstance();
+              inventoryService.deleteRawMaterial(currentMaterial.id).then((success) => {
+                if (success) {
+                  toast.success(`تم حذف المادة الخام ${currentMaterial.name} بنجاح`);
+                  setIsDeleteDialogOpen(false);
+                  queryClient.invalidateQueries({ queryKey: ['rawMaterials'] });
+                } else {
+                  toast.error(`فشل في حذف المادة الخام ${currentMaterial.name}`);
+                }
+              });
             }}
             title="حذف مادة خام"
             description={`هل أنت متأكد من حذف ${currentMaterial.name}؟ لا يمكن التراجع عن هذه العملية.`}

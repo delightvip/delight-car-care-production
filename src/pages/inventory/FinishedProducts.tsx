@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
@@ -11,6 +10,8 @@ import FinishedProductForm from '@/components/inventory/finished-products/Finish
 import DeleteConfirmDialog from '@/components/inventory/common/DeleteConfirmDialog';
 import FinishedProductDetails from '@/components/inventory/finished-products/FinishedProductDetails';
 import ImportDialog from '@/components/inventory/common/ImportDialog';
+import InventoryService from '@/services/InventoryService';
+import { toast } from 'sonner';
 
 const FinishedProducts = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -111,9 +112,17 @@ const FinishedProducts = () => {
             isOpen={isDeleteDialogOpen}
             onClose={() => setIsDeleteDialogOpen(false)}
             onConfirm={() => {
-              // Delete logic here
-              setIsDeleteDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+              // استدعاء خدمة المخزون لحذف المنتج النهائي
+              const inventoryService = InventoryService.getInstance();
+              inventoryService.deleteFinishedProduct(currentProduct.id).then((success) => {
+                if (success) {
+                  toast.success(`تم حذف المنتج ${currentProduct.name} بنجاح`);
+                  setIsDeleteDialogOpen(false);
+                  queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+                } else {
+                  toast.error(`فشل في حذف المنتج ${currentProduct.name}`);
+                }
+              });
             }}
             title="حذف منتج نهائي"
             description={`هل أنت متأكد من حذف ${currentProduct.name}؟ لا يمكن التراجع عن هذه العملية.`}
