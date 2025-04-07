@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Package, Beaker, Droplet } from 'lucide-react';
-import ProductMovementHistory from '@/components/inventory/movement/ProductMovementHistory';
+import { ProductMovementHistory } from '@/components/inventory/movement';
 
 interface SemiFinishedDetailsProps {
   isOpen: boolean;
@@ -45,7 +45,10 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
     queryKey: ['semiFinishedIngredients', product?.id],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        if (!product?.id) return [];
+        
+        // Fetch raw material ingredients
+        const { data: rawIngredients, error: rawError } = await supabase
           .from('semi_finished_ingredients')
           .select(`
             id,
@@ -53,11 +56,12 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
             ingredient_type,
             raw_material:raw_material_id(id, code, name, unit, unit_cost)
           `)
-          .eq('semi_finished_product_id', product.id);
+          .eq('semi_finished_product_id', product.id)
+          .eq('ingredient_type', 'raw');
           
-        if (error) throw error;
+        if (rawError) throw rawError;
         
-        // For semi-finished ingredients, make a separate query
+        // Fetch semi-finished ingredients
         const { data: semiIngredients, error: semiError } = await supabase
           .from('semi_finished_ingredients')
           .select(`
@@ -70,6 +74,19 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
           .eq('ingredient_type', 'semi');
           
         if (semiError) throw semiError;
+        
+        // Fetch water ingredients
+        const { data: waterIngredients, error: waterError } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            ingredient_type
+          `)
+          .eq('semi_finished_product_id', product.id)
+          .eq('ingredient_type', 'water');
+          
+        if (waterError) throw waterError;
         
         // If we have semi-finished ingredients, fetch their details
         let enhancedSemiIngredients = [];
@@ -93,10 +110,14 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
           });
         }
         
-        // Combine both raw and semi ingredients
+        // Combine all ingredients
         const allIngredients = [
-          ...(data || []).filter(ing => ing.ingredient_type !== 'semi'),
-          ...enhancedSemiIngredients
+          ...(rawIngredients || []),
+          ...enhancedSemiIngredients,
+          ...(waterIngredients || []).map(ing => ({
+            ...ing,
+            is_water: true
+          }))
         ];
         
         return allIngredients || [];
@@ -136,7 +157,7 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
           type: 'semi',
           unit_cost: ingredient.semi_finished_product.unit_cost
         };
-      } else if (ingredient.ingredient_type === 'water') {
+      } else if (ingredient.ingredient_type === 'water' || ingredient.is_water) {
         return {
           name: 'ماء',
           code: 'WATER',
