@@ -250,7 +250,9 @@ class PartyService {
       // لا تقم بإنشاء معاملات مالية في لوحة التحكم المالية إذا كان النوع متعلق بإلغاء المرتجعات
       const isReturnCancellation = transactionType === 'cancel_sales_return' || 
                                   transactionType === 'cancel_purchase_return';
-
+      
+      // لا تقم بإنشاء معاملات مالية في لوحة التحكم المالية إذا كان النوع متعلق بإلغاء المرتجعات
+      // هنا ستتم إضافة السجل إلى دفتر الحسابات فقط، وليس إلى المعاملات المالية
       const { error: ledgerError } = await this.supabase
         .from('ledger')
         .insert({
@@ -265,6 +267,38 @@ class PartyService {
         });
       
       if (ledgerError) throw ledgerError;
+      
+      // إنشاء معاملة مالية في لوحة التحكم المالية فقط إذا لم تكن معاملة إلغاء مرتجع
+      // وأيضًا إذا لم تكن معاملة تأكيد مرتجع (الحالتان تؤثران فقط على أرصدة العملاء وليس لوحة التحكم المالية)
+      const isReturnConfirmation = transactionType === 'sales_return' ||
+                                  transactionType === 'purchase_return';
+      
+      if (!isReturnCancellation && !isReturnConfirmation && 
+          !transactionType.includes('return') && amount > 0) {
+        // تحديد نوع المعاملة المالية (إيراد أو مصروف)
+        // أي معاملة تزيد من رصيد العميل (isDebit=true) هي مصروف (لأننا نسدد للعملاء/الموردين)
+        // وأي معاملة تنقص من رصيد العميل (isDebit=false) هي إيراد (لأننا نستلم من العملاء/الموردين)
+        const type = isDebit ? 'expense' : 'income';
+        const category_id = type === 'income' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181';
+        
+        // إنشاء المعاملة المالية في لوحة التحكم المالية
+        const { error: financialError } = await this.supabase
+          .from('financial_transactions')
+          .insert({
+            type: type,
+            amount: amount,
+            category_id: category_id,
+            date: new Date().toISOString().split('T')[0],
+            payment_method: 'other',
+            notes: description,
+            reference_id: reference || partyId,
+            reference_type: transactionType
+          });
+          
+        if (financialError) {
+          console.warn('خطأ في إنشاء المعاملة المالية، ولكن تم تحديث رصيد العميل بنجاح:', financialError);
+        }
+      }
       
       return true;
     } catch (error) {

@@ -278,11 +278,13 @@ export class ReturnService {
       }
 
       // 2. استخدام معالج المرتجعات لإلغاء المرتجع
+      // هذا سيقوم بمعالجة كل من المخزون والعمليات المالية من خلال FinancialCommercialBridge
       const success = await this.returnProcessor.cancelReturn(returnId);
       
       if (success && returnData.return_type === 'sales_return') {
         try {
           // 3. استعادة بيانات الربح للفاتورة المرتبطة (لمرتجعات المبيعات فقط)
+          // هذه العملية لا تتم في معالج المرتجعات، لذلك نبقيها هنا
           if (returnData.invoice_id) {
             console.log('Restoring profit data for invoice after return cancellation:', returnData.invoice_id);
             const restoreResult = await this.profitService.restoreProfitAfterReturnCancellation(
@@ -299,38 +301,16 @@ export class ReturnService {
             }
           }
           
-          // 4. تحديث حساب العميل (عكس التغيير السابق)
-          if (returnData.party_id) {
-            console.log('Updating customer balance after return cancellation:', returnId);
-            await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              true, // مدين لإلغاء مرتجعات المبيعات (استعادة دين العميل)
-              'إلغاء مرتجع مبيعات',
-              'cancel_sales_return',
-              returnId
-            );
-          }
+          // ملاحظة: تم إزالة كود تحديث رصيد العميل الذي كان هنا
+          // لأنه يتم تنفيذه بالفعل في ReturnProcessor -> FinancialCommercialBridge
+          // وتنفيذه مرة أخرى هنا يؤدي إلى مضاعفة التأثير على رصيد العميل
         } catch (err) {
           console.error('Error updating financial records after cancellation:', err);
           toast.warning('تم إلغاء المرتجع لكن قد تكون هناك مشكلة في تحديث السجلات المالية');
         }
-      } else if (success && returnData.return_type === 'purchase_return' && returnData.party_id) {
-        try {
-          // 5. تحديث حساب المورد لإلغاء مرتجعات المشتريات (عكس التغيير السابق)
-          console.log('Updating supplier balance after return cancellation:', returnId);
-          await this.partyService.updatePartyBalance(
-            returnData.party_id,
-            returnData.amount,
-            false, // دائن لإلغاء مرتجعات المشتريات (استعادة دين المورد)
-            'إلغاء مرتجع مشتريات',
-            'cancel_purchase_return',
-            returnId
-          );
-        } catch (err) {
-          console.error('Error updating supplier balance after cancellation:', err);
-          toast.warning('تم إلغاء المرتجع لكن قد تكون هناك مشكلة في تحديث حساب المورد');
-        }
+      } else if (success && returnData.return_type === 'purchase_return') {
+        // لا حاجة لأي عمليات إضافية هنا، لأن معالج المرتجعات يقوم بكل شيء
+        // تم إزالة كود تحديث رصيد المورد الذي كان هنا لنفس السبب
       }
       
       return success;

@@ -457,33 +457,10 @@ export class ReturnProcessor {
           }
         }
         
-        // تحديث حساب العميل لإلغاء مرتجعات المبيعات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating customer balance for cancelled return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              true, // مدين لإلغاء مرتجعات المبيعات (استعادة دين العميل)
-              'إلغاء مرتجع مبيعات',
-              'cancel_sales_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update customer balance for cancelled return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب العميل",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating customer balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        }
+        // تم إزالة تحديث حساب العميل لإلغاء مرتجعات المبيعات هنا
+        // لأنه سيتم التعامل معه من خلال ReturnProcessingService -> FinancialCommercialBridge
+        // لتجنب مضاعفة التأثير على رصيد العميل
+        
       } else if (returnData.return_type === 'purchase_return') {
         // زيادة المخزون لمرتجعات المشتريات الملغاة (استعادة البضاعة المرجعة)
         for (const item of returnData.items) {
@@ -554,33 +531,9 @@ export class ReturnProcessor {
           }
         }
         
-        // تحديث حساب المورد لإلغاء مرتجعات المشتريات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating supplier balance for cancelled return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              false, // دائن لإلغاء مرتجعات المشتريات (استعادة دين المورد)
-              'إلغاء مرتجع مشتريات',
-              'cancel_purchase_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update supplier balance for cancelled return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب المورد",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating supplier balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        }
+        // تم إزالة تحديث حساب المورد لإلغاء مرتجعات المشتريات هنا
+        // لأنه سيتم التعامل معه من خلال ReturnProcessingService -> FinancialCommercialBridge
+        // لتجنب مضاعفة التأثير على رصيد المورد
       }
       
       if (!allUpdatesSuccessful) {
