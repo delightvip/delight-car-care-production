@@ -51,13 +51,55 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
             id,
             percentage,
             ingredient_type,
-            raw_material:raw_material_id(id, code, name, unit, unit_cost),
-            semi_finished_product:semi_finished_id!semi_finished_products(id, code, name, unit, unit_cost)
+            raw_material:raw_material_id(id, code, name, unit, unit_cost)
           `)
           .eq('semi_finished_product_id', product.id);
           
         if (error) throw error;
-        return data || [];
+        
+        // For semi-finished ingredients, make a separate query
+        const { data: semiIngredients, error: semiError } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            ingredient_type,
+            semi_finished_id
+          `)
+          .eq('semi_finished_product_id', product.id)
+          .eq('ingredient_type', 'semi');
+          
+        if (semiError) throw semiError;
+        
+        // If we have semi-finished ingredients, fetch their details
+        let enhancedSemiIngredients = [];
+        if (semiIngredients && semiIngredients.length > 0) {
+          const semiIds = semiIngredients.map(ing => ing.semi_finished_id);
+          
+          const { data: semiDetails, error: detailsError } = await supabase
+            .from('semi_finished_products')
+            .select('id, code, name, unit, unit_cost')
+            .in('id', semiIds);
+            
+          if (detailsError) throw detailsError;
+          
+          // Combine the data
+          enhancedSemiIngredients = semiIngredients.map(ing => {
+            const details = semiDetails.find(s => s.id === ing.semi_finished_id);
+            return {
+              ...ing,
+              semi_finished_product: details
+            };
+          });
+        }
+        
+        // Combine both raw and semi ingredients
+        const allIngredients = [
+          ...(data || []).filter(ing => ing.ingredient_type !== 'semi'),
+          ...enhancedSemiIngredients
+        ];
+        
+        return allIngredients || [];
       } catch (error) {
         console.error("Error fetching ingredients:", error);
         return [];

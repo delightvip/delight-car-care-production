@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,7 +36,6 @@ import IngredientSelector from './ingredients/IngredientSelector';
 import IngredientsList from './ingredients/IngredientsList';
 import { Ingredient, SemiFinishedProductFormData } from '@/types/inventoryTypes';
 
-// Define form schema
 const semiFinishedSchema = z.object({
   name: z.string().min(2, { message: "يجب أن يحتوي الاسم على حرفين على الأقل" }),
   unit: z.string().min(1, { message: "يرجى اختيار وحدة القياس" }),
@@ -70,7 +68,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   const [hasWater, setHasWater] = useState<boolean>(false);
   const [totalCost, setTotalCost] = useState<number>(0);
   
-  // Fetch raw materials
   const { data: rawMaterials = [], isLoading: isRawMaterialsLoading } = useQuery({
     queryKey: ['rawMaterials'],
     queryFn: async () => {
@@ -84,7 +81,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     }
   });
   
-  // Fetch semi-finished products
   const { data: semiFinishedProducts = [], isLoading: isSemiFinishedLoading } = useQuery({
     queryKey: ['semiFinishedProductsList'],
     queryFn: async () => {
@@ -110,13 +106,10 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     }
   });
   
-  // Load existing ingredients if editing
   useEffect(() => {
     if (isEditing && initialData) {
-      // Fetch ingredients for this product
       const fetchIngredients = async () => {
         try {
-          // Fixed query with proper relationship hints
           const { data, error } = await supabase
             .from('semi_finished_ingredients')
             .select(`
@@ -125,8 +118,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
               ingredient_type,
               raw_material_id,
               semi_finished_id,
-              raw_material:raw_material_id(id, code, name, unit, unit_cost),
-              semi_finished_product:semi_finished_id!semi_finished_products(id, code, name, unit, unit_cost)
+              raw_material:raw_material_id(id, code, name, unit, unit_cost)
             `)
             .eq('semi_finished_product_id', initialData.id);
             
@@ -136,9 +128,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             return;
           }
           
-          // Format ingredients for our state
           const formattedIngredients: Ingredient[] = data?.map((ing) => {
-            // Handle error cases safely
             if (!ing) return null;
             
             try {
@@ -152,16 +142,20 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                   unit: ing.raw_material.unit,
                   unit_cost: ing.raw_material.unit_cost
                 };
-              } else if (ing.ingredient_type === 'semi' && ing.semi_finished_product) {
-                return {
-                  id: ing.semi_finished_product.id,
-                  code: ing.semi_finished_product.code,
-                  name: ing.semi_finished_product.name,
-                  percentage: ing.percentage,
-                  ingredient_type: 'semi',
-                  unit: ing.semi_finished_product.unit,
-                  unit_cost: ing.semi_finished_product.unit_cost
-                };
+              } else if (ing.ingredient_type === 'semi' && ing.semi_finished_id) {
+                const semiFinishedProduct = semiFinishedProducts.find(p => p.id === ing.semi_finished_id);
+                
+                if (semiFinishedProduct) {
+                  return {
+                    id: semiFinishedProduct.id,
+                    code: semiFinishedProduct.code,
+                    name: semiFinishedProduct.name,
+                    percentage: ing.percentage,
+                    ingredient_type: 'semi',
+                    unit: semiFinishedProduct.unit,
+                    unit_cost: semiFinishedProduct.unit_cost
+                  };
+                }
               } else if (ing.ingredient_type === 'water') {
                 setHasWater(true);
                 return {
@@ -179,7 +173,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
               return null;
             }
             
-            // Fallback for any unexpected cases
             return null;
           }).filter(Boolean) as Ingredient[] || [];
           
@@ -192,9 +185,8 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       
       fetchIngredients();
     }
-  }, [isEditing, initialData]);
+  }, [isEditing, initialData, semiFinishedProducts]);
   
-  // Calculate total cost from ingredients
   useEffect(() => {
     if (ingredients.length === 0) {
       setTotalCost(0);
@@ -208,7 +200,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     
     setTotalCost(calculatedCost);
     
-    // Update form with calculated cost
     form.setValue('unit_cost', calculatedCost);
   }, [ingredients, form]);
   
@@ -231,7 +222,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   };
   
   const validateTotalPercentage = (): boolean => {
-    // If we have water, it will always calculate to 100%
     if (hasWater) return true;
     
     const total = ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
@@ -244,11 +234,9 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof semiFinishedSchema>) => {
-      // Prepare the ingredients data for saving
       const ingredientsData = ingredients.map(ing => {
         const ingredientType = ing.ingredient_type || 'raw';
         
-        // Base data structure
         const baseData = {
           percentage: ing.percentage,
           ingredient_type: ingredientType,
@@ -257,7 +245,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           semi_finished_product_id: null as number | null
         };
         
-        // Add type-specific fields
         if (ingredientType === 'raw') {
           return {
             ...baseData,
@@ -282,7 +269,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       });
       
       if (isEditing) {
-        // Update existing product
         const { data, error } = await supabase
           .from('semi_finished_products')
           .update({
@@ -298,21 +284,17 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           
         if (error) throw error;
         
-        // Handle ingredients - first delete existing
         await supabase
           .from('semi_finished_ingredients')
           .delete()
           .eq('semi_finished_product_id', initialData.id);
         
-        // Then insert new ingredients
         if (ingredients.length > 0) {
-          // Add semi_finished_product_id to each ingredient
           const finalIngredientData = ingredientsData.map(ing => ({
             ...ing,
             semi_finished_product_id: initialData.id
           }));
           
-          // Insert each ingredient individually to avoid type errors
           for (const ingredient of finalIngredientData) {
             const { error: ingredientError } = await supabase
               .from('semi_finished_ingredients')
@@ -324,7 +306,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         
         return data;
       } else {
-        // Generate a code for new record
         const { data: maxCode } = await supabase
           .from('semi_finished_products')
           .select('code')
@@ -338,7 +319,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           newCode = `SFP-${String(lastNum + 1).padStart(5, '0')}`;
         }
         
-        // Insert new product
         const { data, error } = await supabase
           .from('semi_finished_products')
           .insert({
@@ -354,15 +334,12 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           
         if (error) throw error;
         
-        // Insert ingredients
         if (ingredients.length > 0 && data && data.length > 0) {
-          // Add semi_finished_product_id to each ingredient
           const finalIngredientData = ingredientsData.map(ing => ({
             ...ing,
             semi_finished_product_id: data[0].id
           }));
           
-          // Insert each ingredient individually to avoid type errors
           for (const ingredient of finalIngredientData) {
             const { error: ingredientError } = await supabase
               .from('semi_finished_ingredients')

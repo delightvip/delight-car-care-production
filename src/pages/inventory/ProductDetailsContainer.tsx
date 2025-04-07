@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -83,17 +82,39 @@ const ProductDetailsContainer = () => {
         // Find semi-finished products that use this raw material
         const { data: semiFinished, error: semiError } = await supabase
           .from('semi_finished_ingredients')
-          .select('semi_finished_id, percentage, semi_finished_product:semi_finished_id!semi_finished_products(name)')
+          .select(`
+            semi_finished_id, 
+            percentage, 
+            semi_finished_product_id
+          `)
           .eq('raw_material_id', numericId);
         
         if (semiError) throw semiError;
         
-        return semiFinished.map(item => ({
-          id: item.semi_finished_id,
-          name: item.semi_finished_product?.name || 'منتج غير معروف',
-          type: 'semi_finished_products',
-          percentage: item.percentage
-        }));
+        // Get the semi-finished product details for each result
+        if (semiFinished && semiFinished.length > 0) {
+          const productIds = semiFinished.map(item => item.semi_finished_product_id);
+          
+          const { data: products, error: productsError } = await supabase
+            .from('semi_finished_products')
+            .select('id, name')
+            .in('id', productIds);
+            
+          if (productsError) throw productsError;
+          
+          // Map the data together
+          return semiFinished.map(item => {
+            const product = products.find(p => p.id === item.semi_finished_product_id);
+            return {
+              id: item.semi_finished_product_id,
+              name: product?.name || 'منتج غير معروف',
+              type: 'semi_finished_products',
+              percentage: item.percentage
+            };
+          });
+        }
+        
+        return [];
       } 
       else if (tableName === 'packaging_materials') {
         // Find finished products that use this packaging material
