@@ -156,38 +156,67 @@ class InventoryMovementTrackerService {
     itemType: InventoryItemType
   ): Promise<number | null> {
     try {
-      let tableName: string;
+      let currentQuantity: number | null = null;
       
-      switch (itemType) {
-        case InventoryItemType.RAW_MATERIAL:
-          tableName = 'raw_materials';
-          break;
-        case InventoryItemType.SEMI_FINISHED:
-          tableName = 'semi_finished_products';
-          break;
-        case InventoryItemType.PACKAGING:
-          tableName = 'packaging_materials';
-          break;
-        case InventoryItemType.FINISHED_PRODUCT:
-          tableName = 'finished_products';
-          break;
-        default:
-          console.error('Unknown item type:', itemType);
+      // Get the quantity from the specific table based on item type
+      if (itemType === InventoryItemType.RAW_MATERIAL) {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('quantity')
+          .eq('id', parseInt(itemId))
+          .single();
+        
+        if (error) {
+          console.error(`Error fetching current balance for raw materials with ID ${itemId}:`, error);
           return null;
+        }
+        
+        currentQuantity = data?.quantity || 0;
+      } 
+      else if (itemType === InventoryItemType.SEMI_FINISHED) {
+        const { data, error } = await supabase
+          .from('semi_finished_products')
+          .select('quantity')
+          .eq('id', parseInt(itemId))
+          .single();
+        
+        if (error) {
+          console.error(`Error fetching current balance for semi finished products with ID ${itemId}:`, error);
+          return null;
+        }
+        
+        currentQuantity = data?.quantity || 0;
+      }
+      else if (itemType === InventoryItemType.PACKAGING) {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('quantity')
+          .eq('id', parseInt(itemId))
+          .single();
+        
+        if (error) {
+          console.error(`Error fetching current balance for packaging materials with ID ${itemId}:`, error);
+          return null;
+        }
+        
+        currentQuantity = data?.quantity || 0;
+      }
+      else if (itemType === InventoryItemType.FINISHED_PRODUCT) {
+        const { data, error } = await supabase
+          .from('finished_products')
+          .select('quantity')
+          .eq('id', parseInt(itemId))
+          .single();
+        
+        if (error) {
+          console.error(`Error fetching current balance for finished products with ID ${itemId}:`, error);
+          return null;
+        }
+        
+        currentQuantity = data?.quantity || 0;
       }
 
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('quantity')
-        .eq('id', parseInt(itemId))
-        .single();
-
-      if (error) {
-        console.error(`Error fetching current balance for ${itemType} with ID ${itemId}:`, error);
-        return null;
-      }
-
-      return data?.quantity || 0;
+      return currentQuantity;
     } catch (error) {
       console.error('Error in getCurrentItemBalance:', error);
       return null;
@@ -210,8 +239,7 @@ class InventoryMovementTrackerService {
           balance_after,
           reason,
           created_at,
-          user_id,
-          users(name)
+          user_id
         `)
         .order('created_at', { ascending: false });
 
@@ -220,18 +248,37 @@ class InventoryMovementTrackerService {
         throw error;
       }
 
-      return (data || []).map(item => ({
-        id: item.id,
-        item_id: item.item_id,
-        item_type: item.item_type,
-        movement_type: item.movement_type,
-        quantity: item.quantity,
-        balance_after: item.balance_after,
-        reason: item.reason,
-        created_at: item.created_at,
-        user_id: item.user_id,
-        user_name: item.users?.name
+      // Get user names separately to avoid type issues
+      const movements = await Promise.all((data || []).map(async (item) => {
+        let userName = null;
+        
+        if (item.user_id) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', item.user_id)
+            .single();
+            
+          if (userData) {
+            userName = userData.name;
+          }
+        }
+        
+        return {
+          id: item.id,
+          item_id: item.item_id,
+          item_type: item.item_type,
+          movement_type: item.movement_type,
+          quantity: item.quantity,
+          balance_after: item.balance_after,
+          reason: item.reason,
+          created_at: item.created_at,
+          user_id: item.user_id,
+          user_name: userName
+        } as InventoryMovement;
       }));
+
+      return movements;
     } catch (error) {
       console.error('Error in getAllMovements:', error);
       return [];
@@ -256,7 +303,17 @@ class InventoryMovementTrackerService {
         throw error;
       }
 
-      return data || [];
+      return (data || []).map(item => ({
+        id: item.id,
+        item_id: item.item_id,
+        item_type: item.item_type,
+        movement_type: item.movement_type,
+        quantity: item.quantity,
+        balance_after: item.balance_after,
+        reason: item.reason,
+        created_at: item.created_at,
+        user_name: item.user_name
+      })) as InventoryMovement[];
     } catch (error) {
       console.error('Error in getMovementsForItem:', error);
       return [];

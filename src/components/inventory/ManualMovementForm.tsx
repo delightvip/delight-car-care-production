@@ -1,308 +1,314 @@
 
-import React, { useState, useEffect } from 'react';
-import { z } from 'zod';
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+import * as z from 'zod';
+import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { 
+  Form, 
+  FormControl, 
+  FormField, 
+  FormItem, 
+  FormLabel, 
+  FormMessage 
 } from '@/components/ui/form';
-import {
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { 
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { 
+  ArrowDownCircle, 
+  ArrowUpCircle 
+} from 'lucide-react';
 import { recordManualInventoryMovement } from '@/services/InventoryMovementService';
-import InventoryService from '@/services/InventoryService';
 
-// Schema for the form
+// Define form schema with Zod
 const formSchema = z.object({
-  itemType: z.enum(['raw', 'semi', 'packaging', 'finished'], {
-    required_error: "يرجى اختيار نوع العنصر",
-  }),
-  itemId: z.string({
-    required_error: "يرجى اختيار العنصر",
-  }),
-  movementType: z.enum(['in', 'out'], {
-    required_error: "يرجى تحديد نوع الحركة",
-  }),
-  quantity: z
-    .number({ 
-      required_error: "الكمية مطلوبة",
-      invalid_type_error: "يجب أن تكون الكمية رقم",
-    })
-    .positive("يجب أن تكون الكمية موجبة"),
-  reason: z.string().max(100, {
-    message: "يجب ألا يتجاوز سبب الحركة 100 حرف",
-  }).optional(),
+  itemType: z.string().min(1, { message: 'نوع العنصر مطلوب' }),
+  itemId: z.string().min(1, { message: 'العنصر مطلوب' }),
+  movementType: z.enum(['in', 'out']),
+  quantity: z.coerce.number().positive({ message: 'الكمية يجب أن تكون أكبر من صفر' }),
+  reason: z.string().min(3, { message: 'السبب مطلوب (3 أحرف على الأقل)' }),
 });
-
-type FormValues = z.infer<typeof formSchema>;
 
 interface ManualMovementFormProps {
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
-const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ 
-  onSuccess, 
-  onCancel 
+const ManualMovementForm: React.FC<ManualMovementFormProps> = ({
+  onSuccess,
+  onCancel
 }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [items, setItems] = useState<Array<{ id: number; name: string; code: string }>>([]);
-  const inventoryService = InventoryService.getInstance();
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [selectedType, setSelectedType] = React.useState<string>('');
   
-  // Initialize the form
-  const form = useForm<FormValues>({
+  // Initialize form
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      itemType: 'raw',
+      itemType: '',
+      itemId: '',
       movementType: 'in',
-      quantity: undefined,
+      quantity: 1,
       reason: '',
-    },
+    }
   });
   
-  // Watch for changes in the item type to load related items
-  const itemType = form.watch('itemType');
+  // Watch the itemType value for fetching related items
+  const watchItemType = form.watch('itemType');
   
-  // Load items based on selected type
-  useEffect(() => {
-    const loadItems = async () => {
-      try {
-        let fetchedItems: any[] = [];
-        
-        switch (itemType) {
-          case 'raw':
-            fetchedItems = await inventoryService.getRawMaterials();
-            break;
-          case 'semi':
-            fetchedItems = await inventoryService.getSemiFinishedProducts();
-            break;
-          case 'packaging':
-            fetchedItems = await inventoryService.getPackagingMaterials();
-            break;
-          case 'finished':
-            fetchedItems = await inventoryService.getFinishedProducts();
-            break;
-        }
-        
-        setItems(fetchedItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          code: item.code
-        })));
-        
-        // Reset the selected item when type changes
-        form.setValue('itemId', '');
-      } catch (error) {
-        console.error('Error loading items:', error);
-        toast.error('حدث خطأ أثناء تحميل العناصر');
+  // Reset itemId when itemType changes
+  React.useEffect(() => {
+    if (watchItemType !== selectedType) {
+      form.setValue('itemId', '');
+      setSelectedType(watchItemType);
+    }
+  }, [watchItemType, selectedType, form]);
+  
+  // Fetch items based on the selected type
+  const { data: items = [] } = useQuery({
+    queryKey: ['inventoryItems', watchItemType],
+    queryFn: async () => {
+      if (!watchItemType) return [];
+      
+      let tableName = '';
+      
+      switch (watchItemType) {
+        case 'raw':
+          tableName = 'raw_materials';
+          break;
+        case 'semi':
+          tableName = 'semi_finished_products';
+          break;
+        case 'packaging':
+          tableName = 'packaging_materials';
+          break;
+        case 'finished':
+          tableName = 'finished_products';
+          break;
+        default:
+          return [];
       }
-    };
-    
-    loadItems();
-  }, [itemType]);
+      
+      if (tableName === 'raw_materials') {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('id, name, code, quantity')
+          .order('name');
+        
+        if (error) throw error;
+        return data || [];
+      } else if (tableName === 'semi_finished_products') {
+        const { data, error } = await supabase
+          .from('semi_finished_products')
+          .select('id, name, code, quantity')
+          .order('name');
+        
+        if (error) throw error;
+        return data || [];
+      } else if (tableName === 'packaging_materials') {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('id, name, code, quantity')
+          .order('name');
+        
+        if (error) throw error;
+        return data || [];
+      } else if (tableName === 'finished_products') {
+        const { data, error } = await supabase
+          .from('finished_products')
+          .select('id, name, code, quantity')
+          .order('name');
+        
+        if (error) throw error;
+        return data || [];
+      }
+      
+      return [];
+    },
+    enabled: !!watchItemType,
+  });
   
-  // Handle form submission
-  const onSubmit = async (values: FormValues) => {
-    setIsSubmitting(true);
+  // Submit the form
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsLoading(true);
     
     try {
-      // Calculate the actual quantity (positive for IN, negative for OUT)
-      const actualQuantity = 
-        values.movementType === 'in' ? values.quantity : -values.quantity;
+      // Apply quantity sign based on movement type
+      const quantityWithSign = values.movementType === 'in' 
+        ? Math.abs(values.quantity) 
+        : -Math.abs(values.quantity);
       
       // Record the movement
       const success = await recordManualInventoryMovement(
         values.itemId,
         values.itemType,
-        actualQuantity,
-        values.reason || 'حركة يدوية'
+        quantityWithSign,
+        values.reason
       );
       
       if (success) {
         toast.success('تم تسجيل حركة المخزون بنجاح');
-        // Reset form
-        form.reset({
-          itemType: 'raw',
-          itemId: '',
-          movementType: 'in',
-          quantity: undefined,
-          reason: '',
-        });
-        
-        if (onSuccess) {
-          onSuccess();
-        }
+        form.reset();
+        if (onSuccess) onSuccess();
       } else {
         toast.error('حدث خطأ أثناء تسجيل حركة المخزون');
       }
     } catch (error) {
-      console.error('Error submitting movement:', error);
+      console.error('Error recording inventory movement:', error);
       toast.error('حدث خطأ أثناء تسجيل حركة المخزون');
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
   
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField
-          control={form.control}
-          name="itemType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>نوع العنصر</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-                disabled={isSubmitting}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر نوع العنصر" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="raw">المواد الخام</SelectItem>
-                  <SelectItem value="semi">المنتجات النصف مصنعة</SelectItem>
-                  <SelectItem value="packaging">مستلزمات التعبئة</SelectItem>
-                  <SelectItem value="finished">المنتجات النهائية</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="itemType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>نوع العنصر</FormLabel>
+                <Select 
+                  onValueChange={field.onChange} 
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر نوع العنصر" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="raw">المواد الأولية</SelectItem>
+                    <SelectItem value="semi">المنتجات النصف مصنعة</SelectItem>
+                    <SelectItem value="packaging">مستلزمات التعبئة</SelectItem>
+                    <SelectItem value="finished">المنتجات النهائية</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="itemId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>العنصر</FormLabel>
+                <Select 
+                  onValueChange={field.onChange} 
+                  defaultValue={field.value}
+                  disabled={!watchItemType || items.length === 0}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={items.length === 0 ? "لا توجد عناصر" : "اختر العنصر"} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {items.map((item) => (
+                      <SelectItem key={item.id} value={item.id.toString()}>
+                        {item.name} ({item.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         
-        <FormField
-          control={form.control}
-          name="itemId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>العنصر</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                value={field.value}
-                disabled={isSubmitting || items.length === 0}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر العنصر" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {items.map((item) => (
-                    <SelectItem key={item.id} value={item.id.toString()}>
-                      {item.code} - {item.name}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="movementType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>نوع الحركة</FormLabel>
+                <Select 
+                  onValueChange={field.onChange} 
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="in" className="flex items-center">
+                      <div className="flex items-center">
+                        <ArrowUpCircle className="h-4 w-4 mr-2 text-green-500" />
+                        <span>إضافة (وارد)</span>
+                      </div>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>
-                {items.length === 0 ? 'لا توجد عناصر متاحة من هذا النوع' : ''}
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="movementType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>نوع الحركة</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-                disabled={isSubmitting}
-              >
+                    <SelectItem value="out" className="flex items-center">
+                      <div className="flex items-center">
+                        <ArrowDownCircle className="h-4 w-4 mr-2 text-red-500" />
+                        <span>سحب (صادر)</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>الكمية</FormLabel>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر نوع الحركة" />
-                  </SelectTrigger>
+                  <Input type="number" min="0.1" step="0.1" {...field} />
                 </FormControl>
-                <SelectContent>
-                  <SelectItem value="in">وارد (إضافة)</SelectItem>
-                  <SelectItem value="out">صادر (خصم)</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="quantity"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>الكمية</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  disabled={isSubmitting}
-                  placeholder="أدخل الكمية"
-                  {...field}
-                  onChange={e => field.onChange(parseFloat(e.target.value))}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         
         <FormField
           control={form.control}
           name="reason"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>السبب (اختياري)</FormLabel>
+              <FormLabel>السبب / الملاحظات</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder="أدخل سبب الحركة"
-                  className="resize-none"
-                  disabled={isSubmitting}
-                  {...field}
+                <Textarea 
+                  placeholder="اكتب سبب الإضافة أو السحب..." 
+                  className="resize-none" 
+                  {...field} 
                 />
               </FormControl>
-              <FormDescription>
-                وصف سبب إضافة أو خصم هذه الكمية من المخزون
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
         
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-2 pt-2">
           {onCancel && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={isSubmitting}
-            >
+            <Button type="button" variant="outline" onClick={onCancel}>
               إلغاء
             </Button>
           )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'جاري المعالجة...' : 'تسجيل الحركة'}
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? "جاري التنفيذ..." : "تأكيد"}
           </Button>
         </div>
       </form>

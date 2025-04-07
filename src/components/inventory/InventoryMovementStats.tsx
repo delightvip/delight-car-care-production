@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowDownCircle, ArrowUpCircle, Scale, BarChart3, PackageCheck } from 'lucide-react';
+import { ArrowUpFromLine, ArrowDownToLine, RefreshCw, Activity } from 'lucide-react';
 import { InventoryMovementData } from '@/services/InventoryMovementService';
 
 interface InventoryMovementStatsProps {
@@ -9,111 +9,103 @@ interface InventoryMovementStatsProps {
   selectedCategory: string;
 }
 
-const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ 
-  movements,
-  selectedCategory
-}) => {
-  // Calculate various statistics based on the movements data
+const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movements, selectedCategory }) => {
   const stats = useMemo(() => {
-    // Filter by selected category if not 'all'
     const filteredMovements = selectedCategory === 'all' 
       ? movements 
       : movements.filter(m => m.category === selectedCategory);
     
-    // Calculate total incoming, outgoing, and balance
-    const incoming = filteredMovements
-      .filter(m => m.type === 'in')
-      .reduce((sum, m) => sum + m.quantity, 0);
-      
-    const outgoing = filteredMovements
-      .filter(m => m.type === 'out')
-      .reduce((sum, m) => sum + m.quantity, 0);
-      
-    const balance = incoming - outgoing;
+    const totalMovements = filteredMovements.length;
     
-    // Get unique items count
-    const uniqueItems = new Set(filteredMovements.map(m => m.item_id)).size;
+    const inMovements = filteredMovements.filter(m => m.type === 'in');
+    const outMovements = filteredMovements.filter(m => m.type === 'out');
+    const adjustments = filteredMovements.filter(m => m.type === 'adjustment');
     
-    // Get most active item
-    const itemActivityMap = filteredMovements.reduce((acc, m) => {
-      acc[m.item_name] = (acc[m.item_name] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const totalIn = inMovements.reduce((sum, m) => sum + m.quantity, 0);
+    const totalOut = outMovements.reduce((sum, m) => sum + m.quantity, 0);
+    const totalAdjustments = adjustments.reduce((sum, m) => sum + Math.abs(m.quantity), 0);
     
-    let mostActiveItem = {
-      name: 'لا يوجد',
-      count: 0
-    };
+    // Last 24 hours movements
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
     
-    for (const [name, count] of Object.entries(itemActivityMap)) {
-      if (count > mostActiveItem.count) {
-        mostActiveItem = { name, count };
-      }
-    }
+    const recentMovements = filteredMovements.filter(m => m.date >= yesterday);
+    const recentCount = recentMovements.length;
     
     return {
-      totalMovements: filteredMovements.length,
-      incoming,
-      outgoing,
-      balance,
-      uniqueItems,
-      mostActiveItem
+      totalMovements,
+      totalIn,
+      totalOut, 
+      totalAdjustments,
+      recentCount
     };
   }, [movements, selectedCategory]);
   
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+        <CardContent className="pt-6">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">إجمالي الوارد</p>
-              <h3 className="text-2xl font-bold">{stats.incoming.toLocaleString()}</h3>
+              <p className="text-muted-foreground text-sm">إجمالي الحركات</p>
+              <h3 className="text-2xl font-bold mt-1">{stats.totalMovements}</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stats.recentCount} حركة في آخر 24 ساعة
+              </p>
             </div>
-            <div className="h-12 w-12 rounded-lg bg-green-50 flex items-center justify-center">
-              <ArrowDownCircle className="h-6 w-6 text-green-600" />
+            <div className="rounded-full p-2 bg-primary/10">
+              <Activity className="h-5 w-5 text-primary" />
             </div>
           </div>
         </CardContent>
       </Card>
       
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+        <CardContent className="pt-6">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">إجمالي الصادر</p>
-              <h3 className="text-2xl font-bold">{stats.outgoing.toLocaleString()}</h3>
+              <p className="text-muted-foreground text-sm">إجمالي الوارد</p>
+              <h3 className="text-2xl font-bold mt-1">{stats.totalIn.toFixed(0)}</h3>
+              <p className="text-xs text-green-600 mt-1">
+                وحدة مضافة
+              </p>
             </div>
-            <div className="h-12 w-12 rounded-lg bg-red-50 flex items-center justify-center">
-              <ArrowUpCircle className="h-6 w-6 text-red-600" />
+            <div className="rounded-full p-2 bg-green-100">
+              <ArrowUpFromLine className="h-5 w-5 text-green-600" />
             </div>
           </div>
         </CardContent>
       </Card>
       
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+        <CardContent className="pt-6">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">الأصناف المتحركة</p>
-              <h3 className="text-2xl font-bold">{stats.uniqueItems}</h3>
+              <p className="text-muted-foreground text-sm">إجمالي الصادر</p>
+              <h3 className="text-2xl font-bold mt-1">{stats.totalOut.toFixed(0)}</h3>
+              <p className="text-xs text-red-600 mt-1">
+                وحدة مسحوبة
+              </p>
             </div>
-            <div className="h-12 w-12 rounded-lg bg-blue-50 flex items-center justify-center">
-              <PackageCheck className="h-6 w-6 text-blue-600" />
+            <div className="rounded-full p-2 bg-red-100">
+              <ArrowDownToLine className="h-5 w-5 text-red-600" />
             </div>
           </div>
         </CardContent>
       </Card>
       
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+        <CardContent className="pt-6">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">إجمالي الحركات</p>
-              <h3 className="text-2xl font-bold">{stats.totalMovements}</h3>
+              <p className="text-muted-foreground text-sm">التعديلات</p>
+              <h3 className="text-2xl font-bold mt-1">{stats.totalAdjustments.toFixed(0)}</h3>
+              <p className="text-xs text-amber-600 mt-1">
+                وحدة تم تعديلها
+              </p>
             </div>
-            <div className="h-12 w-12 rounded-lg bg-purple-50 flex items-center justify-center">
-              <BarChart3 className="h-6 w-6 text-purple-600" />
+            <div className="rounded-full p-2 bg-amber-100">
+              <RefreshCw className="h-5 w-5 text-amber-600" />
             </div>
           </div>
         </CardContent>
