@@ -1,6 +1,8 @@
 
 import React, { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import PageTransition from '@/components/ui/PageTransition';
 import { Button } from '@/components/ui/button';
 import { FileUp, Plus } from 'lucide-react';
@@ -21,6 +23,7 @@ const SemiFinishedProducts = () => {
   const [currentProduct, setCurrentProduct] = useState<any>(null);
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const queryClient = useQueryClient();
   
@@ -44,6 +47,58 @@ const SemiFinishedProducts = () => {
   
   const handleImportSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
+  };
+  
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (productId: number) => {
+      setIsDeleting(true);
+      
+      try {
+        // First, delete any ingredients associated with this product
+        const { error: ingredientsError } = await supabase
+          .from('semi_finished_ingredients')
+          .delete()
+          .eq('semi_finished_product_id', productId);
+          
+        if (ingredientsError) {
+          console.error("Error deleting ingredients:", ingredientsError);
+          throw ingredientsError;
+        }
+        
+        // Then delete the product itself
+        const { error: productError } = await supabase
+          .from('semi_finished_products')
+          .delete()
+          .eq('id', productId);
+          
+        if (productError) {
+          console.error("Error deleting product:", productError);
+          throw productError;
+        }
+        
+        return productId;
+      } catch (error: any) {
+        console.error("Delete operation failed:", error);
+        throw new Error(error.message || "Failed to delete product");
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
+      toast.success('تم حذف المنتج النصف مصنع بنجاح');
+      setIsDeleteDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(`حدث خطأ أثناء الحذف: ${error.message}`);
+    }
+  });
+  
+  const handleConfirmDelete = () => {
+    if (currentProduct && currentProduct.id) {
+      deleteMutation.mutate(currentProduct.id);
+    }
   };
   
   return (
@@ -114,13 +169,10 @@ const SemiFinishedProducts = () => {
           <DeleteConfirmDialog
             isOpen={isDeleteDialogOpen}
             onClose={() => setIsDeleteDialogOpen(false)}
-            onConfirm={() => {
-              // Delete logic here
-              setIsDeleteDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
-            }}
+            onConfirm={handleConfirmDelete}
             title="حذف منتج نصف مصنع"
             description={`هل أنت متأكد من حذف ${currentProduct.name}؟ لا يمكن التراجع عن هذه العملية.`}
+            isLoading={isDeleting}
           />
         )}
         
