@@ -246,12 +246,24 @@ class PartyService {
       
       if (balanceError) throw balanceError;
       
-      // قم بتسجيل السجل في دفتر الحسابات (ledger) ولكن حدد ما إذا كان نوع المعاملة متعلق بإلغاء المرتجعات
-      // لا تقم بإنشاء معاملات مالية في لوحة التحكم المالية إذا كان النوع متعلق بإلغاء المرتجعات
-      const isReturnCancellation = transactionType === 'cancel_sales_return' || 
-                                  transactionType === 'cancel_purchase_return';
+      // تحديد وتصنيف أنواع المعاملات بشكل أكثر دقة
+      // قائمة محددة بأنواع المعاملات المتعلقة بالمرتجعات التي يجب استبعادها من لوحة التحكم المالية
+      const returnRelatedTypes = [
+        'sales_return',                // مرتجع مبيعات
+        'purchase_return',             // مرتجع مشتريات
+        'cancel_sales_return',         // إلغاء مرتجع مبيعات
+        'cancel_purchase_return',      // إلغاء مرتجع مشتريات
+        'return_cancellation',         // نوع عام لإلغاء المرتجع
+        'return_confirmation',         // نوع عام لتأكيد المرتجع
+        'sales_return_cancellation',   // إلغاء مرتجع مبيعات
+        'purchase_return_cancellation' // إلغاء مرتجع مشتريات
+      ];
       
-      // لا تقم بإنشاء معاملات مالية في لوحة التحكم المالية إذا كان النوع متعلق بإلغاء المرتجعات
+      // تحديد ما إذا كان نوع المعاملة متعلق بالمرتجعات
+      const isReturnRelatedTransaction = returnRelatedTypes.includes(transactionType) ||
+                                        transactionType.includes('return_cancellation');
+
+      // لا تقم بإنشاء معاملات مالية في لوحة التحكم المالية إذا كان النوع متعلق بالمرتجعات
       // هنا ستتم إضافة السجل إلى دفتر الحسابات فقط، وليس إلى المعاملات المالية
       const { error: ledgerError } = await this.supabase
         .from('ledger')
@@ -263,23 +275,20 @@ class PartyService {
           credit: !isDebit ? amount : 0,
           balance_after: newBalance,
           transaction_id: reference || undefined,
-          description: description + (isReturnCancellation ? ' (لا يظهر في لوحة التحكم المالية)' : '')
+          description: description + (isReturnRelatedTransaction ? ' (لا يظهر في لوحة التحكم المالية)' : '')
         });
       
       if (ledgerError) throw ledgerError;
       
-      // إنشاء معاملة مالية في لوحة التحكم المالية فقط إذا لم تكن معاملة إلغاء مرتجع
-      // وأيضًا إذا لم تكن معاملة تأكيد مرتجع (الحالتان تؤثران فقط على أرصدة العملاء وليس لوحة التحكم المالية)
-      const isReturnConfirmation = transactionType === 'sales_return' ||
-                                  transactionType === 'purchase_return';
-      
-      if (!isReturnCancellation && !isReturnConfirmation && 
-          !transactionType.includes('return') && amount > 0) {
+      // إنشاء معاملة مالية في لوحة التحكم المالية فقط إذا لم تكن معاملة متعلقة بالمرتجعات
+      if (!isReturnRelatedTransaction && amount > 0) {
         // تحديد نوع المعاملة المالية (إيراد أو مصروف)
         // أي معاملة تزيد من رصيد العميل (isDebit=true) هي مصروف (لأننا نسدد للعملاء/الموردين)
         // وأي معاملة تنقص من رصيد العميل (isDebit=false) هي إيراد (لأننا نستلم من العملاء/الموردين)
         const type = isDebit ? 'expense' : 'income';
         const category_id = type === 'income' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181';
+        
+        console.log(`إنشاء معاملة مالية للمعاملة ${transactionType}، نوع: ${type}، القيمة: ${amount}`);
         
         // إنشاء المعاملة المالية في لوحة التحكم المالية
         const { error: financialError } = await this.supabase
@@ -298,6 +307,8 @@ class PartyService {
         if (financialError) {
           console.warn('خطأ في إنشاء المعاملة المالية، ولكن تم تحديث رصيد العميل بنجاح:', financialError);
         }
+      } else if (isReturnRelatedTransaction) {
+        console.log(`تم تجاهل إنشاء معاملة مالية للمعاملة ${transactionType} لأنها متعلقة بالمرتجعات`);
       }
       
       return true;

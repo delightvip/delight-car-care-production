@@ -101,9 +101,11 @@ export class ReturnProcessingService {
         throw error;
       }
 
-      // 5. عكس تأثير المرتجع على رصيد الطرف (العميل/المورد) فقط بدون تأثير على لوحة التحكم المالية
+      // 5. عكس تأثير المرتجع على رصيد الطرف (العميل/المورد) فقط
+      // هام: نستخدم فقط handleReturnCancellation ولا نقوم بإنشاء معاملات مالية
       if (returnData.party_id) {
         console.log("Reversing party balance for cancelled return:", returnId);
+        // استخدام FinancialCommercialBridge لعكس تأثير المرتجع على الرصيد فقط
         await this.financialBridge.handleReturnCancellation(returnData);
       }
 

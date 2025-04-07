@@ -265,82 +265,6 @@ class FinancialCommercialBridge {
   }
   
   /**
-   * معالجة إلغاء مرتجع
-   * تم تعديلها لإلغاء تأثيرها على لوحة التحكم المالية مع الاحتفاظ بتأثيرها على أرصدة العملاء/الموردين
-   */
-  public async handleReturnCancellation(returnData: any): Promise<boolean> {
-    try {
-      // تحديد نوع المرتجع
-      const isSalesReturn = returnData.return_type === 'sales_return';
-      
-      console.log(`معالجة إلغاء مرتجع ${isSalesReturn ? 'مبيعات' : 'مشتريات'} رقم ${returnData.id}`);
-      
-      // حذف المعاملات المالية المرتبطة بالمرتجع (إذا كانت موجودة من قبل التعديل)
-      const { data: existingTransactions, error: findError } = await supabase
-        .from('financial_transactions')
-        .select('id')
-        .eq('reference_id', returnData.id)
-        .eq('reference_type', 'return');
-      
-      if (findError) {
-        console.error("خطأ في البحث عن المعاملات المالية المرتبطة بالمرتجع:", findError);
-      } 
-      else if (existingTransactions && existingTransactions.length > 0) {
-        // حذف المعاملات المالية المرتبطة للتنظيف
-        for (const transaction of existingTransactions) {
-          await supabase
-            .from('financial_transactions')
-            .delete()
-            .eq('id', transaction.id);
-        }
-        console.log(`تم حذف ${existingTransactions.length} معاملة مالية مرتبطة بالمرتجع رقم ${returnData.id}`);
-      }
-
-      // البحث عن المعاملات العكسية المرتبطة بالمرتجع (إذا كانت موجودة) وحذفها أيضًا
-      const { data: reverseTransactions, error: findReverseError } = await supabase
-        .from('financial_transactions')
-        .select('id')
-        .eq('reference_id', returnData.id)
-        .eq('reference_type', 'reverse_return');
-      
-      if (findReverseError) {
-        console.error("خطأ في البحث عن المعاملات العكسية المرتبطة بالمرتجع:", findReverseError);
-      } 
-      else if (reverseTransactions && reverseTransactions.length > 0) {
-        // حذف المعاملات العكسية المرتبطة
-        for (const transaction of reverseTransactions) {
-          await supabase
-            .from('financial_transactions')
-            .delete()
-            .eq('id', transaction.id);
-        }
-        console.log(`تم حذف ${reverseTransactions.length} معاملة عكسية مرتبطة بالمرتجع رقم ${returnData.id}`);
-      }
-      
-      // عكس تأثير المرتجع على رصيد الطرف (العميل/المورد) فقط
-      if (returnData.party_id) {
-        await this.reversePartyBalanceAfterReturnCancellation(
-          returnData.party_id, 
-          returnData.amount, 
-          returnData.return_type
-        );
-      }
-      
-      // تنبيه هام: لا نقوم بإنشاء معاملات مالية للمرتجعات في لوحة التحكم المالية
-      // هذا تغيير مقصود لمنع التأثير المضاعف وإنشاء معاملات إيراد خاطئة
-      
-      // إرسال إشعار بتغيير البيانات المالية
-      this.notifyFinancialDataChange('return_cancellation');
-      
-      return true;
-    } catch (error) {
-      console.error(`Error handling return cancellation:`, error);
-      toast.error(`حدث خطأ أثناء معالجة إلغاء المرتجع رقم ${returnData.id}`);
-      return false;
-    }
-  }
-  
-  /**
    * عكس تأثير المرتجع على رصيد الطرف بعد إلغاء المرتجع
    */
   private async reversePartyBalanceAfterReturnCancellation(
@@ -391,6 +315,182 @@ class FinancialCommercialBridge {
       const { error: ledgerError } = await supabase
         .from('ledger')
         .insert({
+          party_id: partyId,
+          transaction_id: crypto.randomUUID(),
+          transaction_type: `${returnType}_cancellation`,
+          date: new Date().toISOString().split('T')[0],
+          debit: returnType === 'sales_return' ? amount : 0, // عكس المدين والدائن
+          credit: returnType === 'sales_return' ? 0 : amount,
+          balance_after: newBalance
+        });
+        
+      if (ledgerError) {
+        throw ledgerError;
+      }
+      
+    } catch (error) {
+      console.error(`Error reversing party balance after return cancellation:`, error);
+      toast.error('حدث خطأ أثناء عكس تأثير المرتجع على رصيد الطرف');
+    }
+  }
+  
+  /**
+   * التحقق مما إذا كان يجب إنشاء معاملة مالية للعملية المحددة
+   * @param referenceType نوع المعاملة المرجعي (مثل invoice, payment, return, return_cancellation)
+   * @private
+   */
+  private shouldCreateFinancialTransaction(referenceType: string): boolean {
+    // قائمة بأنواع المعاملات المرتبطة بالمرتجعات التي يجب استبعادها
+    const excludedTypes = [
+      'return',
+      'reverse_return',
+      'sales_return',
+      'purchase_return',
+      'return_cancellation',
+      'sales_return_cancellation',
+      'purchase_return_cancellation',
+      'cancel_sales_return',
+      'cancel_purchase_return'
+    ];
+    
+    // فحص ما إذا كان نوع المعاملة مدرجًا في القائمة المستبعدة
+    if (excludedTypes.includes(referenceType) || 
+        referenceType.includes('_return_') || 
+        referenceType.includes('return_') ||
+        referenceType.includes('_return')) {
+      console.log(`تم منع إنشاء معاملة مالية للعملية من نوع: ${referenceType}`);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
+   * معالجة إلغاء مرتجع
+   * تم تعديلها لإلغاء تأثيرها على لوحة التحكم المالية مع الاحتفاظ بتأثيرها على أرصدة العملاء/الموردين
+   */
+  public async handleReturnCancellation(returnData: any): Promise<boolean> {
+    try {
+      // تحديد نوع المرتجع
+      const isSalesReturn = returnData.return_type === 'sales_return';
+      
+      console.log(`معالجة إلغاء مرتجع ${isSalesReturn ? 'مبيعات' : 'مشتريات'} رقم ${returnData.id}`);
+      
+      // خطوة 1: حذف أي معاملات مالية مرتبطة بهذا المرتجع تمامًا
+      if (returnData.id) {
+        const cleanupResult = await this.cleanupSpecificReturnTransactions(returnData.id);
+        console.log(`نتيجة تنظيف المعاملات المالية للمرتجع ${returnData.id}: ${cleanupResult ? 'ناجح' : 'فشل'}`);
+      }
+      
+      // خطوة 2: عكس تأثير المرتجع على رصيد الطرف (العميل/المورد) فقط
+      if (returnData.party_id) {
+        await this.reversePartyBalanceAfterReturnCancellation(
+          returnData.party_id, 
+          returnData.amount, 
+          returnData.return_type
+        );
+      }
+      
+      // خطوة 3: ضمان إزالة أي معاملات مالية جديدة قد تم إنشاؤها بطريق الخطأ
+      setTimeout(async () => {
+        console.log('فحص إضافي للتأكد من عدم وجود معاملات مالية متعلقة بالمرتجع الملغي');
+        await this.cleanupSpecificReturnTransactions(returnData.id);
+      }, 500);
+      
+      // تحذير: لا تقم بإنشاء أي معاملات مالية عند إلغاء المرتجعات
+      console.log('تم منع إنشاء معاملات مالية جديدة عند إلغاء المرتجع');
+      
+      // إرسال إشعار بتغيير البيانات المالية
+      this.notifyFinancialDataChange('return_cancellation');
+      
+      return true;
+    } catch (error) {
+      console.error(`Error handling return cancellation:`, error);
+      toast.error(`حدث خطأ أثناء معالجة إلغاء المرتجع رقم ${returnData.id}`);
+      return false;
+    }
+  }
+
+  /**
+   * تنظيف المعاملات المالية لمرتجع محدد
+   * @param returnId معرف المرتجع
+   * @private
+   */
+  private async cleanupSpecificReturnTransactions(returnId: string): Promise<boolean> {
+    try {
+      console.log(`تنظيف المعاملات المالية للمرتجع رقم ${returnId}`);
+      
+      // 1. البحث الشامل عن أي معاملات مالية مرتبطة بالمرتجع
+      const { data: relatedTransactions, error: findError } = await supabase
+        .from('financial_transactions')
+        .select('id, type, amount, reference_id, reference_type, notes')
+        .or(`reference_id.eq.${returnId},notes.ilike.%مرتجع%${returnId}%,reference_type.like.%return%`);
+      
+      if (findError) {
+        console.error(`خطأ في البحث عن المعاملات المالية المرتبطة بالمرتجع ${returnId}:`, findError);
+        return false;
+      }
+      
+      // 2. معالجة المعاملات المرتبطة إذا وجدت
+      if (relatedTransactions && relatedTransactions.length > 0) {
+        console.log(`وجدت ${relatedTransactions.length} معاملة مالية مرتبطة بالمرتجع ${returnId}`);
+        
+        // حذف كل معاملة على حدة
+        for (const transaction of relatedTransactions) {
+          const { error: deleteError } = await supabase
+            .from('financial_transactions')
+            .delete()
+            .eq('id', transaction.id);
+          
+          if (deleteError) {
+            console.error(`خطأ في حذف المعاملة المالية ${transaction.id}:`, deleteError);
+          } else {
+            console.log(`تم حذف المعاملة المالية ${transaction.id} بنجاح`);
+          }
+        }
+      } else {
+        console.log(`لا توجد معاملات مالية مرتبطة بالمرتجع ${returnId}`);
+      }
+      
+      // 3. بحث إضافي عن المعاملات التي تحتوي على كلمة "مرتجع" في الملاحظات
+      const { data: notesTransactions, error: notesError } = await supabase
+        .from('financial_transactions')
+        .select('id')
+        .ilike('notes', `%مرتجع%`);
+        
+      if (!notesError && notesTransactions && notesTransactions.length > 0) {
+        console.log(`وجدت ${notesTransactions.length} معاملة تحتوي على كلمة مرتجع في الملاحظات`);
+        
+        for (const transaction of notesTransactions) {
+          const { data: details } = await supabase
+            .from('financial_transactions')
+            .select('notes')
+            .eq('id', transaction.id)
+            .single();
+            
+          if (details && details.notes && details.notes.includes(returnId)) {
+            const { error: deleteError } = await supabase
+              .from('financial_transactions')
+              .delete()
+              .eq('id', transaction.id);
+              
+            if (deleteError) {
+              console.error(`خطأ في حذف المعاملة المالية ${transaction.id}:`, deleteError);
+            } else {
+              console.log(`تم حذف المعاملة المالية الإضافية ${transaction.id} بنجاح`);
+            }
+          }
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error(`خطأ في تنظيف المعاملات المالية للمرتجع ${returnId}:`, error);
+      return false;
+    }
+  }
+  
+  /**
           party_id: partyId,
           transaction_id: crypto.randomUUID(),
           transaction_type: `${returnType}_cancellation`,

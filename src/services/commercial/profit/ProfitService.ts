@@ -381,16 +381,9 @@ class ProfitService {
       
       if (updateError) throw updateError;
       
-      // 5. تحديث الإيرادات المرتبطة بالأرباح (إضافة جديدة)
-      const updatedProfitData = {
-        ...profitData,
-        total_sales: newTotalSales,
-        total_cost: newTotalCost,
-        profit_amount: newProfitAmount,
-        profit_percentage: newProfitPercentage
-      };
-      
-      await this.revenueService.updateProfitRevenue(profitData.id, updatedProfitData);
+      // 5. ملاحظة: لا نقوم بإنشاء معاملة إيراد جديدة عند إلغاء المرتجعات
+      // أزلنا استدعاء دالة updateProfitRevenue لمنع إنشاء إيصالات إيراد عند إلغاء المرتجعات
+      console.log(`قمنا بتحديث بيانات الربح فقط دون إنشاء معاملات مالية جديدة عند إلغاء المرتجع`);
       
       console.log(`Successfully restored profit for invoice ${invoiceId} after return cancellation`);
       return true;
