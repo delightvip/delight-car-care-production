@@ -39,7 +39,8 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
   // Fetch ingredients for this product
   const {
     data: ingredients,
-    isLoading: isLoadingIngredients
+    isLoading: isLoadingIngredients,
+    error: ingredientsError
   } = useQuery({
     queryKey: ['semiFinishedIngredients', product?.id],
     queryFn: async () => {
@@ -67,30 +68,43 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
   
   // Format ingredient data for display
   const getIngredientData = (ingredient: any) => {
-    if (ingredient.ingredient_type === 'raw' && ingredient.raw_material) {
-      return {
-        name: ingredient.raw_material.name,
-        code: ingredient.raw_material.code,
-        unit: ingredient.raw_material.unit,
-        type: 'raw',
-        unit_cost: ingredient.raw_material.unit_cost
-      };
-    } else if (ingredient.ingredient_type === 'semi' && ingredient.semi_finished_product) {
-      return {
-        name: ingredient.semi_finished_product.name,
-        code: ingredient.semi_finished_product.code,
-        unit: ingredient.semi_finished_product.unit,
-        type: 'semi',
-        unit_cost: ingredient.semi_finished_product.unit_cost
-      };
-    } else if (ingredient.ingredient_type === 'water') {
-      return {
-        name: 'ماء',
-        code: 'WATER',
-        unit: 'لتر',
-        type: 'water',
-        unit_cost: 0
-      };
+    // Check if ingredient exists and is properly formatted
+    if (!ingredient) return {
+      name: 'غير معروف',
+      code: '',
+      unit: '',
+      type: 'unknown',
+      unit_cost: 0
+    };
+
+    try {
+      if (ingredient.ingredient_type === 'raw' && ingredient.raw_material) {
+        return {
+          name: ingredient.raw_material.name,
+          code: ingredient.raw_material.code,
+          unit: ingredient.raw_material.unit,
+          type: 'raw',
+          unit_cost: ingredient.raw_material.unit_cost
+        };
+      } else if (ingredient.ingredient_type === 'semi' && ingredient.semi_finished_product) {
+        return {
+          name: ingredient.semi_finished_product.name,
+          code: ingredient.semi_finished_product.code,
+          unit: ingredient.semi_finished_product.unit,
+          type: 'semi',
+          unit_cost: ingredient.semi_finished_product.unit_cost
+        };
+      } else if (ingredient.ingredient_type === 'water') {
+        return {
+          name: 'ماء',
+          code: 'WATER',
+          unit: 'لتر',
+          type: 'water',
+          unit_cost: 0
+        };
+      }
+    } catch (e) {
+      console.error("Error formatting ingredient data:", e, ingredient);
     }
     
     // Fallback
@@ -177,6 +191,10 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
                   <div className="flex justify-center py-4">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
+                ) : ingredientsError ? (
+                  <div className="text-center py-4 text-destructive">
+                    حدث خطأ في تحميل المكونات. يرجى المحاولة مرة أخرى.
+                  </div>
                 ) : ingredients && ingredients.length > 0 ? (
                   <Table>
                     <TableHeader>
@@ -190,7 +208,7 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ingredients.map((ingredient) => {
+                      {ingredients.map((ingredient: any) => {
                         const data = getIngredientData(ingredient);
                         const costContribution = (ingredient.percentage / 100) * (data.unit_cost || 0);
                         

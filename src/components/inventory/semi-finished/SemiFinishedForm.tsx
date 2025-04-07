@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,55 +131,56 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             
           if (error) {
             toast.error('خطأ في جلب المكونات');
+            console.error("Error fetching ingredients:", error);
             return;
           }
           
           // Format ingredients for our state
           const formattedIngredients: Ingredient[] = data?.map((ing) => {
-            if (ing.ingredient_type === 'raw' && ing.raw_material) {
-              return {
-                id: ing.raw_material.id,
-                code: ing.raw_material.code,
-                name: ing.raw_material.name,
-                percentage: ing.percentage,
-                ingredient_type: 'raw',
-                unit: ing.raw_material.unit,
-                unit_cost: ing.raw_material.unit_cost
-              };
-            } else if (ing.ingredient_type === 'semi' && ing.semi_finished_product) {
-              return {
-                id: ing.semi_finished_product.id,
-                code: ing.semi_finished_product.code,
-                name: ing.semi_finished_product.name,
-                percentage: ing.percentage,
-                ingredient_type: 'semi',
-                unit: ing.semi_finished_product.unit,
-                unit_cost: ing.semi_finished_product.unit_cost
-              };
-            } else if (ing.ingredient_type === 'water') {
-              setHasWater(true);
-              return {
-                id: 0,
-                code: 'WATER',
-                name: 'ماء',
-                percentage: ing.percentage,
-                ingredient_type: 'water',
-                is_auto_calculated: true,
-                unit_cost: 0
-              };
+            // Handle error cases safely
+            if (!ing) return null;
+            
+            try {
+              if (ing.ingredient_type === 'raw' && ing.raw_material) {
+                return {
+                  id: ing.raw_material.id,
+                  code: ing.raw_material.code,
+                  name: ing.raw_material.name,
+                  percentage: ing.percentage,
+                  ingredient_type: 'raw',
+                  unit: ing.raw_material.unit,
+                  unit_cost: ing.raw_material.unit_cost
+                };
+              } else if (ing.ingredient_type === 'semi' && ing.semi_finished_product) {
+                return {
+                  id: ing.semi_finished_product.id,
+                  code: ing.semi_finished_product.code,
+                  name: ing.semi_finished_product.name,
+                  percentage: ing.percentage,
+                  ingredient_type: 'semi',
+                  unit: ing.semi_finished_product.unit,
+                  unit_cost: ing.semi_finished_product.unit_cost
+                };
+              } else if (ing.ingredient_type === 'water') {
+                setHasWater(true);
+                return {
+                  id: 0,
+                  code: 'WATER',
+                  name: 'ماء',
+                  percentage: ing.percentage,
+                  ingredient_type: 'water',
+                  is_auto_calculated: true,
+                  unit_cost: 0
+                };
+              }
+            } catch (e) {
+              console.error("Error formatting ingredient:", e, ing);
+              return null;
             }
             
             // Fallback for any unexpected cases
-            return {
-              id: ing.raw_material?.id || 0,
-              code: ing.raw_material?.code || '',
-              name: ing.raw_material?.name || '',
-              percentage: ing.percentage,
-              ingredient_type: 'raw',
-              unit: ing.raw_material?.unit || '',
-              unit_cost: ing.raw_material?.unit_cost || 0
-            };
-          }) || [];
+            return null;
+          }).filter(Boolean) as Ingredient[] || [];
           
           setIngredients(formattedIngredients);
         } catch (error) {
@@ -199,7 +201,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     }
     
     const calculatedCost = ingredients.reduce((total, ing) => {
-      if (!ing.unit_cost) return total;
+      if (!ing || !ing.unit_cost) return total;
       return total + ((ing.percentage / 100) * ing.unit_cost);
     }, 0);
     
@@ -219,11 +221,11 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   
   const handleRemoveIngredient = (id: number, type: string) => {
     setIngredients(ingredients.filter(ing => {
-      if (type === 'water' && (ing as any).ingredient_type === 'water') {
+      if (type === 'water' && ing.ingredient_type === 'water') {
         setHasWater(false);
         return false;
       }
-      return !(ing.id === id && (ing as any).ingredient_type === type);
+      return !(ing.id === id && ing.ingredient_type === type);
     }));
   };
   
@@ -243,14 +245,15 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     mutationFn: async (values: z.infer<typeof semiFinishedSchema>) => {
       // Prepare the ingredients data for saving
       const ingredientsData = ingredients.map(ing => {
-        const ingredientType = (ing as any).ingredient_type || 'raw';
+        const ingredientType = ing.ingredient_type || 'raw';
         
         // Base data structure
         const baseData = {
           percentage: ing.percentage,
           ingredient_type: ingredientType,
           raw_material_id: null as number | null,
-          semi_finished_id: null as number | null
+          semi_finished_id: null as number | null,
+          semi_finished_product_id: null as number | null
         };
         
         // Add type-specific fields
@@ -302,16 +305,20 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         
         // Then insert new ingredients
         if (ingredients.length > 0) {
+          // Add semi_finished_product_id to each ingredient
           const finalIngredientData = ingredientsData.map(ing => ({
             ...ing,
             semi_finished_product_id: initialData.id
           }));
           
-          const { error: ingredientError } = await supabase
-            .from('semi_finished_ingredients')
-            .insert(finalIngredientData);
-            
-          if (ingredientError) throw ingredientError;
+          // Insert each ingredient individually
+          for (const ingredient of finalIngredientData) {
+            const { error: ingredientError } = await supabase
+              .from('semi_finished_ingredients')
+              .insert(ingredient);
+              
+            if (ingredientError) throw ingredientError;
+          }
         }
         
         return data;
@@ -348,16 +355,20 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         
         // Insert ingredients
         if (ingredients.length > 0 && data && data.length > 0) {
+          // Add semi_finished_product_id to each ingredient
           const finalIngredientData = ingredientsData.map(ing => ({
             ...ing,
             semi_finished_product_id: data[0].id
           }));
           
-          const { error: ingredientError } = await supabase
-            .from('semi_finished_ingredients')
-            .insert(finalIngredientData);
-            
-          if (ingredientError) throw ingredientError;
+          // Insert each ingredient individually
+          for (const ingredient of finalIngredientData) {
+            const { error: ingredientError } = await supabase
+              .from('semi_finished_ingredients')
+              .insert(ingredient);
+              
+            if (ingredientError) throw ingredientError;
+          }
         }
         
         return data;
@@ -370,6 +381,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       form.reset();
     },
     onError: (error: any) => {
+      console.error("Mutation error:", error);
       toast.error(`حدث خطأ: ${error.message}`);
     }
   });
