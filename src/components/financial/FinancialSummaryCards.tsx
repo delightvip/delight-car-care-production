@@ -1,8 +1,11 @@
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowDown, ArrowUp, CreditCard, DollarSign, Wallet, TrendingUp, ShoppingBag } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { ArrowDown, ArrowUp, CreditCard, DollarSign, Wallet, TrendingUp, ShoppingBag, Link as LinkIcon } from 'lucide-react';
 import { FinancialSummary } from '@/services/financial/FinancialTypes';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface FinancialSummaryCardsProps {
   summary: FinancialSummary;
@@ -45,7 +48,7 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
         </CardContent>
       </Card>
       
-      {/* بطاقة أرباح المبيعات (جديدة) */}
+      {/* بطاقة أرباح المبيعات (محدثة) - تعرض بيانات من خدمة الأرباح */}
       <Card className="lg:col-span-1 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">أرباح المبيعات</CardTitle>
@@ -57,10 +60,46 @@ const FinancialSummaryCards: React.FC<FinancialSummaryCardsProps> = ({
           ) : (
             <div className="text-2xl font-bold">{formatAmount(summary.salesProfit || 0)}</div>
           )}
-          <p className="text-xs text-muted-foreground">
-            صافي الأرباح من فواتير البيع والمرتجعات
-          </p>
+          
+          {/* عرض تفاصيل إضافية من خدمة الأرباح */}
+          {summary.salesProfitDetails && !loading && (
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-muted-foreground">المبيعات: </span>
+                {formatAmount(summary.salesProfitDetails.total_sales)}
+              </div>
+              <div>
+                <span className="text-muted-foreground">التكلفة: </span>
+                {formatAmount(summary.salesProfitDetails.total_cost)}
+              </div>
+              <div>
+                <span className="text-muted-foreground">النسبة: </span>
+                {summary.salesProfitDetails.average_profit_percentage.toFixed(1)}%
+              </div>
+              <div>
+                <span className="text-muted-foreground">الفواتير: </span>
+                {summary.salesProfitDetails.invoice_count}
+              </div>
+            </div>
+          )}
         </CardContent>
+        <CardFooter className="p-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full text-xs" asChild>
+                  <Link to="/commercial/profits" className="flex items-center justify-center gap-1">
+                    <LinkIcon className="h-3 w-3" />
+                    عرض تفاصيل الأرباح
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>الانتقال إلى صفحة إدارة الأرباح</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </CardFooter>
       </Card>
       
       {/* بطاقة المصروفات */}

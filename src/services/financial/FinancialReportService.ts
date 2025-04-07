@@ -2,6 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FinancialSummary, Transaction } from "./FinancialTypes";
 import FinancialTransactionService from "./FinancialTransactionService";
+// استيراد خدمة الأرباح من المبيعات
+import ProfitService from "../commercial/profit/ProfitService";
 
 /**
  * خدمة مخصصة للتقارير المالية
@@ -9,9 +11,11 @@ import FinancialTransactionService from "./FinancialTransactionService";
 class FinancialReportService {
   private static instance: FinancialReportService;
   private transactionService: FinancialTransactionService;
+  private profitService: ProfitService; // إضافة مرجع لخدمة الأرباح
   
   private constructor() {
     this.transactionService = FinancialTransactionService.getInstance();
+    this.profitService = ProfitService.getInstance(); // تهيئة خدمة الأرباح
   }
   
   public static getInstance(): FinancialReportService {
@@ -22,52 +26,6 @@ class FinancialReportService {
   }
   
   /**
-   * الحصول على بيانات الأرباح من المبيعات
-   * هذه دالة جديدة تستخدم جدول الأرباح لحساب صافي الأرباح من المبيعات
-   */
-  private async getSalesProfit(startDate?: string, endDate?: string): Promise<{ totalSales: number, totalProfit: number }> {
-    try {
-      let query = supabase
-        .from('profits')
-        .select(`
-          *,
-          invoices!inner (date, invoice_type, status)
-        `)
-        .eq('invoices.invoice_type', 'sale');
-      
-      // إضافة شروط التاريخ إذا تم تحديدها
-      if (startDate) {
-        query = query.gte('invoices.date', startDate);
-      }
-      
-      if (endDate) {
-        query = query.lte('invoices.date', endDate);
-      }
-      
-      // التأكد من حالة الفاتورة (معتمدة أو مكتملة)
-      query = query.in('invoices.status', ['confirmed', 'completed', 'paid', 'delivered', 'done']);
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        console.error('Error fetching profits data:', error);
-        return { totalSales: 0, totalProfit: 0 };
-      }
-      
-      // حساب إجماليات المبيعات والأرباح
-      const totalSales = data.reduce((sum, profit) => sum + profit.total_sales, 0);
-      const totalProfit = data.reduce((sum, profit) => sum + profit.profit_amount, 0);
-      
-      console.log(`Fetched profits data: sales=${totalSales}, profits=${totalProfit} for period ${startDate || 'all'} to ${endDate || 'all'}`);
-      
-      return { totalSales, totalProfit };
-    } catch (error) {
-      console.error('Error calculating sales profit:', error);
-      return { totalSales: 0, totalProfit: 0 };
-    }
-  }
-  
-  /**
    * الحصول على ملخص مالي
    */
   public async getFinancialSummary(startDate?: string, endDate?: string): Promise<FinancialSummary> {
@@ -75,8 +33,9 @@ class FinancialReportService {
       // جلب المعاملات المالية
       const transactions = await this.transactionService.getTransactions(startDate, endDate);
       
-      // الحصول على بيانات أرباح المبيعات من جدول الأرباح
-      const salesProfitData = await this.getSalesProfit(startDate, endDate);
+      // الحصول على بيانات أرباح المبيعات من خدمة الأرباح مباشرة بدلاً من الدالة المحلية
+      const profitFilter = startDate || endDate ? { startDate, endDate } : undefined;
+      const salesProfitData = await this.profitService.getProfitSummary(profitFilter);
       
       // حساب الإجماليات من المعاملات المالية المسجلة
       let totalIncome = 0;
@@ -90,9 +49,9 @@ class FinancialReportService {
         }
       });
       
-      // إضافة صافي الربح من المبيعات إلى إجمالي الدخل (إذا لم يكن مسجلاً بالفعل في المعاملات المالية)
-      // نفترض أن بيانات المبيعات قد تكون مسجلة بالفعل في المعاملات، لذلك نضيف فقط صافي الربح
-      totalIncome += salesProfitData.totalProfit;
+      // إضافة صافي الربح من المبيعات إلى إجمالي الدخل
+      // نستخدم total_profit من ملخص الأرباح
+      totalIncome += salesProfitData.total_profit;
       
       const netProfit = totalIncome - totalExpense;
       
@@ -131,7 +90,14 @@ class FinancialReportService {
         endDate,
         incomeByCategory: [],
         expenseByCategory: [],
-        salesProfit: salesProfitData.totalProfit // إضافة صافي الربح من المبيعات للإيرادات
+        salesProfit: salesProfitData.total_profit, // إضافة صافي الربح من المبيعات
+        // إضافة مزيد من بيانات ملخص الأرباح
+        salesProfitDetails: {
+          total_sales: salesProfitData.total_sales,
+          total_cost: salesProfitData.total_cost,
+          average_profit_percentage: salesProfitData.average_profit_percentage,
+          invoice_count: salesProfitData.invoice_count
+        }
       };
     } catch (error) {
       console.error('Error getting financial summary:', error);
@@ -152,7 +118,13 @@ class FinancialReportService {
         endDate,
         incomeByCategory: [],
         expenseByCategory: [],
-        salesProfit: 0
+        salesProfit: 0,
+        salesProfitDetails: {
+          total_sales: 0,
+          total_cost: 0,
+          average_profit_percentage: 0,
+          invoice_count: 0
+        }
       };
     }
   }
@@ -244,8 +216,9 @@ class FinancialReportService {
       // الحصول على جميع المعاملات في النطاق الزمني
       const transactions = await this.transactionService.getTransactions(startDate, endDate);
       
-      // الحصول على بيانات أرباح المبيعات من جدول الأرباح
-      const salesProfitData = await this.getSalesProfit(startDate, endDate);
+      // الحصول على بيانات أرباح المبيعات من خدمة الأرباح
+      const profitFilter = { startDate, endDate };
+      const salesProfitData = await this.profitService.getProfitSummary(profitFilter);
       
       // تجميع البيانات
       const incomeByCategory: Record<string, number> = {};
@@ -265,11 +238,11 @@ class FinancialReportService {
         }
       });
       
-      // إضافة أرباح المبيعات كفئة دخل إضافية (إذا لم تكن موجودة بالفعل)
-      if (salesProfitData.totalProfit > 0) {
+      // إضافة أرباح المبيعات كفئة دخل إضافية
+      if (salesProfitData.total_profit > 0) {
         const salesProfitCategoryKey = 'sales-profit-أرباح المبيعات';
-        incomeByCategory[salesProfitCategoryKey] = (incomeByCategory[salesProfitCategoryKey] || 0) + salesProfitData.totalProfit;
-        totalIncome += salesProfitData.totalProfit;
+        incomeByCategory[salesProfitCategoryKey] = (incomeByCategory[salesProfitCategoryKey] || 0) + salesProfitData.total_profit;
+        totalIncome += salesProfitData.total_profit;
       }
       
       // تحويل البيانات لتنسيق مناسب
@@ -291,7 +264,13 @@ class FinancialReportService {
         netIncome: totalIncome - totalExpense,
         incomeData,
         expenseData,
-        salesProfit: salesProfitData.totalProfit // إضافة صافي الربح من المبيعات
+        salesProfit: salesProfitData.total_profit, // إضافة صافي الربح من المبيعات
+        salesProfitDetails: {
+          total_sales: salesProfitData.total_sales,
+          total_cost: salesProfitData.total_cost,
+          average_profit_percentage: salesProfitData.average_profit_percentage,
+          invoice_count: salesProfitData.invoice_count
+        }
       };
     } catch (error) {
       console.error('Error generating income/expense report:', error);

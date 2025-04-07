@@ -21,6 +21,14 @@ export interface Transaction {
   created_at?: string;
 }
 
+// إضافة واجهة جديدة لتفاصيل أرباح المبيعات
+export interface SalesProfitDetails {
+  total_sales: number;
+  total_cost: number;
+  average_profit_percentage: number;
+  invoice_count: number;
+}
+
 export interface FinancialSummary {
   totalIncome: number;
   totalExpense: number;
@@ -37,6 +45,7 @@ export interface FinancialSummary {
   totalBalance?: number;
   categoryAnalysis?: any[];
   salesProfit?: number; // صافي الربح من المبيعات (من جدول profits)
+  salesProfitDetails?: SalesProfitDetails; // تفاصيل أرباح المبيعات (جديد)
 }
 
 export interface CategoryAmount {
