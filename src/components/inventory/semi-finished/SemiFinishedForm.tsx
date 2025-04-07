@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,7 +42,7 @@ const semiFinishedSchema = z.object({
   unit: z.string().min(1, { message: "يرجى اختيار وحدة القياس" }),
   quantity: z.coerce.number().min(0, { message: "الكمية يجب أن تكون 0 أو أكثر" }),
   unit_cost: z.coerce.number().min(0, { message: "التكلفة يجب أن تكون 0 أو أكثر" }),
-  sales_price: z.coerce.number().min(0, { message: "سعر البيع يجب أن يكون 0 أو أكثر" }),
+  sales_price: z.coerce.number().min(0, { message: "سعر البيع يجب أن تكون 0 أو أكثر" }),
   min_stock: z.coerce.number().min(0, { message: "الحد الأدنى يجب أن يكون 0 أو أكثر" })
 });
 
@@ -110,73 +111,135 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     if (isEditing && initialData) {
       const fetchIngredients = async () => {
         try {
-          const { data, error } = await supabase
+          // تجلب المكونات من قاعدة البيانات للمنتج المُعدّل
+          const { data: rawIngredientsData, error: rawError } = await supabase
             .from('semi_finished_ingredients')
             .select(`
               id,
               percentage,
               ingredient_type,
               raw_material_id,
-              semi_finished_id,
               raw_material:raw_material_id(id, code, name, unit, unit_cost)
             `)
-            .eq('semi_finished_product_id', initialData.id);
+            .eq('semi_finished_product_id', initialData.id)
+            .eq('ingredient_type', 'raw');
             
-          if (error) {
-            toast.error('خطأ في جلب المكونات');
-            console.error("Error fetching ingredients:", error);
+          if (rawError) {
+            toast.error('خطأ في جلب المكونات الخام');
+            console.error("Error fetching raw ingredients:", rawError);
             return;
           }
           
-          const formattedIngredients: Ingredient[] = data?.map((ing) => {
-            if (!ing) return null;
+          // تجلب المكونات من نوع نصف مصنع
+          const { data: semiIngredientsData, error: semiError } = await supabase
+            .from('semi_finished_ingredients')
+            .select(`
+              id,
+              percentage,
+              ingredient_type,
+              semi_finished_id
+            `)
+            .eq('semi_finished_product_id', initialData.id)
+            .eq('ingredient_type', 'semi');
             
-            try {
-              if (ing.ingredient_type === 'raw' && ing.raw_material) {
-                return {
-                  id: ing.raw_material.id,
-                  code: ing.raw_material.code,
-                  name: ing.raw_material.name,
-                  percentage: ing.percentage,
-                  ingredient_type: 'raw',
-                  unit: ing.raw_material.unit,
-                  unit_cost: ing.raw_material.unit_cost
-                };
-              } else if (ing.ingredient_type === 'semi' && ing.semi_finished_id) {
-                const semiFinishedProduct = semiFinishedProducts.find(p => p.id === ing.semi_finished_id);
-                
-                if (semiFinishedProduct) {
-                  return {
-                    id: semiFinishedProduct.id,
-                    code: semiFinishedProduct.code,
-                    name: semiFinishedProduct.name,
-                    percentage: ing.percentage,
-                    ingredient_type: 'semi',
-                    unit: semiFinishedProduct.unit,
-                    unit_cost: semiFinishedProduct.unit_cost
-                  };
-                }
-              } else if (ing.ingredient_type === 'water') {
-                setHasWater(true);
-                return {
-                  id: 0,
-                  code: 'WATER',
-                  name: 'ماء',
-                  percentage: ing.percentage,
-                  ingredient_type: 'water',
-                  is_auto_calculated: true,
-                  unit_cost: 0
-                };
-              }
-            } catch (e) {
-              console.error("Error formatting ingredient:", e, ing);
-              return null;
-            }
+          if (semiError) {
+            toast.error('خطأ في جلب المكونات النصف مصنعة');
+            console.error("Error fetching semi ingredients:", semiError);
+            return;
+          }
+          
+          // تجلب مكونات الماء
+          const { data: waterIngredientsData, error: waterError } = await supabase
+            .from('semi_finished_ingredients')
+            .select(`
+              id,
+              percentage,
+              ingredient_type
+            `)
+            .eq('semi_finished_product_id', initialData.id)
+            .eq('ingredient_type', 'water');
             
-            return null;
+          if (waterError) {
+            toast.error('خطأ في جلب مكونات الماء');
+            console.error("Error fetching water ingredients:", waterError);
+            return;
+          }
+          
+          const rawIngredientsFormatted: Ingredient[] = rawIngredientsData?.map((ing) => {
+            if (!ing || !ing.raw_material) return null;
+            
+            return {
+              id: ing.raw_material.id,
+              code: ing.raw_material.code,
+              name: ing.raw_material.name,
+              percentage: ing.percentage,
+              ingredient_type: 'raw',
+              unit: ing.raw_material.unit,
+              unit_cost: ing.raw_material.unit_cost
+            };
           }).filter(Boolean) as Ingredient[] || [];
           
-          setIngredients(formattedIngredients);
+          let semiIngredientsFormatted: Ingredient[] = [];
+          
+          // إذا كان هناك مكونات من نوع نصف مصنع، نجلب تفاصيلها
+          if (semiIngredientsData && semiIngredientsData.length > 0) {
+            // نحصل على معرّفات المنتجات النصف مصنعة
+            const semiIds = semiIngredientsData
+              .map(ing => ing.semi_finished_id)
+              .filter(Boolean);
+            
+            if (semiIds.length > 0) {
+              const { data: semiProducts, error: semiProductsError } = await supabase
+                .from('semi_finished_products')
+                .select('id, code, name, unit, unit_cost')
+                .in('id', semiIds);
+                
+              if (semiProductsError) {
+                toast.error('خطأ في جلب بيانات المنتجات النصف مصنعة');
+                console.error("Error fetching semi-finished products:", semiProductsError);
+              } else {
+                semiIngredientsFormatted = semiIngredientsData.map(ing => {
+                  const productDetails = semiProducts?.find(p => p.id === ing.semi_finished_id);
+                  if (!productDetails) return null;
+                  
+                  return {
+                    id: productDetails.id,
+                    code: productDetails.code,
+                    name: productDetails.name,
+                    percentage: ing.percentage,
+                    ingredient_type: 'semi',
+                    unit: productDetails.unit,
+                    unit_cost: productDetails.unit_cost
+                  };
+                }).filter(Boolean) as Ingredient[] || [];
+              }
+            }
+          }
+          
+          const waterIngredientsFormatted: Ingredient[] = waterIngredientsData?.map((ing) => {
+            return {
+              id: 0,
+              code: 'WATER',
+              name: 'ماء',
+              percentage: ing.percentage,
+              ingredient_type: 'water',
+              is_auto_calculated: true,
+              unit_cost: 0
+            };
+          }) || [];
+          
+          if (waterIngredientsFormatted.length > 0) {
+            setHasWater(true);
+          }
+          
+          // دمج جميع المكونات في مصفوفة واحدة
+          const allIngredients = [
+            ...rawIngredientsFormatted,
+            ...semiIngredientsFormatted,
+            ...waterIngredientsFormatted
+          ];
+          
+          setIngredients(allIngredients);
         } catch (error) {
           console.error("Error fetching ingredients:", error);
           toast.error('حدث خطأ أثناء تحميل المكونات');
@@ -185,7 +248,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       
       fetchIngredients();
     }
-  }, [isEditing, initialData, semiFinishedProducts]);
+  }, [isEditing, initialData]);
   
   useEffect(() => {
     if (ingredients.length === 0) {
@@ -234,42 +297,31 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof semiFinishedSchema>) => {
+      console.log("Starting mutation with ingredients:", ingredients);
+      
+      // تحضير بيانات المكونات للإدخال في قاعدة البيانات
       const ingredientsData = ingredients.map(ing => {
         const ingredientType = ing.ingredient_type || 'raw';
         
-        const baseData = {
+        const baseData: any = {
           percentage: ing.percentage,
-          ingredient_type: ingredientType,
-          raw_material_id: null as number | null,
-          semi_finished_id: null as number | null,
-          semi_finished_product_id: null as number | null
+          ingredient_type: ingredientType
         };
         
         if (ingredientType === 'raw') {
-          return {
-            ...baseData,
-            raw_material_id: ing.id,
-            semi_finished_id: null
-          };
+          baseData.raw_material_id = ing.id;
         } else if (ingredientType === 'semi') {
-          return {
-            ...baseData,
-            raw_material_id: null,
-            semi_finished_id: ing.id
-          };
-        } else if (ingredientType === 'water') {
-          return {
-            ...baseData,
-            raw_material_id: null,
-            semi_finished_id: null
-          };
+          baseData.semi_finished_id = ing.id;
         }
         
         return baseData;
       });
       
       if (isEditing) {
-        const { data, error } = await supabase
+        console.log("Updating existing product:", initialData.id);
+        
+        // تحديث المنتج النصف مصنع الموجود
+        const { data: updatedProduct, error: updateError } = await supabase
           .from('semi_finished_products')
           .update({
             name: values.name,
@@ -282,30 +334,54 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           .eq('id', initialData.id)
           .select();
           
-        if (error) throw error;
+        if (updateError) {
+          console.error("Error updating product:", updateError);
+          throw updateError;
+        }
         
-        await supabase
+        console.log("Product updated successfully, now handling ingredients");
+        
+        // حذف المكونات القديمة
+        const { error: deleteError } = await supabase
           .from('semi_finished_ingredients')
           .delete()
           .eq('semi_finished_product_id', initialData.id);
         
+        if (deleteError) {
+          console.error("Error deleting old ingredients:", deleteError);
+          throw deleteError;
+        }
+        
+        console.log("Old ingredients deleted successfully");
+        
+        // إذا كان هناك مكونات جديدة، نضيفها
         if (ingredients.length > 0) {
+          console.log("Adding new ingredients to product:", initialData.id);
+          
+          // إضافة معرف المنتج لكل مكون
           const finalIngredientData = ingredientsData.map(ing => ({
             ...ing,
             semi_finished_product_id: initialData.id
           }));
           
-          for (const ingredient of finalIngredientData) {
-            const { error: ingredientError } = await supabase
-              .from('semi_finished_ingredients')
-              .insert(ingredient);
-              
-            if (ingredientError) throw ingredientError;
+          // إضافة المكونات بعملية واحدة
+          const { error: insertError } = await supabase
+            .from('semi_finished_ingredients')
+            .insert(finalIngredientData);
+            
+          if (insertError) {
+            console.error("Error inserting new ingredients:", insertError);
+            throw insertError;
           }
+          
+          console.log("New ingredients added successfully");
         }
         
-        return data;
+        return updatedProduct;
       } else {
+        console.log("Creating new product");
+        
+        // الحصول على آخر كود موجود لإنشاء كود جديد
         const { data: maxCode } = await supabase
           .from('semi_finished_products')
           .select('code')
@@ -319,7 +395,10 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           newCode = `SFP-${String(lastNum + 1).padStart(5, '0')}`;
         }
         
-        const { data, error } = await supabase
+        console.log("Generated new code:", newCode);
+        
+        // إنشاء منتج نصف مصنع جديد
+        const { data: newProduct, error: insertError } = await supabase
           .from('semi_finished_products')
           .insert({
             code: newCode,
@@ -332,24 +411,37 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           })
           .select();
           
-        if (error) throw error;
-        
-        if (ingredients.length > 0 && data && data.length > 0) {
-          const finalIngredientData = ingredientsData.map(ing => ({
-            ...ing,
-            semi_finished_product_id: data[0].id
-          }));
-          
-          for (const ingredient of finalIngredientData) {
-            const { error: ingredientError } = await supabase
-              .from('semi_finished_ingredients')
-              .insert(ingredient);
-              
-            if (ingredientError) throw ingredientError;
-          }
+        if (insertError) {
+          console.error("Error creating new product:", insertError);
+          throw insertError;
         }
         
-        return data;
+        console.log("New product created successfully:", newProduct);
+        
+        // إذا كان هناك مكونات وتم إنشاء المنتج بنجاح، نضيف المكونات
+        if (ingredients.length > 0 && newProduct && newProduct.length > 0) {
+          console.log("Adding ingredients to new product:", newProduct[0].id);
+          
+          // إضافة معرف المنتج الجديد لكل مكون
+          const finalIngredientData = ingredientsData.map(ing => ({
+            ...ing,
+            semi_finished_product_id: newProduct[0].id
+          }));
+          
+          // إضافة جميع المكونات بعملية واحدة
+          const { error: ingredientsError } = await supabase
+            .from('semi_finished_ingredients')
+            .insert(finalIngredientData);
+            
+          if (ingredientsError) {
+            console.error("Error adding ingredients:", ingredientsError);
+            throw ingredientsError;
+          }
+          
+          console.log("Ingredients added successfully");
+        }
+        
+        return newProduct;
       }
     },
     onSuccess: () => {
