@@ -83,14 +83,14 @@ const ProductDetailsContainer = () => {
         // Find semi-finished products that use this raw material
         const { data: semiFinished, error: semiError } = await supabase
           .from('semi_finished_ingredients')
-          .select('semi_finished_id, percentage, semi_finished_products(name)')
+          .select('semi_finished_id, percentage, semi_finished_product:semi_finished_id!semi_finished_products(name)')
           .eq('raw_material_id', numericId);
         
         if (semiError) throw semiError;
         
         return semiFinished.map(item => ({
           id: item.semi_finished_id,
-          name: item.semi_finished_products?.name || 'منتج غير معروف',
+          name: item.semi_finished_product?.name || 'منتج غير معروف',
           type: 'semi_finished_products',
           percentage: item.percentage
         }));
@@ -116,7 +116,7 @@ const ProductDetailsContainer = () => {
         const { data: ingredients, error: ingredientsError } = await supabase
           .from('semi_finished_ingredients')
           .select('raw_material_id, percentage, raw_materials(name)')
-          .eq('semi_finished_id', numericId);
+          .eq('semi_finished_product_id', numericId);
         
         if (ingredientsError) throw ingredientsError;
         

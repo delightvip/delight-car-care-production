@@ -52,7 +52,7 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
             percentage,
             ingredient_type,
             raw_material:raw_material_id(id, code, name, unit, unit_cost),
-            semi_finished_product:semi_finished_id(id, code, name, unit, unit_cost)
+            semi_finished_product:semi_finished_id!semi_finished_products(id, code, name, unit, unit_cost)
           `)
           .eq('semi_finished_product_id', product.id);
           

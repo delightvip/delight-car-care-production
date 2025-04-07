@@ -116,6 +116,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       // Fetch ingredients for this product
       const fetchIngredients = async () => {
         try {
+          // Fixed query with proper relationship hints
           const { data, error } = await supabase
             .from('semi_finished_ingredients')
             .select(`
@@ -125,7 +126,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
               raw_material_id,
               semi_finished_id,
               raw_material:raw_material_id(id, code, name, unit, unit_cost),
-              semi_finished_product:semi_finished_id(id, code, name, unit, unit_cost)
+              semi_finished_product:semi_finished_id!semi_finished_products(id, code, name, unit, unit_cost)
             `)
             .eq('semi_finished_product_id', initialData.id);
             
@@ -311,7 +312,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             semi_finished_product_id: initialData.id
           }));
           
-          // Insert each ingredient individually
+          // Insert each ingredient individually to avoid type errors
           for (const ingredient of finalIngredientData) {
             const { error: ingredientError } = await supabase
               .from('semi_finished_ingredients')
@@ -361,7 +362,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             semi_finished_product_id: data[0].id
           }));
           
-          // Insert each ingredient individually
+          // Insert each ingredient individually to avoid type errors
           for (const ingredient of finalIngredientData) {
             const { error: ingredientError } = await supabase
               .from('semi_finished_ingredients')
