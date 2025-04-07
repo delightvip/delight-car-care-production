@@ -25,7 +25,7 @@ const PackagingOrders = lazy(() => import('@/pages/production/PackagingOrders'))
 const ProductionPlanning = lazy(() => import('@/pages/production/ProductionPlanning'));
 const InventoryDistributionPage = lazy(() => import('@/pages/analytics/InventoryDistributionPage'));
 
-// Commercial pages - change the way Invoices is imported to avoid the dynamic import error
+// Commercial pages
 const Parties = lazy(() => import('@/pages/commercial/Parties'));
 // Import Invoices directly instead of using dynamic import
 import Invoices from '@/pages/commercial/Invoices';
@@ -33,13 +33,14 @@ const InvoiceDetails = lazy(() => import('@/pages/commercial/InvoiceDetails'));
 const Payments = lazy(() => import('@/pages/commercial/Payments'));
 const PartyDetails = lazy(() => import('@/pages/commercial/PartyDetails'));
 const Returns = lazy(() => import('@/pages/commercial/Returns'));
-const Profits = lazy(() => import('@/pages/commercial/Profits'));
+// Import Profits directly to avoid dynamic import issues
+import Profits from '@/pages/commercial/Profits';
 const AccountStatements = lazy(() => import('@/pages/commercial/AccountStatements'));
 const CommercialLedger = lazy(() => import('@/pages/commercial/CommercialLedger'));
 const CommercialDashboard = lazy(() => import('@/pages/commercial/CommercialDashboard'));
 
-// Financial pages
-const FinancialDashboard = lazy(() => import('@/pages/financial/FinancialDashboard'));
+// Financial pages - Import directly instead of lazy loading to fix the errors
+import FinancialDashboard from '@/pages/financial/FinancialDashboard';
 const TransactionPage = lazy(() => import('@/pages/financial/TransactionPage'));
 const CategoriesPage = lazy(() => import('@/pages/financial/CategoriesPage'));
 const CategoryForm = lazy(() => import('@/components/financial/CategoryForm'));
@@ -88,7 +89,6 @@ function App() {
               <Route index element={<CommercialDashboard />} />
               <Route path="parties" element={<Parties />} />
               <Route path="parties/:id" element={<PartyDetails />} />
-              {/* Use the directly imported Invoices component */}
               <Route path="invoices" element={<Invoices />} />
               <Route path="invoices/:id" element={<InvoiceDetails />} />
               <Route path="payments" element={<Payments />} />
@@ -98,7 +98,7 @@ function App() {
               <Route path="ledger" element={<CommercialLedger />} />
             </Route>
             
-            {/* Financial Routes */}
+            {/* Financial Routes - Using direct imports instead of lazy loading */}
             <Route path="financial">
               <Route index element={<FinancialDashboard />} />
               <Route path="transactions" element={<TransactionPage />} />
