@@ -36,6 +36,16 @@ const formSchema = z.object({
   unit_cost: z.coerce.number().min(0, { message: 'التكلفة يجب أن تكون أكبر من أو تساوي صفر' }),
 });
 
+// Define a type for the form values to match the Supabase schema requirements
+type PackagingMaterialFormValues = {
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+  unit_cost: number;
+};
+
 interface PackagingMaterialFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -69,11 +79,21 @@ const PackagingMaterialForm: React.FC<PackagingMaterialFormProps> = ({
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      // Ensure all required fields are present
+      const formData: PackagingMaterialFormValues = {
+        code: values.code,
+        name: values.name,
+        unit: values.unit,
+        quantity: values.quantity,
+        min_stock: values.min_stock,
+        unit_cost: values.unit_cost
+      };
+      
       if (isEditing) {
         // Update existing packaging material
         const { error } = await supabase
           .from('packaging_materials')
-          .update(values)
+          .update(formData)
           .eq('id', initialData.id);
         
         if (error) throw error;
@@ -83,7 +103,7 @@ const PackagingMaterialForm: React.FC<PackagingMaterialFormProps> = ({
         // Insert new packaging material
         const { error } = await supabase
           .from('packaging_materials')
-          .insert(values);
+          .insert(formData);
         
         if (error) throw error;
         

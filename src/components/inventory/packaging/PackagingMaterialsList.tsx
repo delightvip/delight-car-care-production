@@ -38,7 +38,8 @@ const PackagingMaterialsList: React.FC<PackagingMaterialsListProps> = ({
         .select('*');
       
       if (filterType === 'low-stock') {
-        query = query.lt('quantity', supabase.raw('min_stock'));
+        // For low-stock, we use a filter to check quantity < min_stock
+        query = query.filter('quantity', 'lt', 'min_stock');
       } else if (filterType === 'high-value') {
         query = query.order('unit_cost', { ascending: false }).limit(10);
       }
