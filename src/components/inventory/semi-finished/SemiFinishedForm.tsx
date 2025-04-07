@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -115,72 +114,77 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     if (isEditing && initialData) {
       // Fetch ingredients for this product
       const fetchIngredients = async () => {
-        const { data, error } = await supabase
-          .from('semi_finished_ingredients')
-          .select(`
-            id,
-            percentage,
-            ingredient_type,
-            raw_material_id,
-            semi_finished_id,
-            raw_material:raw_material_id(id, code, name, unit, unit_cost),
-            semi_finished_product:semi_finished_id(id, code, name, unit, unit_cost)
-          `)
-          .eq('semi_finished_product_id', initialData.id);
-          
-        if (error) {
-          toast.error('خطأ في جلب المكونات');
-          return;
-        }
-        
-        // Format ingredients for our state
-        const formattedIngredients: Ingredient[] = data?.map((ing) => {
-          if (ing.ingredient_type === 'raw' && ing.raw_material) {
-            return {
-              id: ing.raw_material.id,
-              code: ing.raw_material.code,
-              name: ing.raw_material.name,
-              percentage: ing.percentage,
-              ingredient_type: 'raw',
-              unit: ing.raw_material.unit,
-              unit_cost: ing.raw_material.unit_cost
-            };
-          } else if (ing.ingredient_type === 'semi' && ing.semi_finished_product) {
-            return {
-              id: ing.semi_finished_product.id,
-              code: ing.semi_finished_product.code,
-              name: ing.semi_finished_product.name,
-              percentage: ing.percentage,
-              ingredient_type: 'semi',
-              unit: ing.semi_finished_product.unit,
-              unit_cost: ing.semi_finished_product.unit_cost
-            };
-          } else if (ing.ingredient_type === 'water') {
-            setHasWater(true);
-            return {
-              id: 0,
-              code: 'WATER',
-              name: 'ماء',
-              percentage: ing.percentage,
-              ingredient_type: 'water',
-              is_auto_calculated: true,
-              unit_cost: 0
-            };
+        try {
+          const { data, error } = await supabase
+            .from('semi_finished_ingredients')
+            .select(`
+              id,
+              percentage,
+              ingredient_type,
+              raw_material_id,
+              semi_finished_id,
+              raw_material:raw_material_id(id, code, name, unit, unit_cost),
+              semi_finished_product:semi_finished_id(id, code, name, unit, unit_cost)
+            `)
+            .eq('semi_finished_product_id', initialData.id);
+            
+          if (error) {
+            toast.error('خطأ في جلب المكونات');
+            return;
           }
           
-          // Fallback for any unexpected cases
-          return {
-            id: ing.raw_material?.id || 0,
-            code: ing.raw_material?.code || '',
-            name: ing.raw_material?.name || '',
-            percentage: ing.percentage,
-            ingredient_type: 'raw',
-            unit: ing.raw_material?.unit || '',
-            unit_cost: ing.raw_material?.unit_cost || 0
-          };
-        }) || [];
-        
-        setIngredients(formattedIngredients);
+          // Format ingredients for our state
+          const formattedIngredients: Ingredient[] = data?.map((ing) => {
+            if (ing.ingredient_type === 'raw' && ing.raw_material) {
+              return {
+                id: ing.raw_material.id,
+                code: ing.raw_material.code,
+                name: ing.raw_material.name,
+                percentage: ing.percentage,
+                ingredient_type: 'raw',
+                unit: ing.raw_material.unit,
+                unit_cost: ing.raw_material.unit_cost
+              };
+            } else if (ing.ingredient_type === 'semi' && ing.semi_finished_product) {
+              return {
+                id: ing.semi_finished_product.id,
+                code: ing.semi_finished_product.code,
+                name: ing.semi_finished_product.name,
+                percentage: ing.percentage,
+                ingredient_type: 'semi',
+                unit: ing.semi_finished_product.unit,
+                unit_cost: ing.semi_finished_product.unit_cost
+              };
+            } else if (ing.ingredient_type === 'water') {
+              setHasWater(true);
+              return {
+                id: 0,
+                code: 'WATER',
+                name: 'ماء',
+                percentage: ing.percentage,
+                ingredient_type: 'water',
+                is_auto_calculated: true,
+                unit_cost: 0
+              };
+            }
+            
+            // Fallback for any unexpected cases
+            return {
+              id: ing.raw_material?.id || 0,
+              code: ing.raw_material?.code || '',
+              name: ing.raw_material?.name || '',
+              percentage: ing.percentage,
+              ingredient_type: 'raw',
+              unit: ing.raw_material?.unit || '',
+              unit_cost: ing.raw_material?.unit_cost || 0
+            };
+          }) || [];
+          
+          setIngredients(formattedIngredients);
+        } catch (error) {
+          console.error("Error fetching ingredients:", error);
+          toast.error('حدث خطأ أثناء تحميل المكونات');
+        }
       };
       
       fetchIngredients();
@@ -245,6 +249,8 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         const baseData = {
           percentage: ing.percentage,
           ingredient_type: ingredientType,
+          raw_material_id: null as number | null,
+          semi_finished_id: null as number | null
         };
         
         // Add type-specific fields

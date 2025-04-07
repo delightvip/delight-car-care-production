@@ -43,19 +43,24 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
   } = useQuery({
     queryKey: ['semiFinishedIngredients', product?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('semi_finished_ingredients')
-        .select(`
-          id,
-          percentage,
-          ingredient_type,
-          raw_material:raw_material_id(id, code, name, unit, unit_cost),
-          semi_finished_product:semi_finished_id(id, code, name, unit, unit_cost)
-        `)
-        .eq('semi_finished_product_id', product.id);
-        
-      if (error) throw error;
-      return data || [];
+      try {
+        const { data, error } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            ingredient_type,
+            raw_material:raw_material_id(id, code, name, unit, unit_cost),
+            semi_finished_product:semi_finished_id(id, code, name, unit, unit_cost)
+          `)
+          .eq('semi_finished_product_id', product.id);
+          
+        if (error) throw error;
+        return data || [];
+      } catch (error) {
+        console.error("Error fetching ingredients:", error);
+        return [];
+      }
     },
     enabled: !!product?.id
   });
