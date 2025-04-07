@@ -26,23 +26,19 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   cancelText = 'إلغاء'
 }) => {
   // Handle confirm action and prevent dialog from closing automatically
-  const handleConfirm = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleConfirm = () => {
     onConfirm();
     // Note: We don't close the dialog here because we want to show the loading state
     // The parent component should close the dialog when the operation is complete
   };
 
-  // Handle the dialog's close functionality
-  const handleCloseDialog = () => {
-    // Only allow closing if not in loading state
-    if (!isLoading) {
-      onClose();
-    }
-  };
-
   return (
-    <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
+    <Dialog open={isOpen} onOpenChange={(isOpen) => {
+      // Only allow closing if not in loading state
+      if (!isLoading && !isOpen) {
+        onClose();
+      }
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

@@ -155,7 +155,7 @@ export const useSemiFinishedForm = (initialData: any, semiFinishedProducts: any[
               name: 'ماء',
               percentage: ing.percentage,
               ingredient_type: 'water',
-              is_auto_calculated: true,
+              unit: 'لتر',
               unit_cost: 0
             };
           }) || [];
