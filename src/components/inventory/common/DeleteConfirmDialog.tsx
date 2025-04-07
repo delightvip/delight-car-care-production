@@ -11,6 +11,8 @@ interface DeleteConfirmDialogProps {
   title: string;
   description: string;
   isLoading?: boolean;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
@@ -19,7 +21,9 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   onConfirm,
   title,
   description,
-  isLoading = false
+  isLoading = false,
+  confirmText = 'حذف',
+  cancelText = 'إلغاء'
 }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -36,7 +40,7 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
             onClick={onClose}
             disabled={isLoading}
           >
-            إلغاء
+            {cancelText}
           </Button>
           <Button
             variant="destructive"
@@ -48,7 +52,7 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 جاري الحذف...
               </>
-            ) : 'حذف'}
+            ) : confirmText}
           </Button>
         </DialogFooter>
       </DialogContent>
