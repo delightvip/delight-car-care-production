@@ -9,6 +9,11 @@ import Index from '@/pages/Index';
 import NotFound from '@/pages/NotFound';
 import Settings from '@/pages/settings/Settings';
 
+// Financial pages - Import directly instead of lazy loading
+import FinancialDashboard from '@/pages/financial/FinancialDashboard';
+import Profits from '@/pages/commercial/Profits';
+import Invoices from '@/pages/commercial/Invoices';
+
 // Lazy loaded pages
 const Dashboard = lazy(() => import('@/pages/Index'));
 const AnalyticsPage = lazy(() => import('@/pages/analytics/Analytics'));
@@ -27,20 +32,15 @@ const InventoryDistributionPage = lazy(() => import('@/pages/analytics/Inventory
 
 // Commercial pages
 const Parties = lazy(() => import('@/pages/commercial/Parties'));
-// Import Invoices directly instead of using dynamic import
-import Invoices from '@/pages/commercial/Invoices';
 const InvoiceDetails = lazy(() => import('@/pages/commercial/InvoiceDetails'));
 const Payments = lazy(() => import('@/pages/commercial/Payments'));
 const PartyDetails = lazy(() => import('@/pages/commercial/PartyDetails'));
 const Returns = lazy(() => import('@/pages/commercial/Returns'));
-// Import Profits directly to avoid dynamic import issues
-import Profits from '@/pages/commercial/Profits';
 const AccountStatements = lazy(() => import('@/pages/commercial/AccountStatements'));
 const CommercialLedger = lazy(() => import('@/pages/commercial/CommercialLedger'));
 const CommercialDashboard = lazy(() => import('@/pages/commercial/CommercialDashboard'));
 
-// Financial pages - Import directly instead of lazy loading to fix the errors
-import FinancialDashboard from '@/pages/financial/FinancialDashboard';
+// Financial pages - Continue with directly imported components
 const TransactionPage = lazy(() => import('@/pages/financial/TransactionPage'));
 const CategoriesPage = lazy(() => import('@/pages/financial/CategoriesPage'));
 const CategoryForm = lazy(() => import('@/components/financial/CategoryForm'));
