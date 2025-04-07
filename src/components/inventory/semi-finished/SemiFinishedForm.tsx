@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,23 +32,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from '@/components/ui/separator';
-import { Loader2 } from 'lucide-react';
-import IngredientSelector from './ingredients/IngredientSelector';
-import IngredientsList from './ingredients/IngredientsList';
-import { Ingredient, SemiFinishedProductFormData } from '@/types/inventoryTypes';
-import { useSemiFinishedMaterialsData } from './hooks/useSemiFinishedMaterialsData';
-import { useSemiFinishedForm } from './hooks/useSemiFinishedForm';
+import { PlusCircle, X, Loader2 } from 'lucide-react';
 
+// Define form schema
 const semiFinishedSchema = z.object({
   name: z.string().min(2, { message: "يجب أن يحتوي الاسم على حرفين على الأقل" }),
   unit: z.string().min(1, { message: "يرجى اختيار وحدة القياس" }),
   quantity: z.coerce.number().min(0, { message: "الكمية يجب أن تكون 0 أو أكثر" }),
   unit_cost: z.coerce.number().min(0, { message: "التكلفة يجب أن تكون 0 أو أكثر" }),
-  sales_price: z.coerce.number().min(0, { message: "سعر البيع يجب أن تكون 0 أو أكثر" }),
+  sales_price: z.coerce.number().min(0, { message: "سعر البيع يجب أن يكون 0 أو أكثر" }),
   min_stock: z.coerce.number().min(0, { message: "الحد الأدنى يجب أن يكون 0 أو أكثر" })
 });
 
 const units = ['كجم', 'لتر', 'مللى', 'جم', 'علبة', 'قطعة', 'كرتونة'];
+
+interface Ingredient {
+  id: number;
+  code: string;
+  name: string;
+  percentage: number;
+}
 
 interface SemiFinishedFormProps {
   isOpen: boolean;
@@ -66,164 +70,205 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const isEditing = !!initialData;
+  const [selectedRawMaterial, setSelectedRawMaterial] = useState<string>('');
+  const [percentage, setPercentage] = useState<number>(0);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   
-  // Custom hooks for data fetching and form logic
-  const { rawMaterials, isRawMaterialsLoading, semiFinishedProducts, isSemiFinishedLoading } = 
-    useSemiFinishedMaterialsData(isEditing ? initialData?.id : undefined);
+  // Fetch raw materials
+  const { data: rawMaterials = [], isLoading: isRawMaterialsLoading } = useQuery({
+    queryKey: ['rawMaterials'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .select('id, name, code')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    }
+  });
   
-  const { 
-    form, 
-    ingredients, 
-    hasWater, 
-    totalCost, 
-    handleAddIngredient, 
-    handleRemoveIngredient, 
-    setHasWater, 
-    validateTotalPercentage 
-  } = useSemiFinishedForm(initialData, semiFinishedProducts);
+  const form = useForm<z.infer<typeof semiFinishedSchema>>({
+    resolver: zodResolver(semiFinishedSchema),
+    defaultValues: {
+      name: initialData?.name || "",
+      unit: initialData?.unit || units[0],
+      quantity: initialData?.quantity || 0,
+      unit_cost: initialData?.unit_cost || 0,
+      sales_price: initialData?.sales_price || 0,
+      min_stock: initialData?.min_stock || 0
+    }
+  });
   
-  // Handle form submission
+  // Load existing ingredients if editing
+  useEffect(() => {
+    if (isEditing && initialData) {
+      // Fetch ingredients for this product
+      const fetchIngredients = async () => {
+        const { data, error } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            raw_material:raw_material_id(id, code, name)
+          `)
+          .eq('semi_finished_id', initialData.id);
+          
+        if (error) {
+          toast.error('خطأ في جلب المكونات');
+          return;
+        }
+        
+        // Format ingredients for our state
+        const formattedIngredients = data?.map((ing) => ({
+          id: ing.raw_material?.id,
+          code: ing.raw_material?.code,
+          name: ing.raw_material?.name,
+          percentage: ing.percentage
+        })) || [];
+        
+        setIngredients(formattedIngredients);
+      };
+      
+      fetchIngredients();
+    }
+  }, [isEditing, initialData]);
+  
+  const handleAddIngredient = () => {
+    if (!selectedRawMaterial) {
+      toast.error('يرجى اختيار مادة خام');
+      return;
+    }
+    
+    if (percentage <= 0 || percentage > 100) {
+      toast.error('يجب أن تكون النسبة بين 1 و 100');
+      return;
+    }
+    
+    // Check if already exists
+    if (ingredients.some(ing => ing.id === parseInt(selectedRawMaterial))) {
+      toast.error('تم إضافة هذه المادة بالفعل');
+      return;
+    }
+    
+    const rawMaterial = rawMaterials.find(m => m.id === parseInt(selectedRawMaterial));
+    if (!rawMaterial) return;
+    
+    setIngredients([
+      ...ingredients,
+      {
+        id: rawMaterial.id,
+        code: rawMaterial.code,
+        name: rawMaterial.name,
+        percentage: percentage
+      }
+    ]);
+    
+    setSelectedRawMaterial('');
+    setPercentage(0);
+  };
+  
+  const handleRemoveIngredient = (id: number) => {
+    setIngredients(ingredients.filter(ing => ing.id !== id));
+  };
+  
+  const validateTotalPercentage = (): boolean => {
+    const total = ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
+    if (Math.abs(total - 100) > 0.01) {
+      toast.error(`مجموع النسب يجب أن يكون 100%، الإجمالي الحالي: ${total}%`);
+      return false;
+    }
+    return true;
+  };
+  
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof semiFinishedSchema>) => {
-      console.log("Starting mutation with ingredients:", ingredients);
-      
-      try {
-        // Prepare ingredients data for database insertion
-        const ingredientsData = ingredients.map(ing => {
-          const ingredientType = ing.ingredient_type || 'raw';
+      if (isEditing) {
+        // Update existing product
+        const { data, error } = await supabase
+          .from('semi_finished_products')
+          .update({
+            name: values.name,
+            unit: values.unit,
+            quantity: values.quantity,
+            min_stock: values.min_stock,
+            unit_cost: values.unit_cost,
+            sales_price: values.sales_price
+          })
+          .eq('id', initialData.id)
+          .select();
           
-          const baseData: any = {
-            percentage: ing.percentage,
-            ingredient_type: ingredientType
-          };
-          
-          // Set the appropriate ID based on ingredient type
-          if (ingredientType === 'raw') {
-            baseData.raw_material_id = ing.id;
-          } else if (ingredientType === 'semi') {
-            baseData.semi_finished_id = ing.id;
-          }
-          
-          return baseData;
-        });
+        if (error) throw error;
         
-        if (isEditing) {
-          console.log("Updating existing product:", initialData.id);
+        // Handle ingredients - first delete existing
+        await supabase
+          .from('semi_finished_ingredients')
+          .delete()
+          .eq('semi_finished_id', initialData.id);
+        
+        // Then insert new ingredients
+        if (ingredients.length > 0) {
+          const ingredientData = ingredients.map(ing => ({
+            semi_finished_id: initialData.id,
+            raw_material_id: ing.id,
+            percentage: ing.percentage
+          }));
           
-          // Update the existing semi-finished product
-          const { data: updatedProduct, error: updateError } = await supabase
-            .from('semi_finished_products')
-            .update({
-              name: values.name,
-              unit: values.unit,
-              quantity: values.quantity,
-              min_stock: values.min_stock,
-              unit_cost: values.unit_cost,
-              sales_price: values.sales_price
-            })
-            .eq('id', initialData.id)
-            .select();
-            
-          if (updateError) {
-            console.error("Error updating product:", updateError);
-            throw updateError;
-          }
-          
-          console.log("Product updated successfully, now handling ingredients");
-          
-          // Delete existing ingredients
-          const { error: deleteError } = await supabase
+          const { error: ingredientError } = await supabase
             .from('semi_finished_ingredients')
-            .delete()
-            .eq('semi_finished_product_id', initialData.id);
-          
-          if (deleteError) {
-            console.error("Error deleting old ingredients:", deleteError);
-            throw deleteError;
-          }
-          
-          // Add ingredients with semi_finished_product_id
-          if (ingredients.length > 0) {
-            console.log("Adding new ingredients to product:", initialData.id);
+            .insert(ingredientData);
             
-            // Add product ID to each ingredient
-            const finalIngredientData = ingredientsData.map(ing => ({
-              ...ing,
-              semi_finished_product_id: initialData.id
-            }));
-            
-            // Insert all ingredients in one operation
-            const { error: insertError } = await supabase
-              .from('semi_finished_ingredients')
-              .insert(finalIngredientData);
-              
-            if (insertError) {
-              console.error("Error inserting new ingredients:", insertError);
-              throw insertError;
-            }
-          }
-          
-          return updatedProduct;
-        } else {
-          console.log("Creating new product");
-          
-          // Get the latest code to create a new one
-          const { data: maxCode } = await supabase
-            .from('semi_finished_products')
-            .select('code')
-            .order('code', { ascending: false })
-            .limit(1);
-            
-          let newCode = 'SFP-00001';
-          if (maxCode && maxCode.length > 0) {
-            const lastCode = maxCode[0].code;
-            const lastNum = parseInt(lastCode.split('-')[1]);
-            newCode = `SFP-${String(lastNum + 1).padStart(5, '0')}`;
-          }
-          
-          // Create new semi-finished product
-          const { data: newProduct, error: insertError } = await supabase
-            .from('semi_finished_products')
-            .insert({
-              code: newCode,
-              name: values.name,
-              unit: values.unit,
-              quantity: values.quantity,
-              min_stock: values.min_stock,
-              unit_cost: values.unit_cost,
-              sales_price: values.sales_price
-            })
-            .select();
-            
-          if (insertError) {
-            console.error("Error creating new product:", insertError);
-            throw insertError;
-          }
-          
-          // Add ingredients if there are any and the product was successfully created
-          if (ingredients.length > 0 && newProduct && newProduct.length > 0) {
-            // Add product ID to each ingredient
-            const finalIngredientData = ingredientsData.map(ing => ({
-              ...ing,
-              semi_finished_product_id: newProduct[0].id
-            }));
-            
-            // Insert all ingredients in one operation
-            const { error: ingredientsError } = await supabase
-              .from('semi_finished_ingredients')
-              .insert(finalIngredientData);
-              
-            if (ingredientsError) {
-              console.error("Error adding ingredients:", ingredientsError);
-              throw ingredientsError;
-            }
-          }
-          
-          return newProduct;
+          if (ingredientError) throw ingredientError;
         }
-      } catch (error: any) {
-        console.error("Error in mutation:", error);
-        throw new Error(error.message || "Failed to save product");
+        
+        return data;
+      } else {
+        // Generate a code for new record
+        const { data: maxCode } = await supabase
+          .from('semi_finished_products')
+          .select('code')
+          .order('code', { ascending: false })
+          .limit(1);
+          
+        let newCode = 'SFP-00001';
+        if (maxCode && maxCode.length > 0) {
+          const lastCode = maxCode[0].code;
+          const lastNum = parseInt(lastCode.split('-')[1]);
+          newCode = `SFP-${String(lastNum + 1).padStart(5, '0')}`;
+        }
+        
+        // Insert new product
+        const { data, error } = await supabase
+          .from('semi_finished_products')
+          .insert({
+            code: newCode,
+            name: values.name,
+            unit: values.unit,
+            quantity: values.quantity,
+            min_stock: values.min_stock,
+            unit_cost: values.unit_cost,
+            sales_price: values.sales_price
+          })
+          .select();
+          
+        if (error) throw error;
+        
+        // Insert ingredients
+        if (ingredients.length > 0 && data && data.length > 0) {
+          const ingredientData = ingredients.map(ing => ({
+            semi_finished_id: data[0].id,
+            raw_material_id: ing.id,
+            percentage: ing.percentage
+          }));
+          
+          const { error: ingredientError } = await supabase
+            .from('semi_finished_ingredients')
+            .insert(ingredientData);
+            
+          if (ingredientError) throw ingredientError;
+        }
+        
+        return data;
       }
     },
     onSuccess: () => {
@@ -233,7 +278,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       form.reset();
     },
     onError: (error: any) => {
-      console.error("Mutation error:", error);
       toast.error(`حدث خطأ: ${error.message}`);
     }
   });
@@ -324,15 +368,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                   <FormItem>
                     <FormLabel>تكلفة الوحدة</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        min="0" 
-                        step="0.01" 
-                        {...field}
-                        value={totalCost > 0 ? totalCost.toFixed(2) : field.value}
-                        className={totalCost > 0 ? "bg-green-50" : ""}
-                        title={totalCost > 0 ? "تم حساب التكلفة تلقائيًا من المكونات" : ""}
-                      />
+                      <Input type="number" min="0" step="0.01" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -371,25 +407,75 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             <Separator className="my-4" />
             
             <div className="space-y-4">
-              <h3 className="text-md font-medium">مكونات المنتج</h3>
+              <h3 className="text-md font-medium">مكونات المنتج (المواد الأولية)</h3>
               
-              <IngredientSelector
-                rawMaterials={rawMaterials}
-                semiFinishedProducts={isEditing ? 
-                  semiFinishedProducts.filter(p => p.id !== initialData.id) : 
-                  semiFinishedProducts}
-                onAddIngredient={handleAddIngredient}
-                ingredients={ingredients}
-                hasWater={hasWater}
-                onToggleWater={setHasWater}
-              />
+              <div className="flex space-x-4 rtl:space-x-reverse">
+                <div className="flex-1">
+                  <FormLabel>المادة الأولية</FormLabel>
+                  <Select
+                    value={selectedRawMaterial}
+                    onValueChange={setSelectedRawMaterial}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر مادة أولية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rawMaterials.map(material => (
+                        <SelectItem key={material.id} value={String(material.id)}>
+                          {material.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="w-32">
+                  <FormLabel>النسبة %</FormLabel>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={percentage}
+                    onChange={e => setPercentage(Number(e.target.value))}
+                  />
+                </div>
+                
+                <div className="flex items-end">
+                  <Button type="button" onClick={handleAddIngredient}>
+                    <PlusCircle size={16} className="mr-2" />
+                    إضافة
+                  </Button>
+                </div>
+              </div>
               
-              <IngredientsList
-                ingredients={ingredients}
-                onRemoveIngredient={handleRemoveIngredient}
-                hasWater={hasWater}
-                totalCost={totalCost}
-              />
+              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {ingredients.length > 0 ? (
+                  <>
+                    <div className="text-sm font-medium rtl:text-right ltr:text-left">
+                      إجمالي النسب: {ingredients.reduce((sum, ing) => sum + ing.percentage, 0)}%
+                    </div>
+                    {ingredients.map(ing => (
+                      <div key={ing.id} className="flex justify-between items-center p-2 border rounded-md">
+                        <div>
+                          <div className="font-medium">{ing.name}</div>
+                          <div className="text-sm text-muted-foreground">النسبة: {ing.percentage}%</div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveIngredient(ing.id)}
+                        >
+                          <X size={16} />
+                        </Button>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <div className="text-muted-foreground text-center py-2">
+                    لم يتم إضافة مكونات بعد
+                  </div>
+                )}
+              </div>
             </div>
             
             <DialogFooter className="mt-6">

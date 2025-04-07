@@ -19,8 +19,7 @@ const Dashboard = lazy(() => import('@/pages/Index'));
 const AnalyticsPage = lazy(() => import('@/pages/analytics/Analytics'));
 const InventoryRawMaterials = lazy(() => import('@/pages/inventory/InventoryRawMaterials'));
 const SemiFinishedProducts = lazy(() => import('@/pages/inventory/SemiFinishedProducts'));
-// Import packaging materials directly instead of lazy loading
-import PackagingMaterials from '@/pages/inventory/PackagingMaterials';
+const PackagingMaterials = lazy(() => import('@/pages/inventory/PackagingMaterials'));
 const FinishedProducts = lazy(() => import('@/pages/inventory/FinishedProducts'));
 const ProductDetailsContainer = lazy(() => import('@/pages/inventory/ProductDetailsContainer'));
 const LowStockItems = lazy(() => import('@/pages/inventory/LowStockItems'));

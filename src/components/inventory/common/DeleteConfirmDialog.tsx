@@ -1,8 +1,14 @@
 
 import React from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -10,9 +16,9 @@ interface DeleteConfirmDialogProps {
   onConfirm: () => void;
   title: string;
   description: string;
-  isLoading?: boolean;
   confirmText?: string;
   cancelText?: string;
+  isLoading?: boolean;
 }
 
 const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
@@ -21,50 +27,25 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   onConfirm,
   title,
   description,
-  isLoading = false,
-  confirmText = 'حذف',
-  cancelText = 'إلغاء'
+  confirmText = "نعم، حذف",
+  cancelText = "إلغاء",
+  isLoading = false
 }) => {
-  // Handle confirm action and prevent dialog from closing automatically
-  const handleConfirm = () => {
-    onConfirm();
-    // Note: We don't close the dialog here because we want to show the loading state
-    // The parent component should close the dialog when the operation is complete
-  };
-
   return (
-    <Dialog open={isOpen} onOpenChange={(isOpen) => {
-      // Only allow closing if not in loading state
-      if (!isLoading && !isOpen) {
-        onClose();
-      }
-    }}>
-      <DialogContent>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {description}
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="mt-4">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isLoading}
-          >
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isLoading}>
             {cancelText}
           </Button>
-          <Button
-            variant="destructive"
-            onClick={handleConfirm}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                جاري الحذف...
-              </>
-            ) : confirmText}
+          <Button variant="destructive" onClick={onConfirm} disabled={isLoading}>
+            {isLoading ? "جاري الحذف..." : confirmText}
           </Button>
         </DialogFooter>
       </DialogContent>

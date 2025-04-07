@@ -880,29 +880,23 @@ export type Database = {
         Row: {
           created_at: string | null
           id: number
-          ingredient_type: string
           percentage: number
           raw_material_id: number
           semi_finished_id: number
-          semi_finished_product_id: number | null
         }
         Insert: {
           created_at?: string | null
           id?: number
-          ingredient_type?: string
           percentage: number
           raw_material_id: number
           semi_finished_id: number
-          semi_finished_product_id?: number | null
         }
         Update: {
           created_at?: string | null
           id?: number
-          ingredient_type?: string
           percentage?: number
           raw_material_id?: number
           semi_finished_id?: number
-          semi_finished_product_id?: number | null
         }
         Relationships: [
           {
@@ -915,13 +909,6 @@ export type Database = {
           {
             foreignKeyName: "semi_finished_ingredients_semi_finished_id_fkey"
             columns: ["semi_finished_id"]
-            isOneToOne: false
-            referencedRelation: "semi_finished_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "semi_finished_ingredients_semi_finished_product_id_fkey"
-            columns: ["semi_finished_product_id"]
             isOneToOne: false
             referencedRelation: "semi_finished_products"
             referencedColumns: ["id"]
