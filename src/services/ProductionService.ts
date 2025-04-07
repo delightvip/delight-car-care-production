@@ -166,15 +166,10 @@ class ProductionService {
       // التحقق من الحالة السابقة للأمر
       const prevStatus = order.status;
       
-      // تحديث حالة الأمر في قاعدة البيانات
-      const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
-      
-      if (!result) {
-        return false;
-      }
-
       // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
       if (prevStatus === 'completed' && newStatus !== 'completed') {
+        console.log(`[DEBUG] إلغاء تأثير اكتمال الأمر ${orderId}`);
+        
         // استرجاع المواد الأولية المستهلكة
         const returnMaterials = order.ingredients.map(ingredient => ({
           code: ingredient.code,
@@ -187,52 +182,92 @@ class ProductionService {
         // إزالة المنتج النصف مصنع من المخزون
         await this.inventoryService.removeSemiFinishedFromInventory(order.productCode, order.quantity);
         
-        toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
-        return true;
+        // تحديث حالة الأمر في قاعدة البيانات بعد نجاح العمليات السابقة
+        const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
+        if (result) {
+          toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
+        }
+        return result;
       }
 
       // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
       if (newStatus === 'completed' && prevStatus !== 'completed') {
+        console.log(`[DEBUG] بدء عملية اكتمال الأمر ${orderId}`);
+        
         // تجهيز متطلبات المواد الأولية
         const requirements = order.ingredients.map(ingredient => ({
           code: ingredient.code,
           requiredQuantity: ingredient.requiredQuantity
         }));
         
-        // استهلاك المواد الأولية من المخزون
-        const consumeSuccess = await this.inventoryService.consumeRawMaterials(requirements);
-        if (!consumeSuccess) {
-          // إعادة الحالة السابقة إذا فشلت العملية
-          await this.databaseService.updateProductionOrderStatus(orderId, prevStatus);
+        // التحقق من توفر جميع المواد الخام أولاً
+        const allAvailable = await this.inventoryService.checkRawMaterialsAvailability(requirements);
+        if (!allAvailable) {
+          toast.error('بعض المواد الخام غير متوفرة بالكميات المطلوبة');
           return false;
         }
         
-        // تحديث الأهمية للمواد الأولية المستخدمة
-        await this.inventoryService.updateRawMaterialsImportance(
-          requirements.map(req => req.code)
-        );
+        // محاولة استهلاك المواد الأولية من المخزون
+        const consumeSuccess = await this.inventoryService.consumeRawMaterials(requirements);
+        if (!consumeSuccess) {
+          toast.error('حدث خطأ أثناء استهلاك المواد الأولية');
+          return false;
+        }
+        console.log(`[DEBUG] تم استهلاك المواد الأولية بنجاح للأمر ${orderId}`);
         
         // حساب التكلفة الإجمالية بناءً على تكلفة المواد الأولية
         const totalCost = await this.calculateProductionCost(requirements);
         
-        // إضافة المنتج النصف مصنع للمخزون مع تحديث التكلفة
-        const addSuccess = await this.inventoryService.addSemiFinishedToInventory(
-          order.productCode, 
-          order.quantity, 
-          totalCost / order.quantity // تكلفة الوحدة
-        );
-        
-        if (!addSuccess) {
-          // استعادة المواد الأولية إذا فشلت العملية
+        try {
+          // محاولة إضافة المنتج النصف مصنع للمخزون
+          const addSuccess = await this.inventoryService.addSemiFinishedToInventory(
+            order.productCode, 
+            order.quantity, 
+            totalCost / order.quantity // تكلفة الوحدة
+          );
+          
+          if (!addSuccess) {
+            // استعادة المواد الأولية إذا فشلت عملية الإضافة
+            console.error(`[ERROR] فشل في إضافة المنتج النصف مصنع للمخزون للأمر ${orderId}`);
+            await this.inventoryService.returnRawMaterials(requirements);
+            toast.error('حدث خطأ أثناء إضافة المنتج النصف مصنع للمخزون');
+            return false;
+          }
+          
+          console.log(`[DEBUG] تم إضافة المنتج النصف مصنع للمخزون بنجاح للأمر ${orderId}`);
+          
+          // تحديث الأهمية للمواد الأولية المستخدمة
+          await this.inventoryService.updateRawMaterialsImportance(
+            requirements.map(req => req.code)
+          );
+          
+          // تحديث حالة الأمر وتكلفته في قاعدة البيانات بعد نجاح العمليات السابقة
+          const statusUpdateSuccess = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
+          if (!statusUpdateSuccess) {
+            // حاول إعادة المواد الخام واسترجاع المنتج النصف مصنع إذا فشل تحديث الحالة
+            console.error(`[ERROR] فشل في تحديث حالة الأمر ${orderId}`);
+            await this.inventoryService.returnRawMaterials(requirements);
+            await this.inventoryService.removeSemiFinishedFromInventory(order.productCode, order.quantity);
+            toast.error('حدث خطأ أثناء تحديث حالة أمر الإنتاج');
+            return false;
+          }
+          
+          // تحديث تكلفة الأمر في قاعدة البيانات
+          await this.databaseService.updateProductionOrderCost(orderId, totalCost);
+          
+          toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
+          return true;
+        } catch (error) {
+          console.error(`[ERROR] حدث خطأ أثناء معالجة أمر الإنتاج ${orderId}:`, error);
+          // محاولة استعادة المواد الخام في حالة حدوث خطأ
           await this.inventoryService.returnRawMaterials(requirements);
-          await this.databaseService.updateProductionOrderStatus(orderId, prevStatus);
+          toast.error('حدث خطأ أثناء معالجة أمر الإنتاج');
           return false;
         }
-        
-        // تحديث تكلفة الأمر في قاعدة البيانات
-        await this.databaseService.updateProductionOrderCost(orderId, totalCost);
       }
       
+      // في حالة تغيير الحالة إلى غير "مكتمل" (مثلاً: قيد الانتظار، قيد التنفيذ، ملغي)
+      const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
       if (result) {
         toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
       }

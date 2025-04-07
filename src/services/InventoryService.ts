@@ -896,6 +896,27 @@ class InventoryService {
       return false;
     }
   }
+
+  // Check if raw materials are available
+  public async checkRawMaterialsAvailability(
+    materials: { code: string; requiredQuantity: number }[]
+  ): Promise<boolean> {
+    try {
+      for (const material of materials) {
+        const { data: rawMaterial } = await this.getRawMaterialByCode(
+          material.code
+        );
+        if (!rawMaterial || rawMaterial.quantity < material.requiredQuantity) {
+          console.log(`المادة ${rawMaterial?.name || material.code} غير متوفرة بالكمية المطلوبة: المتوفر ${rawMaterial?.quantity || 0}, المطلوب ${material.requiredQuantity}`);
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("Error checking raw materials availability:", error);
+      return false;
+    }
+  }
 }
 
 export default InventoryService;
