@@ -28,6 +28,21 @@ const FinancialDashboard = () => {
   
   const [activeTab, setActiveTab] = useState('summary');
   
+  // تنفيذ عملية تهيئة النظام المالي عند تحميل الصفحة
+  useEffect(() => {
+    const initializeFinancialSystem = async () => {
+      try {
+        // استدعاء دالة تهيئة النظام المالي التي تقوم بتنظيف المعاملات المرتبطة بالمرتجعات
+        await financialService.initialize();
+      } catch (error) {
+        console.error('خطأ في تهيئة النظام المالي:', error);
+      }
+    };
+    
+    // تنفيذ عملية التهيئة مرة واحدة فقط عند تحميل الصفحة
+    initializeFinancialSystem();
+  }, []);
+  
   useEffect(() => {
     loadData();
     

@@ -246,6 +246,11 @@ class PartyService {
       
       if (balanceError) throw balanceError;
       
+      // قم بتسجيل السجل في دفتر الحسابات (ledger) ولكن حدد ما إذا كان نوع المعاملة متعلق بإلغاء المرتجعات
+      // لا تقم بإنشاء معاملات مالية في لوحة التحكم المالية إذا كان النوع متعلق بإلغاء المرتجعات
+      const isReturnCancellation = transactionType === 'cancel_sales_return' || 
+                                  transactionType === 'cancel_purchase_return';
+
       const { error: ledgerError } = await this.supabase
         .from('ledger')
         .insert({
@@ -255,7 +260,8 @@ class PartyService {
           debit: isDebit ? amount : 0,
           credit: !isDebit ? amount : 0,
           balance_after: newBalance,
-          transaction_id: reference || undefined
+          transaction_id: reference || undefined,
+          description: description + (isReturnCancellation ? ' (لا يظهر في لوحة التحكم المالية)' : '')
         });
       
       if (ledgerError) throw ledgerError;

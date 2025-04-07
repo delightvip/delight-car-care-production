@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
@@ -50,15 +49,8 @@ export class ReturnProcessingService {
         throw error;
       }
 
-      // 5. تسجيل المعاملة المالية المقابلة
-      try {
-        await this.recordFinancialTransaction(returnData, 'confirm');
-      } catch (error) {
-        // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مسودة
-        await this.updateInventory(returnData, 'reverse_confirm');
-        await this.updateReturnStatus(returnId, 'draft');
-        throw error;
-      }
+      // تم إزالة استدعاء recordFinancialTransaction هنا لإلغاء تأثير المرتجعات على لوحة التحكم المالية
+      // ولكننا سنحتفظ بتحديث أرصدة العملاء/الموردين من خلال خدمة أخرى
 
       toast.success('تم تأكيد المرتجع وتحديث المخزون والحسابات');
       return true;
@@ -103,15 +95,8 @@ export class ReturnProcessingService {
         throw error;
       }
 
-      // 5. عكس المعاملة المالية
-      try {
-        await this.recordFinancialTransaction(returnData, 'cancel');
-      } catch (error) {
-        // في حالة حدوث خطأ، نحاول عكس تأثير المخزون ونعيد حالة المرتجع إلى مؤكد
-        await this.updateInventory(returnData, 'reverse_cancel');
-        await this.updateReturnStatus(returnId, 'confirmed');
-        throw error;
-      }
+      // تم إزالة استدعاء recordFinancialTransaction هنا
+      // لإلغاء التأثير المزدوج على رصيد العميل/المورد ومنع إنشاء إيصال إيراد في لوحة التحكم المالية
 
       toast.success('تم إلغاء المرتجع وعكس تأثيره على المخزون والحسابات');
       return true;
@@ -523,37 +508,36 @@ export class ReturnProcessingService {
    * @private
    */
   private async recordFinancialTransaction(returnData: Return, action: 'confirm' | 'cancel'): Promise<void> {
-    // 1. إعداد بيانات المعاملة المالية
+    // إيقاف إنشاء أي معاملات مالية عند إلغاء المرتجع
+    if (action === 'cancel') {
+      console.log("تم تجاهل إنشاء معاملة مالية عند إلغاء المرتجع لمنع ظهور إيرادات في لوحة التحكم المالية");
+      return;
+    }
+    
+    // للتأكد من أن الدالة لا تُستدعى قط عند إلغاء المرتجع (حماية إضافية)
+    if (returnData.payment_status === 'cancelled') {
+      console.log("تجاهل إنشاء معاملة مالية للمرتجع الملغي:", returnData.id);
+      return;
+    }
+
+    // 1. إعداد بيانات المعاملة المالية (فقط للتأكيد وليس الإلغاء)
     const note = returnData.return_type === 'sales_return' 
       ? `مرتجع مبيعات من ${returnData.party_name || ''}` 
       : `مرتجع مشتريات إلى ${returnData.party_name || ''}`;
 
-    // 2. تحديد نوع المعاملة بناءً على الإجراء
-    const transactionData = (action === 'confirm')
-      ? {
-          id: returnData.id,
-          return_type: returnData.return_type,
-          amount: returnData.amount,
-          date: returnData.date,
-          party_id: returnData.party_id,
-          party_name: returnData.party_name,
-          invoice_id: returnData.invoice_id,
-          notes: note
-        }
-      : {
-          id: returnData.id,
-          return_type: returnData.return_type,
-          amount: returnData.amount,
-          date: returnData.date,
-          party_id: returnData.party_id,
-          party_name: returnData.party_name
-        };
+    // 2. إعداد البيانات فقط لتأكيد المرتجع
+    const transactionData = {
+      id: returnData.id,
+      return_type: returnData.return_type,
+      amount: returnData.amount,
+      date: returnData.date,
+      party_id: returnData.party_id,
+      party_name: returnData.party_name,
+      invoice_id: returnData.invoice_id,
+      notes: note
+    };
 
-    // 3. استخدام جسر الربط المالي
-    if (action === 'confirm') {
-      await this.financialBridge.handleReturnConfirmation(transactionData);
-    } else {
-      await this.financialBridge.handleReturnCancellation(transactionData);
-    }
+    // 3. تنفيذ معالجة تأكيد المرتجع فقط
+    await this.financialBridge.handleReturnConfirmation(transactionData);
   }
 }

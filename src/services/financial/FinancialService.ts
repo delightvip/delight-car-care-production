@@ -172,6 +172,33 @@ class FinancialService {
     return this.commercialBridge.findLinkedFinancialTransactions(commercialId);
   }
   
+  /**
+   * تنظيف المعاملات المالية للمرتجعات
+   * تستخدم هذه الدالة لحذف أي معاملات مالية مرتبطة بالمرتجعات
+   * من أجل إزالة تأثير المرتجعات على لوحة التحكم المالية تمامًا
+   */
+  public async cleanupReturnFinancialTransactions(): Promise<boolean> {
+    return this.commercialBridge.cleanupReturnFinancialTransactions();
+  }
+  
+  /**
+   * تهيئة النظام المالي
+   * تستخدم هذه الدالة عند بدء تشغيل النظام لتنفيذ أي عمليات تهيئة مطلوبة
+   * مثل تنظيف المعاملات المالية المرتبطة بالمرتجعات
+   */
+  public async initialize(): Promise<void> {
+    try {
+      console.log('بدء تهيئة النظام المالي...');
+      
+      // تنظيف المعاملات المالية المرتبطة بالمرتجعات (إزالة تأثير المرتجعات على لوحة التحكم المالية)
+      await this.cleanupReturnFinancialTransactions();
+      
+      console.log('تمت تهيئة النظام المالي بنجاح');
+    } catch (error) {
+      console.error('حدث خطأ أثناء تهيئة النظام المالي:', error);
+    }
+  }
+  
   // =========== وظائف الأرصدة المالية ===========
   
   /**
