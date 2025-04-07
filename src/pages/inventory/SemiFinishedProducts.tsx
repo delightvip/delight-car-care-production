@@ -55,6 +55,37 @@ const SemiFinishedProducts = () => {
       setIsDeleting(true);
       
       try {
+        // First, check if the product is used in any semi-finished ingredients
+        const { data: usedInIngredients, error: checkError } = await supabase
+          .from('semi_finished_ingredients')
+          .select('id')
+          .eq('semi_finished_id', productId)
+          .not('semi_finished_product_id', 'eq', productId); // Exclude self-references
+        
+        if (checkError) {
+          console.error("Error checking ingredient usage:", checkError);
+          throw checkError;
+        }
+        
+        if (usedInIngredients && usedInIngredients.length > 0) {
+          throw new Error("لا يمكن حذف هذا المنتج لأنه مستخدم كمكون في منتجات أخرى");
+        }
+        
+        // Check if used in any finished products
+        const { data: usedInFinished, error: finishedError } = await supabase
+          .from('finished_products')
+          .select('id')
+          .eq('semi_finished_id', productId);
+          
+        if (finishedError) {
+          console.error("Error checking finished product usage:", finishedError);
+          throw finishedError;
+        }
+        
+        if (usedInFinished && usedInFinished.length > 0) {
+          throw new Error("لا يمكن حذف هذا المنتج لأنه مستخدم في منتجات نهائية");
+        }
+        
         // First, delete any ingredients associated with this product
         const { error: ingredientsError } = await supabase
           .from('semi_finished_ingredients')
@@ -92,6 +123,8 @@ const SemiFinishedProducts = () => {
     },
     onError: (error: any) => {
       toast.error(`حدث خطأ أثناء الحذف: ${error.message}`);
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
     }
   });
   

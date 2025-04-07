@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// مكونات تم تقسيمها
+// Import refactored components
 import ProductInfo from './details/ProductInfo';
 import IngredientsCard from './details/IngredientsCard';
 import MovementsCard from './details/MovementsCard';
