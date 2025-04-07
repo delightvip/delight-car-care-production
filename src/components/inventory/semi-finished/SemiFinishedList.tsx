@@ -1,209 +1,172 @@
 
-import React, { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
-import { toast } from 'sonner';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getCommonTableColumns, renderInventoryActions } from '../common/InventoryTableColumns';
-import { formatInventoryData } from '../common/InventoryDataFormatter';
+import { 
+  Table, 
+  TableHeader, 
+  TableRow, 
+  TableHead, 
+  TableBody, 
+  TableCell 
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Edit, Trash2, Eye } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 
 interface SemiFinishedListProps {
   filterType: 'all' | 'low-stock' | 'high-value';
   searchQuery: string;
-  onEdit: (item: any) => void;
-  onDelete: (item: any) => void;
-  onView: (item: any) => void;
+  onEdit: (product: any) => void;
+  onDelete: (product: any) => void;
+  onView: (product: any) => void;
 }
 
-const SemiFinishedList: React.FC<SemiFinishedListProps> = ({ 
-  filterType, 
-  searchQuery, 
-  onEdit, 
-  onDelete, 
-  onView 
+const SemiFinishedList: React.FC<SemiFinishedListProps> = ({
+  filterType,
+  searchQuery,
+  onEdit,
+  onDelete,
+  onView
 }) => {
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  const queryClient = useQueryClient();
-
-  // Fetch semi-finished products data with ingredients
-  const { data: semiFinishedProducts = [], isLoading, error } = useQuery({
-    queryKey: ['semiFinishedProducts'],
+  const {
+    data: products,
+    isLoading,
+    error
+  } = useQuery({
+    queryKey: ['semiFinishedProducts', filterType],
     queryFn: async () => {
-      // 1. Get the semi-finished products
-      const { data: products, error: productsError } = await supabase
+      let query = supabase
         .from('semi_finished_products')
         .select('*')
         .order('created_at', { ascending: false });
-        
-      if (productsError) throw new Error(productsError.message);
-
-      // 2. Get ingredients for each product
-      const productsWithIngredients = await Promise.all(products.map(async (product) => {
-        const { data: ingredients, error: ingredientsError } = await supabase
-          .from('semi_finished_ingredients')
-          .select(`
-            id,
-            percentage,
-            raw_materials:raw_material_id(id, code, name)
-          `)
-          .eq('semi_finished_id', product.id);
-          
-        if (ingredientsError) throw new Error(ingredientsError.message);
-        
-        // Format ingredients
-        const formattedIngredients = ingredients?.map((ingredient) => ({
-          id: ingredient.raw_materials?.id,
-          code: ingredient.raw_materials?.code,
-          name: ingredient.raw_materials?.name,
-          percentage: ingredient.percentage
-        })) || [];
-        
-        // Ensure numeric values
-        const quantity = Number(product.quantity);
-        const unitCost = Number(product.unit_cost);
-        const totalValue = quantity * unitCost;
-        
-        return {
-          ...product,
-          quantity,
-          unit_cost: unitCost,
-          totalValue,
-          ingredients: formattedIngredients
-        };
-      }));
       
-      return productsWithIngredients;
-    }
-  });
-  
-  // Quick update quantity mutation
-  const quickUpdateQuantityMutation = useMutation({
-    mutationFn: async ({ id, change }: { id: number, change: number }) => {
-      const { data: product, error: fetchError } = await supabase
-        .from('semi_finished_products')
-        .select('quantity')
-        .eq('id', id)
-        .single();
-        
-      if (fetchError) throw fetchError;
+      // Apply filters
+      if (filterType === 'low-stock') {
+        query = query.filter('quantity', 'lt', 'min_stock');
+      } else if (filterType === 'high-value') {
+        query = query.order('unit_cost', { ascending: false }).limit(20);
+      }
       
-      const newQuantity = Math.max(0, Number(product.quantity) + change);
+      const { data, error } = await query;
       
-      const { data, error } = await supabase
-        .from('semi_finished_products')
-        .update({ quantity: newQuantity })
-        .eq('id', id)
-        .select();
-        
       if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
-      toast.success('تم تحديث الكمية بنجاح');
-    },
-    onError: (error: any) => {
-      toast.error(`حدث خطأ: ${error.message}`);
+      return data || [];
     }
   });
-
-  // Filter and sort the data
-  const filteredProducts = useMemo(() => {
-    let filtered = [...semiFinishedProducts];
-    
-    // Apply search filter
-    if (searchQuery) {
-      filtered = filtered.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.code.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    
-    // Apply type filter
-    switch (filterType) {
-      case 'low-stock':
-        filtered = filtered.filter(item => item.quantity <= item.min_stock * 1.2);
-        break;
-      case 'high-value':
-        filtered = [...filtered].sort((a, b) => b.totalValue - a.totalValue);
-        break;
-      default:
-        // No additional filtering needed for 'all'
-        break;
-    }
-    
-    return filtered;
-  }, [semiFinishedProducts, filterType, searchQuery]);
   
-  // Apply sorting
-  const sortedProducts = useMemo(() => {
-    if (!sortConfig) return filteredProducts;
-    
-    return [...filteredProducts].sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
-        return sortConfig.direction === 'asc' ? -1 : 1;
-      }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
-        return sortConfig.direction === 'asc' ? 1 : -1;
-      }
-      return 0;
-    });
-  }, [filteredProducts, sortConfig]);
+  // Filter products based on search query
+  const filteredProducts = searchQuery
+    ? products?.filter(product => 
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.code.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : products;
   
-  // Handle row actions
-  const handleIncrement = (record: any) => {
-    quickUpdateQuantityMutation.mutate({ id: record.id, change: 1 });
-  };
-  
-  const handleDecrement = (record: any) => {
-    quickUpdateQuantityMutation.mutate({ id: record.id, change: -1 });
-  };
-  
-  // Define table columns
-  const columns = [
-    ...getCommonTableColumns(),
-    { 
-      key: 'ingredients', 
-      title: 'عدد المكونات',
-      render: (value: any[] | undefined) => (value && Array.isArray(value)) ? value.length : 0,
-      sortable: true
-    }
-  ];
-
-  // Render row actions
-  const renderActions = (record: any) => renderInventoryActions(
-    record, 
-    onEdit, 
-    onDelete, 
-    onView, 
-    handleIncrement, 
-    handleDecrement
-  );
-
-  if (error) {
-    return <div className="p-4 text-red-500">خطأ في تحميل البيانات: {(error as Error).message}</div>;
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+      </div>
+    );
   }
-
+  
+  if (error) {
+    return (
+      <div className="text-center py-4 text-destructive">
+        حدث خطأ أثناء تحميل البيانات
+      </div>
+    );
+  }
+  
+  if (!filteredProducts?.length) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        لا توجد منتجات نصف مصنعة{' '}
+        {filterType === 'low-stock' ? 'منخفضة المخزون' : filterType === 'high-value' ? 'عالية القيمة' : ''}
+        {searchQuery ? ` تطابق "${searchQuery}"` : ''}
+      </div>
+    );
+  }
+  
   return (
-    <DataTableWithLoading
-      columns={columns}
-      data={sortedProducts}
-      isLoading={isLoading}
-      actions={renderActions}
-      onSort={(key) => {
-        if (sortConfig && sortConfig.key === key) {
-          if (sortConfig.direction === 'asc') {
-            setSortConfig({ key, direction: 'desc' });
-          } else {
-            setSortConfig(null);
-          }
-        } else {
-          setSortConfig({ key, direction: 'asc' });
-        }
-      }}
-      sortConfig={sortConfig}
-    />
+    <div className="border rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[100px]">الكود</TableHead>
+            <TableHead>الاسم</TableHead>
+            <TableHead className="text-center">الكمية</TableHead>
+            <TableHead className="text-center">الوحدة</TableHead>
+            <TableHead className="text-center">الحد الأدنى</TableHead>
+            <TableHead className="text-center">التكلفة</TableHead>
+            <TableHead className="text-center">سعر البيع</TableHead>
+            <TableHead className="text-center">الحالة</TableHead>
+            <TableHead className="text-center w-[180px]">الإجراءات</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredProducts.map((product) => (
+            <TableRow key={product.id}>
+              <TableCell className="font-medium">{product.code}</TableCell>
+              <TableCell>{product.name}</TableCell>
+              <TableCell className="text-center">{product.quantity}</TableCell>
+              <TableCell className="text-center">{product.unit}</TableCell>
+              <TableCell className="text-center">{product.min_stock}</TableCell>
+              <TableCell className="text-center">{product.unit_cost}</TableCell>
+              <TableCell className="text-center">{product.sales_price}</TableCell>
+              <TableCell className="text-center">
+                <StockStatusBadge quantity={product.quantity} minStock={product.min_stock} />
+              </TableCell>
+              <TableCell>
+                <div className="flex justify-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onView(product)}
+                    title="عرض التفاصيل"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onEdit(product)}
+                    title="تعديل"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDelete(product)}
+                    title="حذف"
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
+};
+
+// Helper component for stock status badge
+const StockStatusBadge = ({ quantity, minStock }: { quantity: number, minStock: number }) => {
+  if (quantity <= 0) {
+    return <Badge variant="destructive">نفذ المخزون</Badge>;
+  } else if (quantity < minStock) {
+    return <Badge variant="warning" className="bg-amber-500">منخفض</Badge>;
+  } else {
+    return <Badge variant="success" className="bg-green-600">متوفر</Badge>;
+  }
 };
 
 export default SemiFinishedList;

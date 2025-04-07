@@ -32,7 +32,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from '@/components/ui/separator';
-import { PlusCircle, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import IngredientSelector from './ingredients/IngredientSelector';
+import IngredientsList from './ingredients/IngredientsList';
+import { Ingredient, SemiFinishedProductFormData } from '@/types/inventoryTypes';
 
 // Define form schema
 const semiFinishedSchema = z.object({
@@ -45,13 +48,6 @@ const semiFinishedSchema = z.object({
 });
 
 const units = ['كجم', 'لتر', 'مللى', 'جم', 'علبة', 'قطعة', 'كرتونة'];
-
-interface Ingredient {
-  id: number;
-  code: string;
-  name: string;
-  percentage: number;
-}
 
 interface SemiFinishedFormProps {
   isOpen: boolean;
@@ -70,9 +66,9 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const isEditing = !!initialData;
-  const [selectedRawMaterial, setSelectedRawMaterial] = useState<string>('');
-  const [percentage, setPercentage] = useState<number>(0);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [hasWater, setHasWater] = useState<boolean>(false);
+  const [totalCost, setTotalCost] = useState<number>(0);
   
   // Fetch raw materials
   const { data: rawMaterials = [], isLoading: isRawMaterialsLoading } = useQuery({
@@ -80,7 +76,21 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('raw_materials')
-        .select('id, name, code')
+        .select('id, name, code, unit, unit_cost')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+  
+  // Fetch semi-finished products
+  const { data: semiFinishedProducts = [], isLoading: isSemiFinishedLoading } = useQuery({
+    queryKey: ['semiFinishedProductsList'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('semi_finished_products')
+        .select('id, name, code, unit, unit_cost')
         .order('name', { ascending: true });
       
       if (error) throw error;
@@ -110,9 +120,13 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           .select(`
             id,
             percentage,
-            raw_material:raw_material_id(id, code, name)
+            ingredient_type,
+            raw_material_id,
+            semi_finished_id,
+            raw_material:raw_material_id(id, code, name, unit, unit_cost),
+            semi_finished_product:semi_finished_id(id, code, name, unit, unit_cost)
           `)
-          .eq('semi_finished_id', initialData.id);
+          .eq('semi_finished_product_id', initialData.id);
           
         if (error) {
           toast.error('خطأ في جلب المكونات');
@@ -120,12 +134,51 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         }
         
         // Format ingredients for our state
-        const formattedIngredients = data?.map((ing) => ({
-          id: ing.raw_material?.id,
-          code: ing.raw_material?.code,
-          name: ing.raw_material?.name,
-          percentage: ing.percentage
-        })) || [];
+        const formattedIngredients: Ingredient[] = data?.map((ing) => {
+          if (ing.ingredient_type === 'raw' && ing.raw_material) {
+            return {
+              id: ing.raw_material.id,
+              code: ing.raw_material.code,
+              name: ing.raw_material.name,
+              percentage: ing.percentage,
+              ingredient_type: 'raw',
+              unit: ing.raw_material.unit,
+              unit_cost: ing.raw_material.unit_cost
+            };
+          } else if (ing.ingredient_type === 'semi' && ing.semi_finished_product) {
+            return {
+              id: ing.semi_finished_product.id,
+              code: ing.semi_finished_product.code,
+              name: ing.semi_finished_product.name,
+              percentage: ing.percentage,
+              ingredient_type: 'semi',
+              unit: ing.semi_finished_product.unit,
+              unit_cost: ing.semi_finished_product.unit_cost
+            };
+          } else if (ing.ingredient_type === 'water') {
+            setHasWater(true);
+            return {
+              id: 0,
+              code: 'WATER',
+              name: 'ماء',
+              percentage: ing.percentage,
+              ingredient_type: 'water',
+              is_auto_calculated: true,
+              unit_cost: 0
+            };
+          }
+          
+          // Fallback for any unexpected cases
+          return {
+            id: ing.raw_material?.id || 0,
+            code: ing.raw_material?.code || '',
+            name: ing.raw_material?.name || '',
+            percentage: ing.percentage,
+            ingredient_type: 'raw',
+            unit: ing.raw_material?.unit || '',
+            unit_cost: ing.raw_material?.unit_cost || 0
+          };
+        }) || [];
         
         setIngredients(formattedIngredients);
       };
@@ -134,45 +187,46 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     }
   }, [isEditing, initialData]);
   
-  const handleAddIngredient = () => {
-    if (!selectedRawMaterial) {
-      toast.error('يرجى اختيار مادة خام');
+  // Calculate total cost from ingredients
+  useEffect(() => {
+    if (ingredients.length === 0) {
+      setTotalCost(0);
       return;
     }
     
-    if (percentage <= 0 || percentage > 100) {
-      toast.error('يجب أن تكون النسبة بين 1 و 100');
-      return;
+    const calculatedCost = ingredients.reduce((total, ing) => {
+      if (!ing.unit_cost) return total;
+      return total + ((ing.percentage / 100) * ing.unit_cost);
+    }, 0);
+    
+    setTotalCost(calculatedCost);
+    
+    // Update form with calculated cost
+    form.setValue('unit_cost', calculatedCost);
+  }, [ingredients, form]);
+  
+  const handleAddIngredient = (ingredient: Ingredient) => {
+    setIngredients([...ingredients, ingredient]);
+    
+    if (ingredient.ingredient_type === 'water') {
+      setHasWater(true);
     }
-    
-    // Check if already exists
-    if (ingredients.some(ing => ing.id === parseInt(selectedRawMaterial))) {
-      toast.error('تم إضافة هذه المادة بالفعل');
-      return;
-    }
-    
-    const rawMaterial = rawMaterials.find(m => m.id === parseInt(selectedRawMaterial));
-    if (!rawMaterial) return;
-    
-    setIngredients([
-      ...ingredients,
-      {
-        id: rawMaterial.id,
-        code: rawMaterial.code,
-        name: rawMaterial.name,
-        percentage: percentage
-      }
-    ]);
-    
-    setSelectedRawMaterial('');
-    setPercentage(0);
   };
   
-  const handleRemoveIngredient = (id: number) => {
-    setIngredients(ingredients.filter(ing => ing.id !== id));
+  const handleRemoveIngredient = (id: number, type: string) => {
+    setIngredients(ingredients.filter(ing => {
+      if (type === 'water' && (ing as any).ingredient_type === 'water') {
+        setHasWater(false);
+        return false;
+      }
+      return !(ing.id === id && (ing as any).ingredient_type === type);
+    }));
   };
   
   const validateTotalPercentage = (): boolean => {
+    // If we have water, it will always calculate to 100%
+    if (hasWater) return true;
+    
     const total = ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
     if (Math.abs(total - 100) > 0.01) {
       toast.error(`مجموع النسب يجب أن يكون 100%، الإجمالي الحالي: ${total}%`);
@@ -183,6 +237,40 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof semiFinishedSchema>) => {
+      // Prepare the ingredients data for saving
+      const ingredientsData = ingredients.map(ing => {
+        const ingredientType = (ing as any).ingredient_type || 'raw';
+        
+        // Base data structure
+        const baseData = {
+          percentage: ing.percentage,
+          ingredient_type: ingredientType,
+        };
+        
+        // Add type-specific fields
+        if (ingredientType === 'raw') {
+          return {
+            ...baseData,
+            raw_material_id: ing.id,
+            semi_finished_id: null
+          };
+        } else if (ingredientType === 'semi') {
+          return {
+            ...baseData,
+            raw_material_id: null,
+            semi_finished_id: ing.id
+          };
+        } else if (ingredientType === 'water') {
+          return {
+            ...baseData,
+            raw_material_id: null,
+            semi_finished_id: null
+          };
+        }
+        
+        return baseData;
+      });
+      
       if (isEditing) {
         // Update existing product
         const { data, error } = await supabase
@@ -204,19 +292,18 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         await supabase
           .from('semi_finished_ingredients')
           .delete()
-          .eq('semi_finished_id', initialData.id);
+          .eq('semi_finished_product_id', initialData.id);
         
         // Then insert new ingredients
         if (ingredients.length > 0) {
-          const ingredientData = ingredients.map(ing => ({
-            semi_finished_id: initialData.id,
-            raw_material_id: ing.id,
-            percentage: ing.percentage
+          const finalIngredientData = ingredientsData.map(ing => ({
+            ...ing,
+            semi_finished_product_id: initialData.id
           }));
           
           const { error: ingredientError } = await supabase
             .from('semi_finished_ingredients')
-            .insert(ingredientData);
+            .insert(finalIngredientData);
             
           if (ingredientError) throw ingredientError;
         }
@@ -255,15 +342,14 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         
         // Insert ingredients
         if (ingredients.length > 0 && data && data.length > 0) {
-          const ingredientData = ingredients.map(ing => ({
-            semi_finished_id: data[0].id,
-            raw_material_id: ing.id,
-            percentage: ing.percentage
+          const finalIngredientData = ingredientsData.map(ing => ({
+            ...ing,
+            semi_finished_product_id: data[0].id
           }));
           
           const { error: ingredientError } = await supabase
             .from('semi_finished_ingredients')
-            .insert(ingredientData);
+            .insert(finalIngredientData);
             
           if (ingredientError) throw ingredientError;
         }
@@ -368,7 +454,15 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                   <FormItem>
                     <FormLabel>تكلفة الوحدة</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" step="0.01" {...field} />
+                      <Input 
+                        type="number" 
+                        min="0" 
+                        step="0.01" 
+                        {...field}
+                        value={totalCost > 0 ? totalCost.toFixed(2) : field.value}
+                        className={totalCost > 0 ? "bg-green-50" : ""}
+                        title={totalCost > 0 ? "تم حساب التكلفة تلقائيًا من المكونات" : ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -407,75 +501,25 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             <Separator className="my-4" />
             
             <div className="space-y-4">
-              <h3 className="text-md font-medium">مكونات المنتج (المواد الأولية)</h3>
+              <h3 className="text-md font-medium">مكونات المنتج</h3>
               
-              <div className="flex space-x-4 rtl:space-x-reverse">
-                <div className="flex-1">
-                  <FormLabel>المادة الأولية</FormLabel>
-                  <Select
-                    value={selectedRawMaterial}
-                    onValueChange={setSelectedRawMaterial}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر مادة أولية" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rawMaterials.map(material => (
-                        <SelectItem key={material.id} value={String(material.id)}>
-                          {material.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="w-32">
-                  <FormLabel>النسبة %</FormLabel>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={percentage}
-                    onChange={e => setPercentage(Number(e.target.value))}
-                  />
-                </div>
-                
-                <div className="flex items-end">
-                  <Button type="button" onClick={handleAddIngredient}>
-                    <PlusCircle size={16} className="mr-2" />
-                    إضافة
-                  </Button>
-                </div>
-              </div>
+              <IngredientSelector
+                rawMaterials={rawMaterials}
+                semiFinishedProducts={isEditing ? 
+                  semiFinishedProducts.filter(p => p.id !== initialData.id) : 
+                  semiFinishedProducts}
+                onAddIngredient={handleAddIngredient}
+                ingredients={ingredients}
+                hasWater={hasWater}
+                onToggleWater={setHasWater}
+              />
               
-              <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                {ingredients.length > 0 ? (
-                  <>
-                    <div className="text-sm font-medium rtl:text-right ltr:text-left">
-                      إجمالي النسب: {ingredients.reduce((sum, ing) => sum + ing.percentage, 0)}%
-                    </div>
-                    {ingredients.map(ing => (
-                      <div key={ing.id} className="flex justify-between items-center p-2 border rounded-md">
-                        <div>
-                          <div className="font-medium">{ing.name}</div>
-                          <div className="text-sm text-muted-foreground">النسبة: {ing.percentage}%</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveIngredient(ing.id)}
-                        >
-                          <X size={16} />
-                        </Button>
-                      </div>
-                    ))}
-                  </>
-                ) : (
-                  <div className="text-muted-foreground text-center py-2">
-                    لم يتم إضافة مكونات بعد
-                  </div>
-                )}
-              </div>
+              <IngredientsList
+                ingredients={ingredients}
+                onRemoveIngredient={handleRemoveIngredient}
+                hasWater={hasWater}
+                totalCost={totalCost}
+              />
             </div>
             
             <DialogFooter className="mt-6">
