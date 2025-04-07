@@ -49,8 +49,14 @@ export class ReturnProcessingService {
         throw error;
       }
 
-      // تم إزالة استدعاء recordFinancialTransaction هنا لإلغاء تأثير المرتجعات على لوحة التحكم المالية
-      // ولكننا سنحتفظ بتحديث أرصدة العملاء/الموردين من خلال خدمة أخرى
+      // 5. معالجة تأثير المرتجع على رصيد العميل/المورد فقط (بدون تأثير على لوحة التحكم المالية)
+      if (returnData.party_id) {
+        console.log("Updating party balance for return:", returnId);
+        await this.financialBridge.handleReturnConfirmation(returnData);
+      }
+
+      // 6. تم إزالة تحديث بيانات الربح من هنا لمنع التأثير المضاعف
+      // أصبح تحديث الأرباح يتم فقط من خلال ReturnService.confirmReturn
 
       toast.success('تم تأكيد المرتجع وتحديث المخزون والحسابات');
       return true;
@@ -95,8 +101,14 @@ export class ReturnProcessingService {
         throw error;
       }
 
-      // تم إزالة استدعاء recordFinancialTransaction هنا
-      // لإلغاء التأثير المزدوج على رصيد العميل/المورد ومنع إنشاء إيصال إيراد في لوحة التحكم المالية
+      // 5. عكس تأثير المرتجع على رصيد الطرف (العميل/المورد) فقط بدون تأثير على لوحة التحكم المالية
+      if (returnData.party_id) {
+        console.log("Reversing party balance for cancelled return:", returnId);
+        await this.financialBridge.handleReturnCancellation(returnData);
+      }
+
+      // 6. تم إزالة استعادة بيانات الربح من هنا لمنع التأثير المضاعف
+      // أصبحت استعادة الأرباح تتم فقط من خلال ReturnService.cancelReturn
 
       toast.success('تم إلغاء المرتجع وعكس تأثيره على المخزون والحسابات');
       return true;

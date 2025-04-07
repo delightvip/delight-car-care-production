@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Return } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
@@ -198,35 +197,10 @@ export class ReturnProcessor {
           }
         }
         
-        // تحديث حساب العميل لمرتجعات المبيعات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating customer balance for return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              false, // دائن لمرتجعات المبيعات (تقليل دين العميل)
-              'مرتجع مبيعات',
-              'sales_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update customer balance for return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب العميل",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating customer balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        } else {
-          console.warn('No party_id or amount for sales return:', returnId, returnData.party_id, returnData.amount);
-        }
+        // تم إزالة استدعاء تحديث رصيد العميل لمرتجعات المبيعات هنا
+        // لأنه سيتم التعامل معه من خلال ReturnProcessingService -> FinancialCommercialBridge
+        // لتجنب مضاعفة التأثير على رصيد العميل
+        
       } else if (returnData.return_type === 'purchase_return') {
         // خفض المخزون لمرتجعات المشتريات (إرجاع بضاعة للمورد)
         for (const item of returnData.items) {
@@ -309,35 +283,9 @@ export class ReturnProcessor {
           }
         }
         
-        // تحديث حساب المورد لمرتجعات المشتريات
-        if (returnData.party_id && returnData.amount > 0) {
-          try {
-            console.log(`Updating supplier balance for return: ${returnId}, amount: ${returnData.amount}`);
-            const result = await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              true, // مدين لمرتجعات المشتريات (زيادة دين المورد تجاهنا)
-              'مرتجع مشتريات',
-              'purchase_return',
-              returnId
-            );
-            
-            if (!result) {
-              console.error('Failed to update supplier balance for return:', returnId);
-              toast({
-                title: "خطأ",
-                description: "حدث خطأ أثناء تحديث حساب المورد",
-                variant: "destructive"
-              });
-              allUpdatesSuccessful = false;
-            }
-          } catch (err) {
-            console.error('Error updating supplier balance:', err);
-            allUpdatesSuccessful = false;
-          }
-        } else {
-          console.warn('No party_id or amount for purchase return:', returnId, returnData.party_id, returnData.amount);
-        }
+        // تم إزالة استدعاء تحديث رصيد المورد لمرتجعات المشتريات هنا
+        // لأنه سيتم التعامل معه من خلال ReturnProcessingService -> FinancialCommercialBridge
+        // لتجنب مضاعفة التأثير على رصيد المورد
       }
       
       if (!allUpdatesSuccessful) {

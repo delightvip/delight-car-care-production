@@ -191,7 +191,14 @@ class FinancialService {
       console.log('بدء تهيئة النظام المالي...');
       
       // تنظيف المعاملات المالية المرتبطة بالمرتجعات (إزالة تأثير المرتجعات على لوحة التحكم المالية)
-      await this.cleanupReturnFinancialTransactions();
+      const cleanupResult = await this.cleanupReturnFinancialTransactions();
+      if (cleanupResult) {
+        console.log('تم تنظيف المعاملات المالية المرتبطة بالمرتجعات بنجاح');
+      } else {
+        console.warn('لم يتم تنظيف المعاملات المالية المرتبطة بالمرتجعات بنجاح');
+      }
+
+      // هنا يمكن إضافة أي إجراءات تهيئة أخرى مستقبلاً
       
       console.log('تمت تهيئة النظام المالي بنجاح');
     } catch (error) {

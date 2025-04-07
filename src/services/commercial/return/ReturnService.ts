@@ -250,39 +250,10 @@ export class ReturnService {
               console.log(`Successfully updated profit and revenue data for invoice ${returnData.invoice_id}`);
             }
           }
-          
-          // 4. تحديث حساب العميل
-          if (returnData.party_id) {
-            console.log('Updating customer balance for return:', returnId);
-            await this.partyService.updatePartyBalance(
-              returnData.party_id,
-              returnData.amount,
-              false, // دائن لمرتجعات المبيعات (تقليل دين العميل)
-              'مرتجع مبيعات',
-              'sales_return',
-              returnId
-            );
-          }
         } catch (err) {
           console.error('Error updating financial records:', err);
           // لا نريد إلغاء العملية بأكملها إذا فشل تحديث السجلات المالية
           toast.warning('تم تأكيد المرتجع لكن قد تكون هناك مشكلة في تحديث السجلات المالية');
-        }
-      } else if (success && returnData.return_type === 'purchase_return' && returnData.party_id) {
-        try {
-          // 5. تحديث حساب المورد لمرتجعات المشتريات
-          console.log('Updating supplier balance for return:', returnId);
-          await this.partyService.updatePartyBalance(
-            returnData.party_id,
-            returnData.amount,
-            true, // مدين لمرتجعات المشتريات (زيادة دين المورد)
-            'مرتجع مشتريات',
-            'purchase_return',
-            returnId
-          );
-        } catch (err) {
-          console.error('Error updating supplier balance:', err);
-          toast.warning('تم تأكيد المرتجع لكن قد تكون هناك مشكلة في تحديث حساب المورد');
         }
       }
       
