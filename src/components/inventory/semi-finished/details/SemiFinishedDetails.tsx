@@ -1,14 +1,19 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+
+// Import refactored components
 import ProductInfo from './ProductInfo';
 import IngredientsCard from './IngredientsCard';
 import MovementHistoryCard from './MovementHistoryCard';
-import { Loader } from 'lucide-react';
 
 interface SemiFinishedDetailsProps {
   isOpen: boolean;
@@ -16,93 +21,135 @@ interface SemiFinishedDetailsProps {
   product: any;
 }
 
-const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({ isOpen, onClose, product }) => {
-  // Fetch product ingredients 
-  const { data: ingredients = [], isLoading: isLoadingIngredients, error: ingredientsError } = useQuery({
+const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({
+  isOpen,
+  onClose,
+  product
+}) => {
+  const [activeTab, setActiveTab] = useState('details');
+  
+  // Fetch ingredients for this product
+  const {
+    data: ingredients,
+    isLoading: isLoadingIngredients,
+    error: ingredientsError
+  } = useQuery({
     queryKey: ['semiFinishedIngredients', product?.id],
     queryFn: async () => {
-      // Fetch raw materials first
-      const { data: rawIngredients, error: rawError } = await supabase
-        .from('semi_finished_ingredients')
-        .select(`
-          id,
-          percentage,
-          ingredient_type,
-          raw_material:raw_material_id(id, code, name, type: 'raw')
-        `)
-        .eq('semi_finished_product_id', product.id)
-        .eq('ingredient_type', 'raw');
-      
-      if (rawError) throw rawError;
-      
-      // Fetch semi-finished ingredients
-      const { data: semiIngredients, error: semiError } = await supabase
-        .from('semi_finished_ingredients')
-        .select(`
-          id,
-          percentage,
-          ingredient_type,
-          semi_finished:semi_finished_id(id, code, name, type: 'semi')
-        `)
-        .eq('semi_finished_product_id', product.id)
-        .eq('ingredient_type', 'semi');
-      
-      if (semiError) throw semiError;
-      
-      // Fetch water ingredients
-      const { data: waterIngredients, error: waterError } = await supabase
-        .from('semi_finished_ingredients')
-        .select(`
-          id,
-          percentage,
-          ingredient_type
-        `)
-        .eq('semi_finished_product_id', product.id)
-        .eq('ingredient_type', 'water');
-      
-      if (waterError) throw waterError;
-      
-      // Combine and format all ingredients
-      const formattedIngredients = [
-        ...(rawIngredients || []).map(item => ({
-          id: item.id,
-          percentage: item.percentage,
-          ingredient_type: item.ingredient_type,
-          ingredient_data: {
-            ...item.raw_material,
-            type: 'raw'
-          }
-        })),
-        ...(semiIngredients || []).map(item => ({
-          id: item.id,
-          percentage: item.percentage,
-          ingredient_type: item.ingredient_type,
-          ingredient_data: {
-            ...item.semi_finished,
-            type: 'semi'
-          }
-        })),
-        ...(waterIngredients || []).map(item => ({
-          id: item.id,
-          percentage: item.percentage,
-          ingredient_type: item.ingredient_type,
-          ingredient_data: {
-            id: 0,
-            code: 'WATER',
-            name: 'ماء',
-            type: 'water'
-          }
-        }))
-      ];
-      
-      return formattedIngredients;
+      try {
+        if (!product?.id) return [];
+        
+        // Fetch raw material ingredients
+        const { data: rawIngredients, error: rawError } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            ingredient_type,
+            raw_material_id,
+            raw_material:raw_materials(id, code, name, unit, unit_cost)
+          `)
+          .eq('semi_finished_product_id', product.id)
+          .eq('ingredient_type', 'raw');
+          
+        if (rawError) throw rawError;
+        
+        // Fetch semi-finished ingredients
+        const { data: semiIngredients, error: semiError } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            ingredient_type,
+            semi_finished_id,
+            semi_finished:semi_finished_products(id, code, name, unit, unit_cost)
+          `)
+          .eq('semi_finished_product_id', product.id)
+          .eq('ingredient_type', 'semi');
+          
+        if (semiError) throw semiError;
+        
+        // Fetch water ingredients
+        const { data: waterIngredients, error: waterError } = await supabase
+          .from('semi_finished_ingredients')
+          .select(`
+            id,
+            percentage,
+            ingredient_type
+          `)
+          .eq('semi_finished_product_id', product.id)
+          .eq('ingredient_type', 'water');
+          
+        if (waterError) throw waterError;
+        
+        // Combine all ingredients
+        const allIngredients = [
+          ...(rawIngredients || []),
+          ...(semiIngredients || []),
+          ...(waterIngredients || []).map(ing => ({
+            ...ing,
+            is_water: true
+          }))
+        ];
+        
+        return allIngredients || [];
+      } catch (error) {
+        console.error("Error fetching ingredients:", error);
+        return [];
+      }
     },
     enabled: !!product?.id
   });
   
-  // Helper to get ingredient data when needed
+  // Format ingredient data for display
   const getIngredientData = (ingredient: any) => {
-    return ingredient.ingredient_data || {};
+    // Check if ingredient exists and is properly formatted
+    if (!ingredient) return {
+      name: 'غير معروف',
+      code: '',
+      unit: '',
+      type: 'unknown',
+      unit_cost: 0
+    };
+
+    try {
+      if (ingredient.ingredient_type === 'raw' && ingredient.raw_material) {
+        return {
+          name: ingredient.raw_material.name,
+          code: ingredient.raw_material.code,
+          unit: ingredient.raw_material.unit,
+          type: 'raw',
+          unit_cost: ingredient.raw_material.unit_cost
+        };
+      } else if (ingredient.ingredient_type === 'semi' && ingredient.semi_finished) {
+        return {
+          name: ingredient.semi_finished.name,
+          code: ingredient.semi_finished.code,
+          unit: ingredient.semi_finished.unit,
+          type: 'semi',
+          unit_cost: ingredient.semi_finished.unit_cost
+        };
+      } else if (ingredient.ingredient_type === 'water' || ingredient.is_water) {
+        return {
+          name: 'ماء',
+          code: 'WATER',
+          unit: 'لتر',
+          type: 'water',
+          unit_cost: 0
+        };
+      }
+    } catch (e) {
+      console.error("Error formatting ingredient data:", e, ingredient);
+    }
+    
+    // Fallback
+    return {
+      name: 'غير معروف',
+      code: '',
+      unit: '',
+      type: 'unknown',
+      unit_cost: 0
+    };
   };
   
   if (!product) return null;
@@ -111,47 +158,29 @@ const SemiFinishedDetails: React.FC<SemiFinishedDetailsProps> = ({ isOpen, onClo
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>تفاصيل المنتج النصف مصنع: {product.name}</DialogTitle>
+          <DialogTitle>تفاصيل المنتج النصف مصنع</DialogTitle>
         </DialogHeader>
         
-        <Tabs defaultValue="details" className="mt-4">
-          <TabsList className="grid grid-cols-3 mb-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-2">
             <TabsTrigger value="details">معلومات المنتج</TabsTrigger>
-            <TabsTrigger value="ingredients">المكونات</TabsTrigger>
-            <TabsTrigger value="movements">حركة المخزون</TabsTrigger>
+            <TabsTrigger value="movements">حركات المخزون</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="details" className="mt-4">
+          <TabsContent value="details" className="space-y-4">
             <ProductInfo product={product} />
-          </TabsContent>
-          
-          <TabsContent value="ingredients" className="mt-4">
-            {isLoadingIngredients ? (
-              <div className="flex justify-center items-center h-40">
-                <Loader className="w-6 h-6 animate-spin" />
-                <span className="mr-2">جاري تحميل المكونات...</span>
-              </div>
-            ) : (
-              <IngredientsCard 
-                ingredients={ingredients} 
-                isLoadingIngredients={isLoadingIngredients}
-                ingredientsError={ingredientsError}
-                getIngredientData={getIngredientData}
-              />
-            )}
-          </TabsContent>
-          
-          <TabsContent value="movements" className="mt-4">
-            <MovementHistoryCard 
-              itemId={product.id.toString()} 
-              itemType="semi" 
+            <IngredientsCard 
+              ingredients={ingredients || []}
+              isLoadingIngredients={isLoadingIngredients}
+              ingredientsError={ingredientsError}
+              getIngredientData={getIngredientData}
             />
           </TabsContent>
+          
+          <TabsContent value="movements">
+            <MovementHistoryCard itemId={String(product.id)} itemType="semi" />
+          </TabsContent>
         </Tabs>
-        
-        <div className="flex justify-end mt-4">
-          <Button onClick={onClose}>إغلاق</Button>
-        </div>
       </DialogContent>
     </Dialog>
   );

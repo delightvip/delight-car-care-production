@@ -25,7 +25,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
   hasWater,
   onToggleWater
 }) => {
-  const [selectedType, setSelectedType] = useState<string>('raw');
+  const [selectedType, setSelectedType] = useState<"raw" | "semi" | "water">('raw');
   const [selectedMaterial, setSelectedMaterial] = useState<string>('');
   const [percentage, setPercentage] = useState<number>(0);
   
@@ -41,11 +41,16 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
   
   // Reset material selection when type changes
   const handleTypeChange = (newType: string) => {
-    setSelectedType(newType);
+    // Ensure newType is one of the allowed types
+    const validType = (newType === 'raw' || newType === 'semi' || newType === 'water') 
+      ? newType as "raw" | "semi" | "water" 
+      : 'raw';
+      
+    setSelectedType(validType);
     setSelectedMaterial('');
     
     // If selecting water type, handle it differently
-    if (newType === 'water') {
+    if (validType === 'water') {
       handleAddWater();
     }
   };
@@ -99,7 +104,7 @@ const IngredientSelector: React.FC<IngredientSelectorProps> = ({
     
     // Check if this material already exists in ingredients
     const existingIngredient = ingredients.find(ing => 
-      (ing as any).ingredient_type === selectedType && 
+      ing.ingredient_type === selectedType && 
       ing.id === parseInt(selectedMaterial)
     );
     
