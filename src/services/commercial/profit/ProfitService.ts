@@ -225,6 +225,7 @@ class ProfitService {
   ): Promise<boolean> {
     try {
       console.log(`Updating profit for invoice ${invoiceId} after return with amount ${returnAmount}`);
+      console.log(`نوع المرتجع: ${returnAmount === 0 ? 'مرتجع كامل' : 'مرتجع جزئي'}`);
       
       // 1. الحصول على بيانات الربح الحالية للفاتورة
       const { data: profitData, error } = await supabase
@@ -287,7 +288,7 @@ class ProfitService {
       
       if (updateError) throw updateError;
       
-      // 5. تحديث الإيرادات المرتبطة بالأرباح (إضافة جديدة)
+      // 5. تحديث الإيرادات المرتبطة بالأرباح
       const updatedProfitData = {
         ...profitData,
         total_sales: newTotalSales,
@@ -296,7 +297,19 @@ class ProfitService {
         profit_percentage: newProfitPercentage
       };
       
-      await this.revenueService.updateProfitRevenue(profitData.id, updatedProfitData);
+      // تحديد ما إذا كان المرتجع جزئي أم كامل
+      const isPartialReturn = returnAmount > 0 && returnAmount < profitData.total_sales;
+      
+      // نمرر true للمعلمة الثالثة في حالة المرتجع الجزئي لمنع إنشاء إيصال إيراد جديد
+      await this.revenueService.updateProfitRevenue(
+        profitData.id, 
+        updatedProfitData, 
+        isPartialReturn
+      );
+      
+      if (isPartialReturn) {
+        console.log(`تم منع إنشاء معاملات مالية جديدة عند إنشاء مرتجع جزئي (الربح المتبقي: ${newProfitAmount})`);
+      }
       
       console.log(`Successfully updated profit for invoice ${invoiceId} after return`);
       return true;
@@ -319,6 +332,7 @@ class ProfitService {
   ): Promise<boolean> {
     try {
       console.log(`Restoring profit for invoice ${invoiceId} after return cancellation with amount ${returnAmount}`);
+      console.log(`نوع المرتجع: ${returnAmount === 0 ? 'مرتجع كامل' : 'مرتجع جزئي'}`);
       
       // 1. الحصول على بيانات الربح الحالية للفاتورة
       const { data: profitData, error } = await supabase
@@ -368,7 +382,7 @@ class ProfitService {
         newProfitPercentage
       });
       
-      // 4. تحديث سجل الربح
+      // 4. تحديث سجل الربح مباشرة في قاعدة البيانات
       const { error: updateError } = await supabase
         .from('profits')
         .update({
@@ -381,10 +395,20 @@ class ProfitService {
       
       if (updateError) throw updateError;
       
-      // 5. ملاحظة: لا نقوم بإنشاء معاملة إيراد جديدة عند إلغاء المرتجعات
-      // أزلنا استدعاء دالة updateProfitRevenue لمنع إنشاء إيصالات إيراد عند إلغاء المرتجعات
-      console.log(`قمنا بتحديث بيانات الربح فقط دون إنشاء معاملات مالية جديدة عند إلغاء المرتجع`);
+      // 5. إذا تم استدعاء تحديث الإيرادات من مكان آخر، نتأكد من إرسال معلمة isReturnCancellation = true
+      // تحديث الإيرادات مع تمرير معلمة isReturnCancellation لمنع إنشاء إيصالات إيراد جديدة
+      const updatedProfitData = {
+        ...profitData,
+        total_sales: newTotalSales,
+        total_cost: newTotalCost,
+        profit_amount: newProfitAmount,
+        profit_percentage: newProfitPercentage
+      };
       
+      // إلغاء أي إيرادات مرتبطة وعدم إنشاء إيرادات جديدة (المعلمة الثالثة true تمنع إنشاء إيرادات جديدة)
+      await this.revenueService.updateProfitRevenue(profitData.id, updatedProfitData, true);
+      
+      console.log(`تم منع إنشاء معاملات مالية جديدة عند إلغاء المرتجع (سواء كان كاملًا أو جزئيًا)`);
       console.log(`Successfully restored profit for invoice ${invoiceId} after return cancellation`);
       return true;
     } catch (error) {

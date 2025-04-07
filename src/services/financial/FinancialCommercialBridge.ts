@@ -391,18 +391,10 @@ class FinancialCommercialBridge {
         );
       }
       
-      // خطوة 3: ضمان إزالة أي معاملات مالية جديدة قد تم إنشاؤها بطريق الخطأ
-      setTimeout(async () => {
-        console.log('فحص إضافي للتأكد من عدم وجود معاملات مالية متعلقة بالمرتجع الملغي');
-        await this.cleanupSpecificReturnTransactions(returnData.id);
-      }, 500);
-      
-      // تحذير: لا تقم بإنشاء أي معاملات مالية عند إلغاء المرتجعات
-      console.log('تم منع إنشاء معاملات مالية جديدة عند إلغاء المرتجع');
-      
       // إرسال إشعار بتغيير البيانات المالية
       this.notifyFinancialDataChange('return_cancellation');
       
+      console.log('تم إلغاء المرتجع بنجاح ومنع إنشاء أي معاملات مالية');
       return true;
     } catch (error) {
       console.error(`Error handling return cancellation:`, error);
@@ -487,26 +479,6 @@ class FinancialCommercialBridge {
     } catch (error) {
       console.error(`خطأ في تنظيف المعاملات المالية للمرتجع ${returnId}:`, error);
       return false;
-    }
-  }
-  
-  /**
-          party_id: partyId,
-          transaction_id: crypto.randomUUID(),
-          transaction_type: `${returnType}_cancellation`,
-          date: new Date().toISOString().split('T')[0],
-          debit: returnType === 'sales_return' ? amount : 0, // عكس المدين والدائن
-          credit: returnType === 'sales_return' ? 0 : amount,
-          balance_after: newBalance
-        });
-        
-      if (ledgerError) {
-        throw ledgerError;
-      }
-      
-    } catch (error) {
-      console.error(`Error reversing party balance after return cancellation:`, error);
-      toast.error('حدث خطأ أثناء عكس تأثير المرتجع على رصيد الطرف');
     }
   }
   

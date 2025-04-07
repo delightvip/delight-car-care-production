@@ -182,22 +182,36 @@ class ProfitRevenueService extends BaseCommercialService {
    * تحديث الإيراد المرتبط بربح عند تعديل فاتورة البيع
    * @param oldProfitId معرف سجل الربح القديم
    * @param newProfitData بيانات الربح الجديدة
+   * @param isReturnCancellation هل التحديث بسبب إلغاء مرتجع
    * @returns نجاح العملية
    */
-  public async updateProfitRevenue(oldProfitId: string, newProfitData: ProfitData): Promise<boolean> {
+  public async updateProfitRevenue(
+    oldProfitId: string, 
+    newProfitData: ProfitData, 
+    isReturnCancellation: boolean = false
+  ): Promise<boolean> {
     try {
+      console.log(`تحديث الإيرادات للربح ${oldProfitId}، هل هو بسبب إلغاء مرتجع؟ ${isReturnCancellation}`);
+      
       // إلغاء الإيراد القديم
       await this.cancelProfitRevenue(oldProfitId);
       
-      // إنشاء إيراد جديد
-      const result = await this.createRevenueFromProfit(newProfitData);
-      
-      if (result) {
-        // إرسال إشعار بتغيير البيانات المالية
-        this.notifyFinancialDataChange('profit_revenue_updated');
+      // إنشاء إيراد جديد فقط إذا لم يكن التحديث بسبب إلغاء مرتجع
+      if (!isReturnCancellation) {
+        const result = await this.createRevenueFromProfit(newProfitData);
+        
+        if (result) {
+          // إرسال إشعار بتغيير البيانات المالية
+          this.notifyFinancialDataChange('profit_revenue_updated');
+        }
+        
+        return result;
+      } else {
+        // في حالة إلغاء المرتجع، لا نقوم بإنشاء إيراد جديد
+        console.log('منع إنشاء إيراد جديد لأن التحديث بسبب إلغاء مرتجع');
+        this.notifyFinancialDataChange('profit_revenue_update_skipped_due_to_return_cancellation');
+        return true;
       }
-      
-      return result;
     } catch (error) {
       console.error('Error updating profit revenue:', error);
       toast.error('حدث خطأ أثناء تحديث الإيراد من الربح');
