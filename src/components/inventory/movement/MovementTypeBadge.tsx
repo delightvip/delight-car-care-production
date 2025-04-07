@@ -3,54 +3,59 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 
+interface MovementTypeDetails {
+  label: string;
+  icon: React.ReactNode;
+  variant: 'outline';
+  className: string;
+}
+
 interface MovementTypeBadgeProps {
-  type: 'in' | 'out' | 'adjustment' | string;
+  type: string;
 }
 
 export const MovementTypeBadge: React.FC<MovementTypeBadgeProps> = ({ type }) => {
-  let content;
-  let className;
+  const getMovementTypeDetails = (type: string): MovementTypeDetails => {
+    switch (type) {
+      case 'in':
+        return {
+          label: 'وارد',
+          icon: <ArrowUp className="h-4 w-4 text-success" />,
+          variant: 'outline',
+          className: 'border-success text-success'
+        };
+      case 'out':
+        return {
+          label: 'صادر',
+          icon: <ArrowDown className="h-4 w-4 text-destructive" />,
+          variant: 'outline',
+          className: 'border-destructive text-destructive'
+        };
+      case 'adjustment':
+        return {
+          label: 'تسوية',
+          icon: <RefreshCw className="h-4 w-4 text-warning" />,
+          variant: 'outline',
+          className: 'border-warning text-warning'
+        };
+      default:
+        return {
+          label: type,
+          icon: null,
+          variant: 'outline',
+          className: ''
+        };
+    }
+  };
   
-  switch (type) {
-    case 'in':
-      content = (
-        <>
-          <ArrowUp className="h-3.5 w-3.5 mr-1" />
-          <span>وارد</span>
-        </>
-      );
-      className = "bg-green-50 text-green-700 border-green-200 hover:bg-green-100 hover:text-green-800";
-      break;
-    case 'out':
-      content = (
-        <>
-          <ArrowDown className="h-3.5 w-3.5 mr-1" />
-          <span>صادر</span>
-        </>
-      );
-      className = "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 hover:text-red-800";
-      break;
-    case 'adjustment':
-      content = (
-        <>
-          <RefreshCw className="h-3.5 w-3.5 mr-1" />
-          <span>تعديل</span>
-        </>
-      );
-      className = "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800";
-      break;
-    default:
-      content = (
-        <>
-          <span>{type}</span>
-        </>
-      );
-      className = "bg-gray-100 text-gray-700 border-gray-300";
-  }
+  const typeDetails = getMovementTypeDetails(type);
   
   return (
-    <Badge variant="outline" className={`flex items-center px-2 py-0.5 text-xs font-medium ${className}`}>
-      {content}
+    <Badge variant="outline" className={typeDetails.className}>
+      <span className="flex items-center gap-1">
+        {typeDetails.icon}
+        {typeDetails.label}
+      </span>
     </Badge>
   );
 };

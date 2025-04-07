@@ -1,14 +1,13 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, lowStockQueries } from '@/integrations/supabase/client';
 
 // استدعاء بيانات المخزون المنخفض
 export async function fetchLowStockItems() {
   try {
     console.log("Fetching low stock items using optimized database function...");
     
-    // استخدام وظيفة قاعدة البيانات للحصول على عناصر المخزون المنخفض
-    const { data: lowStockItems, error } = await supabase
-      .rpc('get_all_low_stock_items');
+    // استخدام الوظيفة الجديدة للحصول على جميع عناصر المخزون المنخفض في استدعاء واحد
+    const { data: lowStockItems, error } = await lowStockQueries.getAllLowStockItems();
     
     if (error) {
       console.error("Error fetching low stock items:", error);
@@ -40,116 +39,69 @@ export async function fetchLowStockItems() {
   } catch (error) {
     console.error("خطأ في جلب عناصر المخزون المنخفض:", error);
     
-    // في حال فشل الوظيفة، نرجع إلى طريقة بديلة باستخدام استعلامات منفصلة
-    return fetchLowStockItemsFallback();
+    // في حال فشل الوظيفة الجديدة، نرجع إلى الطريقة القديمة كخطة بديلة
+    console.log("Falling back to original low stock query method...");
+    return fetchLowStockItemsOriginal();
   }
 }
 
-// طريقة احتياطية باستخدام استعلامات منفصلة
-async function fetchLowStockItemsFallback() {
+// طريقة احتياطية تستخدم الاستدعاءات المنفصلة القديمة
+async function fetchLowStockItemsOriginal() {
   try {
-    console.log("Using fallback method for low stock items...");
+    console.log("Using original low stock queries as fallback...");
     
-    // المواد الأولية منخفضة المخزون
-    const { data: rawMaterials, error: rawError } = await supabase
-      .from('raw_materials')
-      .select('*')
-      .filter('quantity', 'lt', 'min_stock');
+    // فحص المواد الأولية ذات المخزون المنخفض 
+    const rawMaterialsResponse = await lowStockQueries.rawMaterials();
     
-    // المنتجات النصف مصنعة منخفضة المخزون
-    const { data: semiFinished, error: semiError } = await supabase
-      .from('semi_finished_products')
-      .select('*')
-      .filter('quantity', 'lt', 'min_stock');
+    // فحص المنتجات نصف المصنعة ذات المخزون المنخفض 
+    const semiFinishedResponse = await lowStockQueries.semiFinishedProducts();
     
-    // مستلزمات التعبئة منخفضة المخزون
-    const { data: packaging, error: packagingError } = await supabase
-      .from('packaging_materials')
-      .select('*')
-      .filter('quantity', 'lt', 'min_stock');
+    // فحص مستلزمات التعبئة ذات المخزون المنخفض 
+    const packagingResponse = await lowStockQueries.packagingMaterials();
     
-    // المنتجات النهائية ذات المخزون المنخفض
-    const { data: finished, error: finishedError } = await supabase
-      .from('finished_products')
-      .select('*')
-      .filter('quantity', 'lt', 'min_stock');
+    // فحص المنتجات النهائية ذات المخزون المنخفض 
+    const finishedResponse = await lowStockQueries.finishedProducts();
     
-    if (rawError || semiError || packagingError || finishedError) {
-      throw new Error("Error fetching low stock items");
-    }
+    // تحقق من الأخطاء
+    if (rawMaterialsResponse.error) throw rawMaterialsResponse.error;
+    if (semiFinishedResponse.error) throw semiFinishedResponse.error;
+    if (packagingResponse.error) throw packagingResponse.error;
+    if (finishedResponse.error) throw finishedResponse.error;
     
-    // تحويل البيانات إلى التنسيق المطلوب
-    const formattedItems = [
-      ...(rawMaterials || []).map(item => ({ 
-        ...item, 
-        type: 'raw', 
-        type_name: 'مواد أولية',
-        importance: item.importance || 0
-      })),
-      ...(semiFinished || []).map(item => ({ 
-        ...item, 
-        type: 'semi', 
-        type_name: 'منتجات نصف مصنعة',
-        importance: 0
-      })),
-      ...(packaging || []).map(item => ({ 
-        ...item, 
-        type: 'packaging', 
-        type_name: 'مستلزمات تعبئة',
-        importance: item.importance || 0
-      })),
-      ...(finished || []).map(item => ({ 
-        ...item, 
-        type: 'finished', 
-        type_name: 'منتجات نهائية',
-        importance: 0
-      }))
+    // حساب إجمالي العناصر ذات المخزون المنخفض
+    const rawMaterialsCount = rawMaterialsResponse.data?.length || 0;
+    const semiFinishedCount = semiFinishedResponse.data?.length || 0;
+    const packagingCount = packagingResponse.data?.length || 0;
+    const finishedCount = finishedResponse.data?.length || 0;
+    
+    const totalCount = 
+      rawMaterialsCount + 
+      semiFinishedCount + 
+      packagingCount + 
+      finishedCount;
+    
+    // تجميع قائمة بالعناصر المنخفضة
+    const lowStockItems = [
+      ...(rawMaterialsResponse.data || []).map(item => ({ ...item, type: 'raw', typeName: 'مواد أولية' })),
+      ...(semiFinishedResponse.data || []).map(item => ({ ...item, type: 'semi', typeName: 'منتجات نصف مصنعة' })),
+      ...(packagingResponse.data || []).map(item => ({ ...item, type: 'packaging', typeName: 'مستلزمات تعبئة' })),
+      ...(finishedResponse.data || []).map(item => ({ ...item, type: 'finished', typeName: 'منتجات نهائية' }))
     ];
-    
-    // الإحصائيات
-    const rawCount = rawMaterials?.length || 0;
-    const semiCount = semiFinished?.length || 0;
-    const packagingCount = packaging?.length || 0;
-    const finishedCount = finished?.length || 0;
-    const totalCount = rawCount + semiCount + packagingCount + finishedCount;
     
     return {
       totalCount,
-      items: formattedItems,
+      items: lowStockItems,
       counts: {
-        rawMaterials: rawCount,
-        semiFinished: semiCount,
+        rawMaterials: rawMaterialsCount,
+        semiFinished: semiFinishedCount,
         packaging: packagingCount,
         finished: finishedCount
       }
     };
   } catch (error) {
-    console.error("خطأ في الطريقة البديلة لجلب عناصر المخزون المنخفض:", error);
-    // في حالة الفشل الكامل، نرجع بيانات فارغة
-    return {
-      totalCount: 0,
-      items: [],
-      counts: {
-        rawMaterials: 0,
-        semiFinished: 0,
-        packaging: 0,
-        finished: 0
-      }
-    };
+    console.error("خطأ في جلب عناصر المخزون المنخفض (طريقة احتياطية):", error);
+    throw error;
   }
-}
-
-// الحصول على لون خلفية لنوع المخزون 
-export function getItemTypeBgColor(type: string) {
-  const colors = {
-    raw: 'bg-blue-600',
-    semi: 'bg-purple-600',
-    packaging: 'bg-green-600',
-    finished: 'bg-amber-600',
-    default: 'bg-red-600'
-  };
-  
-  return colors[type as keyof typeof colors] || colors.default;
 }
 
 // الحصول على أيقونة لنوع المخزون
@@ -163,4 +115,17 @@ export function getItemTypeIcon(type: string, size: number = 16) {
   };
   
   return icons[type as keyof typeof icons] || icons.default;
+}
+
+// الحصول على لون خلفية لنوع المخزون 
+export function getItemTypeBgColor(type: string) {
+  const colors = {
+    raw: 'bg-blue-600',
+    semi: 'bg-purple-600',
+    packaging: 'bg-green-600',
+    finished: 'bg-amber-600',
+    default: 'bg-red-600'
+  };
+  
+  return colors[type as keyof typeof colors] || colors.default;
 }

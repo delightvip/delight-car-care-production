@@ -1,26 +1,22 @@
 
 import React from 'react';
-import ImportInventoryDialog from '../common/ImportInventoryDialog';
+import ImportDialog from '../common/ImportDialog';
 
 interface ImportMaterialsDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
 }
 
 const ImportMaterialsDialog: React.FC<ImportMaterialsDialogProps> = ({
   isOpen,
-  onClose,
-  onSuccess
+  onClose
 }) => {
   return (
-    <ImportInventoryDialog
+    <ImportDialog
       isOpen={isOpen}
       onClose={onClose}
-      onSuccess={onSuccess}
-      itemType="raw_materials"
       title="استيراد المواد الخام"
-      description="قم بتحميل ملف Excel أو CSV يحتوي على بيانات المواد الخام. يمكنك تحميل القالب أدناه كمرجع."
+      description="قم بتحميل ملف Excel أو CSV يحتوي على بيانات المواد الخام"
     />
   );
 };

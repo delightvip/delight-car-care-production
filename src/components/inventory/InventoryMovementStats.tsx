@@ -1,115 +1,122 @@
-
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowUpFromLine, ArrowDownToLine, RefreshCw, Activity } from 'lucide-react';
-import { InventoryMovementData } from '@/services/InventoryMovementService';
+import { ArrowDownIcon, ArrowUpIcon, ListRestart, BarChart3 } from 'lucide-react';
+import { InventoryMovement } from '@/services/InventoryMovementService';
+
+interface StatCardProps {
+  title: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+  description?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, description }) => {
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <h3 className="text-2xl font-bold mt-1">{value}</h3>
+            {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+          </div>
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+            {icon}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 interface InventoryMovementStatsProps {
-  movements: InventoryMovementData[];
-  selectedCategory: string;
+  movements: InventoryMovement[];
+  selectedCategory?: string;
 }
 
 const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movements, selectedCategory }) => {
-  const stats = useMemo(() => {
-    const filteredMovements = selectedCategory === 'all' 
-      ? movements 
-      : movements.filter(m => m.category === selectedCategory);
-    
-    const totalMovements = filteredMovements.length;
-    
-    const inMovements = filteredMovements.filter(m => m.type === 'in');
-    const outMovements = filteredMovements.filter(m => m.type === 'out');
-    const adjustments = filteredMovements.filter(m => m.type === 'adjustment');
-    
-    const totalIn = inMovements.reduce((sum, m) => sum + m.quantity, 0);
-    const totalOut = outMovements.reduce((sum, m) => sum + m.quantity, 0);
-    const totalAdjustments = adjustments.reduce((sum, m) => sum + Math.abs(m.quantity), 0);
-    
-    // Last 24 hours movements
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    const recentMovements = filteredMovements.filter(m => m.date >= yesterday);
-    const recentCount = recentMovements.length;
-    
-    return {
-      totalMovements,
-      totalIn,
-      totalOut, 
-      totalAdjustments,
-      recentCount
-    };
-  }, [movements, selectedCategory]);
+  // أهم الإحصائيات
+  const getFilteredMovements = () => {
+    if (!selectedCategory || selectedCategory === 'all') {
+      return movements;
+    }
+    return movements.filter(m => m.category === selectedCategory);
+  };
+  
+  const filteredMovements = getFilteredMovements();
+  
+  // إجمالي حركات الوارد
+  const inMovements = filteredMovements.filter(m => m.type === 'in');
+  const totalInQuantity = inMovements.reduce((sum, m) => sum + m.quantity, 0);
+  
+  // إجمالي حركات الصادر
+  const outMovements = filteredMovements.filter(m => m.type === 'out');
+  const totalOutQuantity = outMovements.reduce((sum, m) => sum + m.quantity, 0);
+  
+  // إجمالي الحركات
+  const totalMovements = filteredMovements.length;
+  
+  // التصنيف الأكثر نشاطاً
+  const categoryCount = filteredMovements.reduce((acc, movement) => {
+    acc[movement.category] = (acc[movement.category] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const mostActiveCategory = Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0];
+  
+  const getCategoryName = (category: string) => {
+    switch(category) {
+      case 'raw_materials': return 'المواد الأولية';
+      case 'semi_finished': return 'المنتجات النصف مصنعة';
+      case 'packaging': return 'مستلزمات التعبئة';
+      case 'finished_products': return 'المنتجات النهائية';
+      default: return category;
+    }
+  };
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">إجمالي الحركات</p>
-              <h3 className="text-2xl font-bold mt-1">{stats.totalMovements}</h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats.recentCount} حركة في آخر 24 ساعة
-              </p>
-            </div>
-            <div className="rounded-full p-2 bg-primary/10">
-              <Activity className="h-5 w-5 text-primary" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <StatCard
+        title="إجمالي الحركات"
+        value={totalMovements}
+        icon={<ListRestart className="h-5 w-5" />}
+        description={selectedCategory !== 'all' ? `تصفية: ${getCategoryName(selectedCategory || '')}` : undefined}
+      />
       
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">إجمالي الوارد</p>
-              <h3 className="text-2xl font-bold mt-1">{stats.totalIn.toFixed(0)}</h3>
-              <p className="text-xs text-green-600 mt-1">
-                وحدة مضافة
-              </p>
-            </div>
-            <div className="rounded-full p-2 bg-green-100">
-              <ArrowUpFromLine className="h-5 w-5 text-green-600" />
-            </div>
+      <StatCard
+        title="حركات الوارد"
+        value={
+          <div className="flex items-center gap-2">
+            <span>{totalInQuantity}</span>
+            <span className="text-xs font-normal text-green-500">({inMovements.length} حركة)</span>
           </div>
-        </CardContent>
-      </Card>
+        }
+        icon={<ArrowDownIcon className="h-5 w-5 text-green-500" />}
+      />
       
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">إجمالي الصادر</p>
-              <h3 className="text-2xl font-bold mt-1">{stats.totalOut.toFixed(0)}</h3>
-              <p className="text-xs text-red-600 mt-1">
-                وحدة مسحوبة
-              </p>
-            </div>
-            <div className="rounded-full p-2 bg-red-100">
-              <ArrowDownToLine className="h-5 w-5 text-red-600" />
-            </div>
+      <StatCard
+        title="حركات الصادر"
+        value={
+          <div className="flex items-center gap-2">
+            <span>{totalOutQuantity}</span>
+            <span className="text-xs font-normal text-amber-500">({outMovements.length} حركة)</span>
           </div>
-        </CardContent>
-      </Card>
+        }
+        icon={<ArrowUpIcon className="h-5 w-5 text-amber-500" />}
+      />
       
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">التعديلات</p>
-              <h3 className="text-2xl font-bold mt-1">{stats.totalAdjustments.toFixed(0)}</h3>
-              <p className="text-xs text-amber-600 mt-1">
-                وحدة تم تعديلها
-              </p>
+      <StatCard
+        title="الفئة الأكثر نشاطاً"
+        value={
+          mostActiveCategory ? (
+            <div className="flex items-center gap-2">
+              <span>{getCategoryName(mostActiveCategory[0])}</span>
+              <span className="text-xs font-normal text-muted-foreground">({mostActiveCategory[1]} حركة)</span>
             </div>
-            <div className="rounded-full p-2 bg-amber-100">
-              <RefreshCw className="h-5 w-5 text-amber-600" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          ) : 'لا توجد بيانات'
+        }
+        icon={<BarChart3 className="h-5 w-5" />}
+      />
     </div>
   );
 };

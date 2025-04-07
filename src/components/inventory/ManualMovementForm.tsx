@@ -1,318 +1,338 @@
-
-import React from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { 
-  Form, 
-  FormControl, 
-  FormField, 
-  FormItem, 
-  FormLabel, 
-  FormMessage 
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { 
-  ArrowDownCircle, 
-  ArrowUpCircle 
-} from 'lucide-react';
-import { recordManualInventoryMovement } from '@/services/InventoryMovementService';
-
-// Define form schema with Zod
-const formSchema = z.object({
-  itemType: z.string().min(1, { message: 'نوع العنصر مطلوب' }),
-  itemId: z.string().min(1, { message: 'العنصر مطلوب' }),
-  movementType: z.enum(['in', 'out']),
-  quantity: z.coerce.number().positive({ message: 'الكمية يجب أن تكون أكبر من صفر' }),
-  reason: z.string().min(3, { message: 'السبب مطلوب (3 أحرف على الأقل)' }),
-});
+import { createManualInventoryMovement } from '@/services/InventoryMovementService';
+import InventoryService from '@/services/InventoryService'; // تصحيح الاستيراد هنا
 
 interface ManualMovementFormProps {
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
-const ManualMovementForm: React.FC<ManualMovementFormProps> = ({
-  onSuccess,
-  onCancel
-}) => {
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [selectedType, setSelectedType] = React.useState<string>('');
+interface FormState {
+  type: 'in' | 'out';
+  category: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  note: string;
+  date: Date;
+}
+
+const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCancel }) => {
+  const [formState, setFormState] = useState<FormState>({
+    type: 'in',
+    category: 'raw_materials',
+    itemId: '',
+    itemName: '',
+    quantity: 0,
+    unit: 'كجم',
+    note: '',
+    date: new Date()
+  });
+
+  const inventoryService = InventoryService.getInstance(); // استخدام getInstance للحصول على نسخة من خدمة المخزون
   
-  // Initialize form
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      itemType: '',
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  
+  // استعلام عن المواد الخام
+  const { data: rawMaterials = [] } = useQuery({
+    queryKey: ['rawMaterials'],
+    queryFn: () => inventoryService.getRawMaterials(),
+    enabled: formState.category === 'raw_materials'
+  });
+  
+  // استعلام عن مواد التعبئة
+  const { data: packagingMaterials = [] } = useQuery({
+    queryKey: ['packagingMaterials'],
+    queryFn: () => inventoryService.getPackagingMaterials(),
+    enabled: formState.category === 'packaging'
+  });
+  
+  // استعلام عن المنتجات نصف مصنعة
+  const { data: semiFinishedProducts = [] } = useQuery({
+    queryKey: ['semiFinishedProducts'],
+    queryFn: () => inventoryService.getSemiFinishedProducts(),
+    enabled: formState.category === 'semi_finished'
+  });
+  
+  // استعلام عن المنتجات النهائية
+  const { data: finishedProducts = [] } = useQuery({
+    queryKey: ['finishedProducts'],
+    queryFn: () => inventoryService.getFinishedProducts(),
+    enabled: formState.category === 'finished_products'
+  });
+  
+  // الحصول على قائمة الأصناف حسب الفئة المحددة
+  const getItemsList = () => {
+    switch (formState.category) {
+      case 'raw_materials':
+        return rawMaterials;
+      case 'packaging':
+        return packagingMaterials;
+      case 'semi_finished':
+        return semiFinishedProducts;
+      case 'finished_products':
+        return finishedProducts;
+      default:
+        return [];
+    }
+  };
+  
+  // تحديد الوحدة تلقائيًا عند اختيار الصنف
+  const handleItemChange = (id: string) => {
+    const items = getItemsList();
+    const selectedItem = items.find((item: any) => item.id.toString() === id || item.code === id);
+    
+    if (selectedItem) {
+      const itemNameField = selectedItem.name || '';
+      const unitField = selectedItem.unit || getDefaultUnit(formState.category);
+      
+      setFormState({
+        ...formState,
+        itemId: id,
+        itemName: itemNameField,
+        unit: unitField
+      });
+    }
+  };
+  
+  // الحصول على الوحدة الافتراضية حسب الفئة
+  const getDefaultUnit = (category: string) => {
+    switch (category) {
+      case 'raw_materials':
+        return 'كجم';
+      case 'packaging':
+        return 'قطعة';
+      case 'semi_finished':
+        return 'لتر';
+      case 'finished_products':
+        return 'عبوة';
+      default:
+        return 'وحدة';
+    }
+  };
+  
+  // تغيير الفئة وإعادة ضبط الصنف والوحدة
+  const handleCategoryChange = (category: string) => {
+    setFormState({
+      ...formState,
+      category,
       itemId: '',
-      movementType: 'in',
-      quantity: 1,
-      reason: '',
+      itemName: '',
+      unit: getDefaultUnit(category)
+    });
+  };
+  
+  // التحقق من صحة النموذج
+  const isFormValid = () => {
+    if (!formState.itemId || !formState.itemName) {
+      toast.error('يرجى اختيار الصنف');
+      return false;
     }
-  });
-  
-  // Watch the itemType value for fetching related items
-  const watchItemType = form.watch('itemType');
-  
-  // Reset itemId when itemType changes
-  React.useEffect(() => {
-    if (watchItemType !== selectedType) {
-      form.setValue('itemId', '');
-      setSelectedType(watchItemType);
+    
+    if (!formState.quantity || formState.quantity <= 0) {
+      toast.error('يرجى إدخال كمية صحيحة');
+      return false;
     }
-  }, [watchItemType, selectedType, form]);
+    
+    if (!formState.note.trim()) {
+      toast.error('يرجى إدخال ملاحظات للحركة');
+      return false;
+    }
+    
+    return true;
+  };
   
-  // Fetch items based on the selected type
-  const { data: items = [] } = useQuery({
-    queryKey: ['inventoryItems', watchItemType],
-    queryFn: async () => {
-      if (!watchItemType) return [];
-      
-      let tableName = '';
-      
-      switch (watchItemType) {
-        case 'raw':
-          tableName = 'raw_materials';
-          break;
-        case 'semi':
-          tableName = 'semi_finished_products';
-          break;
-        case 'packaging':
-          tableName = 'packaging_materials';
-          break;
-        case 'finished':
-          tableName = 'finished_products';
-          break;
-        default:
-          return [];
-      }
-      
-      if (tableName === 'raw_materials') {
-        const { data, error } = await supabase
-          .from('raw_materials')
-          .select('id, name, code, quantity')
-          .order('name');
-        
-        if (error) throw error;
-        return data || [];
-      } else if (tableName === 'semi_finished_products') {
-        const { data, error } = await supabase
-          .from('semi_finished_products')
-          .select('id, name, code, quantity')
-          .order('name');
-        
-        if (error) throw error;
-        return data || [];
-      } else if (tableName === 'packaging_materials') {
-        const { data, error } = await supabase
-          .from('packaging_materials')
-          .select('id, name, code, quantity')
-          .order('name');
-        
-        if (error) throw error;
-        return data || [];
-      } else if (tableName === 'finished_products') {
-        const { data, error } = await supabase
-          .from('finished_products')
-          .select('id, name, code, quantity')
-          .order('name');
-        
-        if (error) throw error;
-        return data || [];
-      }
-      
-      return [];
-    },
-    enabled: !!watchItemType,
-  });
-  
-  // Submit the form
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    setIsLoading(true);
+  // إرسال النموذج
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!isFormValid()) return;
+    
+    setIsSubmitting(true);
     
     try {
-      // Apply quantity sign based on movement type
-      const quantityWithSign = values.movementType === 'in' 
-        ? Math.abs(values.quantity) 
-        : -Math.abs(values.quantity);
-      
-      // Record the movement
-      const success = await recordManualInventoryMovement(
-        values.itemId,
-        values.itemType,
-        quantityWithSign,
-        values.reason
-      );
+      const success = await createManualInventoryMovement({
+        type: formState.type,
+        category: formState.category,
+        item_name: formState.itemName,
+        item_id: parseInt(formState.itemId),
+        quantity: formState.quantity,
+        unit: formState.unit,
+        note: formState.note,
+        date: formState.date
+      });
       
       if (success) {
-        toast.success('تم تسجيل حركة المخزون بنجاح');
-        form.reset();
         if (onSuccess) onSuccess();
-      } else {
-        toast.error('حدث خطأ أثناء تسجيل حركة المخزون');
       }
     } catch (error) {
-      console.error('Error recording inventory movement:', error);
-      toast.error('حدث خطأ أثناء تسجيل حركة المخزون');
+      console.error('Error submitting form:', error);
+      toast.error('حدث خطأ أثناء حفظ البيانات');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
   
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="itemType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>نوع العنصر</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر نوع العنصر" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="raw">المواد الأولية</SelectItem>
-                    <SelectItem value="semi">المنتجات النصف مصنعة</SelectItem>
-                    <SelectItem value="packaging">مستلزمات التعبئة</SelectItem>
-                    <SelectItem value="finished">المنتجات النهائية</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="itemId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>العنصر</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
-                  defaultValue={field.value}
-                  disabled={!watchItemType || items.length === 0}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={items.length === 0 ? "لا توجد عناصر" : "اختر العنصر"} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {items.map((item) => (
-                      <SelectItem key={item.id} value={item.id.toString()}>
-                        {item.name} ({item.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="movement-type">نوع الحركة</Label>
+          <Select 
+            value={formState.type} 
+            onValueChange={(value) => setFormState({ ...formState, type: value as 'in' | 'out' })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="اختر نوع الحركة" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="in">وارد</SelectItem>
+              <SelectItem value="out">صادر</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="category">التصنيف</Label>
+          <Select 
+            value={formState.category} 
+            onValueChange={handleCategoryChange}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="اختر التصنيف" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="raw_materials">المواد الخام</SelectItem>
+              <SelectItem value="packaging">مواد التعبئة</SelectItem>
+              <SelectItem value="semi_finished">منتجات نصف مصنعة</SelectItem>
+              <SelectItem value="finished_products">منتجات نهائية</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="item">الصنف</Label>
+        <Select 
+          value={formState.itemId} 
+          onValueChange={handleItemChange}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="اختر الصنف" />
+          </SelectTrigger>
+          <SelectContent>
+            {getItemsList().map((item: any) => (
+              <SelectItem 
+                key={item.id || item.code} 
+                value={(item.id || item.code).toString()}
+              >
+                {item.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="quantity">الكمية</Label>
+          <Input
+            id="quantity"
+            type="number"
+            step="0.01"
+            value={formState.quantity || ''}
+            onChange={(e) => setFormState({ ...formState, quantity: parseFloat(e.target.value) || 0 })}
           />
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="movementType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>نوع الحركة</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="in" className="flex items-center">
-                      <div className="flex items-center">
-                        <ArrowUpCircle className="h-4 w-4 mr-2 text-green-500" />
-                        <span>إضافة (وارد)</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="out" className="flex items-center">
-                      <div className="flex items-center">
-                        <ArrowDownCircle className="h-4 w-4 mr-2 text-red-500" />
-                        <span>سحب (صادر)</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="quantity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>الكمية</FormLabel>
-                <FormControl>
-                  <Input type="number" min="0.1" step="0.1" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <div className="space-y-2">
+          <Label htmlFor="unit">الوحدة</Label>
+          <Input
+            id="unit"
+            type="text"
+            value={formState.unit}
+            onChange={(e) => setFormState({ ...formState, unit: e.target.value })}
           />
         </div>
-        
-        <FormField
-          control={form.control}
-          name="reason"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>السبب / الملاحظات</FormLabel>
-              <FormControl>
-                <Textarea 
-                  placeholder="اكتب سبب الإضافة أو السحب..." 
-                  className="resize-none" 
-                  {...field} 
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <div className="flex justify-end gap-2 pt-2">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
-              إلغاء
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="date">التاريخ</Label>
+        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full justify-start text-left font-normal"
+            >
+              <CalendarIcon className="ml-2 h-4 w-4" />
+              {format(formState.date, 'yyyy/MM/dd')}
             </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={formState.date}
+              onSelect={(date) => {
+                if (date) {
+                  setFormState({ ...formState, date });
+                  setIsCalendarOpen(false);
+                }
+              }}
+              locale={ar}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="notes">ملاحظات</Label>
+        <Textarea
+          id="notes"
+          placeholder="أدخل ملاحظات حول سبب الحركة"
+          value={formState.note}
+          onChange={(e) => setFormState({ ...formState, note: e.target.value })}
+          rows={3}
+        />
+      </div>
+      
+      <div className="flex justify-end gap-2 pt-4">
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={onCancel}
+          disabled={isSubmitting}
+        >
+          إلغاء
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              جاري الحفظ...
+            </>
+          ) : (
+            'حفظ الحركة'
           )}
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? "جاري التنفيذ..." : "تأكيد"}
-          </Button>
-        </div>
-      </form>
-    </Form>
+        </Button>
+      </div>
+    </form>
   );
 };
 

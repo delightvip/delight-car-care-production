@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { 
   Card, 
@@ -24,7 +23,7 @@ import {
   RefreshCcw 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, lowStockQueries } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchLowStockItems, getItemTypeBgColor } from '@/services/NotificationService';
 
-const LowStockItems = () => {
+export default function LowStockItems() {
   const [allItems, setAllItems] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -240,6 +239,4 @@ const LowStockItems = () => {
       </div>
     </PageTransition>
   );
-};
-
-export default LowStockItems;
+}

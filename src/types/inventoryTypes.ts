@@ -3,7 +3,7 @@ export interface InventoryMovement {
   id: string;
   item_id: string;
   item_type: string;
-  movement_type: 'in' | 'out' | 'adjustment' | string; // Allow string to avoid type compatibility issues
+  movement_type: 'in' | 'out' | 'adjustment';
   quantity: number;
   balance_after: number;
   reason?: string;

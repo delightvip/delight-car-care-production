@@ -10,7 +10,7 @@ import SemiFinishedList from '@/components/inventory/semi-finished/SemiFinishedL
 import SemiFinishedForm from '@/components/inventory/semi-finished/SemiFinishedForm';
 import DeleteConfirmDialog from '@/components/inventory/common/DeleteConfirmDialog';
 import SemiFinishedDetails from '@/components/inventory/semi-finished/SemiFinishedDetails';
-import ImportSemiFinishedDialog from '@/components/inventory/semi-finished/ImportSemiFinishedDialog';
+import ImportDialog from '@/components/inventory/common/ImportDialog';
 
 const SemiFinishedProducts = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -40,10 +40,6 @@ const SemiFinishedProducts = () => {
   const handleView = (product: any) => {
     setCurrentProduct(product);
     setIsDetailsDialogOpen(true);
-  };
-  
-  const handleImportSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
   };
   
   return (
@@ -132,10 +128,11 @@ const SemiFinishedProducts = () => {
           />
         )}
         
-        <ImportSemiFinishedDialog
+        <ImportDialog
           isOpen={isImportDialogOpen}
           onClose={() => setIsImportDialogOpen(false)}
-          onSuccess={handleImportSuccess}
+          title="استيراد المنتجات النصف مصنعة"
+          description="قم بتحميل ملف Excel أو CSV يحتوي على بيانات المنتجات النصف مصنعة"
         />
       </div>
     </PageTransition>
