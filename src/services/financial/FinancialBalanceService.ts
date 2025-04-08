@@ -52,6 +52,12 @@ class FinancialBalanceService {
       
       const newCashBalance = Number(balance.cash_balance) + amount;
       
+      // التحقق من أن الرصيد الجديد غير سالب (لا يمكن للخزينة أن تكون سالبة)
+      if (newCashBalance < 0) {
+        toast.error('لا يمكن أن يكون رصيد الخزينة النقدية سالباً');
+        return false;
+      }
+      
       const { error } = await supabase
         .from('financial_balance')
         .update({
@@ -82,6 +88,12 @@ class FinancialBalanceService {
       if (!balance) return false;
       
       const newBankBalance = Number(balance.bank_balance) + amount;
+      
+      // التحقق من أن الرصيد الجديد غير سالب (لا يمكن للحساب البنكي أن يكون سالباً)
+      if (newBankBalance < 0) {
+        toast.error('لا يمكن أن يكون رصيد الحساب البنكي سالباً');
+        return false;
+      }
       
       const { error } = await supabase
         .from('financial_balance')
@@ -120,6 +132,7 @@ class FinancialBalanceService {
     switch (paymentMethod) {
       case 'cash':
         return this.updateCashBalance(actualAmount, reason);
+      case 'bank':
       case 'bank_transfer':
       case 'check':
         return this.updateBankBalance(actualAmount, reason);
@@ -129,6 +142,45 @@ class FinancialBalanceService {
       default:
         // الافتراضي هو النقدية
         return this.updateCashBalance(actualAmount, reason);
+    }
+  }
+  
+  /**
+   * تحديث أرصدة الخزينة يدويًا بقيم محددة
+   * @param cashBalance الرصيد النقدي الجديد
+   * @param bankBalance الرصيد البنكي الجديد
+   * @param reason سبب التعديل
+   */
+  public async setBalanceManually(
+    cashBalance: number,
+    bankBalance: number,
+    reason: string = 'تعديل يدوي للأرصدة'
+  ): Promise<boolean> {
+    try {
+      // التحقق من صحة القيم
+      if (cashBalance < 0 || bankBalance < 0) {
+        toast.error('لا يمكن أن تكون قيم الأرصدة سالبة');
+        return false;
+      }
+      
+      const { error } = await supabase
+        .from('financial_balance')
+        .update({
+          cash_balance: cashBalance,
+          bank_balance: bankBalance,
+          last_updated: new Date().toISOString()
+        })
+        .eq('id', '1');
+      
+      if (error) throw error;
+      
+      console.log(`Balances updated manually. Cash: ${cashBalance} EGP, Bank: ${bankBalance} EGP. Reason: ${reason}`);
+      toast.success('تم تحديث الأرصدة بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error updating balances manually:', error);
+      toast.error('حدث خطأ أثناء تحديث الأرصدة');
+      return false;
     }
   }
 }

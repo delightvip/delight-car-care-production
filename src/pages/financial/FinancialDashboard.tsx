@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
+import CashManagementTab from '@/components/financial/cash-management/CashManagementTab';
 
 const FinancialDashboard = () => {
   const navigate = useNavigate();
@@ -120,10 +122,11 @@ const FinancialDashboard = () => {
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-3 w-[400px]">
+        <TabsList className="grid grid-cols-4 w-[500px]">
           <TabsTrigger value="summary">ملخص مالي</TabsTrigger>
           <TabsTrigger value="income">الإيرادات</TabsTrigger>
           <TabsTrigger value="expenses">المصروفات</TabsTrigger>
+          <TabsTrigger value="cash-management">إدارة الخزينة</TabsTrigger>
         </TabsList>
         
         <TabsContent value="summary" className="space-y-6">
@@ -174,6 +177,10 @@ const FinancialDashboard = () => {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="cash-management" className="space-y-6">
+          <CashManagementTab onSuccess={handleRefresh} />
         </TabsContent>
       </Tabs>
     </div>
