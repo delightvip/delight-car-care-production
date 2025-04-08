@@ -30,3 +30,39 @@ export const generateOrderCode = (type: 'production' | 'packaging', currentCount
   
   return `${prefix}-${dateStr}-${paddedCount}`;
 };
+
+/**
+ * Checks if a code follows the standard format for a given type
+ * This helps identify special codes that were manually created
+ */
+export const isStandardCode = (code: string, type: 'raw' | 'semi' | 'packaging' | 'finished'): boolean => {
+  const prefix = {
+    raw: 'RAW',
+    semi: 'SEMI',
+    packaging: 'PKG',
+    finished: 'FIN'
+  }[type];
+  
+  const pattern = new RegExp(`^${prefix}-\\d{5}$`);
+  return pattern.test(code);
+};
+
+/**
+ * Generates a code for special items that shouldn't follow the standard sequence
+ */
+export const generateSpecialCode = (type: 'raw' | 'semi' | 'packaging' | 'finished', name: string): string => {
+  const prefix = {
+    raw: 'SPC-RAW',
+    semi: 'SPC-SEMI',
+    packaging: 'SPC-PKG',
+    finished: 'SPC-FIN'
+  }[type];
+  
+  // Create a simplified identifier based on the name
+  const identifier = name.toLowerCase()
+    .replace(/\s+/g, '-')  // Replace spaces with dashes
+    .replace(/[^\w\-]/g, '') // Remove special characters
+    .slice(0, 10);  // Limit to 10 characters
+  
+  return `${prefix}-${identifier}`;
+};
