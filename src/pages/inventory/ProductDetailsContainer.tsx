@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -83,7 +82,7 @@ const ProductDetailsContainer = () => {
         // Find semi-finished products that use this raw material
         const { data: semiFinished, error: semiError } = await supabase
           .from('semi_finished_ingredients')
-          .select('semi_finished_id, percentage, semi_finished_products:semi_finished_id(name)')
+          .select('semi_finished_id, percentage, semi_finished_products!semi_finished_id(name)')
           .eq('raw_material_id', numericId);
         
         if (semiError) throw semiError;
@@ -99,7 +98,7 @@ const ProductDetailsContainer = () => {
         // Find finished products that use this packaging material
         const { data: finished, error: finishedError } = await supabase
           .from('finished_product_packaging')
-          .select('finished_product_id, quantity, finished_products(name)')
+          .select('finished_product_id, quantity, finished_products!finished_product_id(name)')
           .eq('packaging_material_id', numericId);
         
         if (finishedError) throw finishedError;
@@ -115,7 +114,7 @@ const ProductDetailsContainer = () => {
         // Get raw materials that are ingredients of this semi-finished product
         const { data: ingredients, error: ingredientsError } = await supabase
           .from('semi_finished_ingredients')
-          .select('raw_material_id, percentage, raw_materials(name)')
+          .select('raw_material_id, percentage, raw_materials!raw_material_id(name)')
           .eq('semi_finished_id', numericId);
         
         if (ingredientsError) throw ingredientsError;
@@ -131,7 +130,7 @@ const ProductDetailsContainer = () => {
         // Get semi-finished product and packaging materials used in this product
         const { data: semi, error: semiError } = await supabase
           .from('finished_products')
-          .select('semi_finished_id, semi_finished_quantity, semi_finished_products(name)')
+          .select('semi_finished_id, semi_finished_quantity, semi_finished_products!semi_finished_id(name)')
           .eq('id', numericId)
           .single();
         
@@ -139,7 +138,7 @@ const ProductDetailsContainer = () => {
         
         const { data: packaging, error: packagingError } = await supabase
           .from('finished_product_packaging')
-          .select('packaging_material_id, quantity, packaging_materials(name)')
+          .select('packaging_material_id, quantity, packaging_materials!packaging_material_id(name)')
           .eq('finished_product_id', numericId);
         
         if (packagingError) throw packagingError;
