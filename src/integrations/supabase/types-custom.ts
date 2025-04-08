@@ -5,12 +5,12 @@ export interface CashOperation {
   date: string;
   amount: number;
   operation_type: 'deposit' | 'withdraw' | 'transfer';
-  account_type: 'cash' | 'bank' | null;
-  from_account: 'cash' | 'bank' | null;
-  to_account: 'cash' | 'bank' | null;
-  notes: string | null;
-  reference: string | null;
-  created_at: string | null;
+  account_type?: 'cash' | 'bank' | null;
+  from_account?: 'cash' | 'bank' | null;
+  to_account?: 'cash' | 'bank' | null;
+  notes?: string | null;
+  reference?: string | null;
+  created_at?: string | null;
 }
 
 // This file can be expanded to include other custom types as needed

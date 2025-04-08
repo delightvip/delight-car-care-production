@@ -15,11 +15,12 @@ import { ar } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, ArrowLeftRight } from 'lucide-react';
 import CashManagementService from '@/services/financial/CashManagementService';
+import { CashOperation } from '@/integrations/supabase/types-custom';
 
 export const RecentCashOperations: React.FC = () => {
   const cashManagementService = CashManagementService.getInstance();
   
-  const { data: cashOperations, isLoading } = useQuery({
+  const { data: cashOperations, isLoading } = useQuery<CashOperation[]>({
     queryKey: ['cash-operations'],
     queryFn: () => cashManagementService.getRecentCashOperations(),
   });

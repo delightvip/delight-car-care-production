@@ -83,7 +83,7 @@ const ProductDetailsContainer = () => {
         // Find semi-finished products that use this raw material
         const { data: semiFinished, error: semiError } = await supabase
           .from('semi_finished_ingredients')
-          .select('semi_finished_id, percentage, semi_finished_products(name)')
+          .select('semi_finished_id, percentage, semi_finished_products:semi_finished_id(name)')
           .eq('raw_material_id', numericId);
         
         if (semiError) throw semiError;

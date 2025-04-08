@@ -4,20 +4,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import FinancialBalanceService from "./FinancialBalanceService";
 import FinancialTransactionService from "./FinancialTransactionService";
-
-// Define types for our cash operations
-interface CashOperation {
-  id?: string;
-  date: string;
-  amount: number;
-  operation_type: 'deposit' | 'withdraw' | 'transfer';
-  account_type?: 'cash' | 'bank' | null;
-  from_account?: 'cash' | 'bank' | null;
-  to_account?: 'cash' | 'bank' | null;
-  notes?: string;
-  reference?: string;
-  created_at?: string;
-}
+import { CashOperation } from "@/integrations/supabase/types-custom";
 
 /**
  * خدمة إدارة العمليات النقدية
@@ -70,7 +57,7 @@ class CashManagementService {
       }
       
       // إضافة سجل للعملية
-      const operation: CashOperation = {
+      const operation: Omit<CashOperation, 'id' | 'created_at'> = {
         date: format(date, 'yyyy-MM-dd'),
         amount,
         operation_type: 'deposit',
@@ -81,7 +68,7 @@ class CashManagementService {
       
       const { data, error } = await supabase
         .from('cash_operations')
-        .insert(operation)
+        .insert(operation as any)
         .select()
         .single();
       
@@ -156,7 +143,7 @@ class CashManagementService {
       }
       
       // إضافة سجل للعملية
-      const operation: CashOperation = {
+      const operation: Omit<CashOperation, 'id' | 'created_at'> = {
         date: format(date, 'yyyy-MM-dd'),
         amount,
         operation_type: 'withdraw',
@@ -167,7 +154,7 @@ class CashManagementService {
       
       const { data, error } = await supabase
         .from('cash_operations')
-        .insert(operation)
+        .insert(operation as any)
         .select()
         .single();
       
@@ -243,7 +230,7 @@ class CashManagementService {
       }
       
       // إنشاء معاملة في Supabase
-      const operation: CashOperation = {
+      const operation: Omit<CashOperation, 'id' | 'created_at'> = {
         date: format(date, 'yyyy-MM-dd'),
         amount,
         operation_type: 'transfer',
@@ -255,7 +242,7 @@ class CashManagementService {
       
       const { data, error } = await supabase
         .from('cash_operations')
-        .insert(operation)
+        .insert(operation as any)
         .select()
         .single();
       
@@ -292,7 +279,7 @@ class CashManagementService {
         .from('cash_operations')
         .select('*')
         .order('date', { ascending: false })
-        .limit(limit);
+        .limit(limit) as { data: CashOperation[], error: any };
       
       if (error) throw error;
       
