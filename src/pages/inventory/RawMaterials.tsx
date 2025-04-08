@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
@@ -12,6 +13,8 @@ import ImportMaterialsDialog from '@/components/inventory/raw-materials/ImportMa
 import RawMaterialDetails from '@/components/inventory/raw-materials/RawMaterialDetails';
 import InventoryService from '@/services/InventoryService';
 import { toast } from 'sonner';
+import InventoryAuditButton from '@/components/inventory/audit/InventoryAuditButton';
+import InventoryAuditDialog from '@/components/inventory/audit/InventoryAuditDialog';
 
 const RawMaterials = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -19,6 +22,7 @@ const RawMaterials = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isAuditDialogOpen, setIsAuditDialogOpen] = useState(false);
   const [currentMaterial, setCurrentMaterial] = useState<any>(null);
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,6 +56,7 @@ const RawMaterials = () => {
             <p className="text-muted-foreground mt-1">إدارة المواد الخام المستخدمة في عمليات الإنتاج</p>
           </div>
           <div className="flex gap-2">
+            <InventoryAuditButton onClick={() => setIsAuditDialogOpen(true)} />
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <FileUp size={18} className="mr-2" />
               استيراد من ملف
@@ -146,6 +151,17 @@ const RawMaterials = () => {
         <ImportMaterialsDialog
           isOpen={isImportDialogOpen}
           onClose={() => setIsImportDialogOpen(false)}
+        />
+        
+        {/* Inventory Audit Dialog */}
+        <InventoryAuditDialog
+          isOpen={isAuditDialogOpen}
+          onClose={() => {
+            setIsAuditDialogOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['rawMaterials'] });
+          }}
+          inventoryType="raw_materials"
+          title="جرد المواد الخام"
         />
       </div>
     </PageTransition>

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
@@ -12,6 +13,8 @@ import FinishedProductDetails from '@/components/inventory/finished-products/Fin
 import ImportDialog from '@/components/inventory/common/ImportDialog';
 import InventoryService from '@/services/InventoryService';
 import { toast } from 'sonner';
+import InventoryAuditButton from '@/components/inventory/audit/InventoryAuditButton';
+import InventoryAuditDialog from '@/components/inventory/audit/InventoryAuditDialog';
 
 const FinishedProducts = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -19,6 +22,7 @@ const FinishedProducts = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isAuditDialogOpen, setIsAuditDialogOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<any>(null);
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,6 +56,7 @@ const FinishedProducts = () => {
             <p className="text-muted-foreground mt-1">إدارة المنتجات النهائية الجاهزة للبيع</p>
           </div>
           <div className="flex gap-2">
+            <InventoryAuditButton onClick={() => setIsAuditDialogOpen(true)} />
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <FileUp size={18} className="mr-2" />
               استيراد من ملف
@@ -142,6 +147,17 @@ const FinishedProducts = () => {
           onClose={() => setIsImportDialogOpen(false)}
           title="استيراد المنتجات النهائية"
           description="قم بتحميل ملف Excel أو CSV يحتوي على بيانات المنتجات النهائية"
+        />
+        
+        {/* Inventory Audit Dialog */}
+        <InventoryAuditDialog
+          isOpen={isAuditDialogOpen}
+          onClose={() => {
+            setIsAuditDialogOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+          }}
+          inventoryType="finished_products"
+          title="جرد المنتجات النهائية"
         />
       </div>
     </PageTransition>
