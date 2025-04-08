@@ -32,18 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from '@/components/ui/separator';
-import { PlusCircle, X, Loader2, Droplet, AlertCircle } from 'lucide-react';
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle 
-} from "@/components/ui/alert-dialog";
-import { Label } from "@/components/ui/label";
+import { PlusCircle, X, Loader2, Droplet } from 'lucide-react';
 
 // Define form schema
 const semiFinishedSchema = z.object({
@@ -84,12 +73,11 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   const [selectedRawMaterial, setSelectedRawMaterial] = useState<string>('');
   const [percentage, setPercentage] = useState<number>(0);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [waterRawMaterial, setWaterRawMaterial] = useState<any>(null);
-  const [showAddWaterDialog, setShowAddWaterDialog] = useState<boolean>(false);
-  const [waterName, setWaterName] = useState<string>('ماء');
-  const [waterCode, setWaterCode] = useState<string>('');
-  const [waterUnit, setWaterUnit] = useState<string>('لتر');
-  const [waterCost, setWaterCost] = useState<number>(0);
+  
+  // Default water properties - always considered available
+  const WATER_ID = -999;  // Using a special ID for water
+  const WATER_NAME = "ماء";
+  const WATER_CODE = "WATER-000";
   
   // Fetch raw materials
   const { data: rawMaterials = [], isLoading: isRawMaterialsLoading } = useQuery({
@@ -104,49 +92,6 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       return data;
     }
   });
-  
-  // Fetch water raw material on component mount
-  useEffect(() => {
-    const fetchWaterRawMaterial = async () => {
-      try {
-        // Attempt to find water in raw materials by name containing "ماء" or "water"
-        const { data, error } = await supabase
-          .from('raw_materials')
-          .select('id, name, code')
-          .or('name.ilike.%ماء%,name.ilike.%water%')
-          .limit(1);
-          
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          console.log("Found water raw material:", data[0]);
-          setWaterRawMaterial(data[0]);
-        } else {
-          console.log("Water raw material not found in database");
-          
-          // Get the latest raw material code to generate the next one
-          const { data: latestRawMaterial, error: codeError } = await supabase
-            .from('raw_materials')
-            .select('code')
-            .order('code', { ascending: false })
-            .limit(1);
-            
-          if (!codeError && latestRawMaterial && latestRawMaterial.length > 0) {
-            const lastCode = latestRawMaterial[0].code;
-            const lastNum = parseInt(lastCode.split('-')[1]);
-            const newCode = `RM-${String(lastNum + 1).padStart(5, '0')}`;
-            setWaterCode(newCode);
-          } else {
-            setWaterCode('RM-00001');
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching water raw material:", error);
-      }
-    };
-    
-    fetchWaterRawMaterial();
-  }, []);
   
   const form = useForm<z.infer<typeof semiFinishedSchema>>({
     resolver: zodResolver(semiFinishedSchema),
@@ -245,37 +190,8 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     return true;
   };
   
-  // Create water raw material in database
-  const createWaterRawMaterial = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('raw_materials')
-        .insert({
-          code: waterCode,
-          name: waterName,
-          unit: waterUnit,
-          quantity: 1000, // نفترض كمية كبيرة من الماء متاحة دائمًا
-          unit_cost: waterCost,
-          min_stock: 0 // لا حاجة لحد أدنى للماء
-        })
-        .select();
-        
-      if (error) throw error;
-      
-      if (data && data.length > 0) {
-        setWaterRawMaterial(data[0]);
-        toast.success('تم إنشاء مادة الماء بنجاح');
-        return data[0];
-      }
-    } catch (error: any) {
-      console.error('Error creating water raw material:', error);
-      toast.error(`فشل في إنشاء مادة الماء: ${error.message}`);
-    }
-    return null;
-  };
-  
   // New function to add water to complete the formula to 100%
-  const addWaterToCompleteFormula = async () => {
+  const addWaterToCompleteFormula = () => {
     // Calculate current total percentage
     const currentTotal = calculateTotalPercentage();
     
@@ -291,17 +207,11 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       return;
     }
     
-    // If water raw material doesn't exist, ask to create it
-    if (!waterRawMaterial) {
-      setShowAddWaterDialog(true);
-      return;
-    }
-    
     // Calculate how much water to add
     const waterPercentage = parseFloat((100 - currentTotal).toFixed(2));
     
     // Check if water is already an ingredient
-    const existingWaterIndex = ingredients.findIndex(ing => ing.id === waterRawMaterial.id);
+    const existingWaterIndex = ingredients.findIndex(ing => ing.id === WATER_ID);
     
     if (existingWaterIndex >= 0) {
       // Update existing water percentage
@@ -316,40 +226,15 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       setIngredients([
         ...ingredients,
         {
-          id: waterRawMaterial.id,
-          code: waterRawMaterial.code,
-          name: waterRawMaterial.name,
+          id: WATER_ID,
+          code: WATER_CODE,
+          name: WATER_NAME,
           percentage: waterPercentage
         }
       ]);
     }
     
     toast.success(`تم إضافة ${waterPercentage}% من الماء لاستكمال التركيبة إلى 100%`);
-  };
-  
-  // Handler for creating water and then adding it to formula
-  const handleCreateWaterAndAdd = async () => {
-    const newWaterMaterial = await createWaterRawMaterial();
-    setShowAddWaterDialog(false);
-    
-    if (newWaterMaterial) {
-      // Calculate how much water to add
-      const currentTotal = calculateTotalPercentage();
-      const waterPercentage = parseFloat((100 - currentTotal).toFixed(2));
-      
-      // Add water as a new ingredient
-      setIngredients([
-        ...ingredients,
-        {
-          id: newWaterMaterial.id,
-          code: newWaterMaterial.code,
-          name: newWaterMaterial.name,
-          percentage: waterPercentage
-        }
-      ]);
-      
-      toast.success(`تم إضافة ${waterPercentage}% من الماء لاستكمال التركيبة إلى 100%`);
-    }
   };
   
   const mutation = useMutation({
@@ -377,13 +262,66 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           .delete()
           .eq('semi_finished_id', initialData.id);
         
-        // Then insert new ingredients
+        // Then insert new ingredients (taking special care of water)
         if (ingredients.length > 0) {
-          const ingredientData = ingredients.map(ing => ({
-            semi_finished_id: initialData.id,
-            raw_material_id: ing.id,
-            percentage: ing.percentage
-          }));
+          const ingredientData = ingredients.map(ing => {
+            // For water, check if we have an existing water material in the database
+            if (ing.id === WATER_ID) {
+              return {
+                semi_finished_id: initialData.id,
+                raw_material_id: null, // Will be updated below
+                ingredient_type: 'water',
+                percentage: ing.percentage
+              };
+            }
+            
+            return {
+              semi_finished_id: initialData.id,
+              raw_material_id: ing.id,
+              percentage: ing.percentage
+            };
+          });
+          
+          // First, try to find an existing water raw material
+          let waterRawMaterialId = null;
+          if (ingredients.some(ing => ing.id === WATER_ID)) {
+            const { data: waterMaterial } = await supabase
+              .from('raw_materials')
+              .select('id')
+              .or('name.ilike.%ماء%,name.ilike.%water%')
+              .limit(1);
+              
+            if (waterMaterial && waterMaterial.length > 0) {
+              waterRawMaterialId = waterMaterial[0].id;
+            } else {
+              // Create water raw material
+              const { data: newWater } = await supabase
+                .from('raw_materials')
+                .insert({
+                  code: WATER_CODE,
+                  name: WATER_NAME,
+                  unit: 'لتر',
+                  quantity: 1000, // نفترض كمية كبيرة من الماء متاحة دائمًا
+                  unit_cost: 0,
+                  min_stock: 0
+                })
+                .select();
+                
+              if (newWater && newWater.length > 0) {
+                waterRawMaterialId = newWater[0].id;
+              }
+            }
+            
+            // Update the water ingredient with the actual raw material ID
+            if (waterRawMaterialId) {
+              ingredientData.forEach(ing => {
+                if (ing.ingredient_type === 'water') {
+                  ing.raw_material_id = waterRawMaterialId;
+                  delete ing.ingredient_type;
+                }
+              });
+            }
+          }
           
           const { error: ingredientError } = await supabase
             .from('semi_finished_ingredients')
@@ -424,13 +362,66 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           
         if (error) throw error;
         
-        // Insert ingredients
+        // Insert ingredients (taking special care of water)
         if (ingredients.length > 0 && data && data.length > 0) {
-          const ingredientData = ingredients.map(ing => ({
-            semi_finished_id: data[0].id,
-            raw_material_id: ing.id,
-            percentage: ing.percentage
-          }));
+          const ingredientData = ingredients.map(ing => {
+            // For water, mark it specially
+            if (ing.id === WATER_ID) {
+              return {
+                semi_finished_id: data[0].id,
+                raw_material_id: null, // Will be updated below
+                ingredient_type: 'water',
+                percentage: ing.percentage
+              };
+            }
+            
+            return {
+              semi_finished_id: data[0].id,
+              raw_material_id: ing.id,
+              percentage: ing.percentage
+            };
+          });
+          
+          // First, try to find an existing water raw material
+          let waterRawMaterialId = null;
+          if (ingredients.some(ing => ing.id === WATER_ID)) {
+            const { data: waterMaterial } = await supabase
+              .from('raw_materials')
+              .select('id')
+              .or('name.ilike.%ماء%,name.ilike.%water%')
+              .limit(1);
+              
+            if (waterMaterial && waterMaterial.length > 0) {
+              waterRawMaterialId = waterMaterial[0].id;
+            } else {
+              // Create water raw material
+              const { data: newWater } = await supabase
+                .from('raw_materials')
+                .insert({
+                  code: WATER_CODE,
+                  name: WATER_NAME,
+                  unit: 'لتر',
+                  quantity: 1000, // نفترض كمية كبيرة من الماء متاحة دائمًا
+                  unit_cost: 0,
+                  min_stock: 0
+                })
+                .select();
+                
+              if (newWater && newWater.length > 0) {
+                waterRawMaterialId = newWater[0].id;
+              }
+            }
+            
+            // Update the water ingredient with the actual raw material ID
+            if (waterRawMaterialId) {
+              ingredientData.forEach(ing => {
+                if (ing.ingredient_type === 'water') {
+                  ing.raw_material_id = waterRawMaterialId;
+                  delete ing.ingredient_type;
+                }
+              });
+            }
+          }
           
           const { error: ingredientError } = await supabase
             .from('semi_finished_ingredients')
@@ -467,107 +458,77 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   };
   
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>
-              أدخل بيانات المنتج النصف مصنع مع المكونات ونسبها
-            </DialogDescription>
-          </DialogHeader>
-          
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            أدخل بيانات المنتج النصف مصنع مع المكونات ونسبها
+          </DialogDescription>
+        </DialogHeader>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>اسم المنتج</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="أدخل اسم المنتج النصف مصنع" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="unit"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>اسم المنتج</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="أدخل اسم المنتج النصف مصنع" />
-                    </FormControl>
+                    <FormLabel>وحدة القياس</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر وحدة القياس" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {units.map(unit => (
+                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="unit"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>وحدة القياس</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="اختر وحدة القياس" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {units.map(unit => (
-                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="quantity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>الكمية</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="unit_cost"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>تكلفة الوحدة</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="sales_price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>سعر البيع</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
               <FormField
                 control={form.control}
-                name="min_stock"
+                name="quantity"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>الحد الأدنى للمخزون</FormLabel>
+                    <FormLabel>الكمية</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="unit_cost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>تكلفة الوحدة</FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
                     </FormControl>
@@ -576,184 +537,145 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                 )}
               />
               
-              <Separator className="my-4" />
+              <FormField
+                control={form.control}
+                name="sales_price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>سعر البيع</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            <FormField
+              control={form.control}
+              name="min_stock"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>الحد الأدنى للمخزون</FormLabel>
+                  <FormControl>
+                    <Input type="number" min="0" step="0.01" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <Separator className="my-4" />
+            
+            <div className="space-y-4">
+              <h3 className="text-md font-medium">مكونات المنتج (المواد الأولية)</h3>
               
-              <div className="space-y-4">
-                <h3 className="text-md font-medium">مكونات المنتج (المواد الأولية)</h3>
-                
-                <div className="flex space-x-4 rtl:space-x-reverse">
-                  <div className="flex-1">
-                    <FormLabel>المادة الأولية</FormLabel>
-                    <Select
-                      value={selectedRawMaterial}
-                      onValueChange={setSelectedRawMaterial}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر مادة أولية" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {rawMaterials.map(material => (
-                          <SelectItem key={material.id} value={String(material.id)}>
-                            {material.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="w-32">
-                    <FormLabel>النسبة %</FormLabel>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={percentage}
-                      onChange={e => setPercentage(Number(e.target.value))}
-                    />
-                  </div>
-                  
-                  <div className="flex items-end">
-                    <Button type="button" onClick={handleAddIngredient}>
-                      <PlusCircle size={16} className="mr-2" />
-                      إضافة
-                    </Button>
-                  </div>
+              <div className="flex space-x-4 rtl:space-x-reverse">
+                <div className="flex-1">
+                  <FormLabel>المادة الأولية</FormLabel>
+                  <Select
+                    value={selectedRawMaterial}
+                    onValueChange={setSelectedRawMaterial}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر مادة أولية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rawMaterials.map(material => (
+                        <SelectItem key={material.id} value={String(material.id)}>
+                          {material.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 
-                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                  {ingredients.length > 0 ? (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm font-medium rtl:text-right ltr:text-left">
-                          إجمالي النسب: {calculateTotalPercentage()}%
+                <div className="w-32">
+                  <FormLabel>النسبة %</FormLabel>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={percentage}
+                    onChange={e => setPercentage(Number(e.target.value))}
+                  />
+                </div>
+                
+                <div className="flex items-end">
+                  <Button type="button" onClick={handleAddIngredient}>
+                    <PlusCircle size={16} className="mr-2" />
+                    إضافة
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {ingredients.length > 0 ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm font-medium rtl:text-right ltr:text-left">
+                        إجمالي النسب: {calculateTotalPercentage()}%
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={addWaterToCompleteFormula}
+                        className="flex items-center gap-2"
+                      >
+                        <Droplet size={16} />
+                        إضافة ماء لاستكمال 100%
+                      </Button>
+                    </div>
+                    {ingredients.map(ing => (
+                      <div key={ing.id} className="flex justify-between items-center p-2 border rounded-md">
+                        <div>
+                          <div className="font-medium">{ing.name}</div>
+                          <div className="text-sm text-muted-foreground">النسبة: {ing.percentage}%</div>
                         </div>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={addWaterToCompleteFormula}
-                          className="flex items-center gap-2"
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveIngredient(ing.id)}
                         >
-                          <Droplet size={16} />
-                          إضافة ماء لاستكمال 100%
+                          <X size={16} />
                         </Button>
                       </div>
-                      {ingredients.map(ing => (
-                        <div key={ing.id} className="flex justify-between items-center p-2 border rounded-md">
-                          <div>
-                            <div className="font-medium">{ing.name}</div>
-                            <div className="text-sm text-muted-foreground">النسبة: {ing.percentage}%</div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveIngredient(ing.id)}
-                          >
-                            <X size={16} />
-                          </Button>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <div className="text-muted-foreground text-center py-2">
-                      لم يتم إضافة مكونات بعد
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </>
+                ) : (
+                  <div className="text-muted-foreground text-center py-2">
+                    لم يتم إضافة مكونات بعد
+                  </div>
+                )}
               </div>
-              
-              <DialogFooter className="mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onClose}
-                >
-                  إلغاء
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={mutation.isPending}
-                >
-                  {mutation.isPending ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />
-                      جاري الحفظ...
-                    </>
-                  ) : submitText}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Dialog for creating water raw material - FIXED: Using Label instead of FormLabel */}
-      <AlertDialog open={showAddWaterDialog} onOpenChange={setShowAddWaterDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>إضافة مادة الماء</AlertDialogTitle>
-            <AlertDialogDescription>
-              <div className="flex items-center gap-2 mb-4 text-amber-500">
-                <AlertCircle size={18} />
-                <span>لم يتم العثور على مادة "ماء" في قاعدة البيانات. يجب إضافتها أولاً.</span>
-              </div>
-              <p className="mb-4">أدخل بيانات مادة الماء لإضافتها إلى قاعدة البيانات ثم استخدامها في التركيبة:</p>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>الاسم</Label>
-                    <Input 
-                      value={waterName} 
-                      onChange={e => setWaterName(e.target.value)} 
-                      placeholder="اسم المادة"
-                    />
-                  </div>
-                  <div>
-                    <Label>الكود</Label>
-                    <Input 
-                      value={waterCode} 
-                      onChange={e => setWaterCode(e.target.value)} 
-                      placeholder="الكود"
-                      disabled
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>وحدة القياس</Label>
-                    <Select value={waterUnit} onValueChange={setWaterUnit}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر وحدة القياس" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {units.map(unit => (
-                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>التكلفة</Label>
-                    <Input 
-                      type="number" 
-                      value={waterCost} 
-                      onChange={e => setWaterCost(Number(e.target.value))} 
-                      placeholder="تكلفة الوحدة"
-                    />
-                  </div>
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCreateWaterAndAdd}>إضافة واستخدام</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+            </div>
+            
+            <DialogFooter className="mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="submit"
+                disabled={mutation.isPending}
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2 size={16} className="mr-2 animate-spin" />
+                    جاري الحفظ...
+                  </>
+                ) : submitText}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 };
 
 export default SemiFinishedForm;
-
