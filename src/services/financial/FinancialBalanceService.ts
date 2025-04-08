@@ -52,11 +52,6 @@ class FinancialBalanceService {
       
       const newCashBalance = Number(balance.cash_balance) + amount;
       
-      if (newCashBalance < 0) {
-        toast.error('الرصيد النقدي لا يمكن أن يكون سالباً');
-        return false;
-      }
-      
       const { error } = await supabase
         .from('financial_balance')
         .update({
@@ -87,11 +82,6 @@ class FinancialBalanceService {
       if (!balance) return false;
       
       const newBankBalance = Number(balance.bank_balance) + amount;
-      
-      if (newBankBalance < 0) {
-        toast.error('الرصيد البنكي لا يمكن أن يكون سالباً');
-        return false;
-      }
       
       const { error } = await supabase
         .from('financial_balance')
@@ -139,56 +129,6 @@ class FinancialBalanceService {
       default:
         // الافتراضي هو النقدية
         return this.updateCashBalance(actualAmount, reason);
-    }
-  }
-  
-  /**
-   * تحديث أرصدة الخزينة يدويًا
-   * @param cashBalance الرصيد النقدي الجديد
-   * @param bankBalance الرصيد البنكي الجديد
-   * @returns نجاح العملية
-   */
-  public async updateBalancesManually(cashBalance: number, bankBalance: number): Promise<boolean> {
-    try {
-      if (cashBalance < 0 || bankBalance < 0) {
-        toast.error('الأرصدة لا يمكن أن تكون سالبة');
-        return false;
-      }
-      
-      const { error } = await supabase
-        .from('financial_balance')
-        .update({
-          cash_balance: cashBalance,
-          bank_balance: bankBalance,
-          last_updated: new Date().toISOString()
-        })
-        .eq('id', '1');
-      
-      if (error) throw error;
-      
-      toast.success('تم تحديث أرصدة الخزينة بنجاح');
-      return true;
-    } catch (error) {
-      console.error('Error updating financial balances manually:', error);
-      toast.error('حدث خطأ أثناء تحديث أرصدة الخزينة');
-      return false;
-    }
-  }
-  
-  /**
-   * إرسال إشعار بتغيير البيانات المالية
-   * @param source مصدر التغيير
-   * @private
-   */
-  private notifyFinancialDataChange(source: string): void {
-    try {
-      const event = new CustomEvent('financial-data-change', { 
-        detail: { source: source }
-      });
-      window.dispatchEvent(event);
-      console.log(`تم إرسال إشعار بتغيير البيانات المالية من مصدر: ${source}`);
-    } catch (error) {
-      console.error('خطأ في إرسال إشعار بتغيير البيانات المالية:', error);
     }
   }
 }
