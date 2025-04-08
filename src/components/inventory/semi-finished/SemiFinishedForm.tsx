@@ -43,6 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
 
 // Define form schema
 const semiFinishedSchema = z.object({
@@ -685,7 +686,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         </DialogContent>
       </Dialog>
       
-      {/* Dialog for creating water raw material */}
+      {/* Dialog for creating water raw material - FIXED: Using Label instead of FormLabel */}
       <AlertDialog open={showAddWaterDialog} onOpenChange={setShowAddWaterDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -700,7 +701,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <FormLabel>الاسم</FormLabel>
+                    <Label>الاسم</Label>
                     <Input 
                       value={waterName} 
                       onChange={e => setWaterName(e.target.value)} 
@@ -708,7 +709,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                     />
                   </div>
                   <div>
-                    <FormLabel>الكود</FormLabel>
+                    <Label>الكود</Label>
                     <Input 
                       value={waterCode} 
                       onChange={e => setWaterCode(e.target.value)} 
@@ -719,7 +720,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <FormLabel>وحدة القياس</FormLabel>
+                    <Label>وحدة القياس</Label>
                     <Select value={waterUnit} onValueChange={setWaterUnit}>
                       <SelectTrigger>
                         <SelectValue placeholder="اختر وحدة القياس" />
@@ -732,7 +733,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                     </Select>
                   </div>
                   <div>
-                    <FormLabel>التكلفة</FormLabel>
+                    <Label>التكلفة</Label>
                     <Input 
                       type="number" 
                       value={waterCost} 
@@ -755,3 +756,4 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
 };
 
 export default SemiFinishedForm;
+
