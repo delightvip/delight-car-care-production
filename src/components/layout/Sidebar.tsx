@@ -33,7 +33,7 @@ const Sidebar = () => {
           />
           
           <div className="flex-1 overflow-auto">
-            <SidebarMenu />
+            <SidebarMenu isCollapsed={!isOpen} />
           </div>
           
           <div className="border-t py-4 px-4">

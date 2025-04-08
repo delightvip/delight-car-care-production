@@ -9,9 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import CashManagementService from '@/services/financial/CashManagementService';
-import FinancialBalanceService from '@/services/financial/FinancialBalanceService';
 
 const formSchema = z.object({
   account: z.enum(['cash', 'bank']),
@@ -23,13 +22,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 const CashWithdrawalForm: React.FC = () => {
   const cashManagementService = CashManagementService.getInstance();
-  const financialBalanceService = FinancialBalanceService.getInstance();
   const queryClient = useQueryClient();
-  
-  const { data: balance } = useQuery({
-    queryKey: ['financial-balance'],
-    queryFn: () => financialBalanceService.getCurrentBalance(),
-  });
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -63,17 +56,7 @@ const CashWithdrawalForm: React.FC = () => {
     },
   });
   
-  const onSubmit = async (values: FormValues) => {
-    // التحقق من وجود رصيد كافٍ
-    const availableBalance = values.account === 'cash' 
-      ? balance?.cash_balance || 0 
-      : balance?.bank_balance || 0;
-      
-    if (values.amount > availableBalance) {
-      toast.error(`الرصيد غير كافٍ. الرصيد المتاح: ${availableBalance.toLocaleString('ar-EG')} جنيه`);
-      return;
-    }
-    
+  const onSubmit = (values: FormValues) => {
     mutation.mutate(values);
   };
   
