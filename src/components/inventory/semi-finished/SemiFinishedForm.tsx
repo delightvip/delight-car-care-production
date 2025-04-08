@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from '@/components/ui/separator';
-import { PlusCircle, X, Loader2 } from 'lucide-react';
+import { PlusCircle, X, Loader2, Droplet } from 'lucide-react';
 
 // Define form schema
 const semiFinishedSchema = z.object({
@@ -73,6 +73,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   const [selectedRawMaterial, setSelectedRawMaterial] = useState<string>('');
   const [percentage, setPercentage] = useState<number>(0);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [waterRawMaterial, setWaterRawMaterial] = useState<any>(null);
   
   // Fetch raw materials
   const { data: rawMaterials = [], isLoading: isRawMaterialsLoading } = useQuery({
@@ -87,6 +88,32 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
       return data;
     }
   });
+  
+  // Fetch water raw material on component mount
+  useEffect(() => {
+    const fetchWaterRawMaterial = async () => {
+      try {
+        // Attempt to find water in raw materials by name containing "ماء" or "water"
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('id, name, code')
+          .or('name.ilike.%ماء%,name.ilike.%water%')
+          .limit(1);
+          
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          setWaterRawMaterial(data[0]);
+        } else {
+          console.log("Water raw material not found in database");
+        }
+      } catch (error) {
+        console.error("Error fetching water raw material:", error);
+      }
+    };
+    
+    fetchWaterRawMaterial();
+  }, []);
   
   const form = useForm<z.infer<typeof semiFinishedSchema>>({
     resolver: zodResolver(semiFinishedSchema),
@@ -172,13 +199,70 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     setIngredients(ingredients.filter(ing => ing.id !== id));
   };
   
+  const calculateTotalPercentage = (): number => {
+    return ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
+  };
+  
   const validateTotalPercentage = (): boolean => {
-    const total = ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
+    const total = calculateTotalPercentage();
     if (Math.abs(total - 100) > 0.01) {
       toast.error(`مجموع النسب يجب أن يكون 100%، الإجمالي الحالي: ${total}%`);
       return false;
     }
     return true;
+  };
+  
+  // New function to add water to complete the formula to 100%
+  const addWaterToCompleteFormula = () => {
+    // Check if water raw material exists
+    if (!waterRawMaterial) {
+      toast.error("لم يتم العثور على مادة 'ماء' في قاعدة البيانات. يرجى إضافة مادة خام باسم 'ماء' أولا.");
+      return;
+    }
+    
+    // Calculate current total percentage
+    const currentTotal = calculateTotalPercentage();
+    
+    // If already 100%, no need to add water
+    if (Math.abs(currentTotal - 100) < 0.01) {
+      toast.info("مجموع النسب بالفعل 100%، لا حاجة لإضافة الماء.");
+      return;
+    }
+    
+    // If more than 100%, can't add water
+    if (currentTotal > 100) {
+      toast.error("مجموع النسب أكبر من 100%، لا يمكن إضافة الماء. يرجى تعديل النسب الحالية أولا.");
+      return;
+    }
+    
+    // Calculate how much water to add
+    const waterPercentage = parseFloat((100 - currentTotal).toFixed(2));
+    
+    // Check if water is already an ingredient
+    const existingWaterIndex = ingredients.findIndex(ing => ing.id === waterRawMaterial.id);
+    
+    if (existingWaterIndex >= 0) {
+      // Update existing water percentage
+      const updatedIngredients = [...ingredients];
+      updatedIngredients[existingWaterIndex] = {
+        ...updatedIngredients[existingWaterIndex],
+        percentage: waterPercentage
+      };
+      setIngredients(updatedIngredients);
+    } else {
+      // Add water as a new ingredient
+      setIngredients([
+        ...ingredients,
+        {
+          id: waterRawMaterial.id,
+          code: waterRawMaterial.code,
+          name: waterRawMaterial.name,
+          percentage: waterPercentage
+        }
+      ]);
+    }
+    
+    toast.success(`تم إضافة ${waterPercentage}% من الماء لاستكمال التركيبة إلى 100%`);
   };
   
   const mutation = useMutation({
@@ -451,8 +535,20 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                 {ingredients.length > 0 ? (
                   <>
-                    <div className="text-sm font-medium rtl:text-right ltr:text-left">
-                      إجمالي النسب: {ingredients.reduce((sum, ing) => sum + ing.percentage, 0)}%
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm font-medium rtl:text-right ltr:text-left">
+                        إجمالي النسب: {calculateTotalPercentage()}%
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={addWaterToCompleteFormula}
+                        className="flex items-center gap-2"
+                        disabled={!waterRawMaterial}
+                      >
+                        <Droplet size={16} />
+                        إضافة ماء لاستكمال 100%
+                      </Button>
                     </div>
                     {ingredients.map(ing => (
                       <div key={ing.id} className="flex justify-between items-center p-2 border rounded-md">
