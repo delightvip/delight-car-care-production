@@ -236,18 +236,46 @@ const ProductionOrders = () => {
       // عرض مؤشر تحميل
       toast.loading("جاري إنشاء أمر الإنتاج...");
       
-      // إرسال التكلفة الإجمالية المحسوبة مع بيانات الأمر الجديد
-      const createdOrder = await productionService.createProductionOrder(
-        newOrder.productCode, 
-        newOrder.quantity,
-        calculatedTotalCost // إضافة التكلفة المحسوبة
-      );
+      // إضافة آلية إعادة المحاولة
+      let attempts = 0;
+      const maxAttempts = 3;
+      let createdOrder: ProductionOrder | null = null;
+      let error: any = null;
       
+      while (attempts < maxAttempts && !createdOrder) {
+        attempts++;
+        
+        try {
+          console.log(`[DEBUG] محاولة إنشاء أمر إنتاج ${attempts}/${maxAttempts}`);
+          
+          // إرسال التكلفة الإجمالية المحسوبة مع بيانات الأمر الجديد
+          createdOrder = await productionService.createProductionOrder(
+            newOrder.productCode, 
+            newOrder.quantity,
+            calculatedTotalCost
+          );
+          
+          if (createdOrder) {
+            console.log(`[DEBUG] تم إنشاء أمر الإنتاج بنجاح في المحاولة ${attempts}`);
+            break; // الخروج من الحلقة عند النجاح
+          }
+        } catch (e) {
+          error = e;
+          console.error(`[ERROR] فشلت محاولة إنشاء أمر الإنتاج ${attempts}:`, e);
+          
+          // تأخير قبل المحاولة التالية
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+      
+      // التعامل مع النتيجة النهائية بعد محاولات متعددة
       if (createdOrder) {
         // إغلاق مؤشر التحميل
         toast.dismiss();
         
-        // تحديث البيانات بعد تأخير قصير
+        // تحديث البيانات بعد تأخير أطول لضمان اكتمال التحديث
         setTimeout(() => {
           refetchOrders();
           setNewOrder({
@@ -257,10 +285,11 @@ const ProductionOrders = () => {
           setIngredients([]);
           setIsAddDialogOpen(false);
           toast.success(`تم إنشاء أمر إنتاج ${createdOrder.productName} بنجاح`);
-        }, 300);
+        }, 500); // زيادة التأخير لضمان اكتمال عملية التحديث في قاعدة البيانات
       } else {
         toast.dismiss();
-        toast.error("فشل إنشاء أمر الإنتاج");
+        console.error("فشل إنشاء أمر الإنتاج بعد محاولات متعددة:", error);
+        toast.error(`فشل إنشاء أمر الإنتاج بعد ${maxAttempts} محاولات`);
       }
     } catch (error) {
       toast.dismiss();
@@ -273,15 +302,69 @@ const ProductionOrders = () => {
     if (!currentOrder || !newStatus) return;
     
     try {
-      const success = await productionService.updateProductionOrderStatus(
-        currentOrder.id, 
-        newStatus as 'pending' | 'inProgress' | 'completed' | 'cancelled'
-      );
+      // عرض مؤشر تحميل
+      toast.loading(`جاري تحديث حالة أمر الإنتاج إلى ${statusTranslations[newStatus as keyof typeof statusTranslations]}...`);
+      
+      // تنبيه إضافي عند تحديث الحالة إلى "مكتمل"
+      let userConfirmed = true;
+      if (newStatus === 'completed' && currentOrder.status !== 'completed') {
+        userConfirmed = window.confirm(
+          'سيتم خصم المواد الأولية من المخزون وإضافة المنتج النصف مصنع. هل أنت متأكد؟'
+        );
+      }
+      
+      if (!userConfirmed) {
+        toast.dismiss();
+        return;
+      }
+      
+      // إضافة آلية إعادة المحاولة
+      let attempts = 0;
+      const maxAttempts = 3;
+      let success = false;
+      let error: any = null;
+      
+      while (attempts < maxAttempts && !success) {
+        attempts++;
+        
+        try {
+          console.log(`[DEBUG] محاولة تحديث حالة أمر الإنتاج ${attempts}/${maxAttempts}`);
+          
+          success = await productionService.updateProductionOrderStatus(
+            currentOrder.id, 
+            newStatus as 'pending' | 'inProgress' | 'completed' | 'cancelled'
+          );
+          
+          if (success) {
+            console.log(`[DEBUG] تم تحديث حالة أمر الإنتاج بنجاح في المحاولة ${attempts}`);
+            break;
+          }
+        } catch (e) {
+          error = e;
+          console.error(`[ERROR] فشلت محاولة تحديث حالة أمر الإنتاج ${attempts}:`, e);
+          
+          // تأخير قبل المحاولة التالية
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+      
+      toast.dismiss();
+      
       if (success) {
-        refetchOrders();
-        setIsStatusDialogOpen(false);
+        // تحديث البيانات بعد تأخير قصير لضمان اكتمال العملية
+        setTimeout(() => {
+          refetchOrders();
+          setIsStatusDialogOpen(false);
+          toast.success(`تم تحديث حالة أمر الإنتاج إلى ${statusTranslations[newStatus as keyof typeof statusTranslations]}`);
+        }, 500);
+      } else {
+        console.error("فشل تحديث حالة أمر الإنتاج بعد محاولات متعددة:", error);
+        toast.error(`فشل تحديث حالة أمر الإنتاج بعد ${maxAttempts} محاولات`);
       }
     } catch (error) {
+      toast.dismiss();
       console.error("Error updating status:", error);
       toast.error("حدث خطأ أثناء تحديث حالة أمر الإنتاج");
     }
@@ -291,12 +374,59 @@ const ProductionOrders = () => {
     if (!currentOrder) return;
     
     try {
-      const success = await productionService.deleteProductionOrder(currentOrder.id);
+      // عرض تأكيد إضافي للتأكد من رغبة المستخدم في الحذف
+      const userConfirmed = window.confirm(`هل أنت متأكد من حذف أمر الإنتاج ${currentOrder.code}؟ لا يمكن التراجع عن هذا الإجراء.`);
+      if (!userConfirmed) {
+        return;
+      }
+      
+      // عرض مؤشر تحميل
+      toast.loading(`جاري حذف أمر الإنتاج ${currentOrder.code}...`);
+      
+      // إضافة آلية إعادة المحاولة
+      let attempts = 0;
+      const maxAttempts = 3;
+      let success = false;
+      let error: any = null;
+      
+      while (attempts < maxAttempts && !success) {
+        attempts++;
+        
+        try {
+          console.log(`[DEBUG] محاولة حذف أمر الإنتاج ${attempts}/${maxAttempts}`);
+          
+          success = await productionService.deleteProductionOrder(currentOrder.id);
+          
+          if (success) {
+            console.log(`[DEBUG] تم حذف أمر الإنتاج بنجاح في المحاولة ${attempts}`);
+            break;
+          }
+        } catch (e) {
+          error = e;
+          console.error(`[ERROR] فشلت محاولة حذف أمر الإنتاج ${attempts}:`, e);
+          
+          // تأخير قبل المحاولة التالية
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+      
+      toast.dismiss();
+      
       if (success) {
-        refetchOrders();
-        setIsDeleteDialogOpen(false);
+        // تحديث البيانات بعد تأخير قصير لضمان اكتمال العملية
+        setTimeout(() => {
+          refetchOrders();
+          setIsDeleteDialogOpen(false);
+          toast.success(`تم حذف أمر الإنتاج ${currentOrder.code} بنجاح`);
+        }, 500);
+      } else {
+        console.error("فشل حذف أمر الإنتاج بعد محاولات متعددة:", error);
+        toast.error(`فشل حذف أمر الإنتاج بعد ${maxAttempts} محاولات`);
       }
     } catch (error) {
+      toast.dismiss();
       console.error("Error deleting order:", error);
       toast.error("حدث خطأ أثناء حذف أمر الإنتاج");
     }
@@ -325,36 +455,70 @@ const ProductionOrders = () => {
       // عرض مؤشر تحميل
       toast.loading("جاري تحديث أمر الإنتاج...");
       
-      const success = await productionService.updateProductionOrder(
-        editOrder.id,
-        {
-          productCode: editOrder.productCode,
-          productName: semiFinishedProducts.find(p => p.code === editOrder.productCode)?.name || '',
-          quantity: editOrder.quantity,
-          unit: editOrder.unit,
-          ingredients: ingredients.map(ing => ({
-            code: ing.code,
-            name: ing.name,
-            requiredQuantity: ing.requiredQuantity
-          })),
-          totalCost: calculatedTotalCost // إضافة التكلفة المحسوبة
-        }
-      );
+      // إعداد بيانات التحديث
+      const updateData = {
+        productCode: editOrder.productCode,
+        productName: semiFinishedProducts.find(p => p.code === editOrder.productCode)?.name || '',
+        quantity: editOrder.quantity,
+        unit: editOrder.unit,
+        ingredients: ingredients.map(ing => ({
+          code: ing.code,
+          name: ing.name,
+          requiredQuantity: ing.requiredQuantity
+        })),
+        totalCost: calculatedTotalCost
+      };
       
+      // إضافة آلية إعادة المحاولة
+      let attempts = 0;
+      const maxAttempts = 3;
+      let success = false;
+      let error: any = null;
+      
+      while (attempts < maxAttempts && !success) {
+        attempts++;
+        
+        try {
+          console.log(`[DEBUG] محاولة تحديث أمر إنتاج ${attempts}/${maxAttempts}`);
+          
+          success = await productionService.updateProductionOrder(
+            editOrder.id,
+            updateData
+          );
+          
+          if (success) {
+            console.log(`[DEBUG] تم تحديث أمر الإنتاج بنجاح في المحاولة ${attempts}`);
+            break; // الخروج من الحلقة عند النجاح
+          }
+        } catch (e) {
+          error = e;
+          console.error(`[ERROR] فشلت محاولة تحديث أمر الإنتاج ${attempts}:`, e);
+          
+          // تأخير قبل المحاولة التالية
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+      
+      // التعامل مع النتيجة النهائية بعد محاولات متعددة
       if (success) {
         // إغلاق نافذة التعديل
         setIsEditDialogOpen(false);
         setIngredients([]);
         
-        // انتظار قليلاً ثم تحديث البيانات
+        // إغلاق مؤشر التحميل
         toast.dismiss();
+        
+        // تحديث البيانات بعد تأخير أطول لضمان اكتمال التحديث
         setTimeout(() => {
           refetchOrders();
           toast.success("تم تحديث أمر الإنتاج بنجاح");
-        }, 300); // تأخير لضمان اكتمال عملية التحديث في قاعدة البيانات
+        }, 500); // زيادة التأخير لضمان اكتمال عملية التحديث في قاعدة البيانات
       } else {
         toast.dismiss();
-        toast.error("فشل تحديث أمر الإنتاج");
+        console.error("فشل تحديث أمر الإنتاج بعد محاولات متعددة:", error);
+        toast.error(`فشل تحديث أمر الإنتاج بعد ${maxAttempts} محاولات`);
       }
     } catch (error) {
       toast.dismiss();
