@@ -1,141 +1,204 @@
+import React, { useState } from 'react';
+import { LayoutDashboard, Users, ShoppingCart, Package, DollarSign, FileText, Settings, CircleDollarSign } from 'lucide-react';
+import { Separator } from "@/components/ui/separator"
+import { NavLink, useLocation } from 'react-router-dom';
+import { useTheme } from "@/components/theme-provider"
 
-import { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import {
-  Home,
-  ShoppingCart,
-  Package,
-  Factory,
-  BarChart3,
-  Settings,
-  DollarSign,
-  Archive,
-  Receipt,
-  Wallet,
-  Truck,
-  Users,
-  RotateCw,
-  TrendingUp,
-  LucideIcon,
-  CalendarRange
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import SidebarMenuGroup from './SidebarMenuGroup';
-
-interface SidebarMenuItem {
-  icon: LucideIcon;
+interface MenuItem {
   title: string;
-  path: string;
-  badge?: number;
-  submenu?: {
-    title: string;
-    path: string;
-    badge?: number;
-  }[];
+  icon: React.ReactNode;
+  path?: string;
+  submenu?: MenuItem[];
 }
 
-const SidebarMenu = () => {
+interface SidebarMenuProps {
+  isCollapsed: boolean;
+}
+
+const iconSize = 16;
+
+const SidebarMenu: React.FC<SidebarMenuProps> = ({ isCollapsed }) => {
   const location = useLocation();
+  const { theme } = useTheme()
+  const [openSubmenus, setOpenSubmenus] = useState<string[]>([]);
   
-  const menuItems: Record<string, SidebarMenuItem[]> = {
-    main: [
-      { icon: Home, title: 'الرئيسية', path: '/' },
-    ],
-    commercial: [
-      { icon: ShoppingCart, title: 'لوحة المبيعات', path: '/commercial' },
-      { icon: Receipt, title: 'الفواتير', path: '/commercial/invoices' },
-      { icon: Users, title: 'العملاء والموردين', path: '/commercial/parties' },
-      { icon: Wallet, title: 'المدفوعات', path: '/commercial/payments' },
-      { icon: TrendingUp, title: 'الأرباح', path: '/commercial/profits' },
-      { icon: RotateCw, title: 'المرتجعات', path: '/commercial/returns' },
-    ],
-    inventory: [
-      { icon: Archive, title: 'المخزون', path: '/inventory' },
-      { icon: Package, title: 'المواد الخام', path: '/inventory/raw-materials' },
-      { icon: Package, title: 'مواد التعبئة', path: '/inventory/packaging' },
-      { icon: Package, title: 'منتجات نصف مصنعة', path: '/inventory/semi-finished' },
-      { icon: Package, title: 'المنتجات النهائية', path: '/inventory/finished-products' },
-      { icon: Truck, title: 'حركة المخزون', path: '/inventory/tracking' },
-    ],
-    production: [
-      { icon: Factory, title: 'الإنتاج', path: '/production' },
-      { icon: Factory, title: 'أوامر الإنتاج', path: '/production/orders' },
-      { icon: Package, title: 'أوامر التعبئة', path: '/production/packaging-orders' },
-      { icon: CalendarRange, title: 'تخطيط الإنتاج', path: '/production/planning' },
-    ],
-    financial: [
-      { icon: DollarSign, title: 'المالية', path: '/financial' },
-      { icon: DollarSign, title: 'المعاملات', path: '/financial/transactions' },
-      { icon: DollarSign, title: 'الفئات', path: '/financial/categories' },
-    ],
-    analytics: [
-      { icon: BarChart3, title: 'التقارير والتحليل', path: '/analytics' },
-    ],
-    settings: [
-      { icon: Settings, title: 'الإعدادات', path: '/settings' },
-    ],
+  const toggleSubmenu = (title: string) => {
+    setOpenSubmenus(prev => {
+      if (prev.includes(title)) {
+        return prev.filter(item => item !== title);
+      } else {
+        return [...prev, title];
+      }
+    });
   };
-  
-  const isActive = (path: string) => {
-    if (path === '/' && location.pathname === '/') return true;
-    
-    if (path !== '/') {
-      const endWithSlashPath = path.endsWith('/') ? path : `${path}/`;
-      const currentPath = location.pathname.endsWith('/') ? location.pathname : `${location.pathname}/`;
-      
-      return (
-        currentPath.startsWith(endWithSlashPath) ||
-        location.pathname === path
-      );
-    }
-    
-    return false;
-  };
-  
+
+  // قائمة العناصر الرئيسية
+  const menuItems = [
+    {
+      title: "لوحة التحكم",
+      icon: <LayoutDashboard size={iconSize} />,
+      path: "/",
+    },
+    {
+      title: "إدارة العملاء",
+      icon: <Users size={iconSize} />,
+      submenu: [
+        {
+          title: "قائمة العملاء",
+          path: "/parties",
+        },
+        {
+          title: "إضافة عميل جديد",
+          path: "/parties/new",
+        },
+      ],
+    },
+    {
+      title: "إدارة المبيعات",
+      icon: <ShoppingCart size={iconSize} />,
+      submenu: [
+        {
+          title: "قائمة الفواتير",
+          path: "/invoices",
+        },
+        {
+          title: "إضافة فاتورة جديدة",
+          path: "/invoices/new",
+        },
+        {
+          title: "إدارة المرتجعات",
+          path: "/returns",
+        },
+        {
+          title: "إضافة مرتجع",
+          path: "/returns/new",
+        },
+      ],
+    },
+    {
+      title: "إدارة المخزون",
+      icon: <Package size={iconSize} />,
+      submenu: [
+        {
+          title: "إدارة المواد الخام",
+          path: "/raw-materials",
+        },
+        {
+          title: "إدارة مواد التعبئة",
+          path: "/packaging-materials",
+        },
+        {
+          title: "إدارة المنتجات",
+          path: "/products",
+        },
+        {
+          title: "إدارة التصنيع",
+          path: "/production-orders",
+        },
+        {
+          title: "إدارة وحدات القياس",
+          path: "/units",
+        },
+      ],
+    },
+    {
+      title: "الإدارة المالية",
+      icon: <DollarSign size={iconSize} />,
+      submenu: [
+        {
+          title: "لوحة التحكم المالية",
+          path: "/financial",
+        },
+        {
+          title: "إضافة معاملة",
+          path: "/financial/transactions/new",
+        },
+        {
+          title: "إدارة الخزينة",
+          path: "/financial/cash-management",
+        },
+        {
+          title: "فئات المعاملات",
+          path: "/financial/categories",
+        },
+      ],
+    },
+    {
+      title: "سجل الحسابات",
+      icon: <FileText size={iconSize} />,
+      submenu: [
+        {
+          title: "كشف حساب",
+          path: "/ledger",
+        },
+      ],
+    },
+    {
+      title: "إعدادات النظام",
+      icon: <Settings size={iconSize} />,
+      submenu: [
+        {
+          title: "إعدادات عامة",
+          path: "/settings",
+        },
+        {
+          title: "إعدادات المستخدمين",
+          path: "/users",
+        },
+        {
+          title: "نسخ احتياطي",
+          path: "/backup",
+        },
+      ],
+    },
+  ];
+
   return (
-    <nav className="px-2 py-3 flex flex-col gap-1">
-      {menuItems.main.map((item) => (
-        <Button
-          key={item.path}
-          variant={isActive(item.path) ? "secondary" : "ghost"}
-          className="w-full justify-start text-base font-normal"
-          asChild
-        >
-          <Link to={item.path} className="gap-3">
-            <item.icon className="h-5 w-5" />
-            <span>{item.title}</span>
-          </Link>
-        </Button>
-      ))}
-      
-      <SidebarMenuGroup title="إدارة المبيعات" items={menuItems.commercial} isActive={isActive} />
-      
-      <SidebarMenuGroup title="إدارة المخزون" items={menuItems.inventory} isActive={isActive} />
-      
-      <SidebarMenuGroup title="إدارة الإنتاج" items={menuItems.production} isActive={isActive} />
-      
-      <SidebarMenuGroup title="الإدارة المالية" items={menuItems.financial} isActive={isActive} />
-      
-      <SidebarMenuGroup title="التحليلات" items={menuItems.analytics} isActive={isActive} />
-      
-      <div className="mt-auto">
-        {menuItems.settings.map((item) => (
-          <Button
-            key={item.path}
-            variant={isActive(item.path) ? "secondary" : "ghost"}
-            className="w-full justify-start text-base font-normal mt-2"
-            asChild
-          >
-            <Link to={item.path} className="gap-3">
-              <item.icon className="h-5 w-5" />
-              <span>{item.title}</span>
-            </Link>
-          </Button>
-        ))}
+    <div className="flex flex-col h-full">
+      <div className="px-3 py-2 text-center">
+        <h1 className="text-lg font-bold">
+          {isCollapsed ? 'SM' : 'اسم المؤسسة'}
+        </h1>
+        <Separator className="my-2" />
       </div>
-    </nav>
+      <nav className="flex-1">
+        {menuItems.map((item, index) => (
+          item.submenu ? (
+            <div key={index} className="space-y-1">
+              <button
+                onClick={() => toggleSubmenu(item.title)}
+                className={`flex items-center w-full p-2 text-sm font-medium rounded-md transition-colors hover:bg-secondary ${location.pathname.startsWith(item.path || '') ? 'bg-secondary' : ''}`}
+              >
+                {item.icon}
+                {!isCollapsed && <span className="ml-2">{item.title}</span>}
+              </button>
+              {openSubmenus.includes(item.title) && (
+                <div className="pl-4 space-y-1">
+                  {item.submenu.map((subItem, subIndex) => (
+                    <NavLink
+                      key={subIndex}
+                      to={subItem.path || ''}
+                      className={`flex items-center w-full p-2 text-sm font-medium rounded-md transition-colors hover:bg-secondary ${location.pathname === subItem.path ? 'bg-secondary' : ''}`}
+                    >
+                      {subItem.title}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <NavLink
+              key={index}
+              to={item.path || ''}
+              className={`flex items-center w-full p-2 text-sm font-medium rounded-md transition-colors hover:bg-secondary ${location.pathname === item.path ? 'bg-secondary' : ''}`}
+            >
+              {item.icon}
+              {!isCollapsed && <span className="ml-2">{item.title}</span>}
+            </NavLink>
+          )
+        ))}
+      </nav>
+    </div>
   );
 };
 

@@ -1,125 +1,131 @@
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from 'sonner';
 
-import React, { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { Helmet, HelmetProvider } from 'react-helmet-async';
-import { Toaster } from '@/components/ui/toaster';
-import { Toaster as SonnerToaster } from 'sonner';
-import Layout from '@/components/layout/Layout';
-import Index from '@/pages/Index';
-import NotFound from '@/pages/NotFound';
-import Settings from '@/pages/settings/Settings';
-
-// Financial pages - Import directly instead of lazy loading
-import FinancialDashboard from '@/pages/financial/FinancialDashboard';
-import Profits from '@/pages/commercial/Profits';
-import Invoices from '@/pages/commercial/Invoices';
-
-// Lazy loaded pages
-const Dashboard = lazy(() => import('@/pages/Index'));
-const AnalyticsPage = lazy(() => import('@/pages/analytics/Analytics'));
-const InventoryRawMaterials = lazy(() => import('@/pages/inventory/InventoryRawMaterials'));
-const SemiFinishedProducts = lazy(() => import('@/pages/inventory/SemiFinishedProducts'));
-const PackagingMaterials = lazy(() => import('@/pages/inventory/PackagingMaterials'));
-const FinishedProducts = lazy(() => import('@/pages/inventory/FinishedProducts'));
-const ProductDetailsContainer = lazy(() => import('@/pages/inventory/ProductDetailsContainer'));
-const LowStockItems = lazy(() => import('@/pages/inventory/LowStockItems'));
-const InventoryReports = lazy(() => import('@/pages/inventory/InventoryReports'));
-const InventoryTracking = lazy(() => import('@/pages/inventory/InventoryTracking'));
-const ProductionOrders = lazy(() => import('@/pages/production/ProductionOrders'));
-const PackagingOrders = lazy(() => import('@/pages/production/PackagingOrders'));
-const ProductionPlanning = lazy(() => import('@/pages/production/ProductionPlanning'));
-const InventoryDistributionPage = lazy(() => import('@/pages/analytics/InventoryDistributionPage'));
-
-// Commercial pages
-const Parties = lazy(() => import('@/pages/commercial/Parties'));
-const InvoiceDetails = lazy(() => import('@/pages/commercial/InvoiceDetails'));
-const Payments = lazy(() => import('@/pages/commercial/Payments'));
-const PartyDetails = lazy(() => import('@/pages/commercial/PartyDetails'));
-const Returns = lazy(() => import('@/pages/commercial/Returns'));
-const AccountStatements = lazy(() => import('@/pages/commercial/AccountStatements'));
-const CommercialLedger = lazy(() => import('@/pages/commercial/CommercialLedger'));
-const CommercialDashboard = lazy(() => import('@/pages/commercial/CommercialDashboard'));
-
-// Financial pages - Continue with directly imported components
-const TransactionPage = lazy(() => import('@/pages/financial/TransactionPage'));
-const CategoriesPage = lazy(() => import('@/pages/financial/CategoriesPage'));
-const CategoryForm = lazy(() => import('@/components/financial/CategoryForm'));
-const TransactionForm = lazy(() => import('@/components/financial/TransactionForm'));
+import {
+  Index,
+  NotFound,
+  Layout,
+  NotificationProvider,
+  queryClient,
+  SettingsPage,
+  UsersPage,
+  RolesPage,
+  PermissionsPage,
+  ProductsPage,
+  CategoriesPage as ProductsCategoriesPage,
+  NewProductPage,
+  EditProductPage,
+  CustomersPage,
+  NewCustomerPage,
+  EditCustomerPage,
+  SuppliersPage,
+  NewSupplierPage,
+  EditSupplierPage,
+  InvoicesPage,
+  NewInvoicePage,
+  EditInvoicePage,
+  ReceiptsPage,
+  NewReceiptPage,
+  EditReceiptPage,
+  QuotationsPage,
+  NewQuotationPage,
+  EditQuotationPage,
+  PurchaseOrdersPage,
+  NewPurchaseOrderPage,
+  EditPurchaseOrderPage,
+  StockAdjustmentsPage,
+  NewStockAdjustmentPage,
+  EditStockAdjustmentPage,
+  StockTransfersPage,
+  NewStockTransferPage,
+  EditStockTransferPage,
+  BrandsPage,
+  UnitsPage,
+  TaxesPage,
+  CurrenciesPage,
+  FinancialDashboard,
+  TransactionPage,
+  CategoriesPage as FinancialCategoriesPage,
+  CashManagementPage,
+} from './imports';
 
 function App() {
   return (
-    <HelmetProvider>
-      <Helmet>
-        <title>النظام المتكامل</title>
-        <meta name="description" content="نظام متكامل لإدارة الأعمال" />
-      </Helmet>
-      <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center">جاري التحميل...</div>}>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Index />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
-            
-            {/* Inventory Routes */}
-            <Route path="inventory">
-              <Route index element={<Navigate to="/inventory/raw-materials" replace />} />
-              <Route path="raw-materials" element={<InventoryRawMaterials />} />
-              <Route path="raw-materials/:id" element={<ProductDetailsContainer />} />
-              <Route path="semi-finished" element={<SemiFinishedProducts />} />
-              <Route path="semi-finished/:id" element={<ProductDetailsContainer />} />
-              <Route path="packaging" element={<PackagingMaterials />} />
-              <Route path="packaging/:id" element={<ProductDetailsContainer />} />
-              <Route path="finished-products" element={<FinishedProducts />} />
-              <Route path="finished-products/:id" element={<ProductDetailsContainer />} />
-              <Route path="low-stock" element={<LowStockItems />} />
-              <Route path="reports" element={<InventoryReports />} />
-              <Route path="tracking" element={<InventoryTracking />} />
-            </Route>
-            
-            {/* Production Routes */}
-            <Route path="production">
-              <Route index element={<Navigate to="/production/orders" replace />} />
-              <Route path="orders" element={<ProductionOrders />} />
-              <Route path="packaging-orders" element={<PackagingOrders />} />
-              <Route path="planning" element={<ProductionPlanning />} />
-            </Route>
-            
-            {/* Commercial Routes */}
-            <Route path="commercial">
-              <Route index element={<CommercialDashboard />} />
-              <Route path="parties" element={<Parties />} />
-              <Route path="parties/:id" element={<PartyDetails />} />
-              <Route path="invoices" element={<Invoices />} />
-              <Route path="invoices/:id" element={<InvoiceDetails />} />
-              <Route path="payments" element={<Payments />} />
-              <Route path="returns" element={<Returns />} />
-              <Route path="profits" element={<Profits />} />
-              <Route path="account-statements" element={<AccountStatements />} />
-              <Route path="ledger" element={<CommercialLedger />} />
-            </Route>
-            
-            {/* Financial Routes - Using direct imports instead of lazy loading */}
-            <Route path="financial">
-              <Route index element={<FinancialDashboard />} />
-              <Route path="transactions" element={<TransactionPage />} />
-              <Route path="transactions/new" element={<TransactionForm />} />
-              <Route path="transactions/edit/:id" element={<TransactionForm />} />
-              <Route path="categories" element={<CategoriesPage />} />
-              <Route path="categories/new" element={<CategoryForm />} />
-              <Route path="categories/edit/:id" element={<CategoryForm />} />
-            </Route>
-            
-            {/* Settings */}
-            <Route path="settings" element={<Settings />} />
-            
-            {/* Catch all unmatched routes */}
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </Suspense>
-      <SonnerToaster position="top-left" dir="rtl" />
-      <Toaster />
-    </HelmetProvider>
+    <ThemeProvider defaultTheme="light" storageKey="factorial-ui-theme">
+      <QueryClientProvider client={queryClient}>
+        <HelmetProvider>
+          <NotificationProvider>
+            <Routes>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Index />} />
+                
+                {/* System Pages */}
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/users" element={<UsersPage />} />
+                <Route path="/roles" element={<RolesPage />} />
+                <Route path="/permissions" element={<PermissionsPage />} />
+                
+                {/* Commercial Pages */}
+                <Route path="/products" element={<ProductsPage />} />
+                <Route path="/products/new" element={<NewProductPage />} />
+                <Route path="/products/:id/edit" element={<EditProductPage />} />
+                <Route path="/products/categories" element={<ProductsCategoriesPage />} />
+                
+                <Route path="/customers" element={<CustomersPage />} />
+                <Route path="/customers/new" element={<NewCustomerPage />} />
+                <Route path="/customers/:id/edit" element={<EditCustomerPage />} />
+                
+                <Route path="/suppliers" element={<SuppliersPage />} />
+                <Route path="/suppliers/new" element={<NewSupplierPage />} />
+                <Route path="/suppliers/:id/edit" element={<EditSupplierPage />} />
+                
+                <Route path="/invoices" element={<InvoicesPage />} />
+                <Route path="/invoices/new" element={<NewInvoicePage />} />
+                <Route path="/invoices/:id/edit" element={<EditInvoicePage />} />
+                
+                <Route path="/receipts" element={<ReceiptsPage />} />
+                <Route path="/receipts/new" element={<NewReceiptPage />} />
+                <Route path="/receipts/:id/edit" element={<EditReceiptPage />} />
+                
+                <Route path="/quotations" element={<QuotationsPage />} />
+                <Route path="/quotations/new" element={<NewQuotationPage />} />
+                <Route path="/quotations/:id/edit" element={<EditQuotationPage />} />
+                
+                <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
+                <Route path="/purchase-orders/new" element={<NewPurchaseOrderPage />} />
+                <Route path="/purchase-orders/:id/edit" element={<EditPurchaseOrderPage />} />
+                
+                <Route path="/stock-adjustments" element={<StockAdjustmentsPage />} />
+                <Route path="/stock-adjustments/new" element={<NewStockAdjustmentPage />} />
+                <Route path="/stock-adjustments/:id/edit" element={<EditStockAdjustmentPage />} />
+                
+                <Route path="/stock-transfers" element={<StockTransfersPage />} />
+                <Route path="/stock-transfers/new" element={<NewStockTransferPage />} />
+                <Route path="/stock-transfers/:id/edit" element={<EditStockTransferPage />} />
+                
+                <Route path="/brands" element={<BrandsPage />} />
+                <Route path="/units" element={<UnitsPage />} />
+                <Route path="/taxes" element={<TaxesPage />} />
+                <Route path="/currencies" element={<CurrenciesPage />} />
+                
+                {/* صفحات الإدارة المالية */}
+                <Route path="/financial" element={<FinancialDashboard />} />
+                <Route path="/financial/transactions/new" element={<TransactionPage />} />
+                <Route path="/financial/categories" element={<FinancialCategoriesPage />} />
+                <Route path="/financial/cash-management" element={<CashManagementPage />} />
+                
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+            <Toaster richColors />
+          </NotificationProvider>
+        </HelmetProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 
