@@ -298,14 +298,16 @@ class ProductionService {
       return 0;
     }
   }
-  
-  // إنشاء أمر تعبئة جديد
+    // إنشاء أمر تعبئة جديد
   public async createPackagingOrder(
     finishedProductCode: string,
     quantity: number,
     totalCost?: number
   ): Promise<PackagingOrder | null> {
     try {
+      console.log(`[DEBUG] بدء إنشاء أمر تعبئة للمنتج برمز: ${finishedProductCode}, الكمية: ${quantity}`);
+      
+      // 1. الحصول على بيانات المنتج النهائي بشكل كامل
       const finishedProducts = await this.inventoryService.getFinishedProducts();
       const product = finishedProducts.find(p => p.code === finishedProductCode);
       
@@ -314,18 +316,47 @@ class ProductionService {
         return null;
       }
       
-      // التحقق من توفر المنتج النصف مصنع
+      console.log(`[DEBUG] العثور على المنتج النهائي: ${product.name}`);
+      console.log(`[DEBUG] فحص مواد التعبئة للمنتج:`, product.packaging);
+      
+      if (!product.packaging || product.packaging.length === 0) {
+        console.warn(`[WARNING] لا توجد مواد تعبئة مرتبطة بالمنتج النهائي: ${product.name}`);
+      }
+      
+      // 2. التحقق من توفر المنتج النصف مصنع
       const semiFinishedCode = product.semiFinished.code;
       const semiFinishedQuantity = product.semiFinished.quantity * quantity;
+      
+      console.log(`[DEBUG] المنتج نصف المصنع المطلوب: ${semiFinishedCode}, الكمية: ${semiFinishedQuantity}`);
+      
       const semiAvailable = await this.inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
       
-      // التحقق من توفر مواد التعبئة
+      if (!semiAvailable) {
+        console.warn(`[WARNING] المنتج نصف المصنع غير متوفر بالكمية المطلوبة: ${semiFinishedCode}`);
+      }
+      
+      // 3. التحقق من توفر مواد التعبئة
+      // قم بإلتقاط وتسجيل المواد التعبئة
+      if (!product.packaging || !Array.isArray(product.packaging)) {
+        console.error(`[ERROR] بيانات مواد التعبئة غير صحيحة: ${JSON.stringify(product.packaging)}`);
+        product.packaging = []; // ضمان وجود مصفوفة فارغة على الأقل
+      }
+      
+      console.log(`[DEBUG] عدد مواد التعبئة المرتبطة بالمنتج: ${product.packaging.length}`);
+      
       const packagingMaterials = await Promise.all(product.packaging.map(async pkg => {
         const pkgQuantity = pkg.quantity * quantity;
+        
+        console.log(`[DEBUG] التحقق من توفر مادة التعبئة: ${pkg.code}, الكمية المطلوبة: ${pkgQuantity}`);
+        
         const available = await this.inventoryService.checkPackagingAvailability([{
           code: pkg.code,
           requiredQuantity: pkgQuantity
         }]);
+        
+        if (!available) {
+          console.warn(`[WARNING] مادة التعبئة غير متوفرة بالكمية المطلوبة: ${pkg.code}, ${pkg.name}`);
+        }
         
         return {
           code: pkg.code,
@@ -335,7 +366,7 @@ class ProductionService {
         };
       }));
       
-      // تحديد التكلفة الإجمالية (استخدام القيمة المرسلة إذا تم توفيرها)
+      // 4. تحديد التكلفة الإجمالية (استخدام القيمة المرسلة إذا تم توفيرها)
       let finalTotalCost = totalCost;
       
       // إذا لم يتم تمرير التكلفة، قم بحسابها
@@ -352,9 +383,9 @@ class ProductionService {
         finalTotalCost = unitCost * quantity;
       }
       
-      console.log(`إنشاء أمر تعبئة: الكمية=${quantity}, التكلفة المستخدمة=${finalTotalCost}`);
+      console.log(`[DEBUG] إنشاء أمر تعبئة: الكمية=${quantity}, التكلفة=${finalTotalCost}, عدد مواد التعبئة=${packagingMaterials.length}`);
       
-      // إنشاء أمر التعبئة في قاعدة البيانات
+      // 5. إنشاء أمر التعبئة في قاعدة البيانات
       const newOrder = await this.databaseService.createPackagingOrder(
         finishedProductCode,
         product.name,
@@ -369,13 +400,18 @@ class ProductionService {
         finalTotalCost
       );
       
-      if (!newOrder) return null;
+      if (!newOrder) {
+        console.error(`[ERROR] فشل إنشاء أمر التعبئة`);
+        return null;
+      }
+      
+      console.log(`[DEBUG] تم إنشاء أمر تعبئة بنجاح: ${newOrder.code}`);
       
       toast.success(`تم إنشاء أمر تعبئة ${newOrder.productName} بنجاح`);
       
       return newOrder;
     } catch (error) {
-      console.error('Error creating packaging order:', error);
+      console.error('[ERROR] حدث خطأ أثناء إنشاء أمر التعبئة:', error);
       toast.error('حدث خطأ أثناء إنشاء أمر التعبئة');
       return null;
     }
