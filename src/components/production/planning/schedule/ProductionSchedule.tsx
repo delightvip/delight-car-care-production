@@ -135,6 +135,27 @@ const ProductionSchedule = () => {
     }
   };
 
+  const modifiersStyles = {
+    productionDay: { backgroundColor: "rgba(59, 130, 246, 0.1)", color: "rgb(30, 64, 175)" },
+    packagingDay: { backgroundColor: "rgba(16, 185, 129, 0.1)", color: "rgb(6, 95, 70)" },
+    bothTypes: { backgroundColor: "rgba(139, 92, 246, 0.1)", color: "rgb(91, 33, 182)" }
+  };
+  
+  const modifiers = {
+    productionDay: (date: Date) => {
+      return productionOrders.some(order => isSameDay(parseISO(order.date), date)) && 
+             !packagingOrders.some(order => isSameDay(parseISO(order.date), date));
+    },
+    packagingDay: (date: Date) => {
+      return packagingOrders.some(order => isSameDay(parseISO(order.date), date)) && 
+             !productionOrders.some(order => isSameDay(parseISO(order.date), date));
+    },
+    bothTypes: (date: Date) => {
+      return productionOrders.some(order => isSameDay(parseISO(order.date), date)) && 
+             packagingOrders.some(order => isSameDay(parseISO(order.date), date));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -182,9 +203,10 @@ const ProductionSchedule = () => {
                       className="border rounded-md"
                       classNames={{
                         day_today: "bg-primary/20 text-primary font-bold",
-                        day_selected: "bg-primary text-primary-foreground font-bold",
-                        day: (date) => getDayClassNames(date)
+                        day_selected: "bg-primary text-primary-foreground font-bold"
                       }}
+                      modifiers={modifiers}
+                      modifiersStyles={modifiersStyles}
                     />
                   </CardContent>
                 </Card>
