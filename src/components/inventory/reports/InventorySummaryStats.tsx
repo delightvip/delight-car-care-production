@@ -25,6 +25,23 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
       try {
         // Get current quantity from the respective inventory table
         let currentQuantity = 0;
+        
+        // Use the RPC function instead of direct table access to fix the type error
+        const { data: statsData, error: statsError } = await supabase.rpc('get_inventory_summary_stats', {
+          p_item_id: itemId,
+          p_item_type: itemType
+        });
+        
+        if (statsError) {
+          console.error('Error fetching inventory summary stats:', statsError);
+          throw statsError;
+        }
+        
+        if (statsData) {
+          return statsData as SummaryStatsData;
+        }
+        
+        // Fallback: if RPC fails, attempt direct table query with proper type checking
         let tableToQuery = '';
         
         switch (itemType) {
@@ -43,8 +60,9 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
         }
         
         if (tableToQuery) {
+          // Using type assertion to satisfy TypeScript
           const { data: itemData, error: itemError } = await supabase
-            .from(tableToQuery)
+            .from(tableToQuery as any)
             .select('quantity')
             .eq('id', parseInt(itemId))
             .single();
