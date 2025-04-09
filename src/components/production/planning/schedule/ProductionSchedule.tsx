@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -10,20 +11,20 @@ import { addDays, format, isSameDay, parseISO } from 'date-fns';
 import { Calendar as CalendarIcon, List, Clock, CheckSquare, AlertTriangle, Package, Layers, CalendarDays, ListTodo } from 'lucide-react';
 import ProductionService from '@/services/ProductionService';
 import { toast } from 'sonner';
-import { ProductionOrder, PackagingOrder } from '@/services/ProductionService';
+import { ProductionOrderExtended, PackagingOrderExtended } from '@/services/ProductionService';
 
 type DayClassNamesFn = (day: Date) => string;
 
 const ProductionSchedule = () => {
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
-  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([]);
-  const [packagingOrders, setPackagingOrders] = useState<PackagingOrder[]>([]);
+  const [productionOrders, setProductionOrders] = useState<ProductionOrderExtended[]>([]);
+  const [packagingOrders, setPackagingOrders] = useState<PackagingOrderExtended[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedDateOrders, setSelectedDateOrders] = useState<{
-    production: ProductionOrder[],
-    packaging: PackagingOrder[]
+    production: ProductionOrderExtended[],
+    packaging: PackagingOrderExtended[]
   }>({ production: [], packaging: [] });
 
   useEffect(() => {
@@ -94,7 +95,7 @@ const ProductionSchedule = () => {
       ...productionOrders.map(order => ({
         id: order.id,
         code: order.code,
-        productName: order.productName,
+        productName: order.product_name,
         date: order.date,
         type: 'production' as const,
         status: order.status
@@ -102,7 +103,7 @@ const ProductionSchedule = () => {
       ...packagingOrders.map(order => ({
         id: order.id,
         code: order.code,
-        productName: order.productName,
+        productName: order.product_name,
         date: order.date,
         type: 'packaging' as const,
         status: order.status
@@ -259,7 +260,7 @@ const ProductionSchedule = () => {
                                 <div key={order.id} className="p-2 bg-muted rounded-md">
                                   <div className="flex justify-between items-start">
                                     <div>
-                                      <span className="font-medium block">{order.productName}</span>
+                                      <span className="font-medium block">{order.product_name}</span>
                                       <span className="text-xs text-muted-foreground">{order.code}</span>
                                     </div>
                                     <Badge className={getStatusColor(order.status)}>
@@ -286,7 +287,7 @@ const ProductionSchedule = () => {
                                 <div key={order.id} className="p-2 bg-muted rounded-md">
                                   <div className="flex justify-between items-start">
                                     <div>
-                                      <span className="font-medium block">{order.productName}</span>
+                                      <span className="font-medium block">{order.product_name}</span>
                                       <span className="text-xs text-muted-foreground">{order.code}</span>
                                     </div>
                                     <Badge className={getStatusColor(order.status)}>

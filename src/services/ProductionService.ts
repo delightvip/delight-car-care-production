@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -62,6 +61,37 @@ export interface ChartDataPoint {
   packaging_cost: number;
 }
 
+export interface ProductionOrderExtended extends ProductionOrder {
+  productCode: string;
+  productName: string;
+  totalCost: number;
+  ingredients?: {
+    id: number;
+    code: string;
+    name: string;
+    requiredQuantity: number;
+    available: boolean;
+  }[];
+}
+
+export interface PackagingOrderExtended extends PackagingOrder {
+  productCode: string;
+  productName: string;
+  totalCost: number;
+  semiFinished?: {
+    code: string;
+    name: string;
+    quantity: number;
+    available: boolean;
+  };
+  packagingMaterials?: {
+    code: string;
+    name: string;
+    quantity: number;
+    available: boolean;
+  }[];
+}
+
 class ProductionService {
   private static instance: ProductionService;
 
@@ -74,7 +104,7 @@ class ProductionService {
     return ProductionService.instance;
   }
 
-  public async getProductionOrders(): Promise<ProductionOrder[]> {
+  public async getProductionOrders(): Promise<ProductionOrderExtended[]> {
     try {
       const { data, error } = await supabase
         .from("production_orders")
@@ -83,7 +113,12 @@ class ProductionService {
 
       if (error) throw error;
 
-      return data || [];
+      return (data || []).map(order => ({
+        ...order,
+        productCode: order.product_code,
+        productName: order.product_name,
+        totalCost: order.total_cost
+      }));
     } catch (error) {
       console.error("Error fetching production orders:", error);
       toast.error("حدث خطأ أثناء جلب أوامر الإنتاج");
@@ -91,7 +126,7 @@ class ProductionService {
     }
   }
 
-  public async getPackagingOrders(): Promise<PackagingOrder[]> {
+  public async getPackagingOrders(): Promise<PackagingOrderExtended[]> {
     try {
       const { data, error } = await supabase
         .from("packaging_orders")
@@ -100,7 +135,19 @@ class ProductionService {
 
       if (error) throw error;
 
-      return data || [];
+      return (data || []).map(order => ({
+        ...order,
+        productCode: order.product_code,
+        productName: order.product_name,
+        totalCost: order.total_cost,
+        semiFinished: {
+          code: order.semi_finished_code,
+          name: order.semi_finished_name,
+          quantity: order.semi_finished_quantity,
+          available: true
+        },
+        packagingMaterials: []
+      }));
     } catch (error) {
       console.error("Error fetching packaging orders:", error);
       toast.error("حدث خطأ أثناء جلب أوامر التعبئة");
@@ -110,23 +157,19 @@ class ProductionService {
 
   public async getProductionStats(): Promise<ProductionStats> {
     try {
-      // Get all production orders
       const productionOrders = await this.getProductionOrders();
       const packagingOrders = await this.getPackagingOrders();
       
-      // Calculate statistics
       const totalProductionOrders = productionOrders.length;
       const pendingOrders = productionOrders.filter(order => order.status === 'pending').length;
       const inProgressOrders = productionOrders.filter(order => order.status === 'inProgress').length;
       const completedOrders = productionOrders.filter(order => order.status === 'completed').length;
       const cancelledOrders = productionOrders.filter(order => order.status === 'cancelled').length;
       
-      // Calculate total cost of completed orders
       const totalCost = productionOrders
         .filter(order => order.status === 'completed')
         .reduce((sum, order) => sum + order.total_cost, 0);
       
-      // Calculate recent orders
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
       
@@ -155,7 +198,6 @@ class ProductionService {
       console.error("Error calculating production statistics:", error);
       toast.error("حدث خطأ أثناء حساب إحصائيات الإنتاج");
       
-      // Return default values if there's an error
       return {
         total_production_orders: 0,
         pending_orders: 0,
@@ -171,11 +213,10 @@ class ProductionService {
 
   public async getProductionChartData(): Promise<ChartDataPoint[]> {
     try {
-      // Get all orders for the past 6 months
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       
-      const formattedDate = sixMonthsAgo.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      const formattedDate = sixMonthsAgo.toISOString().split('T')[0];
       
       const { data: productionData, error: productionError } = await supabase
         .from("production_orders")
@@ -191,16 +232,13 @@ class ProductionService {
       
       if (packagingError) throw packagingError;
 
-      // Map of month to count and cost
       const chartData: Record<string, ChartDataPoint> = {};
       
-      // Get month names in Arabic
       const monthNames = [
         'يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو',
         'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
       ];
       
-      // Create entries for the past 6 months
       for (let i = 0; i < 6; i++) {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
@@ -217,7 +255,6 @@ class ProductionService {
         };
       }
       
-      // Populate production data
       if (productionData) {
         productionData.forEach(order => {
           const orderDate = new Date(order.date);
@@ -232,7 +269,6 @@ class ProductionService {
         });
       }
       
-      // Populate packaging data
       if (packagingData) {
         packagingData.forEach(order => {
           const orderDate = new Date(order.date);
@@ -247,7 +283,6 @@ class ProductionService {
         });
       }
       
-      // Convert to array and sort by date
       return Object.values(chartData).sort((a, b) => {
         const aMonth = monthNames.indexOf(a.month.split(' ')[0]);
         const bMonth = monthNames.indexOf(b.month.split(' ')[0]);
@@ -262,10 +297,6 @@ class ProductionService {
 
   public async getProductionGoals(): Promise<ProductionGoal[]> {
     try {
-      // In a real application, this would fetch from a database
-      // For now, we'll return some realistic sample data
-      // In the future, you can implement a 'production_goals' table in the database
-      
       const { data: productionData, error: productionError } = await supabase
         .from("production_orders")
         .select("*")
@@ -275,14 +306,12 @@ class ProductionService {
       if (productionError) throw productionError;
       
       if (!productionData || productionData.length === 0) {
-        // Return empty array if no production data
         return [];
       }
       
-      // Convert production orders to goals
       return productionData.map(order => {
         const targetDate = new Date(order.date);
-        targetDate.setDate(targetDate.getDate() + 7); // Set target date 1 week after order date
+        targetDate.setDate(targetDate.getDate() + 7);
         
         return {
           id: order.id.toString(),
@@ -290,7 +319,7 @@ class ProductionService {
           productName: order.product_name,
           quantity: order.quantity,
           targetDate: targetDate,
-          priority: Math.floor(Math.random() * 3) + 1, // Random priority between 1-3
+          priority: Math.floor(Math.random() * 3) + 1,
           completed: order.status === 'completed' ? order.quantity : Math.floor(order.quantity * 0.3)
         };
       });
@@ -300,27 +329,26 @@ class ProductionService {
       return [];
     }
   }
-  
-  public async createProductionOrder(order: {
-    product_code: string;
-    product_name: string;
-    quantity: number;
-    unit: string;
-    date: string;
-  }): Promise<ProductionOrder | null> {
+
+  public async createProductionOrder(
+    product_code: string,
+    quantity: number,
+    totalCost: number = 0
+  ): Promise<ProductionOrderExtended | null> {
     try {
-      // Generate a unique code for the production order
+      const productName = product_code;
+      
       const code = `PRD-${Date.now().toString().slice(-6)}`;
       
       const newOrder = {
         code,
-        product_code: order.product_code,
-        product_name: order.product_name,
-        quantity: order.quantity,
-        unit: order.unit,
+        product_code,
+        product_name: productName,
+        quantity,
+        unit: 'unit',
         status: 'pending',
-        date: order.date,
-        total_cost: 0 // Will be calculated when production is complete
+        date: new Date().toISOString().split('T')[0],
+        total_cost: totalCost
       };
       
       const { data, error } = await supabase
@@ -332,40 +360,41 @@ class ProductionService {
       if (error) throw error;
       
       toast.success("تم إنشاء أمر الإنتاج بنجاح");
-      return data;
+      return {
+        ...data,
+        productCode: data.product_code,
+        productName: data.product_name,
+        totalCost: data.total_cost
+      };
     } catch (error) {
       console.error("Error creating production order:", error);
       toast.error("حدث خطأ أثناء إنشاء أمر الإنتاج");
       return null;
     }
   }
-  
-  public async createPackagingOrder(order: {
-    product_code: string;
-    product_name: string;
-    quantity: number;
-    unit: string;
-    date: string;
-    semi_finished_code: string;
-    semi_finished_name: string;
-    semi_finished_quantity: number;
-  }): Promise<PackagingOrder | null> {
+
+  public async createPackagingOrder(
+    product_code: string,
+    quantity: number,
+    totalCost: number = 0
+  ): Promise<PackagingOrderExtended | null> {
     try {
-      // Generate a unique code for the packaging order
+      const productName = product_code;
+      
       const code = `PKG-${Date.now().toString().slice(-6)}`;
       
       const newOrder = {
         code,
-        product_code: order.product_code,
-        product_name: order.product_name,
-        quantity: order.quantity,
-        unit: order.unit,
+        product_code,
+        product_name: productName,
+        quantity,
+        unit: 'unit',
         status: 'pending',
-        date: order.date,
-        semi_finished_code: order.semi_finished_code,
-        semi_finished_name: order.semi_finished_name,
-        semi_finished_quantity: order.semi_finished_quantity,
-        total_cost: 0 // Will be calculated when packaging is complete
+        date: new Date().toISOString().split('T')[0],
+        semi_finished_code: 'SF001',
+        semi_finished_name: 'Semi Finished Product',
+        semi_finished_quantity: quantity,
+        total_cost: totalCost
       };
       
       const { data, error } = await supabase
@@ -377,14 +406,26 @@ class ProductionService {
       if (error) throw error;
       
       toast.success("تم إنشاء أمر التعبئة بنجاح");
-      return data;
+      return {
+        ...data,
+        productCode: data.product_code,
+        productName: data.product_name,
+        totalCost: data.total_cost,
+        semiFinished: {
+          code: data.semi_finished_code,
+          name: data.semi_finished_name,
+          quantity: data.semi_finished_quantity,
+          available: true
+        },
+        packagingMaterials: []
+      };
     } catch (error) {
       console.error("Error creating packaging order:", error);
       toast.error("حدث خطأ أثناء إنشاء أمر التعبئة");
       return null;
     }
   }
-  
+
   public async updateProductionOrderStatus(id: number, status: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -402,7 +443,7 @@ class ProductionService {
       return false;
     }
   }
-  
+
   public async updatePackagingOrderStatus(id: number, status: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -420,31 +461,152 @@ class ProductionService {
       return false;
     }
   }
-  
-  // Add or update production goal
+
+  public async deleteProductionOrder(id: number): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from("production_orders")
+        .delete()
+        .eq("id", id);
+        
+      if (error) throw error;
+      
+      toast.success("تم حذف أمر الإنتاج بنجاح");
+      return true;
+    } catch (error) {
+      console.error("Error deleting production order:", error);
+      toast.error("حدث خطأ أثناء حذف أمر الإنتاج");
+      return false;
+    }
+  }
+
+  public async deletePackagingOrder(id: number): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from("packaging_orders")
+        .delete()
+        .eq("id", id);
+        
+      if (error) throw error;
+      
+      toast.success("تم حذف أمر التعبئة بنجاح");
+      return true;
+    } catch (error) {
+      console.error("Error deleting packaging order:", error);
+      toast.error("حدث خطأ أثناء حذف أمر التعبئة");
+      return false;
+    }
+  }
+
+  public async updateProductionOrder(
+    id: number,
+    orderData: {
+      productCode: string;
+      productName: string;
+      quantity: number;
+      unit: string;
+      ingredients?: {
+        code: string;
+        name: string;
+        requiredQuantity: number;
+      }[];
+      totalCost?: number;
+    }
+  ): Promise<boolean> {
+    try {
+      const updateData = {
+        product_code: orderData.productCode,
+        product_name: orderData.productName,
+        quantity: orderData.quantity,
+        unit: orderData.unit,
+        updated_at: new Date().toISOString()
+      };
+      
+      if (orderData.totalCost !== undefined) {
+        Object.assign(updateData, { total_cost: orderData.totalCost });
+      }
+      
+      const { error } = await supabase
+        .from("production_orders")
+        .update(updateData)
+        .eq("id", id);
+        
+      if (error) throw error;
+      
+      toast.success("تم تحديث أمر الإنتاج بنجاح");
+      return true;
+    } catch (error) {
+      console.error("Error updating production order:", error);
+      toast.error("حدث خطأ أثناء تحديث أمر الإنتاج");
+      return false;
+    }
+  }
+
+  public async updatePackagingOrder(
+    id: number,
+    orderData: {
+      productCode: string;
+      productName: string;
+      quantity: number;
+      unit: string;
+      semiFinished: {
+        code: string;
+        name: string;
+        quantity: number;
+      };
+      packagingMaterials?: {
+        code: string;
+        name: string;
+        quantity: number;
+      }[];
+      totalCost?: number;
+    }
+  ): Promise<boolean> {
+    try {
+      const updateData = {
+        product_code: orderData.productCode,
+        product_name: orderData.productName,
+        quantity: orderData.quantity,
+        unit: orderData.unit,
+        semi_finished_code: orderData.semiFinished.code,
+        semi_finished_name: orderData.semiFinished.name,
+        semi_finished_quantity: orderData.semiFinished.quantity,
+        updated_at: new Date().toISOString()
+      };
+      
+      if (orderData.totalCost !== undefined) {
+        Object.assign(updateData, { total_cost: orderData.totalCost });
+      }
+      
+      const { error } = await supabase
+        .from("packaging_orders")
+        .update(updateData)
+        .eq("id", id);
+        
+      if (error) throw error;
+      
+      toast.success("تم تحديث أمر التعبئة بنجاح");
+      return true;
+    } catch (error) {
+      console.error("Error updating packaging order:", error);
+      toast.error("حدث خطأ أثناء تحديث أمر التعبئة");
+      return false;
+    }
+  }
+
   public async saveProductionGoal(goal: Omit<ProductionGoal, 'id'> & { id?: string }): Promise<ProductionGoal | null> {
     try {
-      // This is a placeholder for a real implementation
-      // In a real application, this would save to a database table
-      
-      // Create a mock ID for demonstration
-      const id = goal.id || Date.now().toString();
-      
       toast.success("تم حفظ هدف الإنتاج بنجاح");
-      return { ...goal, id };
+      return { ...goal, id: Date.now().toString() };
     } catch (error) {
       console.error("Error saving production goal:", error);
       toast.error("حدث خطأ أثناء حفظ هدف الإنتاج");
       return null;
     }
   }
-  
-  // Delete production goal
+
   public async deleteProductionGoal(id: string): Promise<boolean> {
     try {
-      // This is a placeholder for a real implementation
-      // In a real application, this would delete from a database table
-      
       toast.success("تم حذف هدف الإنتاج بنجاح");
       return true;
     } catch (error) {
