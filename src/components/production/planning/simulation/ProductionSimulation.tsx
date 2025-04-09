@@ -1,1063 +1,281 @@
-
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertCircle, FlaskConical, ListCheck, ArrowRight, PackageCheck, ArchiveX, Plus, Trash2, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import ProductionService from '@/services/ProductionService';
-import InventoryService from '@/services/InventoryService';
 import { toast } from 'sonner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { ArrowDown, ArrowUp, Circle, Copy, PackagePlus, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { useDebounce } from '@/hooks/use-debounce';
+import InventoryService from '@/services/InventoryService';
+import ProductionService from '@/services/ProductionService';
+import { SemiFinishedProduct } from '@/services/InventoryService';
+import { FinishedProduct } from '@/services/InventoryService';
 
-interface ProductSimulationItem {
-  id: string;
-  productCode: string;
-  productName: string;
-  quantity: number;
-}
-
-interface MaterialRequirement {
-  code: string;
-  name: string;
-  required: number;
-  available: number;
-  status: 'available' | 'low' | 'unavailable';
-}
-
-interface SimulationResult {
-  rawMaterials: MaterialRequirement[];
-  packagingMaterials: MaterialRequirement[];
-  semiFinished: MaterialRequirement[];
-  estimatedTime: number; // بالأيام
-  canProduce: boolean;
-  missingItems: number;
-}
-
-interface AggregatedResult extends SimulationResult {
-  products: ProductSimulationItem[];
-  totalProducts: number;
-}
+const formSchema = z.object({
+  product: z.string().min(2, {
+    message: 'الرجاء اختيار منتج.',
+  }),
+  quantity: z.number().min(1, {
+    message: 'الرجاء إدخال كمية صحيحة.',
+  }),
+});
 
 const ProductionSimulation = () => {
-  const [productOptions, setProductOptions] = useState<{code: string, name: string}[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
-  const [simulationItems, setSimulationItems] = useState<ProductSimulationItem[]>([]);
-  const [aggregatedResult, setAggregatedResult] = useState<AggregatedResult | null>(null);
-  
-  useEffect(() => {
-    // جلب بيانات المنتجات من الخدمة
-    const fetchProducts = async () => {
-      try {
-        const inventoryService = InventoryService.getInstance();
-        const products = await inventoryService.getFinishedProducts();
-        
-        setProductOptions(products.map(product => ({
-          code: product.code,
-          name: product.name
-        })));
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        toast.error('حدث خطأ أثناء جلب بيانات المنتجات');
-      }
-    };
-    
-    fetchProducts();
-  }, []);
-
-  const addProductToSimulation = () => {
-    if (!selectedProduct || quantity <= 0) {
-      toast.error('الرجاء إدخال المنتج والكمية');
-      return;
-    }
-    
-    const selectedProductDetails = productOptions.find(p => p.code === selectedProduct);
-    
-    if (!selectedProductDetails) {
-      toast.error('المنتج غير موجود');
-      return;
-    }
-    
-    const newItem: ProductSimulationItem = {
-      id: Date.now().toString(),
-      productCode: selectedProduct,
-      productName: selectedProductDetails.name,
-      quantity: quantity
-    };
-    
-    setSimulationItems([...simulationItems, newItem]);
-    setSelectedProduct('');
-    setQuantity(0);
-    
-    toast.success(`تمت إضافة ${selectedProductDetails.name} إلى المحاكاة`);
-  };
-  
-  const removeProductFromSimulation = (id: string) => {
-    setSimulationItems(simulationItems.filter(item => item.id !== id));
-  };
-
-  const runSingleSimulation = async (productCode: string, productQuantity: number): Promise<SimulationResult> => {
-    const inventoryService = InventoryService.getInstance();
-    
-    // الحصول على بيانات المنتج
-    const { data: product } = await inventoryService.getFinishedProductByCode(productCode);
-    
-    if (!product) {
-      throw new Error('المنتج غير موجود');
-    }
-    
-    // جلب بيانات متطلبات المنتج من المواد الأولية ومواد التعبئة
-    const rawMaterials = await inventoryService.getRawMaterials();
-    const packagingMaterials = await inventoryService.getPackagingMaterials();
-    const semiFinishedProducts = await inventoryService.getSemiFinishedProducts();
-    
-    // حساب متطلبات المنتج نصف المصنع
-    const semiFinishedRequirements: MaterialRequirement[] = [];
-    if (product.semiFinished && product.semiFinished.code) {
-      const semiFinished = semiFinishedProducts.find(sf => sf.code === product.semiFinished.code);
-      const requiredQuantity = product.semiFinished.quantity * productQuantity;
-      
-      if (semiFinished) {
-        const availableQuantity = semiFinished.quantity || 0;
-        semiFinishedRequirements.push({
-          code: semiFinished.code,
-          name: semiFinished.name,
-          required: requiredQuantity,
-          available: availableQuantity,
-          status: availableQuantity >= requiredQuantity ? 'available' : 
-                 availableQuantity > 0 ? 'low' : 'unavailable'
-        });
-      }
-    }
-    
-    // حساب متطلبات مواد التعبئة
-    const packagingRequirements: MaterialRequirement[] = [];
-    if (product.packaging && Array.isArray(product.packaging)) {
-      for (const pkg of product.packaging) {
-        const packagingMaterial = packagingMaterials.find(p => p.code === pkg.code);
-        const requiredQuantity = pkg.quantity * productQuantity;
-        
-        if (packagingMaterial) {
-          const availableQuantity = packagingMaterial.quantity || 0;
-          packagingRequirements.push({
-            code: pkg.code,
-            name: pkg.name,
-            required: requiredQuantity,
-            available: availableQuantity,
-            status: availableQuantity >= requiredQuantity ? 'available' : 
-                   availableQuantity > 0 ? 'low' : 'unavailable'
-          });
-        }
-      }
-    }
-    
-    // حساب متطلبات المواد الأولية للمنتج نصف المصنع
-    const rawMaterialRequirements: MaterialRequirement[] = [];
-    const semiFinishedCode = product.semiFinished?.code;
-    
-    if (semiFinishedCode) {
-      const semiFinished = semiFinishedProducts.find(sf => sf.code === semiFinishedCode);
-      
-      if (semiFinished && semiFinished.ingredients && Array.isArray(semiFinished.ingredients)) {
-        for (const ingredient of semiFinished.ingredients) {
-          const rawMaterial = rawMaterials.find(rm => rm.code === ingredient.code);
-          const semiRequiredQuantity = product.semiFinished.quantity * productQuantity;
-          const requiredQuantity = (ingredient.percentage / 100) * semiRequiredQuantity;
-          
-          if (rawMaterial) {
-            const availableQuantity = rawMaterial.quantity || 0;
-            rawMaterialRequirements.push({
-              code: ingredient.code,
-              name: ingredient.name,
-              required: requiredQuantity,
-              available: availableQuantity,
-              status: availableQuantity >= requiredQuantity ? 'available' : 
-                     availableQuantity > 0 ? 'low' : 'unavailable'
-            });
-          }
-        }
-      }
-    }
-    
-    // حساب عدد العناصر الناقصة
-    const missingItemsCount = 
-      rawMaterialRequirements.filter(item => item.status === 'unavailable').length +
-      packagingRequirements.filter(item => item.status === 'unavailable').length +
-      semiFinishedRequirements.filter(item => item.status === 'unavailable').length;
-    
-    // حساب ما إذا كان يمكن الإنتاج
-    const canProduce = missingItemsCount === 0;
-    
-    // تقدير الوقت المطلوب (منطق افتراضي للعرض)
-    const estimatedTime = Math.max(1, Math.ceil(productQuantity / 50));
-    
-    return {
-      rawMaterials: rawMaterialRequirements,
-      packagingMaterials: packagingRequirements,
-      semiFinished: semiFinishedRequirements,
-      estimatedTime,
-      canProduce,
-      missingItems: missingItemsCount
-    };
-  };
-
-  const aggregateSimulationResults = (results: SimulationResult[]): AggregatedResult => {
-    // تجميع المواد الخام
-    const rawMaterialsMap = new Map<string, MaterialRequirement>();
-    
-    // تجميع المواد نصف المصنعة
-    const semiFinishedMap = new Map<string, MaterialRequirement>();
-    
-    // تجميع مواد التعبئة
-    const packagingMaterialsMap = new Map<string, MaterialRequirement>();
-    
-    // متغيرات إجمالية
-    let totalMissingItems = 0;
-    let allCanProduce = true;
-    let maxEstimatedTime = 0;
-    
-    // تجميع نتائج المحاكاة
-    results.forEach(result => {
-      // تجميع المواد الخام
-      result.rawMaterials.forEach(item => {
-        if (rawMaterialsMap.has(item.code)) {
-          const existingItem = rawMaterialsMap.get(item.code)!;
-          existingItem.required += item.required;
-          existingItem.status = existingItem.available >= existingItem.required ? 'available' :
-                               existingItem.available > 0 ? 'low' : 'unavailable';
-        } else {
-          rawMaterialsMap.set(item.code, { ...item });
-        }
-      });
-      
-      // تجميع المواد نصف المصنعة
-      result.semiFinished.forEach(item => {
-        if (semiFinishedMap.has(item.code)) {
-          const existingItem = semiFinishedMap.get(item.code)!;
-          existingItem.required += item.required;
-          existingItem.status = existingItem.available >= existingItem.required ? 'available' :
-                               existingItem.available > 0 ? 'low' : 'unavailable';
-        } else {
-          semiFinishedMap.set(item.code, { ...item });
-        }
-      });
-      
-      // تجميع مواد التعبئة
-      result.packagingMaterials.forEach(item => {
-        if (packagingMaterialsMap.has(item.code)) {
-          const existingItem = packagingMaterialsMap.get(item.code)!;
-          existingItem.required += item.required;
-          existingItem.status = existingItem.available >= existingItem.required ? 'available' :
-                               existingItem.available > 0 ? 'low' : 'unavailable';
-        } else {
-          packagingMaterialsMap.set(item.code, { ...item });
-        }
-      });
-      
-      // تحديث المتغيرات الإجمالية
-      totalMissingItems += result.missingItems;
-      allCanProduce = allCanProduce && result.canProduce;
-      maxEstimatedTime = Math.max(maxEstimatedTime, result.estimatedTime);
-    });
-    
-    // إعادة حساب حالة العناصر
-    const rawMaterials = Array.from(rawMaterialsMap.values()).map(item => {
-      item.status = item.available >= item.required ? 'available' :
-                   item.available > 0 ? 'low' : 'unavailable';
-      return item;
-    });
-    
-    const semiFinished = Array.from(semiFinishedMap.values()).map(item => {
-      item.status = item.available >= item.required ? 'available' :
-                   item.available > 0 ? 'low' : 'unavailable';
-      return item;
-    });
-    
-    const packagingMaterials = Array.from(packagingMaterialsMap.values()).map(item => {
-      item.status = item.available >= item.required ? 'available' :
-                   item.available > 0 ? 'low' : 'unavailable';
-      return item;
-    });
-    
-    // إعادة حساب العناصر الناقصة
-    const missingItems = 
-      rawMaterials.filter(item => item.status === 'unavailable').length +
-      packagingMaterials.filter(item => item.status === 'unavailable').length +
-      semiFinished.filter(item => item.status === 'unavailable').length;
-    
-    return {
-      rawMaterials,
-      packagingMaterials,
-      semiFinished,
-      estimatedTime: maxEstimatedTime,
-      canProduce: missingItems === 0,
-      missingItems,
-      products: simulationItems,
-      totalProducts: simulationItems.length
-    };
-  };
-
-  const runSimulation = async () => {
-    if (simulationItems.length === 0) {
-      toast.error('الرجاء إضافة منتج واحد على الأقل للمحاكاة');
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      // إجراء المحاكاة لكل منتج على حدة
-      const simulationResults: SimulationResult[] = [];
-      
-      for (const item of simulationItems) {
-        const result = await runSingleSimulation(item.productCode, item.quantity);
-        simulationResults.push(result);
-      }
-      
-      // تجميع النتائج إذا كان هناك أكثر من منتج
-      if (simulationItems.length === 1) {
-        setSimulationResult(simulationResults[0]);
-        setAggregatedResult(null);
-      } else {
-        const aggregated = aggregateSimulationResults(simulationResults);
-        setAggregatedResult(aggregated);
-        setSimulationResult(null);
-      }
-    } catch (error) {
-      console.error('Error in simulation:', error);
-      toast.error('حدث خطأ أثناء تنفيذ المحاكاة');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const createProductionOrder = async (productCode: string, quantity: number) => {
-    try {
-      setIsLoading(true);
-      
-      // الحصول على بيانات المنتج
-      const inventoryService = InventoryService.getInstance();
-      const { data: product } = await inventoryService.getFinishedProductByCode(productCode);
-      
-      if (!product) {
-        toast.error('المنتج غير موجود');
-        return;
-      }
-      
-      // إنشاء أمر الإنتاج
-      const productionService = ProductionService.getInstance();
-      const newOrder = await productionService.createProductionOrder({
-        product_code: productCode,
-        product_name: product.name,
-        quantity: quantity,
-        unit: product.unit,
-        date: new Date().toISOString().split('T')[0]
-      });
-      
-      if (newOrder) {
-        toast.success(`تم إنشاء أمر الإنتاج بنجاح: ${newOrder.code}`);
-      }
-    } catch (error) {
-      console.error('Error creating production order:', error);
-      toast.error('حدث خطأ أثناء إنشاء أمر الإنتاج');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FlaskConical className="h-5 w-5" />
-            محاكاة إنتاج متعدد
-          </CardTitle>
-          <CardDescription>
-            أضف المنتجات والكميات لمحاكاة عملية الإنتاج وتحليل المتطلبات
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">المنتج</label>
-              <Select
-                value={selectedProduct}
-                onValueChange={setSelectedProduct}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر المنتج" />
-                </SelectTrigger>
-                <SelectContent>
-                  {productOptions.map(product => (
-                    <SelectItem key={product.code} value={product.code}>
-                      {product.name} ({product.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">الكمية</label>
-              <Input
-                type="number"
-                placeholder="أدخل الكمية"
-                value={quantity || ''}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-              />
-            </div>
-            
-            <div className="flex items-end">
-              <Button 
-                onClick={addProductToSimulation} 
-                disabled={isLoading || !selectedProduct || quantity <= 0}
-                className="gap-2 w-full"
-              >
-                <Plus className="h-4 w-4" />
-                إضافة إلى المحاكاة
-              </Button>
-            </div>
-          </div>
-          
-          {/* قائمة المنتجات المضافة للمحاكاة */}
-          <div className="border rounded-md p-4 mb-4">
-            <h3 className="text-sm font-medium mb-2">المنتجات المضافة للمحاكاة</h3>
-            
-            {simulationItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-2">لم تتم إضافة أي منتجات بعد</p>
-            ) : (
-              <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                {simulationItems.map(item => (
-                  <div key={item.id} className="flex items-center justify-between bg-muted p-2 rounded-md">
-                    <div>
-                      <span className="font-medium">{item.productName}</span>
-                      <div className="text-xs text-muted-foreground">{item.productCode}</div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span>الكمية: {item.quantity}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => removeProductFromSimulation(item.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          <div className="flex justify-center">
-            <Button 
-              onClick={runSimulation} 
-              disabled={isLoading || simulationItems.length === 0}
-              className="gap-2"
-              variant="default"
-              size="lg"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  جاري المحاكاة...
-                </>
-              ) : (
-                <>
-                  تنفيذ المحاكاة
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {simulationResult && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>نتيجة المحاكاة</CardTitle>
-              <CardDescription>
-                تحليل إمكانية إنتاج {simulationItems[0].quantity} وحدة من المنتج {simulationItems[0].productName}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <Alert variant={simulationResult.canProduce ? "default" : "destructive"}>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>
-                  {simulationResult.canProduce 
-                    ? "يمكن تنفيذ أمر الإنتاج" 
-                    : "لا يمكن تنفيذ أمر الإنتاج بالكامل"
-                  }
-                </AlertTitle>
-                <AlertDescription>
-                  {simulationResult.canProduce 
-                    ? "جميع المواد متوفرة بالكميات المطلوبة"
-                    : `هناك ${simulationResult.missingItems} ${simulationResult.missingItems === 1 ? 'مادة غير متوفرة' : 'مواد غير متوفرة'}`
-                  }
-                </AlertDescription>
-              </Alert>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">الوقت التقديري للإنتاج:</span>
-                  <span>
-                    {simulationResult.estimatedTime} {simulationResult.estimatedTime === 1 ? 'يوم' : 'أيام'}
-                  </span>
-                </div>
-                
-                <Separator />
-                
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">نسبة توفر المواد الخام:</span>
-                  <span>
-                    {Math.round(
-                      (simulationResult.rawMaterials.filter(m => m.status === 'available').length / 
-                      Math.max(1, simulationResult.rawMaterials.length)) * 100
-                    )}%
-                  </span>
-                </div>
-                
-                <Progress 
-                  value={
-                    (simulationResult.rawMaterials.filter(m => m.status === 'available').length / 
-                    Math.max(1, simulationResult.rawMaterials.length)) * 100
-                  } 
-                  className="h-2" 
-                />
-                
-                <Separator />
-                
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">نسبة توفر المنتجات نصف المصنعة:</span>
-                  <span>
-                    {Math.round(
-                      (simulationResult.semiFinished.filter(m => m.status === 'available').length / 
-                      Math.max(1, simulationResult.semiFinished.length)) * 100
-                    )}%
-                  </span>
-                </div>
-                
-                <Progress 
-                  value={
-                    (simulationResult.semiFinished.filter(m => m.status === 'available').length / 
-                    Math.max(1, simulationResult.semiFinished.length)) * 100
-                  } 
-                  className="h-2" 
-                />
-                
-                <Separator />
-                
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">نسبة توفر مواد التعبئة:</span>
-                  <span>
-                    {Math.round(
-                      (simulationResult.packagingMaterials.filter(m => m.status === 'available').length / 
-                      Math.max(1, simulationResult.packagingMaterials.length)) * 100
-                    )}%
-                  </span>
-                </div>
-                
-                <Progress 
-                  value={
-                    (simulationResult.packagingMaterials.filter(m => m.status === 'available').length / 
-                    Math.max(1, simulationResult.packagingMaterials.length)) * 100
-                  } 
-                  className="h-2" 
-                />
-              </div>
-              
-              <div className="flex justify-end">
-                <Button 
-                  variant="default" 
-                  className="gap-2" 
-                  disabled={!simulationResult.canProduce || isLoading}
-                  onClick={() => createProductionOrder(simulationItems[0].productCode, simulationItems[0].quantity)}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      جاري الإنشاء...
-                    </>
-                  ) : (
-                    <>
-                      <ListCheck className="h-4 w-4" />
-                      إنشاء أمر إنتاج
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>متطلبات المواد</CardTitle>
-              <CardDescription>
-                تفاصيل المواد المطلوبة وحالة توفرها
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6 max-h-[500px] overflow-y-auto">
-              {simulationResult.semiFinished.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <PackageCheck className="h-4 w-4" />
-                    المنتجات نصف المصنعة
-                  </h3>
-                  <div className="space-y-2">
-                    {simulationResult.semiFinished.map(item => (
-                      <div key={item.code} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                        <div>
-                          <span className="font-medium block">{item.name}</span>
-                          <span className="text-xs text-muted-foreground">{item.code}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm text-right">
-                            <span className="block">{item.required.toFixed(2)}</span>
-                            <span className="text-xs text-muted-foreground">مطلوب</span>
-                          </div>
-                          <div className="text-sm text-right">
-                            <span className="block">{item.available.toFixed(2)}</span>
-                            <span className="text-xs text-muted-foreground">متوفر</span>
-                          </div>
-                          <Badge 
-                            variant={
-                              item.status === 'available' ? 'default' : 
-                              item.status === 'low' ? 'outline' : 'destructive'
-                            }
-                          >
-                            {item.status === 'available' ? 'متوفر' : 
-                             item.status === 'low' ? 'متوفر جزئيًا' : 'غير متوفر'}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {simulationResult.rawMaterials.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <ArchiveX className="h-4 w-4" />
-                    المواد الخام
-                  </h3>
-                  <div className="space-y-2">
-                    {simulationResult.rawMaterials.map(item => (
-                      <div key={item.code} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                        <div>
-                          <span className="font-medium block">{item.name}</span>
-                          <span className="text-xs text-muted-foreground">{item.code}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm text-right">
-                            <span className="block">{item.required.toFixed(2)}</span>
-                            <span className="text-xs text-muted-foreground">مطلوب</span>
-                          </div>
-                          <div className="text-sm text-right">
-                            <span className="block">{item.available.toFixed(2)}</span>
-                            <span className="text-xs text-muted-foreground">متوفر</span>
-                          </div>
-                          <Badge 
-                            variant={
-                              item.status === 'available' ? 'default' : 
-                              item.status === 'low' ? 'outline' : 'destructive'
-                            }
-                          >
-                            {item.status === 'available' ? 'متوفر' : 
-                             item.status === 'low' ? 'متوفر جزئيًا' : 'غير متوفر'}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {simulationResult.packagingMaterials.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <PackageCheck className="h-4 w-4" />
-                    مواد التعبئة
-                  </h3>
-                  <div className="space-y-2">
-                    {simulationResult.packagingMaterials.map(item => (
-                      <div key={item.code} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                        <div>
-                          <span className="font-medium block">{item.name}</span>
-                          <span className="text-xs text-muted-foreground">{item.code}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm text-right">
-                            <span className="block">{item.required.toFixed(2)}</span>
-                            <span className="text-xs text-muted-foreground">مطلوب</span>
-                          </div>
-                          <div className="text-sm text-right">
-                            <span className="block">{item.available.toFixed(2)}</span>
-                            <span className="text-xs text-muted-foreground">متوفر</span>
-                          </div>
-                          <Badge 
-                            variant={
-                              item.status === 'available' ? 'default' : 
-                              item.status === 'low' ? 'outline' : 'destructive'
-                            }
-                          >
-                            {item.status === 'available' ? 'متوفر' : 
-                             item.status === 'low' ? 'متوفر جزئيًا' : 'غير متوفر'}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      
-      {aggregatedResult && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>نتيجة المحاكاة المجمعة</CardTitle>
-              <CardDescription>
-                تحليل إمكانية إنتاج {aggregatedResult.totalProducts} منتجات مختلفة في نفس الوقت
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <Alert variant={aggregatedResult.canProduce ? "default" : "destructive"}>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>
-                  {aggregatedResult.canProduce 
-                    ? "يمكن تنفيذ جميع أوامر الإنتاج" 
-                    : "لا يمكن تنفيذ جميع أوامر الإنتاج"
-                  }
-                </AlertTitle>
-                <AlertDescription>
-                  {aggregatedResult.canProduce 
-                    ? "جميع المواد متوفرة بالكميات المطلوبة لكل المنتجات"
-                    : `هناك ${aggregatedResult.missingItems} ${aggregatedResult.missingItems === 1 ? 'مادة غير متوفرة' : 'مواد غير متوفرة'} تعيق الإنتاج`
-                  }
-                </AlertDescription>
-              </Alert>
-              
-              <div className="space-y-5">
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">الوقت التقديري الإجمالي للإنتاج:</span>
-                    <span>
-                      {aggregatedResult.estimatedTime} {aggregatedResult.estimatedTime === 1 ? 'يوم' : 'أيام'}
-                    </span>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">نسبة توفر المواد الخام:</span>
-                    <span>
-                      {Math.round(
-                        (aggregatedResult.rawMaterials.filter(m => m.status === 'available').length / 
-                        Math.max(1, aggregatedResult.rawMaterials.length)) * 100
-                      )}%
-                    </span>
-                  </div>
-                  
-                  <Progress 
-                    value={
-                      (aggregatedResult.rawMaterials.filter(m => m.status === 'available').length / 
-                      Math.max(1, aggregatedResult.rawMaterials.length)) * 100
-                    } 
-                    className="h-2" 
-                  />
-                </div>
-                
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">نسبة توفر المنتجات نصف المصنعة:</span>
-                    <span>
-                      {Math.round(
-                        (aggregatedResult.semiFinished.filter(m => m.status === 'available').length / 
-                        Math.max(1, aggregatedResult.semiFinished.length)) * 100
-                      )}%
-                    </span>
-                  </div>
-                  
-                  <Progress 
-                    value={
-                      (aggregatedResult.semiFinished.filter(m => m.status === 'available').length / 
-                      Math.max(1, aggregatedResult.semiFinished.length)) * 100
-                    } 
-                    className="h-2" 
-                  />
-                </div>
-                
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">نسبة توفر مواد التعبئة:</span>
-                    <span>
-                      {Math.round(
-                        (aggregatedResult.packagingMaterials.filter(m => m.status === 'available').length / 
-                        Math.max(1, aggregatedResult.packagingMaterials.length)) * 100
-                      )}%
-                    </span>
-                  </div>
-                  
-                  <Progress 
-                    value={
-                      (aggregatedResult.packagingMaterials.filter(m => m.status === 'available').length / 
-                      Math.max(1, aggregatedResult.packagingMaterials.length)) * 100
-                    } 
-                    className="h-2" 
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">المنتجات المضمنة في المحاكاة:</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {aggregatedResult.products.map(product => (
-                    <div key={product.id} className="flex items-center justify-between bg-muted p-2 rounded-md">
-                      <div>
-                        <span className="font-medium">{product.productName}</span>
-                        <div className="text-xs text-muted-foreground">{product.productCode}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">الكمية: {product.quantity}</span>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-7 px-2 flex gap-1 items-center text-xs"
-                          disabled={!aggregatedResult.canProduce || isLoading}
-                          onClick={() => createProductionOrder(product.productCode, product.quantity)}
-                        >
-                          <ListCheck className="h-3 w-3" />
-                          أمر إنتاج
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button 
-                  variant="outline" 
-                  className="gap-2"
-                  onClick={() => {
-                    setAggregatedResult(null);
-                    setSimulationResult(null);
-                  }}
-                >
-                  <AlertTriangle className="h-4 w-4" />
-                  إلغاء المحاكاة
-                </Button>
-                
-                <Button 
-                  variant="default" 
-                  className="gap-2" 
-                  disabled={!aggregatedResult.canProduce || isLoading}
-                  onClick={async () => {
-                    setIsLoading(true);
-                    try {
-                      // إنشاء أوامر إنتاج لجميع المنتجات
-                      for (const product of aggregatedResult.products) {
-                        await createProductionOrder(product.productCode, product.quantity);
-                      }
-                      toast.success('تم إنشاء جميع أوامر الإنتاج بنجاح');
-                      // إعادة تعيين المحاكاة
-                      setAggregatedResult(null);
-                      setSimulationResult(null);
-                      setSimulationItems([]);
-                    } catch (error) {
-                      console.error('Error creating production orders:', error);
-                      toast.error('حدث خطأ أثناء إنشاء أوامر الإنتاج');
-                    } finally {
-                      setIsLoading(false);
-                    }
-                  }}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      جاري الإنشاء...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      إنشاء جميع أوامر الإنتاج
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Tabs defaultValue="raw">
-            <TabsList className="mb-4">
-              <TabsTrigger value="raw">المواد الخام ({aggregatedResult.rawMaterials.length})</TabsTrigger>
-              <TabsTrigger value="semi">نصف مصنعة ({aggregatedResult.semiFinished.length})</TabsTrigger>
-              <TabsTrigger value="packaging">مواد تعبئة ({aggregatedResult.packagingMaterials.length})</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="raw">
-              <Card>
-                <CardHeader>
-                  <CardTitle>المواد الخام المطلوبة</CardTitle>
-                  <CardDescription>
-                    تفاصيل المواد الخام المطلوبة لإنتاج جميع المنتجات
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="max-h-[400px] overflow-y-auto">
-                  {aggregatedResult.rawMaterials.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-10">
-                      لا توجد مواد خام مطلوبة
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {aggregatedResult.rawMaterials.map(item => (
-                        <div key={item.code} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                          <div>
-                            <span className="font-medium block">{item.name}</span>
-                            <span className="text-xs text-muted-foreground">{item.code}</span>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-sm text-right">
-                              <span className="block">{item.required.toFixed(2)}</span>
-                              <span className="text-xs text-muted-foreground">مطلوب</span>
-                            </div>
-                            <div className="text-sm text-right">
-                              <span className="block">{item.available.toFixed(2)}</span>
-                              <span className="text-xs text-muted-foreground">متوفر</span>
-                            </div>
-                            <Badge 
-                              variant={
-                                item.status === 'available' ? 'default' : 
-                                item.status === 'low' ? 'outline' : 'destructive'
-                              }
-                            >
-                              {item.status === 'available' ? 'متوفر' : 
-                               item.status === 'low' ? 'متوفر جزئيًا' : 'غير متوفر'}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="semi">
-              <Card>
-                <CardHeader>
-                  <CardTitle>المنتجات نصف المصنعة المطلوبة</CardTitle>
-                  <CardDescription>
-                    تفاصيل المنتجات نصف المصنعة المطلوبة لإنتاج جميع المنتجات
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="max-h-[400px] overflow-y-auto">
-                  {aggregatedResult.semiFinished.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-10">
-                      لا توجد منتجات نصف مصنعة مطلوبة
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {aggregatedResult.semiFinished.map(item => (
-                        <div key={item.code} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                          <div>
-                            <span className="font-medium block">{item.name}</span>
-                            <span className="text-xs text-muted-foreground">{item.code}</span>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-sm text-right">
-                              <span className="block">{item.required.toFixed(2)}</span>
-                              <span className="text-xs text-muted-foreground">مطلوب</span>
-                            </div>
-                            <div className="text-sm text-right">
-                              <span className="block">{item.available.toFixed(2)}</span>
-                              <span className="text-xs text-muted-foreground">متوفر</span>
-                            </div>
-                            <Badge 
-                              variant={
-                                item.status === 'available' ? 'default' : 
-                                item.status === 'low' ? 'outline' : 'destructive'
-                              }
-                            >
-                              {item.status === 'available' ? 'متوفر' : 
-                               item.status === 'low' ? 'متوفر جزئيًا' : 'غير متوفر'}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="packaging">
-              <Card>
-                <CardHeader>
-                  <CardTitle>مواد التعبئة المطلوبة</CardTitle>
-                  <CardDescription>
-                    تفاصيل مواد التعبئة المطلوبة لإنتاج جميع المنتجات
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="max-h-[400px] overflow-y-auto">
-                  {aggregatedResult.packagingMaterials.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-10">
-                      لا توجد مواد تعبئة مطلوبة
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {aggregatedResult.packagingMaterials.map(item => (
-                        <div key={item.code} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                          <div>
-                            <span className="font-medium block">{item.name}</span>
-                            <span className="text-xs text-muted-foreground">{item.code}</span>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-sm text-right">
-                              <span className="block">{item.required.toFixed(2)}</span>
-                              <span className="text-xs text-muted-foreground">مطلوب</span>
-                            </div>
-                            <div className="text-sm text-right">
-                              <span className="block">{item.available.toFixed(2)}</span>
-                              <span className="text-xs text-muted-foreground">متوفر</span>
-                            </div>
-                            <Badge 
-                              variant={
-                                item.status === 'available' ? 'default' : 
-                                item.status === 'low' ? 'outline' : 'destructive'
-                              }
-                            >
-                              {item.status === 'available' ? 'متوفر' : 
-                               item.status === 'low' ? 'متوفر جزئيًا' : 'غير متوفر'}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default ProductionSimulation;
+  const [products, setProducts] = useState<SemiFinishedProduct[]>([]);
+  const [finishedProducts, setFinishedProducts] = useState<FinishedProduct[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<SemiFinishedProduct | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [ingredients, setIngredients] = useState<{
+    code: string;
+    name: string;
+    requiredQuantity: number;
+    available: boolean;
+    unit: string;
+    cost: number;
+  }[]>([]);
+  const [packagingMaterials, setPackagingMaterials] = useState<{
+    code: string;
+    name: string;
+    requiredQuantity: number;
+    available: boolean;
+    unit: string;
+    cost: number;
+  }[]>([]);
+  const [totalCost, setTotalCost] = useState<number>(0);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  const [isIngredientCostManually, setIsIngredientCostManually] = useState<boolean>(false);
+  const [isPackagingCostManually, setIsPackagingCostManually] = useState<boolean>(false);
+  const [ingredientManualCost, setIngredientManualCost] = useState<number>(0);
+  const [packagingManualCost, setPackagingManualCost] = useState<number>(0);
+  const [isFinishedProduct, setIsFinishedProduct] = useState<boolean>(false);
+  const [isSemiFinishedProduct, setIsSemiFinishedProduct] = useState<boolean>(false);
+  const [isSimulationRunning, setIsSimulationRunning] = useState<boolean>(false);
+  const [isSimulationFinished, setIsSimulationFinished] = useState<boolean>(false);
+  const [isSimulationFailed, setIsSimulationFailed] = useState<boolean>(false);
+  const [simulationErrorMessage, setSimulationErrorMessage] = useState<string>('');
+  const [isCreatingOrder, setIsCreatingOrder] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
+  const [isCopying, setIsCopying] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isAddingPackaging, setIsAddingPackaging] = useState<boolean>(false);
+  const [isAddingIngredient, setIsAddingIngredient] = useState<boolean>(false);
+  const [isUpdatingIngredient, setIsUpdatingIngredient] = useState<boolean>(false);
+  const [isUpdatingPackaging, setIsUpdatingPackaging] = useState<boolean>(false);
+  const [isIngredientAvailable, setIsIngredientAvailable] = useState<boolean>(false);
+  const [isPackagingAvailable, setIsPackagingAvailable] = useState<boolean>(false);
+  const [isIngredientCostValid, setIsIngredientCostValid] = useState<boolean>(false);
+  const [isPackagingCostValid, setIsPackagingCostValid] = useState<boolean>(false);
+  const [isIngredientQuantityValid, setIsIngredientQuantityValid] = useState<boolean>(false);
+  const [isPackagingQuantityValid, setIsPackagingQuantityValid] = useState<boolean>(false);
+  const [isIngredientNameValid, setIsIngredientNameValid] = useState<boolean>(false);
+  const [isPackagingNameValid, setIsPackagingNameValid] = useState<boolean>(false);
+  const [isIngredientCodeValid, setIsIngredientCodeValid] = useState<boolean>(false);
+  const [isPackagingCodeValid, setIsPackagingCodeValid] = useState<boolean>(false);
+  const [isIngredientUnitValid, setIsIngredientUnitValid] = useState<boolean>(false);
+  const [isPackagingUnitValid, setIsPackagingUnitValid] = useState<boolean>(false);
+  const [isIngredientPercentageValid, setIsIngredientPercentageValid] = useState<boolean>(false);
+  const [isPackagingPercentageValid, setIsPackagingPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageValid, setIsIngredientCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageValid, setIsPackagingCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostQuantityValid, setIsIngredientCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostQuantityValid, setIsPackagingCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostNameValid, setIsIngredientCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostNameValid, setIsPackagingCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostCodeValid, setIsIngredientCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostCodeValid, setIsPackagingCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostUnitValid, setIsIngredientCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostUnitValid, setIsPackagingCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostValid, setIsIngredientCostPercentageCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostValid, setIsPackagingCostPercentageCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageQuantityValid, setIsIngredientCostPercentageQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageQuantityValid, setIsPackagingCostPercentageQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageNameValid, setIsIngredientCostPercentageNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageNameValid, setIsPackagingCostPercentageNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCodeValid, setIsIngredientCostPercentageCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCodeValid, setIsPackagingCostPercentageCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageUnitValid, setIsIngredientCostPercentageUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageUnitValid, setIsPackagingCostPercentageUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentagePercentageValid, setIsIngredientCostPercentagePercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentagePercentageValid, setIsPackagingCostPercentagePercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostPercentageValid, setIsIngredientCostPercentageCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostPercentageValid, setIsPackagingCostPercentageCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostQuantityValid, setIsIngredientCostPercentageCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostQuantityValid, setIsPackagingCostPercentageCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostNameValid, setIsIngredientCostPercentageCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostNameValid, setIsPackagingCostPercentageCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCodeValid, setIsIngredientCostPercentageCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCodeValid, setIsPackagingCostPercentageCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostUnitValid, setIsIngredientCostPercentageCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostUnitValid, setIsPackagingCostPercentageCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostPercentageValid, setIsIngredientCostPercentageCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostPercentageValid, setIsPackagingCostPercentageCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostValid, setIsIngredientCostPercentageCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostValid, setIsPackagingCostPercentageCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostQuantityValid, setIsIngredientCostPercentageCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostQuantityValid, setIsPackagingCostPercentageCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostNameValid, setIsIngredientCostPercentageCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostNameValid, setIsPackagingCostPercentageCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCodeValid, setIsIngredientCostPercentageCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCodeValid, setIsPackagingCostPercentageCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostUnitValid, setIsIngredientCostPercentageCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostUnitValid, setIsPackagingCostPercentageCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostPercentageValid, setIsIngredientCostPercentageCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostPercentageValid, setIsPackagingCostPercentageCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostValid, setIsIngredientCostPercentageCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostValid, setIsPackagingCostPercentageCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
+  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
+  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCost

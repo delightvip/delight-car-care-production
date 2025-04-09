@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -78,7 +79,7 @@ export interface PackagingOrderExtended extends PackagingOrder {
   productCode: string;
   productName: string;
   totalCost: number;
-  semiFinished?: {
+  semiFinished: {
     code: string;
     name: string;
     quantity: number;
@@ -117,7 +118,8 @@ class ProductionService {
         ...order,
         productCode: order.product_code,
         productName: order.product_name,
-        totalCost: order.total_cost
+        totalCost: order.total_cost,
+        ingredients: []
       }));
     } catch (error) {
       console.error("Error fetching production orders:", error);
@@ -364,7 +366,8 @@ class ProductionService {
         ...data,
         productCode: data.product_code,
         productName: data.product_name,
-        totalCost: data.total_cost
+        totalCost: data.total_cost,
+        ingredients: []
       };
     } catch (error) {
       console.error("Error creating production order:", error);

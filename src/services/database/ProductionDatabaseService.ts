@@ -2,7 +2,9 @@ import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   ProductionOrder, 
-  PackagingOrder 
+  PackagingOrder,
+  ProductionOrderExtended,
+  PackagingOrderExtended
 } from "../ProductionService";
 
 class ProductionDatabaseService {
@@ -18,7 +20,7 @@ class ProductionDatabaseService {
   }
 
   // جلب جميع أوامر الإنتاج
-  public async getProductionOrders(): Promise<ProductionOrder[]> {
+  public async getProductionOrders(): Promise<ProductionOrderExtended[]> {
     try {
       const { data: orders, error } = await supabase
         .from('production_orders')
@@ -38,23 +40,18 @@ class ProductionDatabaseService {
         
         // تحويل البيانات من صيغة قاعدة البيانات إلى صيغة التطبيق
         return {
-          id: order.id,
-          code: order.code,
+          ...order,
           productCode: order.product_code,
           productName: order.product_name,
-          quantity: order.quantity,
-          unit: order.unit,
-          status: order.status as "pending" | "inProgress" | "completed" | "cancelled",
-          date: order.date,
+          totalCost: order.total_cost,
           ingredients: ingredients.map(ingredient => ({
             id: ingredient.id,
             code: ingredient.raw_material_code,
             name: ingredient.raw_material_name,
             requiredQuantity: ingredient.required_quantity,
             available: true // سيتم تحديثها لاحقاً عند التحقق من توفر المواد
-          })),
-          totalCost: order.total_cost
-        };
+          }))
+        } as ProductionOrderExtended;
       }));
       
       return ordersWithIngredients;
@@ -66,7 +63,7 @@ class ProductionDatabaseService {
   }
 
   // جلب جميع أوامر التعبئة
-  public async getPackagingOrders(): Promise<PackagingOrder[]> {
+  public async getPackagingOrders(): Promise<PackagingOrderExtended[]> {
     try {
       const { data: orders, error } = await supabase
         .from('packaging_orders')
@@ -86,14 +83,10 @@ class ProductionDatabaseService {
         
         // تحويل البيانات من صيغة قاعدة البيانات إلى صيغة التطبيق
         return {
-          id: order.id,
-          code: order.code,
+          ...order,
           productCode: order.product_code,
           productName: order.product_name,
-          quantity: order.quantity,
-          unit: order.unit,
-          status: order.status as "pending" | "inProgress" | "completed" | "cancelled",
-          date: order.date,
+          totalCost: order.total_cost,
           semiFinished: {
             code: order.semi_finished_code,
             name: order.semi_finished_name,
@@ -105,9 +98,8 @@ class ProductionDatabaseService {
             name: material.packaging_material_name,
             quantity: material.required_quantity,
             available: true // سيتم تحديثها لاحقاً عند التحقق من توفر المواد
-          })),
-          totalCost: order.total_cost
-        };
+          }))
+        } as PackagingOrderExtended;
       }));
       
       return ordersWithMaterials;
@@ -126,7 +118,7 @@ class ProductionDatabaseService {
     unit: string,
     ingredients: { code: string, name: string, requiredQuantity: number }[],
     totalCost: number
-  ): Promise<ProductionOrder | null> {
+  ): Promise<ProductionOrderExtended | null> {
     try {
       console.log('[DEBUG] بدء إنشاء أمر إنتاج جديد');
       
@@ -192,22 +184,17 @@ class ProductionDatabaseService {
         
         // إعادة تهيئة الأمر بالصيغة المطلوبة
         return {
-          id: orderData.id,
-          code: orderData.code,
+          ...orderData,
           productCode: orderData.product_code,
           productName: orderData.product_name,
-          quantity: orderData.quantity,
-          unit: orderData.unit,
-          status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
-          date: orderData.date,
+          totalCost: orderData.total_cost,
           ingredients: ingredients.map(ingredient => ({
             id: 0, // سيتم تحديثه لاحقًا
             code: ingredient.code,
             name: ingredient.name,
             requiredQuantity: ingredient.requiredQuantity,
             available: true
-          })),
-          totalCost: orderData.total_cost
+          }))
         };
       } catch (innerError) {
         // في حالة حدوث خطأ أثناء إضافة المكونات، نحاول إلغاء العملية بالكامل
@@ -237,7 +224,7 @@ class ProductionDatabaseService {
     semiFinished: { code: string, name: string, quantity: number },
     packagingMaterials: { code: string, name: string, quantity: number }[],
     totalCost: number
-  ): Promise<PackagingOrder | null> {
+  ): Promise<PackagingOrderExtended | null> {
     try {
       const code = this.generateOrderCode('packaging');
       const date = new Date().toISOString().split('T')[0];
@@ -279,14 +266,10 @@ class ProductionDatabaseService {
       
       // إعادة تهيئة الأمر بالصيغة المطلوبة
       return {
-        id: orderData.id,
-        code: orderData.code,
+        ...orderData,
         productCode: orderData.product_code,
         productName: orderData.product_name,
-        quantity: orderData.quantity,
-        unit: orderData.unit,
-        status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
-        date: orderData.date,
+        totalCost: orderData.total_cost,
         semiFinished: {
           code: semiFinished.code,
           name: semiFinished.name,
@@ -298,8 +281,7 @@ class ProductionDatabaseService {
           name: material.name,
           quantity: material.quantity,
           available: true
-        })),
-        totalCost: orderData.total_cost
+        }))
       };
     } catch (error) {
       console.error('Error creating packaging order:', error);
