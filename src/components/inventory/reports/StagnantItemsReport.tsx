@@ -24,6 +24,14 @@ interface StagnantItem {
   daysSinceLastMovement: number | null;
 }
 
+interface InventoryItem {
+  id: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
 const StagnantItemsReport = () => {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [timeThreshold, setTimeThreshold] = useState<string>('90');
@@ -58,22 +66,16 @@ const StagnantItemsReport = () => {
         // Prepare arrays to hold results from each category
         const results: StagnantItem[] = [];
         
-        // Process each inventory category based on filter
-        const processCategory = async (table: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products', 
-                                      type: 'raw' | 'packaging' | 'semi' | 'finished', 
-                                      typeName: string) => {
-          if (selectedType !== 'all' && selectedType !== type) {
-            return;
-          }
-          
+        // Process raw materials if needed
+        if (selectedType === 'all' || selectedType === 'raw') {
           const { data: items, error } = await supabase
-            .from(table)
+            .from('raw_materials')
             .select('id, code, name, quantity, unit');
             
           if (error) throw error;
           
-          items?.forEach(item => {
-            const lastMovementDate = lastMovementMap.get(`${type}-${item.id}`);
+          for (const item of items || []) {
+            const lastMovementDate = lastMovementMap.get(`raw-${item.id}`);
             
             // Calculate days since last movement
             let daysSince = null;
@@ -81,12 +83,15 @@ const StagnantItemsReport = () => {
               const lastDate = new Date(lastMovementDate);
               const diffTime = Math.abs(now.getTime() - lastDate.getTime());
               daysSince = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              // If movement is more recent than threshold, this isn't stagnant
+              if (lastDate > thresholdDate) continue;
             } else {
-              // If no movement found, use creation date or max value
+              // If no movement found, consider it stagnant
               daysSince = 1000; // Arbitrary large number
             }
             
-            // Check if item is stagnant based on threshold
+            // Add to stagnant items
             if (daysSince !== null && daysSince >= parseInt(timeThreshold)) {
               results.push({
                 id: item.id,
@@ -94,20 +99,140 @@ const StagnantItemsReport = () => {
                 name: item.name,
                 quantity: item.quantity,
                 unit: item.unit,
-                type,
-                typeName,
+                type: 'raw',
+                typeName: 'مواد خام',
                 lastMovement: lastMovementDate,
                 daysSinceLastMovement: daysSince
               });
             }
-          });
-        };
+          }
+        }
         
-        // Process all categories
-        await processCategory('raw_materials', 'raw', 'مواد خام');
-        await processCategory('packaging_materials', 'packaging', 'مواد تعبئة');
-        await processCategory('semi_finished_products', 'semi', 'منتجات نصف مصنعة');
-        await processCategory('finished_products', 'finished', 'منتجات نهائية');
+        // Process packaging materials if needed
+        if (selectedType === 'all' || selectedType === 'packaging') {
+          const { data: items, error } = await supabase
+            .from('packaging_materials')
+            .select('id, code, name, quantity, unit');
+            
+          if (error) throw error;
+          
+          for (const item of items || []) {
+            const lastMovementDate = lastMovementMap.get(`packaging-${item.id}`);
+            
+            // Calculate days since last movement
+            let daysSince = null;
+            if (lastMovementDate) {
+              const lastDate = new Date(lastMovementDate);
+              const diffTime = Math.abs(now.getTime() - lastDate.getTime());
+              daysSince = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              // If movement is more recent than threshold, this isn't stagnant
+              if (lastDate > thresholdDate) continue;
+            } else {
+              // If no movement found, consider it stagnant
+              daysSince = 1000; // Arbitrary large number
+            }
+            
+            // Add to stagnant items
+            if (daysSince !== null && daysSince >= parseInt(timeThreshold)) {
+              results.push({
+                id: item.id,
+                code: item.code,
+                name: item.name,
+                quantity: item.quantity,
+                unit: item.unit,
+                type: 'packaging',
+                typeName: 'مواد تعبئة',
+                lastMovement: lastMovementDate,
+                daysSinceLastMovement: daysSince
+              });
+            }
+          }
+        }
+        
+        // Process semi-finished products if needed
+        if (selectedType === 'all' || selectedType === 'semi') {
+          const { data: items, error } = await supabase
+            .from('semi_finished_products')
+            .select('id, code, name, quantity, unit');
+            
+          if (error) throw error;
+          
+          for (const item of items || []) {
+            const lastMovementDate = lastMovementMap.get(`semi-${item.id}`);
+            
+            // Calculate days since last movement
+            let daysSince = null;
+            if (lastMovementDate) {
+              const lastDate = new Date(lastMovementDate);
+              const diffTime = Math.abs(now.getTime() - lastDate.getTime());
+              daysSince = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              // If movement is more recent than threshold, this isn't stagnant
+              if (lastDate > thresholdDate) continue;
+            } else {
+              // If no movement found, consider it stagnant
+              daysSince = 1000; // Arbitrary large number
+            }
+            
+            // Add to stagnant items
+            if (daysSince !== null && daysSince >= parseInt(timeThreshold)) {
+              results.push({
+                id: item.id,
+                code: item.code,
+                name: item.name,
+                quantity: item.quantity,
+                unit: item.unit,
+                type: 'semi',
+                typeName: 'منتجات نصف مصنعة',
+                lastMovement: lastMovementDate,
+                daysSinceLastMovement: daysSince
+              });
+            }
+          }
+        }
+        
+        // Process finished products if needed
+        if (selectedType === 'all' || selectedType === 'finished') {
+          const { data: items, error } = await supabase
+            .from('finished_products')
+            .select('id, code, name, quantity, unit');
+            
+          if (error) throw error;
+          
+          for (const item of items || []) {
+            const lastMovementDate = lastMovementMap.get(`finished-${item.id}`);
+            
+            // Calculate days since last movement
+            let daysSince = null;
+            if (lastMovementDate) {
+              const lastDate = new Date(lastMovementDate);
+              const diffTime = Math.abs(now.getTime() - lastDate.getTime());
+              daysSince = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              // If movement is more recent than threshold, this isn't stagnant
+              if (lastDate > thresholdDate) continue;
+            } else {
+              // If no movement found, consider it stagnant
+              daysSince = 1000; // Arbitrary large number
+            }
+            
+            // Add to stagnant items
+            if (daysSince !== null && daysSince >= parseInt(timeThreshold)) {
+              results.push({
+                id: item.id,
+                code: item.code,
+                name: item.name,
+                quantity: item.quantity,
+                unit: item.unit,
+                type: 'finished',
+                typeName: 'منتجات نهائية',
+                lastMovement: lastMovementDate,
+                daysSinceLastMovement: daysSince
+              });
+            }
+          }
+        }
         
         // Sort by days since last movement (descending)
         return results.sort((a, b) => {
@@ -149,7 +274,12 @@ const StagnantItemsReport = () => {
         break;
     }
     
-    navigate(route);
+    // Navigate to the item details
+    if (route) {
+      navigate(route);
+    } else {
+      enhancedToast.warning("تعذر فتح تفاصيل العنصر");
+    }
   };
   
   return (
