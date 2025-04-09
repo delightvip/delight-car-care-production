@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -22,7 +22,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 import { ArrowDown, ArrowUp, Circle, Copy, PackagePlus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -119,31 +119,43 @@ const ProductionSimulation = () => {
     if (selectedProd) {
       setSelectedProduct(selectedProd);
       
-      // Fetch ingredients for this product
+      // Get the ingredients for this product from the selectedProd.ingredients property
       try {
-        const inventoryService = InventoryService.getInstance();
-        const ingredients = await inventoryService.getSemiFinishedIngredients(selectedProd.id);
-        
-        // Transform ingredients to required format
-        const formattedIngredients = ingredients.map(ing => ({
+        // Transform ingredients to required format using data already available in selectedProd.ingredients
+        const formattedIngredients = selectedProd.ingredients.map(ing => ({
           code: ing.code || '',
           name: ing.name || '',
           requiredQuantity: ing.percentage * quantity / 100,
-          available: (ing.quantity || 0) >= (ing.percentage * quantity / 100),
-          unit: ing.unit || '',
-          cost: ing.unit_cost || 0
+          available: true, // We'll need to check this based on raw materials inventory
+          unit: 'كجم', // Default unit
+          cost: 0 // Default cost
         }));
         
-        setIngredients(formattedIngredients);
+        // Check availability and get costs from raw materials
+        const inventoryService = InventoryService.getInstance();
+        const rawMaterials = await inventoryService.getRawMaterials();
+        
+        // Update ingredient data with raw material data
+        const updatedIngredients = formattedIngredients.map(ing => {
+          const rawMaterial = rawMaterials.find(r => r.code === ing.code);
+          return {
+            ...ing,
+            available: rawMaterial ? (rawMaterial.quantity >= ing.requiredQuantity) : false,
+            unit: rawMaterial?.unit || 'كجم',
+            cost: rawMaterial?.unit_cost || 0
+          };
+        });
+        
+        setIngredients(updatedIngredients);
         
         // Calculate total ingredients cost
-        const ingredientsCost = formattedIngredients.reduce(
+        const ingredientsCost = updatedIngredients.reduce(
           (sum, ing) => sum + (ing.cost * ing.requiredQuantity), 0
         );
         
         setTotalCost(ingredientsCost);
       } catch (error) {
-        console.error('Error fetching ingredients:', error);
+        console.error('Error processing ingredients:', error);
         toast.error('حدث خطأ أثناء جلب المكونات');
       }
     }
@@ -157,7 +169,7 @@ const ProductionSimulation = () => {
       const updatedIngredients = ingredients.map(ing => ({
         ...ing,
         requiredQuantity: ing.requiredQuantity * (newQuantity / quantity),
-        available: ing.available // This should be recalculated based on actual inventory
+        // We should recalculate availability here based on the new quantity
       }));
       
       setIngredients(updatedIngredients);
