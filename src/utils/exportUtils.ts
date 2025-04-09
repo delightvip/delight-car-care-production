@@ -1,3 +1,4 @@
+
 /**
  * Utility for exporting inventory data to CSV files
  */
@@ -108,21 +109,6 @@ export const exportFinishedProducts = (products: any[]) => {
   }));
   
   exportToCSV(formattedData, 'finished_products');
-};
-
-// Export audit data
-export const exportAuditData = (auditData: any[]) => {
-  const formattedData = auditData.map(item => ({
-    كود: item.code,
-    الاسم: item.name,
-    الكمية_النظام: item.systemQuantity,
-    الكمية_الفعلية: item.actualQuantity,
-    الفرق: item.difference,
-    الوحدة: item.unit,
-    تاريخ_الجرد: new Date().toISOString().slice(0, 10)
-  }));
-  
-  exportToCSV(formattedData, 'inventory_audit');
 };
 
 /**

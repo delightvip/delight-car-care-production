@@ -59,7 +59,9 @@ const StagnantItemsReport = () => {
         const results: StagnantItem[] = [];
         
         // Process each inventory category based on filter
-        const processCategory = async (table: string, type: 'raw' | 'packaging' | 'semi' | 'finished', typeName: string) => {
+        const processCategory = async (table: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products', 
+                                      type: 'raw' | 'packaging' | 'semi' | 'finished', 
+                                      typeName: string) => {
           if (selectedType !== 'all' && selectedType !== type) {
             return;
           }

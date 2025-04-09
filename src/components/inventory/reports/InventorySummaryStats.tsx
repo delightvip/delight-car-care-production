@@ -10,6 +10,14 @@ interface InventorySummaryStatsProps {
   itemType: string;
 }
 
+interface SummaryStatsData {
+  total_movements: number;
+  total_in: number;
+  total_out: number;
+  adjustments: number;
+  current_quantity: number;
+}
+
 const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, itemType }) => {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['inventory-summary-stats', itemType, itemId],
@@ -21,10 +29,16 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
         );
         
         if (error) throw error;
-        return data || { total_movements: 0, total_in: 0, total_out: 0, adjustments: 0, current_quantity: 0 };
+        
+        // Ensure we return a single object, not an array
+        const statsData: SummaryStatsData = Array.isArray(data) && data.length > 0 
+          ? data[0] 
+          : data || { total_movements: 0, total_in: 0, total_out: 0, adjustments: 0, current_quantity: 0 };
+          
+        return statsData;
       } catch (error) {
         console.error('Error fetching inventory summary stats:', error);
-        return null;
+        return { total_movements: 0, total_in: 0, total_out: 0, adjustments: 0, current_quantity: 0 } as SummaryStatsData;
       }
     }
   });

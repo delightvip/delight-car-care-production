@@ -9,6 +9,18 @@ interface UseInventoryReportsOptions {
   period?: number; // Days to look back
 }
 
+interface InventoryItem {
+  id: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  type: string;
+  typeName: string;
+  lastMovement?: string | null;
+  daysSinceLastMovement?: number | null;
+}
+
 export const useInventoryReports = (options: UseInventoryReportsOptions = {}) => {
   const { type = 'all', period = 90 } = options;
   const [filter, setFilter] = useState({ type, period });
@@ -41,7 +53,7 @@ export const useInventoryReports = (options: UseInventoryReportsOptions = {}) =>
         const fetchRawMaterials = filter.type === 'all' || filter.type === 'raw';
         const fetchPackagingMaterials = filter.type === 'all' || filter.type === 'packaging';
         
-        let unusedItems = [];
+        let unusedItems: InventoryItem[] = [];
         
         // Process raw materials if needed
         if (fetchRawMaterials) {
@@ -58,7 +70,7 @@ export const useInventoryReports = (options: UseInventoryReportsOptions = {}) =>
             !usedRawIds.has(item.id) && !usedRawCodes.has(item.code)
           ).map(item => ({
             ...item,
-            type: 'raw',
+            type: 'raw' as const,
             typeName: 'مواد خام'
           }));
           
@@ -79,7 +91,7 @@ export const useInventoryReports = (options: UseInventoryReportsOptions = {}) =>
             !usedPackagingCodes.has(item.code)
           ).map(item => ({
             ...item,
-            type: 'packaging',
+            type: 'packaging' as const,
             typeName: 'مواد تعبئة'
           }));
           
@@ -117,10 +129,14 @@ export const useInventoryReports = (options: UseInventoryReportsOptions = {}) =>
         });
         
         // Fetch items based on type filter
-        let stagnantItems = [];
+        let stagnantItems: InventoryItem[] = [];
         
         // Function to process a category of items
-        const processCategory = async (table: string, type: string, typeName: string) => {
+        const processCategory = async (
+          table: 'raw_materials' | 'packaging_materials' | 'semi_finished_products' | 'finished_products', 
+          type: 'raw' | 'packaging' | 'semi' | 'finished', 
+          typeName: string
+        ) => {
           if (filter.type !== 'all' && filter.type !== type) return [];
           
           const { data: items } = await supabase
@@ -147,7 +163,7 @@ export const useInventoryReports = (options: UseInventoryReportsOptions = {}) =>
               lastMovement: lastMovementDate,
               daysSinceLastMovement: daysSince || filter.period + 30 // If no movement, assume older than threshold
             };
-          }).filter(Boolean);
+          }).filter(Boolean) as InventoryItem[];
         };
         
         // Process each inventory category
