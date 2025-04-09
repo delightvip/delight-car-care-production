@@ -1,17 +1,16 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent } from '@/components/ui/card';
-import { ArrowUp, ArrowDown, Package2, RefreshCw } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ArrowDown, ArrowUp, BarChart3, Scale } from 'lucide-react';
 
 interface InventorySummaryStatsProps {
-  itemId: string;  // Using string to match with other components
+  itemId: string;
   itemType: string;
 }
 
-interface SummaryStats {
+interface SummaryStatsData {
   total_movements: number;
   total_in: number;
   total_out: number;
@@ -19,60 +18,144 @@ interface SummaryStats {
   current_quantity: number;
 }
 
-export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, itemType }) => {
-  const { data: stats, isLoading, error } = useQuery({
-    queryKey: ['inventory-summary', itemType, itemId],
+const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, itemType }) => {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['inventory-summary-stats', itemType, itemId],
     queryFn: async () => {
       try {
-        console.log(`Fetching inventory summary for item: ${itemId}, type: ${itemType}`);
+        // Get current quantity from the respective inventory table
+        let currentQuantity = 0;
         
-        // Convert string ID to integer for the SQL function
-        const numericItemId = parseInt(itemId);
-        
-        // Call the Supabase RPC function to get the summary stats
-        const { data, error } = await supabase.rpc('get_inventory_summary_stats', {
-          p_item_id: numericItemId.toString(), // Convert back to string as the function expects
+        // Use the RPC function instead of direct table access to fix the type error
+        const { data: statsData, error: statsError } = await supabase.rpc('get_inventory_summary_stats', {
+          p_item_id: itemId,
           p_item_type: itemType
         });
-
-        if (error) {
-          console.error("Error fetching inventory summary stats:", error);
-          throw error;
+        
+        if (statsError) {
+          console.error('Error fetching inventory summary stats:', statsError);
+          throw statsError;
         }
         
-        console.log("Received summary data:", data);
-        
-        // The function returns an array with a single row, we need to extract it
-        if (Array.isArray(data) && data.length > 0) {
-          // Make sure all numeric values have defaults to avoid undefined errors
-          return {
-            total_movements: data[0].total_movements || 0,
-            total_in: data[0].total_in || 0,
-            total_out: data[0].total_out || 0,
-            adjustments: data[0].adjustments || 0,
-            current_quantity: data[0].current_quantity || 0
-          } as SummaryStats;
+        if (statsData && Array.isArray(statsData) && statsData.length > 0) {
+          // The RPC returns an array with a single object, so we need to extract it
+          return statsData[0] as SummaryStatsData;
         }
         
-        // If no data is returned, provide default values
-        return {
-          total_movements: 0,
-          total_in: 0,
-          total_out: 0,
-          adjustments: 0,
-          current_quantity: 0
-        } as SummaryStats;
-      } catch (err) {
-        console.error("Error in summary stats query:", err);
+        // Fallback: if RPC fails, attempt direct table query with proper type checking
+        let tableToQuery = '';
         
-        // In development mode, return mock data to allow UI testing
+        switch (itemType) {
+          case 'raw':
+            tableToQuery = 'raw_materials';
+            break;
+          case 'semi':
+            tableToQuery = 'semi_finished_products';
+            break;
+          case 'packaging':
+            tableToQuery = 'packaging_materials';
+            break;
+          case 'finished':
+            tableToQuery = 'finished_products';
+            break;
+        }
+        
+        if (tableToQuery) {
+          try {
+            // Create a type safe approach to querying different tables
+            type InventoryTable = { id: number; quantity: number };
+            
+            // Use explicit typing and cast the result to our expected interface
+            if (tableToQuery === 'raw_materials') {
+              const { data, error } = await supabase
+                .from('raw_materials')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
+            } else if (tableToQuery === 'semi_finished_products') {
+              const { data, error } = await supabase
+                .from('semi_finished_products')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
+            } else if (tableToQuery === 'packaging_materials') {
+              const { data, error } = await supabase
+                .from('packaging_materials')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
+            } else if (tableToQuery === 'finished_products') {
+              const { data, error } = await supabase
+                .from('finished_products')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching quantity from ${tableToQuery}:`, err);
+          }
+        }
+        
+        // Get movements from inventory_movements table
+        const { data: movements, error: movementsError } = await supabase
+          .from('inventory_movements')
+          .select('quantity, reason')
+          .eq('item_id', itemId)
+          .eq('item_type', itemType);
+          
+        if (movementsError) throw movementsError;
+        
+        // Calculate stats from movements
+        const totalMovements = movements?.length || 0;
+        let totalIn = 0;
+        let totalOut = 0;
+        let adjustments = 0;
+        
+        movements?.forEach(movement => {
+          if (movement.quantity > 0) {
+            totalIn += Number(movement.quantity);
+          } else if (movement.quantity < 0) {
+            totalOut += Math.abs(Number(movement.quantity));
+          }
+          
+          if (movement.reason === 'adjustment') {
+            adjustments += Math.abs(Number(movement.quantity));
+          }
+        });
+        
+        // Return formatted stats
         return {
-          total_movements: Math.floor(Math.random() * 200) + 20,
-          total_in: Math.floor(Math.random() * 1000) + 100,
-          total_out: Math.floor(Math.random() * 800) + 50,
-          adjustments: Math.floor(Math.random() * 40) + 5,
-          current_quantity: Math.floor(Math.random() * 300) + 50
-        } as SummaryStats;
+          total_movements: totalMovements,
+          total_in: totalIn,
+          total_out: totalOut,
+          adjustments: adjustments,
+          current_quantity: currentQuantity
+        } as SummaryStatsData;
+      } catch (error) {
+        console.error('Error fetching inventory summary stats:', error);
+        return { 
+          total_movements: 0, 
+          total_in: 0, 
+          total_out: 0, 
+          adjustments: 0, 
+          current_quantity: 0 
+        } as SummaryStatsData;
       }
     }
   });
@@ -80,93 +163,68 @@ export const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ it
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {Array(4).fill(0).map((_, i) => (
-          <Card key={i} className="border-border/40 bg-card/60 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <Skeleton className="h-8 w-16 mb-2" />
-              <Skeleton className="h-12 w-24" />
-              <Skeleton className="h-4 w-32 mt-2" />
-            </CardContent>
-          </Card>
-        ))}
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
       </div>
     );
   }
   
-  if (error || !stats) {
-    return (
-      <Card className="border-destructive/20 bg-destructive/5">
-        <CardContent className="p-6">
-          <p className="text-destructive flex items-center gap-2">
-            <span className="rounded-full bg-destructive/20 p-1">
-              <RefreshCw size={16} className="text-destructive" />
-            </span>
-            حدث خطأ أثناء تحميل البيانات
-          </p>
-        </CardContent>
-      </Card>
-    );
+  if (!stats) {
+    return <div className="text-center text-muted-foreground">تعذر تحميل الإحصائيات</div>;
   }
-
-  const items = [
-    {
-      title: 'المخزون الحالي',
-      value: stats?.current_quantity || 0,
-      description: 'الرصيد المتوفر',
-      icon: Package2,
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-100 dark:bg-blue-900/20'
-    },
-    {
-      title: 'إجمالي الوارد',
-      value: stats?.total_in || 0,
-      description: 'إجمالي الكميات الواردة',
-      icon: ArrowDown,
-      color: 'text-green-500',
-      bgColor: 'bg-green-100 dark:bg-green-900/20'
-    },
-    {
-      title: 'إجمالي الصادر',
-      value: stats?.total_out || 0,
-      description: 'إجمالي الكميات المستهلكة',
-      icon: ArrowUp,
-      color: 'text-red-500',
-      bgColor: 'bg-red-100 dark:bg-red-900/20'
-    },
-    {
-      title: 'التعديلات',
-      value: stats?.adjustments || 0,
-      description: 'جرد وتعديلات المخزون',
-      icon: RefreshCw,
-      color: 'text-amber-500',
-      bgColor: 'bg-amber-100 dark:bg-amber-900/20'
-    }
-  ];
-
+  
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {items.map((item, i) => (
-        <Card key={i} className="border-border/40 bg-card/60 backdrop-blur-sm hover:bg-card/80 transition-colors">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {item.title}
-                </p>
-                <h3 className="text-2xl font-bold mt-1">
-                  {typeof item.value === 'number' ? item.value.toLocaleString('ar-EG') : '0'}
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {item.description}
-                </p>
-              </div>
-              <div className={`p-3 rounded-full ${item.bgColor}`}>
-                <item.icon className={`h-6 w-6 ${item.color}`} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <StatCard 
+        title="إجمالي الحركات"
+        value={stats.total_movements}
+        icon={<BarChart3 className="h-5 w-5 text-blue-500" />}
+        suffix=""
+      />
+      <StatCard 
+        title="إجمالي الوارد"
+        value={stats.total_in}
+        icon={<ArrowDown className="h-5 w-5 text-green-500" />}
+        suffix=""
+      />
+      <StatCard 
+        title="إجمالي المنصرف"
+        value={stats.total_out}
+        icon={<ArrowUp className="h-5 w-5 text-red-500" />}
+        suffix=""
+      />
+      <StatCard 
+        title="التسويات"
+        value={stats.adjustments}
+        icon={<Scale className="h-5 w-5 text-amber-500" />}
+        suffix=""
+      />
+    </div>
+  );
+};
+
+interface StatCardProps {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+  suffix?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, suffix }) => {
+  return (
+    <div className="bg-white dark:bg-card rounded-lg p-4 shadow-sm border border-border/50">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+        <div className="p-2 bg-secondary/20 rounded-full">{icon}</div>
+      </div>
+      <div className="mt-3">
+        <p className="text-2xl font-bold">
+          {value?.toLocaleString('ar-EG')}
+          {suffix && <span className="text-sm font-normal text-muted-foreground mr-1">{suffix}</span>}
+        </p>
+      </div>
     </div>
   );
 };

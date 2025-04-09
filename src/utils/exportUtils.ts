@@ -111,17 +111,26 @@ export const exportFinishedProducts = (products: any[]) => {
   exportToCSV(formattedData, 'finished_products');
 };
 
-// Export audit data
-export const exportAuditData = (auditData: any[]) => {
-  const formattedData = auditData.map(item => ({
-    كود: item.code,
-    الاسم: item.name,
-    الكمية_النظام: item.systemQuantity,
-    الكمية_الفعلية: item.actualQuantity,
-    الفرق: item.difference,
-    الوحدة: item.unit,
-    تاريخ_الجرد: new Date().toISOString().slice(0, 10)
-  }));
+/**
+ * Exports inventory stagnant items or unused items report to CSV
+ */
+export const exportReportData = <T extends object>(data: T[], filename: string): void => {
+  if (!data || data.length === 0) {
+    console.warn('No data to export');
+    return;
+  }
   
-  exportToCSV(formattedData, 'inventory_audit');
+  exportToCSV(data, filename);
+};
+
+/**
+ * Exports the audit data from inventory count reconciliation
+ */
+export const exportAuditData = (auditData: any[]): void => {
+  if (!auditData || auditData.length === 0) {
+    console.warn('No audit data to export');
+    return;
+  }
+  
+  exportToCSV(auditData, 'inventory_report');
 };
