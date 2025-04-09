@@ -8,7 +8,6 @@ import { supabase } from '@/integrations/supabase/client';
 import MovementChartContent from './ChartComponents/MovementChartContent';
 import MovementChartLoading from './ChartComponents/MovementChartLoading';
 import MovementChartError from './ChartComponents/MovementChartError';
-import { enhancedToast } from '@/components/ui/enhanced-toast';
 
 interface InventoryMovementChartProps {
   itemId: string;
@@ -38,117 +37,19 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
       try {
         console.log(`Fetching movements for item: ${itemId}, type: ${itemType}, range: ${timeRange}`);
         
-        // Set up start date based on time range
-        let startDate = new Date();
-        switch (timeRange) {
-          case 'week':
-            startDate.setDate(startDate.getDate() - 7);
-            break;
-          case 'month':
-            startDate.setMonth(startDate.getMonth() - 1);
-            break;
-          case 'quarter':
-            startDate.setMonth(startDate.getMonth() - 3);
-            break;
-          case 'year':
-            startDate.setFullYear(startDate.getFullYear() - 1);
-            break;
-          default:
-            startDate.setMonth(startDate.getMonth() - 1);
-        }
-        
-        // Using RPC call but with modified approach to handle the error
-        const { data, error } = await supabase
-          .from('inventory_movements')
-          .select('created_at, quantity')
-          .eq('item_id', itemId)
-          .eq('item_type', itemType)
-          .gte('created_at', startDate.toISOString())
-          .order('created_at', { ascending: true });
+        const { data, error } = await supabase.rpc('get_inventory_movements_by_time', {
+          p_item_id: itemId,
+          p_item_type: itemType,
+          p_period: timeRange
+        });
 
         if (error) {
           console.error("Error fetching inventory movements:", error);
-          enhancedToast.error("حدث خطأ أثناء جلب بيانات حركة المخزون");
           throw error;
         }
         
         console.log("Received movement data:", data);
-        
-        if (!data || data.length === 0) {
-          // If no data, generate dummy data for display purposes
-          const periods = timeRange === 'week' || timeRange === 'month' ? 7 : 6;
-          const dummyData = [];
-          
-          let currentDate = new Date();
-          let runningBalance = 0;
-          
-          for (let i = periods; i >= 0; i--) {
-            const period = timeRange === 'week' || timeRange === 'month'
-              ? format(currentDate, 'yyyy-MM-dd')
-              : format(currentDate, 'yyyy-MM');
-              
-            const inQty = 0;
-            const outQty = 0;
-            
-            dummyData.push({
-              period,
-              in_quantity: inQty,
-              out_quantity: outQty,
-              balance: runningBalance
-            });
-            
-            if (timeRange === 'week') {
-              currentDate.setDate(currentDate.getDate() - 1);
-            } else if (timeRange === 'month') {
-              currentDate.setDate(currentDate.getDate() - 4);
-            } else {
-              currentDate.setMonth(currentDate.getMonth() - 1);
-            }
-          }
-          
-          return dummyData.reverse();
-        }
-        
-        // Process the data manually instead of using the RPC function
-        // Group by period (date)
-        const groupedData: Record<string, { in_qty: number; out_qty: number }> = {};
-        
-        // Format the date based on the time range
-        data.forEach(movement => {
-          const date = new Date(movement.created_at);
-          const period = timeRange === 'week' || timeRange === 'month'
-            ? format(date, 'yyyy-MM-dd')
-            : format(date, 'yyyy-MM');
-          
-          if (!groupedData[period]) {
-            groupedData[period] = { in_qty: 0, out_qty: 0 };
-          }
-          
-          // Categorize as in or out based on quantity
-          if (movement.quantity > 0) {
-            groupedData[period].in_qty += Number(movement.quantity);
-          } else if (movement.quantity < 0) {
-            groupedData[period].out_qty += Math.abs(Number(movement.quantity));
-          }
-        });
-        
-        // Convert to array and calculate running balance
-        const result: MovementData[] = [];
-        let runningBalance = 0;
-        
-        Object.entries(groupedData)
-          .sort(([a], [b]) => a.localeCompare(b)) // Sort by date
-          .forEach(([period, values]) => {
-            runningBalance += values.in_qty - values.out_qty;
-            result.push({
-              period,
-              in_quantity: values.in_qty,
-              out_quantity: values.out_qty,
-              balance: runningBalance
-            });
-          });
-        
-        return result;
+        return data as MovementData[];
       } catch (err) {
         console.error("Failed to fetch inventory movements data:", err);
         throw err;
@@ -158,7 +59,7 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
   
   const formatPeriod = (period: string): string => {
     try {
-      if (timeRange === 'week' || timeRange === 'month') {
+      if (timeRange === 'week' || timeRange === 'day') {
         // If format is yyyy-MM-dd
         const date = new Date(period);
         return format(date, 'dd MMM', { locale: ar });
@@ -186,7 +87,7 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
     return <MovementChartLoading />;
   }
   
-  if (error) {
+  if (error || !data) {
     const errorMessage = error ? `${(error as Error).message}` : "تعذر تحميل البيانات";
     return <MovementChartError message={errorMessage} />;
   }
