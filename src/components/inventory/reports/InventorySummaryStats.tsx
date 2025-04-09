@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,8 +36,9 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
           throw statsError;
         }
         
-        if (statsData) {
-          return statsData as SummaryStatsData;
+        if (statsData && Array.isArray(statsData) && statsData.length > 0) {
+          // The RPC returns an array with a single object, so we need to extract it
+          return statsData[0] as SummaryStatsData;
         }
         
         // Fallback: if RPC fails, attempt direct table query with proper type checking
@@ -60,15 +60,19 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
         }
         
         if (tableToQuery) {
-          // Using type assertion to satisfy TypeScript
-          const { data: itemData, error: itemError } = await supabase
-            .from(tableToQuery as any)
-            .select('quantity')
-            .eq('id', parseInt(itemId))
-            .single();
-            
-          if (!itemError && itemData) {
-            currentQuantity = itemData.quantity;
+          try {
+            // Using type assertion to satisfy TypeScript
+            const { data: itemData, error: itemError } = await supabase
+              .from(tableToQuery as any)
+              .select('quantity')
+              .eq('id', parseInt(itemId))
+              .single();
+              
+            if (!itemError && itemData) {
+              currentQuantity = itemData.quantity;
+            }
+          } catch (err) {
+            console.error(`Error fetching quantity from ${tableToQuery}:`, err);
           }
         }
         
