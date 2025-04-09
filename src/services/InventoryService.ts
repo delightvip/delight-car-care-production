@@ -57,7 +57,6 @@ export interface FinishedProduct {
   semi_finished_quantity: number;
   created_at: string | null;
   updated_at: string | null;
-  // Add these properties to match expected usage
   semiFinished: {
     code: string;
     name: string;
@@ -915,6 +914,44 @@ class InventoryService {
     } catch (error) {
       console.error("Error checking raw materials availability:", error);
       return false;
+    }
+  }
+
+  // Add this new method for getting a finished product by code
+  public async getFinishedProductByCode(
+    code: string
+  ): Promise<{ data: FinishedProduct | null; error: any }> {
+    try {
+      const { data, error } = await supabase
+        .from("finished_products")
+        .select("*, semi_finished:semi_finished_id(id, code, name)")
+        .eq("code", code)
+        .single();
+
+      if (error) throw error;
+
+      // Add packaging information if found
+      if (data) {
+        const packaging = await this.getProductPackaging(data.id);
+        
+        return { 
+          data: {
+            ...data,
+            semiFinished: {
+              code: data.semi_finished.code,
+              name: data.semi_finished.name,
+              quantity: data.semi_finished_quantity,
+            },
+            packaging
+          }, 
+          error: null 
+        };
+      }
+
+      return { data: null, error: null };
+    } catch (error) {
+      console.error("Error getting finished product by code:", error);
+      return { data: null, error };
     }
   }
 }

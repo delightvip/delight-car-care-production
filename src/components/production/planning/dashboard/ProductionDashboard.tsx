@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -89,7 +88,6 @@ const ProductionDashboard = () => {
             <Progress 
               value={stats?.total_production_orders ? (stats.pending_orders / stats.total_production_orders) * 100 : 0} 
               className="h-2 mt-2"
-              className="h-2 mt-2 bg-amber-100"
               indicatorClassName="bg-amber-500"
             />
             <div className="text-xs text-muted-foreground mt-2">

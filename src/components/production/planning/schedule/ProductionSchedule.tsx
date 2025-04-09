@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -12,6 +11,8 @@ import { Calendar as CalendarIcon, List, Clock, CheckSquare, AlertTriangle, Pack
 import ProductionService from '@/services/ProductionService';
 import { toast } from 'sonner';
 import { ProductionOrder, PackagingOrder } from '@/services/ProductionService';
+
+type DayClassNamesFn = (day: Date) => string;
 
 const ProductionSchedule = () => {
   const [date, setDate] = useState<Date>(new Date());
@@ -51,11 +52,9 @@ const ProductionSchedule = () => {
     try {
       const productionService = ProductionService.getInstance();
       
-      // جلب أوامر الإنتاج
       const prodOrders = await productionService.getProductionOrders();
       setProductionOrders(prodOrders);
       
-      // جلب أوامر التعبئة
       const packOrders = await productionService.getPackagingOrders();
       setPackagingOrders(packOrders);
     } catch (error) {
@@ -66,8 +65,7 @@ const ProductionSchedule = () => {
     }
   };
 
-  // تحديد الأيام التي بها أوامر إنتاج أو تعبئة
-  const getDayClassNames = (day: Date, modifiers: any) => {
+  const getDayClassNames: DayClassNamesFn = (day) => {
     if (!day) return "";
     
     const hasProductionOrder = productionOrders.some(order => isSameDay(parseISO(order.date), day));
@@ -84,7 +82,6 @@ const ProductionSchedule = () => {
     return "";
   };
 
-  // الحصول على جميع الأوامر مرتبة حسب التاريخ
   const getAllOrdersByDate = () => {
     const allOrders: {
       id: number;
@@ -112,13 +109,11 @@ const ProductionSchedule = () => {
       }))
     ];
     
-    // ترتيب الأوامر حسب التاريخ
     return allOrders.sort((a, b) => {
       return new Date(a.date).getTime() - new Date(b.date).getTime();
     });
   };
 
-  // تحويل حالة الأمر إلى اللغة العربية
   const getStatusTranslation = (status: string) => {
     const translations: Record<string, string> = {
       pending: 'قيد الانتظار',
@@ -130,7 +125,6 @@ const ProductionSchedule = () => {
     return translations[status] || status;
   };
 
-  // الحصول على لون الحالة
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-amber-100 text-amber-800';
@@ -189,9 +183,10 @@ const ProductionSchedule = () => {
                       classNames={{
                         day_today: "bg-primary/20 text-primary font-bold",
                         day_selected: "bg-primary text-primary-foreground font-bold",
-                        day_range_end: getDayClassNames,
-                        day_range_middle: getDayClassNames,
-                        day_range_start: getDayClassNames,
+                        day: (props) => {
+                          const { date } = props;
+                          return getDayClassNames(date);
+                        }
                       }}
                     />
                   </CardContent>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -59,9 +58,7 @@ const MaterialsRequirements = () => {
         fetchedMaterials = await inventoryService.getSemiFinishedProducts();
       }
 
-      // تحويل البيانات إلى الشكل المطلوب
       const formattedMaterials = fetchedMaterials.map(item => {
-        // حساب حالة المخزون
         let status: 'normal' | 'low' | 'critical' = 'normal';
         if (item.quantity <= item.min_stock * 0.5) {
           status = 'critical';
@@ -69,7 +66,6 @@ const MaterialsRequirements = () => {
           status = 'low';
         }
 
-        // إضافة معدل استهلاك افتراضي للعرض
         const usageRate = Math.random() * 10;
 
         return {
@@ -98,7 +94,6 @@ const MaterialsRequirements = () => {
   const filterMaterials = () => {
     let filtered = [...materials];
 
-    // تطبيق البحث
     if (searchTerm) {
       filtered = filtered.filter(item => 
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -106,12 +101,10 @@ const MaterialsRequirements = () => {
       );
     }
 
-    // تطبيق فلتر الحالة
     if (statusFilter !== 'all') {
       filtered = filtered.filter(item => item.status === statusFilter);
     }
 
-    // تطبيق فلتر الأهمية
     if (importanceFilter !== 'all') {
       filtered = filtered.filter(item => item.importance === importanceFilter);
     }
@@ -144,7 +137,6 @@ const MaterialsRequirements = () => {
     }
   };
 
-  // حساب إحصائيات للرسوم البيانية
   const getStatusChartData = () => {
     const counts = { normal: 0, low: 0, critical: 0 };
     materials.forEach(item => counts[item.status]++);
