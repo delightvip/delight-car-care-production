@@ -42,14 +42,15 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
         // Process the data based on what we receive
         if (!data) return defaultData;
         
+        // Handle different response formats from the database
         if (Array.isArray(data)) {
           // If it's an array and has items, use the first one
           return data.length > 0 
-            ? { ...defaultData, ...data[0] } 
+            ? data[0] as SummaryStatsData 
             : defaultData;
         } else {
           // If it's a single object
-          return { ...defaultData, ...data };
+          return data as SummaryStatsData;
         }
       } catch (error) {
         console.error('Error fetching inventory summary stats:', error);
