@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -75,207 +76,343 @@ const ProductionSimulation = () => {
   const [simulationErrorMessage, setSimulationErrorMessage] = useState<string>('');
   const [isCreatingOrder, setIsCreatingOrder] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
-  const [isCopying, setIsCopying] = useState<boolean>(false);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
-  const [isAddingPackaging, setIsAddingPackaging] = useState<boolean>(false);
-  const [isAddingIngredient, setIsAddingIngredient] = useState<boolean>(false);
-  const [isUpdatingIngredient, setIsUpdatingIngredient] = useState<boolean>(false);
-  const [isUpdatingPackaging, setIsUpdatingPackaging] = useState<boolean>(false);
-  const [isIngredientAvailable, setIsIngredientAvailable] = useState<boolean>(false);
-  const [isPackagingAvailable, setIsPackagingAvailable] = useState<boolean>(false);
-  const [isIngredientCostValid, setIsIngredientCostValid] = useState<boolean>(false);
-  const [isPackagingCostValid, setIsPackagingCostValid] = useState<boolean>(false);
-  const [isIngredientQuantityValid, setIsIngredientQuantityValid] = useState<boolean>(false);
-  const [isPackagingQuantityValid, setIsPackagingQuantityValid] = useState<boolean>(false);
-  const [isIngredientNameValid, setIsIngredientNameValid] = useState<boolean>(false);
-  const [isPackagingNameValid, setIsPackagingNameValid] = useState<boolean>(false);
-  const [isIngredientCodeValid, setIsIngredientCodeValid] = useState<boolean>(false);
-  const [isPackagingCodeValid, setIsPackagingCodeValid] = useState<boolean>(false);
-  const [isIngredientUnitValid, setIsIngredientUnitValid] = useState<boolean>(false);
-  const [isPackagingUnitValid, setIsPackagingUnitValid] = useState<boolean>(false);
-  const [isIngredientPercentageValid, setIsIngredientPercentageValid] = useState<boolean>(false);
-  const [isPackagingPercentageValid, setIsPackagingPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageValid, setIsIngredientCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageValid, setIsPackagingCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostQuantityValid, setIsIngredientCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostQuantityValid, setIsPackagingCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostNameValid, setIsIngredientCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostNameValid, setIsPackagingCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostCodeValid, setIsIngredientCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostCodeValid, setIsPackagingCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostUnitValid, setIsIngredientCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostUnitValid, setIsPackagingCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostValid, setIsIngredientCostPercentageCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostValid, setIsPackagingCostPercentageCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageQuantityValid, setIsIngredientCostPercentageQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageQuantityValid, setIsPackagingCostPercentageQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageNameValid, setIsIngredientCostPercentageNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageNameValid, setIsPackagingCostPercentageNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCodeValid, setIsIngredientCostPercentageCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCodeValid, setIsPackagingCostPercentageCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageUnitValid, setIsIngredientCostPercentageUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageUnitValid, setIsPackagingCostPercentageUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentagePercentageValid, setIsIngredientCostPercentagePercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentagePercentageValid, setIsPackagingCostPercentagePercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostPercentageValid, setIsIngredientCostPercentageCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostPercentageValid, setIsPackagingCostPercentageCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostQuantityValid, setIsIngredientCostPercentageCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostQuantityValid, setIsPackagingCostPercentageCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostNameValid, setIsIngredientCostPercentageCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostNameValid, setIsPackagingCostPercentageCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCodeValid, setIsIngredientCostPercentageCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCodeValid, setIsPackagingCostPercentageCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostUnitValid, setIsIngredientCostPercentageCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostUnitValid, setIsPackagingCostPercentageCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostPercentageValid, setIsIngredientCostPercentageCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostPercentageValid, setIsPackagingCostPercentageCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostValid, setIsIngredientCostPercentageCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostValid, setIsPackagingCostPercentageCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostQuantityValid, setIsIngredientCostPercentageCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostQuantityValid, setIsPackagingCostPercentageCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostNameValid, setIsIngredientCostPercentageCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostNameValid, setIsPackagingCostPercentageCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCodeValid, setIsIngredientCostPercentageCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCodeValid, setIsPackagingCostPercentageCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostUnitValid, setIsIngredientCostPercentageCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostUnitValid, setIsPackagingCostPercentageCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostPercentageValid, setIsIngredientCostPercentageCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostPercentageValid, setIsPackagingCostPercentageCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostValid, setIsIngredientCostPercentageCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostValid, setIsPackagingCostPercentageCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCodeValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostUnitValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostPercentageValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid, setIsPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostQuantityValid] = useState<boolean>(false);
-  const [isIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsIngredientCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid] = useState<boolean>(false);
-  const [isPackagingCostPercentageCostCostCostCostCostCostCostCostCostCostCostCostCostCostNameValid, setIsPackagingCostPercentageCost
+  
+  // Form setup with useForm
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      product: "",
+      quantity: 1,
+    },
+  });
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    if (debouncedSearchTerm) {
+      const filteredProducts = products.filter(product => 
+        product.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        product.code.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+      );
+      // Filter products based on search term
+    }
+  }, [debouncedSearchTerm, products]);
+
+  const fetchProducts = async () => {
+    try {
+      const inventoryService = InventoryService.getInstance();
+      const semiFinishedProducts = await inventoryService.getSemiFinishedProducts();
+      const finishedProducts = await inventoryService.getFinishedProducts();
+      
+      setProducts(semiFinishedProducts);
+      setFinishedProducts(finishedProducts);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error('حدث خطأ أثناء جلب المنتجات');
+    }
+  };
+
+  const handleProductSelect = async (productCode: string) => {
+    const selectedProd = products.find(p => p.code === productCode);
+    if (selectedProd) {
+      setSelectedProduct(selectedProd);
+      
+      // Fetch ingredients for this product
+      try {
+        const inventoryService = InventoryService.getInstance();
+        const ingredients = await inventoryService.getSemiFinishedIngredients(selectedProd.id);
+        
+        // Transform ingredients to required format
+        const formattedIngredients = ingredients.map(ing => ({
+          code: ing.code || '',
+          name: ing.name || '',
+          requiredQuantity: ing.percentage * quantity / 100,
+          available: (ing.quantity || 0) >= (ing.percentage * quantity / 100),
+          unit: ing.unit || '',
+          cost: ing.unit_cost || 0
+        }));
+        
+        setIngredients(formattedIngredients);
+        
+        // Calculate total ingredients cost
+        const ingredientsCost = formattedIngredients.reduce(
+          (sum, ing) => sum + (ing.cost * ing.requiredQuantity), 0
+        );
+        
+        setTotalCost(ingredientsCost);
+      } catch (error) {
+        console.error('Error fetching ingredients:', error);
+        toast.error('حدث خطأ أثناء جلب المكونات');
+      }
+    }
+  };
+
+  const handleQuantityChange = (newQuantity: number) => {
+    setQuantity(newQuantity);
+    
+    // Update required quantities and availability
+    if (ingredients.length > 0) {
+      const updatedIngredients = ingredients.map(ing => ({
+        ...ing,
+        requiredQuantity: ing.requiredQuantity * (newQuantity / quantity),
+        available: ing.available // This should be recalculated based on actual inventory
+      }));
+      
+      setIngredients(updatedIngredients);
+      
+      // Recalculate total cost
+      const ingredientsCost = updatedIngredients.reduce(
+        (sum, ing) => sum + (ing.cost * ing.requiredQuantity), 0
+      );
+      
+      setTotalCost(ingredientsCost);
+    }
+  };
+
+  const runSimulation = async () => {
+    if (!selectedProduct) {
+      toast.error('الرجاء اختيار منتج أولاً');
+      return;
+    }
+    
+    setIsSimulationRunning(true);
+    
+    try {
+      // Check if all ingredients are available
+      const allIngredientsAvailable = ingredients.every(ing => ing.available);
+      
+      if (!allIngredientsAvailable) {
+        setIsSimulationFailed(true);
+        setSimulationErrorMessage('بعض المكونات غير متوفرة بالكمية المطلوبة');
+      } else {
+        setIsSimulationFinished(true);
+      }
+    } catch (error) {
+      console.error('Error running simulation:', error);
+      setIsSimulationFailed(true);
+      setSimulationErrorMessage('حدث خطأ أثناء تشغيل المحاكاة');
+    } finally {
+      setIsSimulationRunning(false);
+    }
+  };
+
+  const createProductionOrder = async () => {
+    if (!selectedProduct) return;
+    
+    setIsCreatingOrder(true);
+    
+    try {
+      const productionService = ProductionService.getInstance();
+      
+      const result = await productionService.createProductionOrder(
+        selectedProduct.code,
+        quantity,
+        totalCost
+      );
+      
+      if (result) {
+        toast.success('تم إنشاء أمر الإنتاج بنجاح');
+        resetSimulation();
+      }
+    } catch (error) {
+      console.error('Error creating production order:', error);
+      toast.error('حدث خطأ أثناء إنشاء أمر الإنتاج');
+    } finally {
+      setIsCreatingOrder(false);
+    }
+  };
+
+  const resetSimulation = () => {
+    setIsResetting(true);
+    setSelectedProduct(null);
+    setQuantity(1);
+    setIngredients([]);
+    setPackagingMaterials([]);
+    setTotalCost(0);
+    setIsSimulationFinished(false);
+    setIsSimulationFailed(false);
+    setSimulationErrorMessage('');
+    form.reset();
+    setIsResetting(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>محاكاة الإنتاج</CardTitle>
+          <CardDescription>
+            قم بمحاكاة عملية إنتاج للتأكد من توفر المكونات والموارد اللازمة
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="product"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label>المنتج</Label>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            handleProductSelect(value);
+                          }}
+                          value={field.value}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر منتج" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem key={product.id} value={product.code}>
+                                {product.name} - {product.code}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label>الكمية</Label>
+                        <Input
+                          type="number"
+                          {...field}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            field.onChange(value);
+                            handleQuantityChange(value);
+                          }}
+                          min={1}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  {selectedProduct && (
+                    <div className="border rounded-md p-4 bg-muted/50">
+                      <h3 className="font-medium mb-2">تفاصيل المنتج</h3>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>الكود:</div>
+                        <div>{selectedProduct.code}</div>
+                        <div>الاسم:</div>
+                        <div>{selectedProduct.name}</div>
+                        <div>الوحدة:</div>
+                        <div>{selectedProduct.unit}</div>
+                        <div>المخزون الحالي:</div>
+                        <div>{selectedProduct.quantity} {selectedProduct.unit}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="font-medium mb-2">المكونات المطلوبة</h3>
+                  {ingredients.length > 0 ? (
+                    <ScrollArea className="h-[240px] rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>المادة</TableHead>
+                            <TableHead>الكمية المطلوبة</TableHead>
+                            <TableHead>التوفر</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {ingredients.map((ingredient, index) => (
+                            <TableRow key={index}>
+                              <TableCell>{ingredient.name}</TableCell>
+                              <TableCell>
+                                {ingredient.requiredQuantity} {ingredient.unit}
+                              </TableCell>
+                              <TableCell>
+                                {ingredient.available ? (
+                                  <Badge className="bg-green-100 text-green-800">متوفر</Badge>
+                                ) : (
+                                  <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground border rounded-md">
+                      <p>اختر منتج لعرض المكونات المطلوبة</p>
+                    </div>
+                  )}
+                  
+                  <div className="border rounded-md p-4 bg-muted/50">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-medium">التكلفة الإجمالية</h3>
+                      <span className="text-lg font-bold">{totalCost.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetSimulation}
+                  disabled={isResetting || !selectedProduct}
+                >
+                  إعادة ضبط
+                </Button>
+                <Button
+                  type="button"
+                  onClick={runSimulation}
+                  disabled={isSimulationRunning || !selectedProduct || ingredients.length === 0}
+                >
+                  {isSimulationRunning ? 'جاري التشغيل...' : 'تشغيل المحاكاة'}
+                </Button>
+                
+                {isSimulationFinished && !isSimulationFailed && (
+                  <Button
+                    type="button"
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={createProductionOrder}
+                    disabled={isCreatingOrder}
+                  >
+                    {isCreatingOrder ? 'جاري الإنشاء...' : 'إنشاء أمر إنتاج'}
+                  </Button>
+                )}
+              </div>
+              
+              {isSimulationFailed && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-4 mt-4">
+                  <h3 className="text-red-800 font-medium mb-2">فشلت المحاكاة</h3>
+                  <p className="text-red-700">{simulationErrorMessage}</p>
+                </div>
+              )}
+              
+              {isSimulationFinished && !isSimulationFailed && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-4 mt-4">
+                  <h3 className="text-green-800 font-medium mb-2">نجحت المحاكاة</h3>
+                  <p className="text-green-700">جميع المكونات متوفرة بالكميات المطلوبة. يمكنك إنشاء أمر إنتاج الآن.</p>
+                </div>
+              )}
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default ProductionSimulation;
