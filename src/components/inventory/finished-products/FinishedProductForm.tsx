@@ -190,80 +190,69 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
   const handleRemovePackaging = (id: number) => {
     setPackaging(packaging.filter(pkg => pkg.id !== id));
   };
-    const mutation = useMutation({
+  
+  const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof finishedProductSchema>) => {
       if (isEditing) {
-        try {
-          // بدء المعاملة - تغييرات متزامنة
-          console.log("[DEBUG] بدء تحديث المنتج النهائي");
+        // Update existing product
+        const { data, error } = await supabase
+          .from('finished_products')
+          .update({
+            name: values.name,
+            unit: values.unit,
+            quantity: values.quantity,
+            min_stock: values.min_stock,
+            unit_cost: values.unit_cost,
+            sales_price: values.sales_price,
+            semi_finished_id: values.semi_finished_id,
+            semi_finished_quantity: values.semi_finished_quantity
+          })
+          .eq('id', initialData.id)
+          .select();
           
-          // Update existing product
-          const { data, error } = await supabase
-            .from('finished_products')
-            .update({
-              name: values.name,
-              unit: values.unit,
-              quantity: values.quantity,
-              min_stock: values.min_stock,
-              unit_cost: values.unit_cost,
-              sales_price: values.sales_price,
-              semi_finished_id: values.semi_finished_id,
-              semi_finished_quantity: values.semi_finished_quantity
-            })
-            .eq('id', initialData.id)
-            .select();
-            
-          if (error) throw error;
+        if (error) throw error;
+        
+        // Handle packaging materials - first delete existing
+        await supabase
+          .from('finished_product_packaging')
+          .delete()
+          .eq('finished_product_id', initialData.id);
+        
+        // Then insert new packaging materials
+        if (packaging.length > 0) {
+          const packagingData = packaging.map(pkg => ({
+            finished_product_id: initialData.id,
+            packaging_material_id: pkg.id,
+            quantity: pkg.quantity
+          }));
           
-          // Handle packaging materials - first delete existing
-          const { error: deleteError } = await supabase
+          const { error: packagingError } = await supabase
             .from('finished_product_packaging')
-            .delete()
-            .eq('finished_product_id', initialData.id);
+            .insert(packagingData);
             
-          if (deleteError) throw deleteError;
+          if (packagingError) throw packagingError;
+        }
+        
+        return data;
+      } else {
+        // Generate a code for new record
+        const { data: maxCode } = await supabase
+          .from('finished_products')
+          .select('code')
+          .order('code', { ascending: false })
+          .limit(1);
           
-          // Then insert new packaging materials
-          if (packaging.length > 0) {
-            const packagingData = packaging.map(pkg => ({
-              finished_product_id: initialData.id,
-              packaging_material_id: pkg.id,
-              quantity: pkg.quantity
-            }));
-            
-            const { error: packagingError } = await supabase
-              .from('finished_product_packaging')
-              .insert(packagingData);
-              
-            if (packagingError) throw packagingError;
-          }
-          
-          return data;
-        } catch (error) {
-          console.error("[ERROR] فشل تحديث المنتج النهائي:", error);
-          throw error;
-        }      } else {
-        try {
-          console.log("[DEBUG] بدء إنشاء منتج نهائي جديد");
-          
-          // 1. انشاء رمز فريد للمنتج الجديد
-          const { data: maxCode } = await supabase
-            .from('finished_products')
-            .select('code')
-            .order('code', { ascending: false })
-            .limit(1);
-            
-          let newCode = 'FIN-00001';
-          if (maxCode && maxCode.length > 0) {
-            const lastCode = maxCode[0].code;
-            const lastNum = parseInt(lastCode.split('-')[1]);
-            newCode = `FIN-${String(lastNum + 1).padStart(5, '0')}`;
-          }
-
-          console.log(`[DEBUG] الرمز الجديد للمنتج النهائي: ${newCode}`);
-
-          // 2. تحضير بيانات المنتج النهائي
-          const productData = {
+        let newCode = 'FIN-00001';
+        if (maxCode && maxCode.length > 0) {
+          const lastCode = maxCode[0].code;
+          const lastNum = parseInt(lastCode.split('-')[1]);
+          newCode = `FIN-${String(lastNum + 1).padStart(5, '0')}`;
+        }
+        
+        // Insert new product
+        const { data, error } = await supabase
+          .from('finished_products')
+          .insert({
             code: newCode,
             name: values.name,
             unit: values.unit,
@@ -273,114 +262,27 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
             sales_price: values.sales_price,
             semi_finished_id: values.semi_finished_id,
             semi_finished_quantity: values.semi_finished_quantity
-          };
-
-          // 3. تحضير بيانات مواد التعبئة
-          const packagingItems = packaging.map(pkg => ({
-            id: pkg.id,
-            code: pkg.code,
-            name: pkg.name,
-            quantity: pkg.quantity
-          }));
-
-          console.log(`[DEBUG] عدد مواد التعبئة: ${packagingItems.length}`);
+          })
+          .select();
           
-          // 4. استخدام تقنية السؤال عن الاستخدام RPC لإجراء العملية في خطوة واحدة (إن وجدت)
-          // في هذه الحالة نستخدم أكثر طريقة متأكدين منها: خطوة بخطوة مع الانتظار الكامل
-          
-          let productId = null;
-          let createdProduct = null;
-
-          // إنشاء المنتج أولاً
-          const { data: productResult, error: productError } = await supabase
-            .from('finished_products')
-            .insert(productData)
-            .select();
-
-          if (productError) {
-            console.error("[ERROR] فشل في إنشاء المنتج النهائي:", productError);
-            throw new Error(`فشل إنشاء المنتج النهائي: ${productError.message}`);
-          }
-
-          if (!productResult || productResult.length === 0) {
-            console.error("[ERROR] لم يتم إرجاع بيانات المنتج");
-            throw new Error("فشل إنشاء المنتج النهائي: لم يتم إرجاع بيانات");
-          }
-
-          productId = productResult[0].id;
-          createdProduct = productResult[0];
-          
-          console.log(`[DEBUG] تم إنشاء المنتج النهائي بنجاح، معرف المنتج: ${productId}`);
-
-          // إذا لم تكن هناك مواد تعبئة، نعيد البيانات مباشرة
-          if (packagingItems.length === 0) {
-            console.log("[DEBUG] لا توجد مواد تعبئة للإضافة");
-            return [createdProduct];
-          }
-
-          // إضافة مواد التعبئة المرتبطة بالمنتج
-          console.log(`[DEBUG] جاري إضافة ${packagingItems.length} من مواد التعبئة للمنتج رقم ${productId}`);
-          
-          const packagingData = packagingItems.map(pkg => ({
-            finished_product_id: productId,
+        if (error) throw error;
+        
+        // Insert packaging materials
+        if (packaging.length > 0 && data && data.length > 0) {
+          const packagingData = packaging.map(pkg => ({
+            finished_product_id: data[0].id,
             packaging_material_id: pkg.id,
             quantity: pkg.quantity
           }));
-
-          try {
-            const { error: packagingError } = await supabase
-              .from('finished_product_packaging')
-              .insert(packagingData);
-
-            if (packagingError) {
-              console.error("[ERROR] فشل إضافة مواد التعبئة:", packagingError);
-              
-              // تنفيذ التراجع عن طريق حذف المنتج المُنشأ
-              console.log(`[DEBUG] بدء عملية التراجع - حذف المنتج رقم ${productId}`);
-              
-              // انتظار عملية الحذف لتكتمل
-              const { error: deleteError } = await supabase
-                .from('finished_products')
-                .delete()
-                .eq('id', productId);
-
-              if (deleteError) {
-                console.error("[ERROR] فشل في عملية التراجع، لم يتم حذف المنتج:", deleteError);
-                throw new Error(`فشل في عملية التراجع: ${deleteError.message}`);
-              }
-              
-              console.log("[DEBUG] تم حذف المنتج بنجاح كجزء من عملية التراجع");
-              throw new Error(`فشل إضافة مواد التعبئة للمنتج: ${packagingError.message}`);
-            }
+          
+          const { error: packagingError } = await supabase
+            .from('finished_product_packaging')
+            .insert(packagingData);
             
-            console.log("[DEBUG] تمت إضافة مواد التعبئة بنجاح");
-            return [createdProduct];
-          } catch (innerError) {
-            console.error("[ERROR] خطأ أثناء إضافة مواد التعبئة:", innerError);
-            
-            // التحقق إذا كان المنتج لا يزال موجودًا بعد محاولة الحذف السابقة
-            const { data: checkProduct } = await supabase
-              .from('finished_products')
-              .select('id')
-              .eq('id', productId)
-              .single();
-
-            // إذا كان المنتج ما زال موجودًا، نحاول حذفه مرة أخرى
-            if (checkProduct) {
-              console.log(`[DEBUG] المنتج ما زال موجودًا، محاولة حذف إضافية للمنتج رقم: ${productId}`);
-              
-              await supabase
-                .from('finished_products')
-                .delete()
-                .eq('id', productId);
-            }
-            
-            throw innerError;
-          }
-        } catch (error) {
-          console.error("[ERROR] فشل إنشاء المنتج النهائي:", error);
-          throw error;
+          if (packagingError) throw packagingError;
         }
+        
+        return data;
       }
     },
     onSuccess: () => {

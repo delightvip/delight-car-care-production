@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle, ClipboardCheck } from 'lucide-react';
+import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,9 +35,7 @@ const PackagingMaterials = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [isInventoryDialogOpen, setIsInventoryDialogOpen] = useState(false); // حالة نافذة الجرد
   const [currentMaterial, setCurrentMaterial] = useState<any>(null);
-  const [inventoryItems, setInventoryItems] = useState<any[]>([]); // قائمة عناصر الجرد
   const [newMaterial, setNewMaterial] = useState({
     name: '',
     unit: '',
@@ -80,68 +78,6 @@ const PackagingMaterials = () => {
       }));
     }
   });
-  
-  // دالة تحديث الجرد
-  const updateInventoryMutation = useMutation({
-    mutationFn: async (items: any[]) => {
-      // تحديث كميات المواد في قاعدة البيانات بناءً على الكميات الفعلية
-      const updates = items.map(async (item) => {
-        if (item.actualQuantity !== undefined) {
-          const { error } = await supabase
-            .from('packaging_materials')
-            .update({ quantity: item.actualQuantity })
-            .eq('id', item.id);
-            
-          if (error) throw new Error(error.message);
-        }
-      });
-      
-      await Promise.all(updates);
-      return true;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
-      toast.success('تم تحديث الجرد بنجاح');
-      setIsInventoryDialogOpen(false);
-    },
-    onError: (error: any) => {
-      toast.error(`حدث خطأ أثناء تحديث الجرد: ${error.message}`);
-    }
-  });
-  
-  // دالة فتح نافذة الجرد وتهيئة البيانات
-  const openInventoryDialog = () => {
-    if (packagingMaterials) {
-      // تهيئة العناصر للعرض في نافذة الجرد
-      const initialItems = packagingMaterials.map(item => ({
-        ...item,
-        actualQuantity: item.quantity, // الكمية الفعلية تساوي الكمية في النظام مبدئيًا
-        difference: 0 // الفرق بين الكمية الفعلية والكمية في النظام
-      }));
-      setInventoryItems(initialItems);
-      setIsInventoryDialogOpen(true);
-    }
-  };
-  
-  // دالة تحديث الكمية الفعلية لعنصر من عناصر الجرد
-  const updateActualQuantity = (id: number, quantity: number) => {
-    setInventoryItems(prevItems => 
-      prevItems.map(item => 
-        item.id === id 
-          ? { 
-              ...item, 
-              actualQuantity: quantity, 
-              difference: quantity - item.quantity 
-            } 
-          : item
-      )
-    );
-  };
-  
-  // دالة حفظ الجرد وتطبيق التغييرات
-  const saveInventory = () => {
-    updateInventoryMutation.mutate(inventoryItems);
-  };
   
   // تطبيق الفلتر على البيانات
   const filteredMaterials = useMemo(() => {
@@ -504,11 +440,6 @@ const PackagingMaterials = () => {
             <p className="text-muted-foreground mt-1">إدارة مستلزمات التعبئة والتغليف</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={openInventoryDialog}>
-              <ClipboardCheck size={18} className="mr-2" />
-              جرد المخزون
-            </Button>
-            
             <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="تصفية المستلزمات" />
@@ -1002,105 +933,6 @@ const PackagingMaterials = () => {
               >
                 تعديل المعلومات
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* نافذة الجرد */}
-        <Dialog open={isInventoryDialogOpen} onOpenChange={setIsInventoryDialogOpen}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl">جرد مستلزمات التعبئة</DialogTitle>
-              <DialogDescription>
-                قم بتحديث الكميات الفعلية للمستلزمات بناءً على الجرد الفعلي.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="py-4">
-              <div className="border rounded-md">
-                <div className="grid grid-cols-12 bg-muted/50 p-3 font-medium text-sm border-b">
-                  <div className="col-span-1">#</div>
-                  <div className="col-span-3">الكود</div>
-                  <div className="col-span-3">اسم المستلزم</div>
-                  <div className="col-span-1">الوحدة</div>
-                  <div className="col-span-2 text-center">الكمية في النظام</div>
-                  <div className="col-span-2 text-center">الكمية الفعلية</div>
-                </div>
-                
-                <div className="max-h-96 overflow-y-auto">
-                  {inventoryItems.map((item, index) => (
-                    <div key={item.id} className={`grid grid-cols-12 p-3 items-center ${index % 2 === 1 ? 'bg-muted/20' : ''}`}>
-                      <div className="col-span-1 text-muted-foreground">{index + 1}</div>
-                      <div className="col-span-3 text-sm">{item.code}</div>
-                      <div className="col-span-3 font-medium">{item.name}</div>
-                      <div className="col-span-1">{item.unit}</div>
-                      <div className="col-span-2 text-center font-medium">{item.quantity}</div>
-                      <div className="col-span-2">
-                        <Input 
-                          type="number" 
-                          min="0"
-                          className="text-center"
-                          value={item.actualQuantity}
-                          onChange={(e) => updateActualQuantity(item.id, Number(e.target.value))}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {inventoryItems.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground">
-                    لا توجد مستلزمات متاحة للجرد
-                  </div>
-                )}
-              </div>
-              
-              <div className="mt-6 bg-muted/20 border rounded-md p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">إجمالي المستلزمات</h4>
-                    <p className="text-2xl font-bold">{inventoryItems.length}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">المستلزمات المعدلة</h4>
-                    <p className="text-2xl font-bold">
-                      {inventoryItems.filter(item => item.quantity !== item.actualQuantity).length}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">الفرق الكلي</h4>
-                    <p className={`text-2xl font-bold ${
-                      inventoryItems.reduce((acc, item) => acc + (item.actualQuantity - item.quantity), 0) < 0 
-                        ? 'text-red-600' 
-                        : 'text-green-600'
-                    }`}>
-                      {inventoryItems.reduce((acc, item) => acc + (item.actualQuantity - item.quantity), 0)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <div className="w-full flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    سيتم تحديث الكميات في النظام وفقًا للكميات الفعلية
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setIsInventoryDialogOpen(false)}>
-                    إلغاء
-                  </Button>
-                  <Button 
-                    onClick={saveInventory} 
-                    disabled={updateInventoryMutation.isPending}
-                    className="min-w-[100px]"
-                  >
-                    {updateInventoryMutation.isPending ? 'جاري الحفظ...' : 'حفظ الجرد'}
-                  </Button>
-                </div>
-              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
