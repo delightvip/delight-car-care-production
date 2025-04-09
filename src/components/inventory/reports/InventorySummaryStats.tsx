@@ -30,15 +30,36 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
         
         if (error) throw error;
         
-        // Ensure we return a single object, not an array
-        const statsData: SummaryStatsData = Array.isArray(data) && data.length > 0 
-          ? data[0] 
-          : data || { total_movements: 0, total_in: 0, total_out: 0, adjustments: 0, current_quantity: 0 };
+        // Ensure we return a single object
+        let statsData: SummaryStatsData;
+        
+        if (Array.isArray(data) && data.length > 0) {
+          // If it's an array, take the first item
+          statsData = data[0] as SummaryStatsData;
+        } else if (data) {
+          // If it's a single object
+          statsData = data as SummaryStatsData;
+        } else {
+          // Default empty data
+          statsData = { 
+            total_movements: 0, 
+            total_in: 0, 
+            total_out: 0, 
+            adjustments: 0, 
+            current_quantity: 0 
+          };
+        }
           
         return statsData;
       } catch (error) {
         console.error('Error fetching inventory summary stats:', error);
-        return { total_movements: 0, total_in: 0, total_out: 0, adjustments: 0, current_quantity: 0 } as SummaryStatsData;
+        return { 
+          total_movements: 0, 
+          total_in: 0, 
+          total_out: 0, 
+          adjustments: 0, 
+          current_quantity: 0 
+        } as SummaryStatsData;
       }
     }
   });
