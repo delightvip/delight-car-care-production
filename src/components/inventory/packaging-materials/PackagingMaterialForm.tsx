@@ -5,8 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { generateCode } from '@/utils/generateCode';
-import { enhancedToast } from '@/components/ui/enhanced-toast';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 
 // Define form schema
-const rawMaterialSchema = z.object({
+const packagingMaterialSchema = z.object({
   name: z.string().min(2, { message: "يجب أن يحتوي الاسم على حرفين على الأقل" }),
   unit: z.string().min(1, { message: "يرجى اختيار وحدة القياس" }),
   quantity: z.coerce.number().min(0, { message: "الكمية يجب أن تكون 0 أو أكثر" }),
@@ -43,7 +43,7 @@ const rawMaterialSchema = z.object({
   importance: z.coerce.number().min(0).max(2)
 });
 
-interface RawMaterialFormProps {
+interface PackagingMaterialFormProps {
   isOpen: boolean;
   onClose: () => void;
   initialData?: any;
@@ -51,7 +51,7 @@ interface RawMaterialFormProps {
   submitText: string;
 }
 
-const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
+const PackagingMaterialForm: React.FC<PackagingMaterialFormProps> = ({
   isOpen,
   onClose,
   initialData,
@@ -61,8 +61,8 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
   const queryClient = useQueryClient();
   const isEditing = !!initialData;
   
-  const form = useForm<z.infer<typeof rawMaterialSchema>>({
-    resolver: zodResolver(rawMaterialSchema),
+  const form = useForm<z.infer<typeof packagingMaterialSchema>>({
+    resolver: zodResolver(packagingMaterialSchema),
     defaultValues: {
       name: initialData?.name || "",
       unit: initialData?.unit || "",
@@ -75,94 +75,61 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
   });
   
   const mutation = useMutation({
-    mutationFn: async (values: z.infer<typeof rawMaterialSchema>) => {
-      try {
-        if (isEditing) {
-          // Update existing record
-          const { data, error } = await supabase
-            .from('raw_materials')
-            .update(values)
-            .eq('id', initialData.id)
-            .select();
-            
-          if (error) throw error;
-          return data;
-        } else {
-          // Get current count for code generation
-          const { count, error: countError } = await supabase
-            .from('raw_materials')
-            .select('id', { count: 'exact', head: true });
-            
-          if (countError) throw countError;
+    mutationFn: async (values: z.infer<typeof packagingMaterialSchema>) => {
+      if (isEditing) {
+        // Update existing record
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .update(values)
+          .eq('id', initialData.id)
+          .select();
           
-          // Check if this material is special (water)
-          const isSpecial = values.name.toLowerCase() === 'ماء' || 
-                          values.name.toLowerCase() === 'water' ||
-                          values.name.toLowerCase() === 'مياه';
+        if (error) throw error;
+        return data;
+      } else {
+        // Get current count for code generation
+        const { count, error: countError } = await supabase
+          .from('packaging_materials')
+          .select('id', { count: 'exact', head: true });
           
-          // Generate appropriate code
-          let newCode;
-          if (isSpecial) {
-            newCode = 'WATER-00001'; // Special code for water
-          } else {
-            newCode = generateCode('raw', count || 0);
-            
-            // Verify the code doesn't exist already
-            const { data: existingCode, error: codeError } = await supabase
-              .from('raw_materials')
-              .select('code')
-              .eq('code', newCode)
-              .maybeSingle();
-              
-            if (codeError) throw codeError;
-            
-            // If code exists, add a random suffix to ensure uniqueness
-            if (existingCode) {
-              const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-              newCode = `${newCode}-${randomSuffix}`;
-            }
-          }
+        if (countError) throw countError;
+        
+        // Generate a unique code
+        const newCode = generateCode('packaging', count || 0);
+        
+        // Create new record with the generated code
+        const newMaterial = {
+          code: newCode,
+          name: values.name,
+          unit: values.unit,
+          quantity: values.quantity,
+          unit_cost: values.unit_cost,
+          sales_price: values.sales_price || 0,
+          min_stock: values.min_stock,
+          importance: values.importance
+        };
+        
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .insert(newMaterial)
+          .select();
           
-          // Create new material with the generated code
-          const newMaterial = {
-            code: newCode,
-            name: values.name,
-            unit: values.unit,
-            quantity: values.quantity,
-            unit_cost: values.unit_cost,
-            sales_price: values.sales_price || 0,
-            min_stock: values.min_stock,
-            importance: values.importance
-          };
-          
-          const { data, error } = await supabase
-            .from('raw_materials')
-            .insert(newMaterial)
-            .select();
-            
-          if (error) throw error;
-          return data;
-        }
-      } catch (error: any) {
-        // Add detailed context to the error
-        if (error.message && error.message.includes('violates unique constraint')) {
-          error.details = 'قد يكون هناك مادة أخرى تستخدم نفس الكود. يرجى المحاولة مرة أخرى.';
-        }
-        throw error;
+        if (error) throw error;
+        return data;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rawMaterials'] });
-      enhancedToast.success(isEditing ? 'تم تعديل المادة الخام بنجاح' : 'تمت إضافة المادة الخام بنجاح');
+      queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
+      toast.success(isEditing ? 'تم تعديل مادة التعبئة بنجاح' : 'تمت إضافة مادة التعبئة بنجاح');
       onClose();
       form.reset();
     },
     onError: (error: any) => {
-      enhancedToast.error(error);
+      toast.error(`حدث خطأ: ${error.message}`);
     }
   });
   
-  const onSubmit = (values: z.infer<typeof rawMaterialSchema>) => {
+  const onSubmit = (values: z.infer<typeof packagingMaterialSchema>) => {
     mutation.mutate(values);
   };
   
@@ -182,7 +149,7 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
                 <FormItem>
                   <FormLabel>اسم المادة</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="أدخل اسم المادة الخام" />
+                    <Input {...field} placeholder="أدخل اسم مادة التعبئة" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -313,4 +280,4 @@ const RawMaterialForm: React.FC<RawMaterialFormProps> = ({
   );
 };
 
-export default RawMaterialForm;
+export default PackagingMaterialForm;

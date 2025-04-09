@@ -6,10 +6,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Download } from 'lucide-react';
+import { Download, BarChart3, Clock, AlertTriangle, Activity } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReportFilterCard from '@/components/inventory/reports/ReportFilterCard';
 import ReportInfoCard from '@/components/inventory/reports/ReportInfoCard';
 import ReportContent from '@/components/inventory/reports/ReportContent';
+import UnusedItemsReport from '@/components/inventory/reports/UnusedItemsReport';
+import StagnantItemsReport from '@/components/inventory/reports/StagnantItemsReport';
+import { exportAuditData } from '@/utils/exportUtils';
+import { enhancedToast } from '@/components/ui/enhanced-toast';
 
 export interface ItemCategory {
   id: string;
@@ -41,6 +46,7 @@ const InventoryReports = () => {
   const [selectedItem, setSelectedItem] = useState<string | null>(params.id || null);
   const [reportType, setReportType] = useState<string>('movement');
   const [timeRange, setTimeRange] = useState<string>('month');
+  const [mainTab, setMainTab] = useState<string>('item-analysis');
   
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['inventory-categories'],
@@ -133,11 +139,60 @@ const InventoryReports = () => {
   }, [items, selectedItem]);
 
   const handleExportReport = () => {
-    toast.info("جاري تحضير التقرير للتنزيل...");
-    
-    setTimeout(() => {
-      toast.success("تم تحضير التقرير بنجاح، جاري التنزيل");
-    }, 1500);
+    try {
+      enhancedToast.info("جاري تحضير التقرير للتنزيل...");
+      
+      if (mainTab === 'unused-items' || mainTab === 'stagnant-items') {
+        // Export special reports
+        const reportData = document.getElementById(mainTab)?.querySelectorAll('table tr');
+        
+        if (!reportData || reportData.length <= 1) {
+          enhancedToast.warning("لا توجد بيانات كافية للتصدير");
+          return;
+        }
+        
+        const headers = Array.from(reportData[0].querySelectorAll('th')).map(th => th.textContent || '');
+        const rows = Array.from(reportData).slice(1).map(row => 
+          Array.from(row.querySelectorAll('td')).map(td => td.textContent || '')
+        );
+        
+        const data = rows.map(row => {
+          const obj: any = {};
+          headers.forEach((header, i) => {
+            obj[header] = row[i];
+          });
+          return obj;
+        });
+        
+        exportAuditData(data);
+      } else {
+        // Export regular item report
+        if (!selectedItemDetails) {
+          enhancedToast.warning("يرجى اختيار عنصر للتصدير");
+          return;
+        }
+        
+        const exportData = [{
+          كود: selectedItemDetails.code,
+          الاسم: selectedItemDetails.name,
+          الكمية: selectedItemDetails.quantity,
+          الوحدة: selectedItemDetails.unit,
+          التقرير: reportType === 'movement' ? 'حركة المخزون' : 'توزيع الاستهلاك',
+          الفترة: timeRange === 'week' ? 'أسبوع' : 
+                  timeRange === 'month' ? 'شهر' : 
+                  timeRange === 'quarter' ? 'ربع سنوي' : 'سنوي'
+        }];
+        
+        exportAuditData(exportData);
+      }
+      
+      setTimeout(() => {
+        enhancedToast.success("تم تصدير التقرير بنجاح");
+      }, 1000);
+    } catch (error) {
+      console.error("Error exporting report:", error);
+      enhancedToast.error("حدث خطأ أثناء تصدير التقرير");
+    }
   };
   
   return (
@@ -146,7 +201,7 @@ const InventoryReports = () => {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">تقارير المخزون</h1>
-            <p className="text-muted-foreground mt-1">تحليل وإحصائيات حركة المخزون</p>
+            <p className="text-muted-foreground mt-1">تحليل وإحصائيات حركة المخزون والعناصر غير المستخدمة</p>
           </div>
           <Button 
             variant="outline" 
@@ -158,37 +213,64 @@ const InventoryReports = () => {
           </Button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ReportFilterCard
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
-            selectedItem={selectedItem}
-            setSelectedItem={setSelectedItem}
-            categories={categories}
-            items={items}
-            isLoadingCategories={isLoadingCategories}
-            isLoadingItems={isLoadingItems}
-            isItemReport={isItemReport}
-          />
+        <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
+          <TabsList className="w-full max-w-2xl mx-auto grid grid-cols-3">
+            <TabsTrigger value="item-analysis" className="flex items-center gap-1">
+              <BarChart3 size={16} />
+              <span>تحليل العناصر</span>
+            </TabsTrigger>
+            <TabsTrigger value="unused-items" className="flex items-center gap-1">
+              <AlertTriangle size={16} />
+              <span>عناصر غير مستخدمة</span>
+            </TabsTrigger>
+            <TabsTrigger value="stagnant-items" className="flex items-center gap-1">
+              <Clock size={16} />
+              <span>عناصر راكدة</span>
+            </TabsTrigger>
+          </TabsList>
           
-          <ReportInfoCard
-            selectedItemDetails={selectedItemDetails}
-            isLoadingItemDetails={isLoadingItemDetails}
-          />
-        </div>
-        
-        <div className="bg-muted/30 rounded-lg p-6 border border-border/40 shadow-sm">
-          <ReportContent
-            selectedItem={selectedItem}
-            selectedCategory={selectedCategory}
-            isLoadingItemDetails={isLoadingItemDetails}
-            selectedItemDetails={selectedItemDetails}
-            reportType={reportType}
-            setReportType={setReportType}
-            timeRange={timeRange}
-            setTimeRange={setTimeRange}
-          />
-        </div>
+          <TabsContent value="item-analysis" className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <ReportFilterCard
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                selectedItem={selectedItem}
+                setSelectedItem={setSelectedItem}
+                categories={categories}
+                items={items}
+                isLoadingCategories={isLoadingCategories}
+                isLoadingItems={isLoadingItems}
+                isItemReport={isItemReport}
+              />
+              
+              <ReportInfoCard
+                selectedItemDetails={selectedItemDetails}
+                isLoadingItemDetails={isLoadingItemDetails}
+              />
+            </div>
+            
+            <div className="bg-muted/30 rounded-lg p-6 border border-border/40 shadow-sm mt-6">
+              <ReportContent
+                selectedItem={selectedItem}
+                selectedCategory={selectedCategory}
+                isLoadingItemDetails={isLoadingItemDetails}
+                selectedItemDetails={selectedItemDetails}
+                reportType={reportType}
+                setReportType={setReportType}
+                timeRange={timeRange}
+                setTimeRange={setTimeRange}
+              />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="unused-items" className="mt-6">
+            <UnusedItemsReport />
+          </TabsContent>
+          
+          <TabsContent value="stagnant-items" className="mt-6">
+            <StagnantItemsReport />
+          </TabsContent>
+        </Tabs>
       </div>
     </PageTransition>
   );

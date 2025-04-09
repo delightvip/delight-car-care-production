@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import UsageChartContent from './ChartComponents/UsageChartContent';
+import { enhancedToast } from '@/components/ui/enhanced-toast';
 
 interface InventoryUsageChartProps {
   itemId: string;
@@ -30,29 +31,76 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
       try {
         console.log(`Fetching usage data for item: ${itemId}, type: ${itemType}, range: ${timeRange}`);
         
-        const { data, error } = await supabase.rpc('get_inventory_usage_stats', {
-          p_item_id: itemId,
-          p_item_type: itemType,
-          p_period: timeRange
-        });
-
-        if (error) {
-          console.error("Error fetching inventory usage stats:", error);
-          throw error;
+        // Set up start date based on time range
+        let startDate = new Date();
+        switch (timeRange) {
+          case 'week':
+            startDate.setDate(startDate.getDate() - 7);
+            break;
+          case 'month':
+            startDate.setMonth(startDate.getMonth() - 1);
+            break;
+          case 'quarter':
+            startDate.setMonth(startDate.getMonth() - 3);
+            break;
+          case 'year':
+            startDate.setFullYear(startDate.getFullYear() - 1);
+            break;
+          default:
+            startDate.setMonth(startDate.getMonth() - 1);
         }
         
-        console.log("Received usage data:", data);
-        return data as UsageData[];
+        // Query inventory_movements table to get outgoing movements with their reasons
+        const { data: movementData, error: movementError } = await supabase
+          .from('inventory_movements')
+          .select('reason, quantity')
+          .eq('item_id', itemId)
+          .eq('item_type', itemType)
+          .lt('quantity', 0) // Only outgoing movements
+          .gte('created_at', startDate.toISOString());
+
+        if (movementError) {
+          console.error("Error fetching inventory usage data:", movementError);
+          throw movementError;
+        }
+        
+        // Process the movement data to get usage by category
+        const usageByCategory: Record<string, number> = {};
+        
+        (movementData || []).forEach(movement => {
+          const category = movement.reason || 'أخرى';
+          const amount = Math.abs(movement.quantity);
+          
+          if (usageByCategory[category]) {
+            usageByCategory[category] += amount;
+          } else {
+            usageByCategory[category] = amount;
+          }
+        });
+        
+        // Convert to array format
+        const usageData = Object.entries(usageByCategory).map(([category, amount]) => ({
+          category,
+          usage_amount: amount
+        }));
+        
+        // Sort by usage amount (descending)
+        usageData.sort((a, b) => b.usage_amount - a.usage_amount);
+        
+        console.log("Processed usage data:", usageData);
+        
+        // If no data, add at least one dummy category
+        if (usageData.length === 0) {
+          usageData.push({ category: 'لا يوجد استهلاك', usage_amount: 0 });
+        }
+        
+        return usageData;
       } catch (err) {
         console.error("Failed to fetch inventory usage data:", err);
+        enhancedToast.error("حدث خطأ أثناء جلب بيانات استهلاك المخزون");
         
-        // For development, return mock data
-        return [
-          { category: "إنتاج", usage_amount: 120 },
-          { category: "تعبئة", usage_amount: 80 },
-          { category: "بيع", usage_amount: 45 },
-          { category: "تالف", usage_amount: 15 }
-        ] as UsageData[];
+        // Return a fallback with a clear message
+        return [{ category: 'خطأ في البيانات', usage_amount: 0 }] as UsageData[];
       }
     }
   });
@@ -71,13 +119,13 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
     );
   }
   
-  if (error || !data) {
+  if (error) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>توزيع الاستهلاك</CardTitle>
           <CardDescription className="text-destructive">
-            {error ? 'حدث خطأ أثناء تحميل البيانات' : 'لا توجد بيانات للعرض'}
+            حدث خطأ أثناء تحميل البيانات
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -89,8 +137,8 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
     );
   }
   
-  // If data array is empty, show empty state
-  if (data.length === 0) {
+  // If data array is empty or only has the "no consumption" entry
+  if (!data || data.length === 0 || (data.length === 1 && data[0].usage_amount === 0)) {
     return (
       <Card>
         <CardHeader>

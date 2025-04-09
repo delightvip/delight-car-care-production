@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from '@/components/ui/separator';
-import { PlusCircle, X, Loader2 } from 'lucide-react';
+import { PlusCircle, X, Loader2, Droplet } from 'lucide-react';
 
 // Define form schema
 const semiFinishedSchema = z.object({
@@ -74,6 +74,11 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   const [percentage, setPercentage] = useState<number>(0);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   
+  // Default water properties - always considered available
+  const WATER_ID = -999;  // Using a special ID for water
+  const WATER_NAME = "ماء";
+  const WATER_CODE = "WATER-000";
+  
   // Fetch raw materials
   const { data: rawMaterials = [], isLoading: isRawMaterialsLoading } = useQuery({
     queryKey: ['rawMaterials'],
@@ -110,7 +115,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           .select(`
             id,
             percentage,
-            raw_material:raw_material_id(id, code, name)
+            raw_material_id(id, code, name)
           `)
           .eq('semi_finished_id', initialData.id);
           
@@ -121,9 +126,9 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
         
         // Format ingredients for our state
         const formattedIngredients = data?.map((ing) => ({
-          id: ing.raw_material?.id,
-          code: ing.raw_material?.code,
-          name: ing.raw_material?.name,
+          id: ing.raw_material_id?.id,
+          code: ing.raw_material_id?.code,
+          name: ing.raw_material_id?.name,
           percentage: ing.percentage
         })) || [];
         
@@ -172,13 +177,64 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     setIngredients(ingredients.filter(ing => ing.id !== id));
   };
   
+  const calculateTotalPercentage = (): number => {
+    return ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
+  };
+  
   const validateTotalPercentage = (): boolean => {
-    const total = ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
+    const total = calculateTotalPercentage();
     if (Math.abs(total - 100) > 0.01) {
       toast.error(`مجموع النسب يجب أن يكون 100%، الإجمالي الحالي: ${total}%`);
       return false;
     }
     return true;
+  };
+  
+  // New function to add water to complete the formula to 100%
+  const addWaterToCompleteFormula = () => {
+    // Calculate current total percentage
+    const currentTotal = calculateTotalPercentage();
+    
+    // If already 100%, no need to add water
+    if (Math.abs(currentTotal - 100) < 0.01) {
+      toast.info("مجموع النسب بالفعل 100%، لا حاجة لإضافة الماء.");
+      return;
+    }
+    
+    // If more than 100%, can't add water
+    if (currentTotal > 100) {
+      toast.error("مجموع النسب أكبر من 100%، لا يمكن إضافة الماء. يرجى تعديل النسب الحالية أولا.");
+      return;
+    }
+    
+    // Calculate how much water to add
+    const waterPercentage = parseFloat((100 - currentTotal).toFixed(2));
+    
+    // Check if water is already an ingredient
+    const existingWaterIndex = ingredients.findIndex(ing => ing.id === WATER_ID);
+    
+    if (existingWaterIndex >= 0) {
+      // Update existing water percentage
+      const updatedIngredients = [...ingredients];
+      updatedIngredients[existingWaterIndex] = {
+        ...updatedIngredients[existingWaterIndex],
+        percentage: waterPercentage
+      };
+      setIngredients(updatedIngredients);
+    } else {
+      // Add water as a new ingredient
+      setIngredients([
+        ...ingredients,
+        {
+          id: WATER_ID,
+          code: WATER_CODE,
+          name: WATER_NAME,
+          percentage: waterPercentage
+        }
+      ]);
+    }
+    
+    toast.success(`تم إضافة ${waterPercentage}% من الماء لاستكمال التركيبة إلى 100%`);
   };
   
   const mutation = useMutation({
@@ -206,13 +262,66 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           .delete()
           .eq('semi_finished_id', initialData.id);
         
-        // Then insert new ingredients
+        // Then insert new ingredients (taking special care of water)
         if (ingredients.length > 0) {
-          const ingredientData = ingredients.map(ing => ({
-            semi_finished_id: initialData.id,
-            raw_material_id: ing.id,
-            percentage: ing.percentage
-          }));
+          const ingredientData = ingredients.map(ing => {
+            // For water, check if we have an existing water material in the database
+            if (ing.id === WATER_ID) {
+              return {
+                semi_finished_id: initialData.id,
+                raw_material_id: null, // Will be updated below
+                ingredient_type: 'water',
+                percentage: ing.percentage
+              };
+            }
+            
+            return {
+              semi_finished_id: initialData.id,
+              raw_material_id: ing.id,
+              percentage: ing.percentage
+            };
+          });
+          
+          // First, try to find an existing water raw material
+          let waterRawMaterialId = null;
+          if (ingredients.some(ing => ing.id === WATER_ID)) {
+            const { data: waterMaterial } = await supabase
+              .from('raw_materials')
+              .select('id')
+              .or('name.ilike.%ماء%,name.ilike.%water%')
+              .limit(1);
+              
+            if (waterMaterial && waterMaterial.length > 0) {
+              waterRawMaterialId = waterMaterial[0].id;
+            } else {
+              // Create water raw material
+              const { data: newWater } = await supabase
+                .from('raw_materials')
+                .insert({
+                  code: WATER_CODE,
+                  name: WATER_NAME,
+                  unit: 'لتر',
+                  quantity: 1000, // نفترض كمية كبيرة من الماء متاحة دائمًا
+                  unit_cost: 0,
+                  min_stock: 0
+                })
+                .select();
+                
+              if (newWater && newWater.length > 0) {
+                waterRawMaterialId = newWater[0].id;
+              }
+            }
+            
+            // Update the water ingredient with the actual raw material ID
+            if (waterRawMaterialId) {
+              ingredientData.forEach(ing => {
+                if (ing.ingredient_type === 'water') {
+                  ing.raw_material_id = waterRawMaterialId;
+                  delete ing.ingredient_type;
+                }
+              });
+            }
+          }
           
           const { error: ingredientError } = await supabase
             .from('semi_finished_ingredients')
@@ -253,13 +362,66 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           
         if (error) throw error;
         
-        // Insert ingredients
+        // Insert ingredients (taking special care of water)
         if (ingredients.length > 0 && data && data.length > 0) {
-          const ingredientData = ingredients.map(ing => ({
-            semi_finished_id: data[0].id,
-            raw_material_id: ing.id,
-            percentage: ing.percentage
-          }));
+          const ingredientData = ingredients.map(ing => {
+            // For water, mark it specially
+            if (ing.id === WATER_ID) {
+              return {
+                semi_finished_id: data[0].id,
+                raw_material_id: null, // Will be updated below
+                ingredient_type: 'water',
+                percentage: ing.percentage
+              };
+            }
+            
+            return {
+              semi_finished_id: data[0].id,
+              raw_material_id: ing.id,
+              percentage: ing.percentage
+            };
+          });
+          
+          // First, try to find an existing water raw material
+          let waterRawMaterialId = null;
+          if (ingredients.some(ing => ing.id === WATER_ID)) {
+            const { data: waterMaterial } = await supabase
+              .from('raw_materials')
+              .select('id')
+              .or('name.ilike.%ماء%,name.ilike.%water%')
+              .limit(1);
+              
+            if (waterMaterial && waterMaterial.length > 0) {
+              waterRawMaterialId = waterMaterial[0].id;
+            } else {
+              // Create water raw material
+              const { data: newWater } = await supabase
+                .from('raw_materials')
+                .insert({
+                  code: WATER_CODE,
+                  name: WATER_NAME,
+                  unit: 'لتر',
+                  quantity: 1000, // نفترض كمية كبيرة من الماء متاحة دائمًا
+                  unit_cost: 0,
+                  min_stock: 0
+                })
+                .select();
+                
+              if (newWater && newWater.length > 0) {
+                waterRawMaterialId = newWater[0].id;
+              }
+            }
+            
+            // Update the water ingredient with the actual raw material ID
+            if (waterRawMaterialId) {
+              ingredientData.forEach(ing => {
+                if (ing.ingredient_type === 'water') {
+                  ing.raw_material_id = waterRawMaterialId;
+                  delete ing.ingredient_type;
+                }
+              });
+            }
+          }
           
           const { error: ingredientError } = await supabase
             .from('semi_finished_ingredients')
@@ -451,8 +613,19 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                 {ingredients.length > 0 ? (
                   <>
-                    <div className="text-sm font-medium rtl:text-right ltr:text-left">
-                      إجمالي النسب: {ingredients.reduce((sum, ing) => sum + ing.percentage, 0)}%
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm font-medium rtl:text-right ltr:text-left">
+                        إجمالي النسب: {calculateTotalPercentage()}%
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={addWaterToCompleteFormula}
+                        className="flex items-center gap-2"
+                      >
+                        <Droplet size={16} />
+                        إضافة ماء لاستكمال 100%
+                      </Button>
                     </div>
                     {ingredients.map(ing => (
                       <div key={ing.id} className="flex justify-between items-center p-2 border rounded-md">
