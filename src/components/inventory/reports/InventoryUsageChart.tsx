@@ -31,14 +31,33 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
       try {
         console.log(`Fetching usage data for item: ${itemId}, type: ${itemType}, range: ${timeRange}`);
         
-        // Query inventory_movements table directly if the RPC function fails
+        // Set up start date based on time range
+        let startDate = new Date();
+        switch (timeRange) {
+          case 'week':
+            startDate.setDate(startDate.getDate() - 7);
+            break;
+          case 'month':
+            startDate.setMonth(startDate.getMonth() - 1);
+            break;
+          case 'quarter':
+            startDate.setMonth(startDate.getMonth() - 3);
+            break;
+          case 'year':
+            startDate.setFullYear(startDate.getFullYear() - 1);
+            break;
+          default:
+            startDate.setMonth(startDate.getMonth() - 1);
+        }
+        
+        // Query inventory_movements table to get outgoing movements with their reasons
         const { data: movementData, error: movementError } = await supabase
           .from('inventory_movements')
           .select('reason, quantity')
           .eq('item_id', itemId)
           .eq('item_type', itemType)
           .lt('quantity', 0) // Only outgoing movements
-          .gte('created_at', getStartDateByRange(timeRange).toISOString());
+          .gte('created_at', startDate.toISOString());
 
         if (movementError) {
           console.error("Error fetching inventory usage data:", movementError);
@@ -85,30 +104,6 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
       }
     }
   });
-  
-  // Helper to get start date based on time range
-  const getStartDateByRange = (range: string): Date => {
-    const date = new Date();
-    
-    switch (range) {
-      case 'week':
-        date.setDate(date.getDate() - 7);
-        break;
-      case 'month':
-        date.setMonth(date.getMonth() - 1);
-        break;
-      case 'quarter':
-        date.setMonth(date.getMonth() - 3);
-        break;
-      case 'year':
-        date.setFullYear(date.getFullYear() - 1);
-        break;
-      default:
-        date.setMonth(date.getMonth() - 1);
-    }
-    
-    return date;
-  };
   
   if (isLoading) {
     return (

@@ -24,14 +24,6 @@ interface StagnantItem {
   daysSinceLastMovement: number | null;
 }
 
-interface InventoryItem {
-  id: number;
-  code: string;
-  name: string;
-  quantity: number;
-  unit: string;
-}
-
 const StagnantItemsReport = () => {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [timeThreshold, setTimeThreshold] = useState<string>('90');
@@ -261,16 +253,16 @@ const StagnantItemsReport = () => {
     
     switch (item.type) {
       case 'raw':
-        route = `/inventory/raw-material/${item.id}`;
+        route = `/inventory/raw-materials/${item.id}`;
         break;
       case 'packaging':
-        route = `/inventory/packaging-material/${item.id}`;
+        route = `/inventory/packaging-materials/${item.id}`;
         break;
       case 'semi':
         route = `/inventory/semi-finished/${item.id}`;
         break;
       case 'finished':
-        route = `/inventory/finished-product/${item.id}`;
+        route = `/inventory/finished-products/${item.id}`;
         break;
     }
     

@@ -57,12 +57,14 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
             startDate.setMonth(startDate.getMonth() - 1);
         }
         
-        const { data, error } = await supabase.rpc('get_inventory_movements_by_time', {
-          p_item_id: itemId,
-          p_item_type: itemType,
-          p_period: timeRange,
-          p_start_date: startDate.toISOString()
-        });
+        // Using RPC call but with modified approach to handle the error
+        const { data, error } = await supabase
+          .from('inventory_movements')
+          .select('created_at, quantity')
+          .eq('item_id', itemId)
+          .eq('item_type', itemType)
+          .gte('created_at', startDate.toISOString())
+          .order('created_at', { ascending: true });
 
         if (error) {
           console.error("Error fetching inventory movements:", error);
@@ -107,7 +109,46 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
           return dummyData.reverse();
         }
         
-        return data as MovementData[];
+        // Process the data manually instead of using the RPC function
+        // Group by period (date)
+        const groupedData: Record<string, { in_qty: number; out_qty: number }> = {};
+        
+        // Format the date based on the time range
+        data.forEach(movement => {
+          const date = new Date(movement.created_at);
+          const period = timeRange === 'week' || timeRange === 'month'
+            ? format(date, 'yyyy-MM-dd')
+            : format(date, 'yyyy-MM');
+          
+          if (!groupedData[period]) {
+            groupedData[period] = { in_qty: 0, out_qty: 0 };
+          }
+          
+          // Categorize as in or out based on quantity
+          if (movement.quantity > 0) {
+            groupedData[period].in_qty += Number(movement.quantity);
+          } else if (movement.quantity < 0) {
+            groupedData[period].out_qty += Math.abs(Number(movement.quantity));
+          }
+        });
+        
+        // Convert to array and calculate running balance
+        const result: MovementData[] = [];
+        let runningBalance = 0;
+        
+        Object.entries(groupedData)
+          .sort(([a], [b]) => a.localeCompare(b)) // Sort by date
+          .forEach(([period, values]) => {
+            runningBalance += values.in_qty - values.out_qty;
+            result.push({
+              period,
+              in_quantity: values.in_qty,
+              out_quantity: values.out_qty,
+              balance: runningBalance
+            });
+          });
+        
+        return result;
       } catch (err) {
         console.error("Failed to fetch inventory movements data:", err);
         throw err;

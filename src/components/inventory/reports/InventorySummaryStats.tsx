@@ -23,35 +23,72 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
     queryKey: ['inventory-summary-stats', itemType, itemId],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase.rpc(
-          'get_inventory_summary_stats',
-          { p_item_id: itemId, p_item_type: itemType }
-        );
+        // Get current quantity from the respective inventory table
+        let currentQuantity = 0;
+        let tableToQuery = '';
         
-        if (error) throw error;
-        
-        // Default empty data
-        const defaultData: SummaryStatsData = { 
-          total_movements: 0, 
-          total_in: 0, 
-          total_out: 0, 
-          adjustments: 0, 
-          current_quantity: 0 
-        };
-        
-        // Process the data based on what we receive
-        if (!data) return defaultData;
-        
-        // Handle different response formats from the database
-        if (Array.isArray(data)) {
-          // If it's an array and has items, use the first one
-          return data.length > 0 
-            ? data[0] as SummaryStatsData 
-            : defaultData;
-        } else {
-          // If it's a single object
-          return data as SummaryStatsData;
+        switch (itemType) {
+          case 'raw':
+            tableToQuery = 'raw_materials';
+            break;
+          case 'semi':
+            tableToQuery = 'semi_finished_products';
+            break;
+          case 'packaging':
+            tableToQuery = 'packaging_materials';
+            break;
+          case 'finished':
+            tableToQuery = 'finished_products';
+            break;
         }
+        
+        if (tableToQuery) {
+          const { data: itemData, error: itemError } = await supabase
+            .from(tableToQuery)
+            .select('quantity')
+            .eq('id', parseInt(itemId))
+            .single();
+            
+          if (!itemError && itemData) {
+            currentQuantity = itemData.quantity;
+          }
+        }
+        
+        // Get movements from inventory_movements table
+        const { data: movements, error: movementsError } = await supabase
+          .from('inventory_movements')
+          .select('quantity, reason')
+          .eq('item_id', itemId)
+          .eq('item_type', itemType);
+          
+        if (movementsError) throw movementsError;
+        
+        // Calculate stats from movements
+        const totalMovements = movements?.length || 0;
+        let totalIn = 0;
+        let totalOut = 0;
+        let adjustments = 0;
+        
+        movements?.forEach(movement => {
+          if (movement.quantity > 0) {
+            totalIn += Number(movement.quantity);
+          } else if (movement.quantity < 0) {
+            totalOut += Math.abs(Number(movement.quantity));
+          }
+          
+          if (movement.reason === 'adjustment') {
+            adjustments += Math.abs(Number(movement.quantity));
+          }
+        });
+        
+        // Return formatted stats
+        return {
+          total_movements: totalMovements,
+          total_in: totalIn,
+          total_out: totalOut,
+          adjustments: adjustments,
+          current_quantity: currentQuantity
+        } as SummaryStatsData;
       } catch (error) {
         console.error('Error fetching inventory summary stats:', error);
         return { 
