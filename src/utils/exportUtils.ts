@@ -2,6 +2,7 @@
 /**
  * Utility for exporting inventory data to CSV files
  */
+import { utils, writeFile } from 'xlsx';
 
 // Generic function to export data to CSV
 export const exportToCSV = <T extends object>(data: T[], filename: string): void => {
@@ -48,6 +49,76 @@ export const exportToCSV = <T extends object>(data: T[], filename: string): void
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+};
+
+// Export template files with Arabic headers
+export const exportTemplate = (itemType: string): void => {
+  let template: Record<string, string>[] = [];
+  let filename = '';
+  
+  switch (itemType) {
+    case 'raw-materials':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': '',
+        'الأهمية': ''
+      }];
+      filename = 'نموذج_مواد_خام';
+      break;
+    
+    case 'packaging-materials':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': '',
+        'الأهمية': ''
+      }];
+      filename = 'نموذج_مواد_تعبئة';
+      break;
+    
+    case 'semi-finished':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': ''
+      }];
+      filename = 'نموذج_منتجات_نصف_مصنعة';
+      break;
+    
+    case 'finished-products':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': '',
+        'كود_المنتج_النصف_مصنع': '',
+        'كمية_المنتج_النصف_مصنع': ''
+      }];
+      filename = 'نموذج_منتجات_نهائية';
+      break;
+  }
+  
+  // Convert to worksheet
+  const ws = utils.json_to_sheet(template);
+  
+  // Generate workbook and write to file
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, 'Template');
+  
+  // Download the file
+  writeFile(wb, `${filename}.xlsx`);
 };
 
 // Export raw materials list
