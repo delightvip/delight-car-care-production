@@ -22,6 +22,10 @@ export const generateCode = (type: 'raw' | 'semi' | 'packaging' | 'finished', cu
 
 /**
  * Generates a unique code for production orders
+ * 
+ * @param type - Type of order (production or packaging)
+ * @param currentCount - Current count of orders in that category
+ * @returns A unique code string with date included
  */
 export const generateOrderCode = (type: 'production' | 'packaging', currentCount: number): string => {
   const prefix = type === 'production' ? 'PROD' : 'PACK';

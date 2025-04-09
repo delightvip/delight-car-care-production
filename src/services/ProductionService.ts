@@ -6,45 +6,54 @@ import ProductionDatabaseService from "./database/ProductionDatabaseService";
 export interface ProductionOrder {
   id: number;
   code: string;
-  productCode: string;
-  productName: string;
+  product_code: string;
+  productCode?: string; // Alias for flexibility
+  product_name: string;
+  productName?: string; // Alias for flexibility
   quantity: number;
   unit: string;
   status: 'pending' | 'inProgress' | 'completed' | 'cancelled';
   date: string;
-  ingredients: {
+  ingredients?: {
     id: number;
     code: string;
     name: string;
     requiredQuantity: number;
     available: boolean;
   }[];
-  totalCost: number;
+  total_cost: number;
+  totalCost?: number; // Alias for flexibility
 }
 
 // أنواع البيانات لأوامر التعبئة
 export interface PackagingOrder {
   id: number;
   code: string;
-  productCode: string;
-  productName: string;
+  product_code: string;
+  productCode?: string; // Alias for flexibility
+  product_name: string;
+  productName?: string; // Alias for flexibility
   quantity: number;
   unit: string;
   status: 'pending' | 'inProgress' | 'completed' | 'cancelled';
   date: string;
-  semiFinished: {
+  semi_finished_code: string;
+  semi_finished_name: string;
+  semi_finished_quantity: number;
+  semiFinished?: {
     code: string;
     name: string;
     quantity: number;
     available: boolean;
   };
-  packagingMaterials: {
+  packagingMaterials?: {
     code: string;
     name: string;
     quantity: number;
     available: boolean;
   }[];
-  totalCost: number;
+  total_cost: number;
+  totalCost?: number; // Alias for flexibility
 }
 
 class ProductionService {
@@ -67,12 +76,46 @@ class ProductionService {
   
   // الحصول على جميع أوامر الإنتاج
   public async getProductionOrders(): Promise<ProductionOrder[]> {
-    return await this.databaseService.getProductionOrders();
+    try {
+      const orders = await this.databaseService.getProductionOrders();
+      
+      // Add aliases for compatibility with both naming conventions
+      return orders.map(order => ({
+        ...order,
+        productCode: order.product_code,
+        productName: order.product_name,
+        totalCost: order.total_cost
+      }));
+    } catch (error) {
+      console.error('Error fetching production orders:', error);
+      toast.error('حدث خطأ أثناء جلب أوامر الإنتاج');
+      return [];
+    }
   }
   
   // الحصول على جميع أوامر التعبئة
   public async getPackagingOrders(): Promise<PackagingOrder[]> {
-    return await this.databaseService.getPackagingOrders();
+    try {
+      const orders = await this.databaseService.getPackagingOrders();
+      
+      // Add aliases for compatibility with both naming conventions
+      return orders.map(order => ({
+        ...order,
+        productCode: order.product_code,
+        productName: order.product_name,
+        totalCost: order.total_cost,
+        semiFinished: {
+          code: order.semi_finished_code,
+          name: order.semi_finished_name,
+          quantity: order.semi_finished_quantity,
+          available: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error fetching packaging orders:', error);
+      toast.error('حدث خطأ أثناء جلب أوامر التعبئة');
+      return [];
+    }
   }
   
   // إنشاء أمر إنتاج جديد
@@ -591,7 +634,7 @@ class ProductionService {
         return false;
       }
 
-      // حساب التكلفة الجديدة إذا تغيرت الكمية
+      // ��ساب التكلفة الجديدة إذا تغيرت الكمية
       let totalCost = currentOrder.totalCost;
       if (orderData.totalCost !== undefined) {
         // استخدام التكلفة المرسلة إذا تم تحديدها
