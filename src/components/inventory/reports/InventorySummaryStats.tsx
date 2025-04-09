@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -61,15 +62,18 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
         
         if (tableToQuery) {
           try {
-            // Using type assertion to satisfy TypeScript
-            const { data: itemData, error: itemError } = await supabase
-              .from(tableToQuery as any)
+            // Create a type safe approach to querying different tables
+            type InventoryTable = { id: number; quantity: number };
+            
+            // Use explicit typing and cast the result to our expected interface
+            const { data, error } = await supabase
+              .from(tableToQuery)
               .select('quantity')
               .eq('id', parseInt(itemId))
-              .single();
+              .single<InventoryTable>();
               
-            if (!itemError && itemData) {
-              currentQuantity = itemData.quantity;
+            if (!error && data) {
+              currentQuantity = data.quantity || 0;
             }
           } catch (err) {
             console.error(`Error fetching quantity from ${tableToQuery}:`, err);
