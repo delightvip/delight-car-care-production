@@ -13,6 +13,16 @@ export interface ProductionOrder {
   total_cost: number;
   created_at: string | null;
   updated_at: string | null;
+  productCode?: string;
+  productName?: string;
+  totalCost?: number;
+  ingredients?: {
+    id: number;
+    code: string;
+    name: string;
+    requiredQuantity: number;
+    available: boolean;
+  }[];
 }
 
 export interface PackagingOrder {
@@ -30,6 +40,21 @@ export interface PackagingOrder {
   total_cost: number;
   created_at: string | null;
   updated_at: string | null;
+  productCode?: string;
+  productName?: string;
+  totalCost?: number;
+  semiFinished?: {
+    code: string;
+    name: string;
+    quantity: number;
+    available: boolean;
+  };
+  packagingMaterials?: {
+    code: string;
+    name: string;
+    quantity: number;
+    available: boolean;
+  }[];
 }
 
 export interface ProductionStats {
@@ -65,7 +90,7 @@ export interface ProductionOrderExtended extends ProductionOrder {
   productCode: string;
   productName: string;
   totalCost: number;
-  ingredients?: {
+  ingredients: {
     id: number;
     code: string;
     name: string;
@@ -84,7 +109,7 @@ export interface PackagingOrderExtended extends PackagingOrder {
     quantity: number;
     available: boolean;
   };
-  packagingMaterials?: {
+  packagingMaterials: {
     code: string;
     name: string;
     quantity: number;
