@@ -66,14 +66,46 @@ const InventorySummaryStats: React.FC<InventorySummaryStatsProps> = ({ itemId, i
             type InventoryTable = { id: number; quantity: number };
             
             // Use explicit typing and cast the result to our expected interface
-            const { data, error } = await supabase
-              .from(tableToQuery)
-              .select('quantity')
-              .eq('id', parseInt(itemId))
-              .single<InventoryTable>();
-              
-            if (!error && data) {
-              currentQuantity = data.quantity || 0;
+            if (tableToQuery === 'raw_materials') {
+              const { data, error } = await supabase
+                .from('raw_materials')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
+            } else if (tableToQuery === 'semi_finished_products') {
+              const { data, error } = await supabase
+                .from('semi_finished_products')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
+            } else if (tableToQuery === 'packaging_materials') {
+              const { data, error } = await supabase
+                .from('packaging_materials')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
+            } else if (tableToQuery === 'finished_products') {
+              const { data, error } = await supabase
+                .from('finished_products')
+                .select('quantity')
+                .eq('id', parseInt(itemId))
+                .single<InventoryTable>();
+                
+              if (!error && data) {
+                currentQuantity = data.quantity || 0;
+              }
             }
           } catch (err) {
             console.error(`Error fetching quantity from ${tableToQuery}:`, err);
