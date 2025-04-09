@@ -1,4 +1,3 @@
-
 /**
  * Utility for exporting inventory data to CSV files
  */
@@ -124,4 +123,28 @@ export const exportAuditData = (auditData: any[]) => {
   }));
   
   exportToCSV(formattedData, 'inventory_audit');
+};
+
+/**
+ * Exports inventory stagnant items or unused items report to CSV
+ */
+export const exportReportData = <T extends object>(data: T[], filename: string): void => {
+  if (!data || data.length === 0) {
+    console.warn('No data to export');
+    return;
+  }
+  
+  exportToCSV(data, filename);
+};
+
+/**
+ * Exports the audit data from inventory count reconciliation
+ */
+export const exportAuditData = (auditData: any[]): void => {
+  if (!auditData || auditData.length === 0) {
+    console.warn('No audit data to export');
+    return;
+  }
+  
+  exportToCSV(auditData, 'inventory_report');
 };
