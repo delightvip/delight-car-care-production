@@ -1,4 +1,3 @@
-
 import { supabase, rpcFunctions } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
@@ -41,9 +40,7 @@ class ProductionDatabaseService {
         return {
           id: order.id,
           code: order.code,
-          product_code: order.product_code,
           productCode: order.product_code,
-          product_name: order.product_name,
           productName: order.product_name,
           quantity: order.quantity,
           unit: order.unit,
@@ -56,7 +53,6 @@ class ProductionDatabaseService {
             requiredQuantity: ingredient.required_quantity,
             available: true // سيتم تحديثها لاحقاً عند التحقق من توفر المواد
           })),
-          total_cost: order.total_cost,
           totalCost: order.total_cost
         };
       }));
@@ -92,17 +88,12 @@ class ProductionDatabaseService {
         return {
           id: order.id,
           code: order.code,
-          product_code: order.product_code,
           productCode: order.product_code,
-          product_name: order.product_name,
           productName: order.product_name,
           quantity: order.quantity,
           unit: order.unit,
           status: order.status as "pending" | "inProgress" | "completed" | "cancelled",
           date: order.date,
-          semi_finished_code: order.semi_finished_code,
-          semi_finished_name: order.semi_finished_name,
-          semi_finished_quantity: order.semi_finished_quantity,
           semiFinished: {
             code: order.semi_finished_code,
             name: order.semi_finished_name,
@@ -115,7 +106,6 @@ class ProductionDatabaseService {
             quantity: material.required_quantity,
             available: true // سيتم تحديثها لاحقاً عند التحقق من توفر المواد
           })),
-          total_cost: order.total_cost,
           totalCost: order.total_cost
         };
       }));
@@ -204,10 +194,8 @@ class ProductionDatabaseService {
         return {
           id: orderData.id,
           code: orderData.code,
-          product_code: orderData.product_code,
           productCode: orderData.product_code,
-          product_name: orderData.product_name,
-          productName: orderData.product_name, 
+          productName: orderData.product_name,
           quantity: orderData.quantity,
           unit: orderData.unit,
           status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
@@ -219,7 +207,6 @@ class ProductionDatabaseService {
             requiredQuantity: ingredient.requiredQuantity,
             available: true
           })),
-          total_cost: orderData.total_cost,
           totalCost: orderData.total_cost
         };
       } catch (innerError) {
@@ -294,17 +281,12 @@ class ProductionDatabaseService {
       return {
         id: orderData.id,
         code: orderData.code,
-        product_code: orderData.product_code,
         productCode: orderData.product_code,
-        product_name: orderData.product_name,
         productName: orderData.product_name,
         quantity: orderData.quantity,
         unit: orderData.unit,
         status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
         date: orderData.date,
-        semi_finished_code: semiFinished.code,
-        semi_finished_name: semiFinished.name,
-        semi_finished_quantity: semiFinished.quantity,
         semiFinished: {
           code: semiFinished.code,
           name: semiFinished.name,
@@ -317,7 +299,6 @@ class ProductionDatabaseService {
           quantity: material.quantity,
           available: true
         })),
-        total_cost: orderData.total_cost,
         totalCost: orderData.total_cost
       };
     } catch (error) {

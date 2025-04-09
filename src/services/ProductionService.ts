@@ -66,6 +66,7 @@ class ProductionService {
     this.databaseService = ProductionDatabaseService.getInstance();
   }
   
+  // الحصول على كائن وحيد من الخدمة (نمط Singleton)
   public static getInstance(): ProductionService {
     if (!ProductionService.instance) {
       ProductionService.instance = new ProductionService();
@@ -73,10 +74,12 @@ class ProductionService {
     return ProductionService.instance;
   }
   
+  // الحصول على جميع أوامر الإنتاج
   public async getProductionOrders(): Promise<ProductionOrder[]> {
     try {
       const orders = await this.databaseService.getProductionOrders();
       
+      // Add aliases for compatibility with both naming conventions
       return orders.map(order => ({
         ...order,
         productCode: order.product_code,
@@ -90,10 +93,12 @@ class ProductionService {
     }
   }
   
+  // الحصول على جميع أوامر التعبئة
   public async getPackagingOrders(): Promise<PackagingOrder[]> {
     try {
       const orders = await this.databaseService.getPackagingOrders();
       
+      // Add aliases for compatibility with both naming conventions
       return orders.map(order => ({
         ...order,
         productCode: order.product_code,
@@ -113,6 +118,7 @@ class ProductionService {
     }
   }
   
+  // إنشاء أمر إنتاج جديد
   public async createProductionOrder(
     productCode: string, 
     quantity: number,
@@ -127,6 +133,7 @@ class ProductionService {
         return null;
       }
       
+      // حساب الكميات المطلوبة من المواد الأولية
       const rawMaterials = await this.inventoryService.getRawMaterials();
       const ingredients = product.ingredients.map(ingredient => {
         const requiredQuantity = (ingredient.percentage / 100) * quantity;
@@ -141,13 +148,17 @@ class ProductionService {
         };
       });
       
+      // تحديد التكلفة الإجمالية (استخدام القيمة المرسلة إذا تم توفيرها)
       let finalTotalCost = totalCost;
       
+      // إذا لم يتم تمرير التكلفة، قم بحسابها
       if (finalTotalCost === undefined) {
+        // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
         let unitCost = 0;
         if (typeof product.unit_cost === 'number') {
           unitCost = product.unit_cost;
         } else if (typeof (product as any).unitCost === 'number') {
+          // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
           unitCost = (product as any).unitCost;
         }
         
@@ -156,6 +167,7 @@ class ProductionService {
       
       console.log(`إنشاء أمر إنتاج: الكمية=${quantity}, التكلفة المستخدمة=${finalTotalCost}`);
       
+      // إنشاء أمر الإنتاج في قاعدة البيانات
       const newOrder = await this.databaseService.createProductionOrder(
         productCode,
         product.name,
@@ -167,6 +179,7 @@ class ProductionService {
       
       if (!newOrder) return null;
       
+      // التحقق من توفر جميع المكونات
       const allAvailable = ingredients.every(i => i.available);
       if (!allAvailable) {
         toast.warning('بعض المكونات غير متوفرة بالكمية المطلوبة. تم حفظ الأمر كمسودة.');
@@ -182,6 +195,7 @@ class ProductionService {
     }
   }
   
+  // تحديث حالة أمر إنتاج
   public async updateProductionOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
     try {
       const orders = await this.getProductionOrders();
@@ -192,20 +206,26 @@ class ProductionService {
         return false;
       }
       
+      // التحقق من الحالة السابقة للأمر
       const prevStatus = order.status;
       
+      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
       if (prevStatus === 'completed' && newStatus !== 'completed') {
         console.log(`[DEBUG] إلغاء تأثير اكتمال الأمر ${orderId}`);
         
+        // استرجاع المواد الأولية المستهلكة
         const returnMaterials = order.ingredients.map(ingredient => ({
           code: ingredient.code,
           requiredQuantity: ingredient.requiredQuantity
         }));
         
+        // إعادة المواد الأولية للمخزون
         await this.inventoryService.returnRawMaterials(returnMaterials);
         
+        // إزالة المنتج النصف مصنع من المخزون
         await this.inventoryService.removeSemiFinishedFromInventory(order.productCode, order.quantity);
         
+        // تحديث حالة الأمر في قاعدة البيانات بعد نجاح العمليات السابقة
         const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
         if (result) {
           toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
@@ -213,20 +233,24 @@ class ProductionService {
         return result;
       }
 
+      // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
       if (newStatus === 'completed' && prevStatus !== 'completed') {
         console.log(`[DEBUG] بدء عملية اكتمال الأمر ${orderId}`);
         
+        // تجهيز متطلبات المواد الأولية
         const requirements = order.ingredients.map(ingredient => ({
           code: ingredient.code,
           requiredQuantity: ingredient.requiredQuantity
         }));
         
+        // التحقق من توفر جميع المواد الخام أولاً
         const allAvailable = await this.inventoryService.checkRawMaterialsAvailability(requirements);
         if (!allAvailable) {
           toast.error('بعض المواد الخام غير متوفرة بالكميات المطلوبة');
           return false;
         }
         
+        // محاولة استهلاك المواد الأولية من المخزون
         const consumeSuccess = await this.inventoryService.consumeRawMaterials(requirements);
         if (!consumeSuccess) {
           toast.error('حدث خطأ أثناء استهلاك المواد الأولية');
@@ -234,16 +258,20 @@ class ProductionService {
         }
         console.log(`[DEBUG] تم استهلاك المواد الأولية بنجاح للأمر ${orderId}`);
         
+        // حساب التكلفة الإجمالية بناءً على تكلفة المواد الأولية
         const totalCost = await this.calculateProductionCost(requirements);
         
         try {
+          // محاولة إضافة المنتج النصف مصنع للمخزون
           const addSuccess = await this.inventoryService.addSemiFinishedToInventory(
             order.productCode, 
             order.quantity, 
-            totalCost / order.quantity
+            totalCost / order.quantity // تكلفة الوحدة
           );
           
           if (!addSuccess) {
+            // استعادة المواد الأولية إذا فشلت عملية الإضافة
+            console.error(`[ERROR] فشل في إضافة المنتج النصف مصنع للمخزون للأمر ${orderId}`);
             await this.inventoryService.returnRawMaterials(requirements);
             toast.error('حدث خطأ أثناء إضافة المنتج النصف مصنع للمخزون');
             return false;
@@ -251,30 +279,37 @@ class ProductionService {
           
           console.log(`[DEBUG] تم إضافة المنتج النصف مصنع للمخزون بنجاح للأمر ${orderId}`);
           
+          // تحديث الأهمية للمواد الأولية المستخدمة
           await this.inventoryService.updateRawMaterialsImportance(
             requirements.map(req => req.code)
           );
           
+          // تحديث حالة الأمر وتكلفته في قاعدة البيانات بعد نجاح العمليات السابقة
           const statusUpdateSuccess = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
           if (!statusUpdateSuccess) {
+            // حاول إعادة المواد الخام واسترجاع المنتج النصف مصنع إذا فشل تحديث الحالة
+            console.error(`[ERROR] فشل في تحديث حالة الأمر ${orderId}`);
             await this.inventoryService.returnRawMaterials(requirements);
             await this.inventoryService.removeSemiFinishedFromInventory(order.productCode, order.quantity);
             toast.error('حدث خطأ أثناء تحديث حالة أمر الإنتاج');
             return false;
           }
           
+          // تحديث تكلفة الأمر في قاعدة البيانات
           await this.databaseService.updateProductionOrderCost(orderId, totalCost);
           
           toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
           return true;
         } catch (error) {
           console.error(`[ERROR] حدث خطأ أثناء معالجة أمر الإنتاج ${orderId}:`, error);
+          // محاولة استعادة المواد الخام في حالة حدوث خطأ
           await this.inventoryService.returnRawMaterials(requirements);
           toast.error('حدث خطأ أثناء معالجة أمر الإنتاج');
           return false;
         }
       }
       
+      // في حالة تغيير الحالة إلى غير "مكتمل" (مثلاً: قيد الانتظار، قيد التنفيذ، ملغي)
       const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
       if (result) {
         toast.success(`تم تحديث حالة أمر الإنتاج إلى ${this.getStatusTranslation(newStatus)}`);
@@ -288,6 +323,7 @@ class ProductionService {
     }
   }
   
+  // حساب تكلفة الإنتاج بناءً على المواد المستخدمة
   private async calculateProductionCost(requirements: { code: string, requiredQuantity: number }[]): Promise<number> {
     try {
       let totalCost = 0;
@@ -306,6 +342,7 @@ class ProductionService {
     }
   }
   
+  // إنشاء أمر تعبئة جديد
   public async createPackagingOrder(
     finishedProductCode: string,
     quantity: number,
@@ -320,10 +357,12 @@ class ProductionService {
         return null;
       }
       
+      // التحقق من توفر المنتج النصف مصنع
       const semiFinishedCode = product.semiFinished.code;
       const semiFinishedQuantity = product.semiFinished.quantity * quantity;
       const semiAvailable = await this.inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
       
+      // التحقق من توفر مواد التعبئة
       const packagingMaterials = await Promise.all(product.packaging.map(async pkg => {
         const pkgQuantity = pkg.quantity * quantity;
         const available = await this.inventoryService.checkPackagingAvailability([{
@@ -339,13 +378,17 @@ class ProductionService {
         };
       }));
       
+      // تحديد التكلفة الإجمالية (استخدام القيمة المرسلة إذا تم توفيرها)
       let finalTotalCost = totalCost;
       
+      // إذا لم يتم تمرير التكلفة، قم بحسابها
       if (finalTotalCost === undefined) {
+        // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
         let unitCost = 0;
         if (typeof product.unit_cost === 'number') {
           unitCost = product.unit_cost;
         } else if (typeof (product as any).unitCost === 'number') {
+          // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
           unitCost = (product as any).unitCost;
         }
         
@@ -354,6 +397,7 @@ class ProductionService {
       
       console.log(`إنشاء أمر تعبئة: الكمية=${quantity}, التكلفة المستخدمة=${finalTotalCost}`);
       
+      // إنشاء أمر التعبئة في قاعدة البيانات
       const newOrder = await this.databaseService.createPackagingOrder(
         finishedProductCode,
         product.name,
@@ -380,6 +424,7 @@ class ProductionService {
     }
   }
   
+  // تحديث حالة أمر تعبئة
   public async updatePackagingOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
     try {
       const orders = await this.getPackagingOrders();
@@ -390,20 +435,25 @@ class ProductionService {
         return false;
       }
       
+      // التحقق من الحالة السابقة للأمر
       const prevStatus = order.status;
       
+      // تحديث حالة الأمر في قاعدة البيانات
       const result = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
       
       if (!result) {
         return false;
       }
       
+      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
       if (prevStatus === 'completed' && newStatus !== 'completed') {
+        // إعادة المنتج النصف مصنع للمخزون
         await this.inventoryService.addSemiFinishedToInventory(
           order.semiFinished.code,
           order.semiFinished.quantity
         );
         
+        // إعادة مواد التعبئة للمخزون
         const packagingReqs = order.packagingMaterials.map(material => ({
           code: material.code,
           requiredQuantity: material.quantity
@@ -411,13 +461,16 @@ class ProductionService {
         
         await this.inventoryService.returnPackagingMaterials(packagingReqs);
         
+        // إزالة المنتج النهائي من المخزون
         await this.inventoryService.removeFinishedFromInventory(order.productCode, order.quantity);
         
         toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
         return true;
       }
 
+      // التحقق من توفر المكونات إذا كان التحديث إلى "مكتمل"
       if (newStatus === 'completed' && prevStatus !== 'completed') {
+        // التحقق من توفر المنتج النصف مصنع
         const semiFinishedAvailable = await this.inventoryService.checkSemiFinishedAvailability(
           order.semiFinished.code, 
           order.semiFinished.quantity
@@ -429,6 +482,7 @@ class ProductionService {
           return false;
         }
         
+        // التحقق من توفر مواد التعبئة
         const packagingReqs = order.packagingMaterials.map(material => ({
           code: material.code,
           requiredQuantity: material.quantity
@@ -441,6 +495,7 @@ class ProductionService {
           return false;
         }
         
+        // تنفيذ عملية إنتاج المنتج النهائي
         const produceSuccess = await this.inventoryService.produceFinishedProduct(
           order.productCode,
           order.quantity,
@@ -467,6 +522,7 @@ class ProductionService {
     }
   }
   
+  // حذف أمر إنتاج
   public async deleteProductionOrder(orderId: number): Promise<boolean> {
     try {
       const orders = await this.getProductionOrders();
@@ -477,11 +533,13 @@ class ProductionService {
         return false;
       }
       
+      // فقط أوامر الإنتاج في حالة "قيد الانتظار" يمكن حذفها
       if (order.status !== 'pending') {
         toast.error('لا يمكن حذف أمر إنتاج قيد التنفيذ أو مكتمل');
         return false;
       }
       
+      // حذف الأمر من قاعدة البيانات
       const result = await this.databaseService.deleteProductionOrder(orderId);
       
       if (result) {
@@ -496,6 +554,7 @@ class ProductionService {
     }
   }
   
+  // حذف أمر تعبئة
   public async deletePackagingOrder(orderId: number): Promise<boolean> {
     try {
       const orders = await this.getPackagingOrders();
@@ -506,11 +565,13 @@ class ProductionService {
         return false;
       }
       
+      // فقط أوامر التعبئة في حالة "قيد الانتظار" يمكن حذفها
       if (order.status !== 'pending') {
         toast.error('لا يمكن حذف أمر تعبئة قيد التنفيذ أو مكتمل');
         return false;
       }
       
+      // حذف الأمر من قاعدة البيانات
       const result = await this.databaseService.deletePackagingOrder(orderId);
       
       if (result) {
@@ -525,6 +586,7 @@ class ProductionService {
     }
   }
   
+  // ترجمة حالة الأمر
   private getStatusTranslation(status: string): string {
     const translations: Record<string, string> = {
       pending: 'قيد الانتظار',
@@ -536,14 +598,17 @@ class ProductionService {
     return translations[status] || status;
   }
   
+  // الحصول على بيانات إحصائية للإنتاج
   public async getProductionStats() {
     return await this.databaseService.getProductionStats();
   }
   
+  // الحصول على بيانات الإنتاج للرسوم البيانية
   public async getProductionChartData() {
     return await this.databaseService.getMonthlyProductionStats();
   }
 
+  // تحديث أمر إنتاج
   public async updateProductionOrder(
     orderId: number,
     orderData: {
@@ -560,6 +625,7 @@ class ProductionService {
     }
   ): Promise<boolean> {
     try {
+      // الحصول على أمر الإنتاج الحالي للحفاظ على التكلفة الإجمالية
       const orders = await this.getProductionOrders();
       const currentOrder = orders.find(o => o.id === orderId);
       
@@ -568,17 +634,27 @@ class ProductionService {
         return false;
       }
 
+      // ��ساب التكلفة الجديدة إذا تغيرت الكمية
       let totalCost = currentOrder.totalCost;
       if (orderData.totalCost !== undefined) {
+        // استخدام التكلفة المرسلة إذا تم تحديدها
         totalCost = orderData.totalCost;
         console.log(`تحديث أمر إنتاج: استخدام التكلفة المحددة: ${totalCost}`);
       } else if (currentOrder.quantity !== orderData.quantity) {
+        // حساب متوسط تكلفة الوحدة ثم حساب التكلفة الجديدة بناءً على الكمية الجديدة
         const unitCost = currentOrder.totalCost / currentOrder.quantity;
         totalCost = unitCost * orderData.quantity;
         console.log(`تحديث أمر إنتاج: حساب التكلفة الجديدة: ${totalCost} (سعر الوحدة: ${unitCost} × الكمية: ${orderData.quantity})`);
       } else {
         console.log(`تحديث أمر إنتاج: الاحتفاظ بالتكلفة الحالية: ${totalCost}`);
       }
+      
+      // طباعة البيانات قبل الإرسال لقاعدة البيانات
+      console.log('بيانات تحديث أمر الإنتاج:', {
+        id: orderId,
+        ...orderData,
+        totalCost
+      });
       
       const result = await this.databaseService.updateProductionOrder(orderId, {
         ...orderData,
@@ -597,6 +673,7 @@ class ProductionService {
     }
   }
 
+  // تحديث أمر تعبئة
   public async updatePackagingOrder(
     orderId: number,
     orderData: {
@@ -614,10 +691,11 @@ class ProductionService {
         name: string;
         quantity: number;
       }[];
-      totalCost?: number;
+      totalCost?: number; // إضافة معامل التكلفة الإجمالية الاختياري
     }
   ): Promise<boolean> {
     try {
+      // الحصول على أمر التعبئة الحالي للحفاظ على التكلفة الإجمالية
       const orders = await this.getPackagingOrders();
       const currentOrder = orders.find(o => o.id === orderId);
       
@@ -626,11 +704,14 @@ class ProductionService {
         return false;
       }
 
+      // حساب التكلفة الجديدة إذا تغيرت الكمية
       let totalCost = currentOrder.totalCost;
       if (orderData.totalCost !== undefined) {
+        // استخدام التكلفة المرسلة إذا تم تحديدها
         totalCost = orderData.totalCost;
         console.log(`تحديث أمر تعبئة: استخدام التكلفة المحددة: ${totalCost}`);
       } else if (currentOrder.quantity !== orderData.quantity) {
+        // حساب متوسط تكلفة الوحدة ثم حساب التكلفة الجديدة بناءً على الكمية الجديدة
         const unitCost = currentOrder.totalCost / currentOrder.quantity;
         totalCost = unitCost * orderData.quantity;
         console.log(`تحديث أمر تعبئة: حساب التكلفة الجديدة: ${totalCost} (سعر الوحدة: ${unitCost} × الكمية: ${orderData.quantity})`);
@@ -638,9 +719,16 @@ class ProductionService {
         console.log(`تحديث أمر تعبئة: الاحتفاظ بالتكلفة الحالية: ${totalCost}`);
       }
       
-      const result = await this.databaseService.updatePackagingOrder(orderId, {
+      // طباعة البيانات قبل الإرسال لقاعدة البيانات
+      console.log('بيانات تحديث أمر التعبئة:', {
+        id: orderId,
         ...orderData,
         totalCost
+      });
+      
+      const result = await this.databaseService.updatePackagingOrder(orderId, {
+        ...orderData,
+        totalCost // تمرير التكلفة الإجمالية الحالية أو المحسوبة
       });
       
       if (result) {
