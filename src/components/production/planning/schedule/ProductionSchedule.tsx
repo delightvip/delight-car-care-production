@@ -183,10 +183,7 @@ const ProductionSchedule = () => {
                       classNames={{
                         day_today: "bg-primary/20 text-primary font-bold",
                         day_selected: "bg-primary text-primary-foreground font-bold",
-                        day: (props) => {
-                          const { date } = props;
-                          return getDayClassNames(date);
-                        }
+                        day: (date) => getDayClassNames(date)
                       }}
                     />
                   </CardContent>
