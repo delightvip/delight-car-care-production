@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ActivitySquare, PieChart } from 'lucide-react';
+import { Calendar, ActivitySquare, PieChart, Info, BarChart } from 'lucide-react';
 import InventorySummaryStats from './InventorySummaryStats';
 
 interface ReportContentProps {
@@ -30,8 +30,10 @@ const ReportContent: React.FC<ReportContentProps> = ({
 }) => {
   if (!selectedItem || !selectedCategory) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        يرجى اختيار صنف للعرض
+      <div className="rounded-lg bg-background/50 border border-border/50 p-8 text-center">
+        <Info className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+        <h3 className="text-lg font-medium">يرجى اختيار صنف للعرض</h3>
+        <p className="text-muted-foreground mt-2">قم باختيار عنصر من القائمة للاطلاع على تفاصيل وتحليل بياناته</p>
       </div>
     );
   }
