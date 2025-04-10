@@ -65,10 +65,13 @@ export const useBackupRestore = () => {
           };
         }
         
-        // Fix: Properly type the calculation of total records
-        const totalRecords = Object.values(jsonData)
-          .reduce((total: number, table: any) => 
-            total + (Array.isArray(table) ? table.length : 0), 0);
+        // Fix: Properly calculate and type the total records count
+        let totalRecords = 0;
+        Object.values(jsonData).forEach((table: any) => {
+          if (Array.isArray(table)) {
+            totalRecords += table.length;
+          }
+        });
             
         return {
           valid: true,
@@ -76,7 +79,7 @@ export const useBackupRestore = () => {
             timestamp: new Date().toISOString(),
             tablesCount: tableKeys.length,
             version: "unknown",
-            recordsCount: totalRecords // Now properly typed as number
+            recordsCount: totalRecords
           },
           error: null
         };
