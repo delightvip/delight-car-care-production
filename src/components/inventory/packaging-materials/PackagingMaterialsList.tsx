@@ -14,7 +14,7 @@ import { Pencil, Trash2, Eye } from 'lucide-react';
 import InventoryService, { PackagingMaterial } from '@/services/InventoryService';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import ImportanceBadge from '@/components/inventory/low-stock/ImportanceBadge';
+import { ImportanceBadge } from '@/components/inventory/low-stock/ImportanceBadge';
 
 interface PackagingMaterialsListProps {
   filterType: 'all' | 'low-stock' | 'high-value';
