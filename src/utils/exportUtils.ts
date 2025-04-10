@@ -2,6 +2,7 @@
 /**
  * Utility for exporting inventory data to CSV files
  */
+import { utils, writeFile } from 'xlsx';
 
 // Generic function to export data to CSV
 export const exportToCSV = <T extends object>(data: T[], filename: string): void => {
@@ -48,6 +49,76 @@ export const exportToCSV = <T extends object>(data: T[], filename: string): void
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+};
+
+// Export template files with Arabic headers
+export const exportTemplate = (itemType: string): void => {
+  let template: Record<string, string>[] = [];
+  let filename = '';
+  
+  switch (itemType) {
+    case 'raw-materials':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': '',
+        'الأهمية': ''
+      }];
+      filename = 'نموذج_مواد_خام';
+      break;
+    
+    case 'packaging-materials':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': '',
+        'الأهمية': ''
+      }];
+      filename = 'نموذج_مواد_تعبئة';
+      break;
+    
+    case 'semi-finished':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': ''
+      }];
+      filename = 'نموذج_منتجات_نصف_مصنعة';
+      break;
+    
+    case 'finished-products':
+      template = [{
+        'الكود': '',
+        'الاسم': '',
+        'الوحدة': '',
+        'الكمية': '',
+        'الحد_الأدنى': '',
+        'التكلفة': '',
+        'كود_المنتج_النصف_مصنع': '',
+        'كمية_المنتج_النصف_مصنع': ''
+      }];
+      filename = 'نموذج_منتجات_نهائية';
+      break;
+  }
+  
+  // Convert to worksheet
+  const ws = utils.json_to_sheet(template);
+  
+  // Generate workbook and write to file
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, 'Template');
+  
+  // Download the file
+  writeFile(wb, `${filename}.xlsx`);
 };
 
 // Export raw materials list
@@ -111,17 +182,26 @@ export const exportFinishedProducts = (products: any[]) => {
   exportToCSV(formattedData, 'finished_products');
 };
 
-// Export audit data
-export const exportAuditData = (auditData: any[]) => {
-  const formattedData = auditData.map(item => ({
-    كود: item.code,
-    الاسم: item.name,
-    الكمية_النظام: item.systemQuantity,
-    الكمية_الفعلية: item.actualQuantity,
-    الفرق: item.difference,
-    الوحدة: item.unit,
-    تاريخ_الجرد: new Date().toISOString().slice(0, 10)
-  }));
+/**
+ * Exports inventory stagnant items or unused items report to CSV
+ */
+export const exportReportData = <T extends object>(data: T[], filename: string): void => {
+  if (!data || data.length === 0) {
+    console.warn('No data to export');
+    return;
+  }
   
-  exportToCSV(formattedData, 'inventory_audit');
+  exportToCSV(data, filename);
+};
+
+/**
+ * Exports the audit data from inventory count reconciliation
+ */
+export const exportAuditData = (auditData: any[]): void => {
+  if (!auditData || auditData.length === 0) {
+    console.warn('No audit data to export');
+    return;
+  }
+  
+  exportToCSV(auditData, 'inventory_report');
 };

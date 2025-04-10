@@ -11,8 +11,11 @@ interface ErrorDetails {
  * Enhanced toast that provides more detailed error information
  */
 export const enhancedToast = {
-  success: (message: string) => {
-    toast.success(message);
+  success: (message: string, description?: string) => {
+    toast.success(message, {
+      description: description,
+      duration: 3000,
+    });
   },
   
   error: (error: string | Error | ErrorDetails) => {
@@ -62,6 +65,16 @@ export const enhancedToast = {
   info: (message: string, description?: string) => {
     toast.info(message, {
       description: description,
+      duration: 3000,
+    });
+  },
+  
+  // New method for report-specific toasts
+  report: (message: string, description?: string) => {
+    toast(message, {
+      description: description,
+      duration: 3000,
+      icon: '📊',
     });
   }
 };
