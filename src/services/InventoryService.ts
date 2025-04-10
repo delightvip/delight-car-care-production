@@ -538,7 +538,7 @@ class InventoryService {
       console.log("Inventory movement recorded:", movement);
     } catch (error) {
       console.error("Error recording inventory movement:", error);
-      toast.error("حدث خطأ أثناء ت��جيل حركة المخزون");
+      toast.error("حدث خطأ أثناء تسجيل حركة المخزون");
     }
   }
 
@@ -951,24 +951,6 @@ class InventoryService {
       return { data: null, error: null };
     } catch (error) {
       console.error("Error getting finished product by code:", error);
-      return { data: null, error };
-    }
-  }
-
-  // أضف هذه الوظيفة الجديدة للحصول على مادة تعبئة بواسطة الكود
-  public async getPackagingMaterialByCode(
-    code: string
-  ): Promise<{ data: PackagingMaterial | null; error: any }> {
-    try {
-      const { data, error } = await supabase
-        .from("packaging_materials")
-        .select("*")
-        .eq("code", code)
-        .single();
-
-      return { data, error };
-    } catch (error) {
-      console.error("Error getting packaging material by code:", error);
       return { data: null, error };
     }
   }

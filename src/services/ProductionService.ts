@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import ProductionInventoryHelper from "./ProductionInventoryHelper";
 
 export interface ProductionOrder {
   id: number;
@@ -407,13 +406,7 @@ class ProductionService {
     totalCost: number = 0
   ): Promise<PackagingOrderExtended | null> {
     try {
-      const { data: finishedProduct } = await supabase
-        .from("finished_products")
-        .select("name")
-        .eq("code", product_code)
-        .single();
-      
-      const productName = finishedProduct?.name || product_code;
+      const productName = product_code;
       
       const code = `PKG-${Date.now().toString().slice(-6)}`;
       
@@ -462,27 +455,15 @@ class ProductionService {
 
   public async updateProductionOrderStatus(id: number, status: string): Promise<boolean> {
     try {
-      const { data: currentOrder, error: fetchError } = await supabase
+      const { error } = await supabase
         .from("production_orders")
-        .select("status")
-        .eq("id", id)
-        .single();
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
         
-      if (fetchError) {
-        console.error("Error fetching production order status:", fetchError);
-        throw fetchError;
-      }
+      if (error) throw error;
       
-      const previousStatus = currentOrder?.status || 'pending';
-      
-      const helper = ProductionInventoryHelper.getInstance();
-      const result = await helper.handleProductionOrderStatusChange(
-        id, 
-        status as 'pending' | 'inProgress' | 'completed' | 'cancelled',
-        previousStatus
-      );
-      
-      return result;
+      toast.success("تم تحديث حالة أمر الإنتاج بنجاح");
+      return true;
     } catch (error) {
       console.error("Error updating production order status:", error);
       toast.error("حدث خطأ أثناء تحديث حالة أمر الإنتاج");
@@ -492,27 +473,15 @@ class ProductionService {
 
   public async updatePackagingOrderStatus(id: number, status: string): Promise<boolean> {
     try {
-      const { data: currentOrder, error: fetchError } = await supabase
+      const { error } = await supabase
         .from("packaging_orders")
-        .select("status")
-        .eq("id", id)
-        .single();
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
         
-      if (fetchError) {
-        console.error("Error fetching packaging order status:", fetchError);
-        throw fetchError;
-      }
+      if (error) throw error;
       
-      const previousStatus = currentOrder?.status || 'pending';
-      
-      const helper = ProductionInventoryHelper.getInstance();
-      const result = await helper.handlePackagingOrderStatusChange(
-        id, 
-        status as 'pending' | 'inProgress' | 'completed' | 'cancelled',
-        previousStatus
-      );
-      
-      return result;
+      toast.success("تم تحديث حالة أمر التعبئة بنجاح");
+      return true;
     } catch (error) {
       console.error("Error updating packaging order status:", error);
       toast.error("حدث خطأ أثناء تحديث حالة أمر التعبئة");
