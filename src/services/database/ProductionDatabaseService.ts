@@ -128,17 +128,10 @@ class ProductionDatabaseService {
     totalCost: number
   ): Promise<ProductionOrder | null> {
     try {
-      console.log('[DEBUG] بدء إنشاء أمر إنتاج جديد');
-      
-      // بدء المعاملة
-      // تسمح المعاملة بالتراجع الكامل عن العملية في حالة حدوث خطأ
-      // الخطوة 1: إنشاء الرمز الفريد للأمر
       const code = this.generateOrderCode('production');
       const date = new Date().toISOString().split('T')[0];
       
-      console.log(`[DEBUG] إنشاء أمر إنتاج جديد: الكود=${code}, التاريخ=${date}`);
-      
-      // الخطوة 2: إنشاء أمر الإنتاج
+      // إنشاء أمر الإنتاج
       const { data: orderData, error: orderError } = await supabase
         .from('production_orders')
         .insert({
@@ -153,76 +146,44 @@ class ProductionDatabaseService {
         })
         .select('*')
         .single();
+        
+      if (orderError) throw orderError;
       
-      // التحقق من نجاح إنشاء الأمر
-      if (orderError) {
-        console.error('[ERROR] فشل في إنشاء أمر الإنتاج:', orderError);
-        throw orderError;
-      }
+      // إضافة المكونات
+      const ingredientsToInsert = ingredients.map(ingredient => ({
+        production_order_id: orderData.id,
+        raw_material_code: ingredient.code,
+        raw_material_name: ingredient.name,
+        required_quantity: ingredient.requiredQuantity
+      }));
       
-      console.log(`[DEBUG] تم إنشاء أمر الإنتاج بنجاح. ID=${orderData.id}`);
+      const { error: ingredientsError } = await supabase
+        .from('production_order_ingredients')
+        .insert(ingredientsToInsert);
+        
+      if (ingredientsError) throw ingredientsError;
       
-      try {
-        // الخطوة 3: إضافة المكونات
-        const ingredientsToInsert = ingredients.map(ingredient => ({
-          production_order_id: orderData.id,
-          raw_material_code: ingredient.code,
-          raw_material_name: ingredient.name,
-          required_quantity: ingredient.requiredQuantity
-        }));
-        
-        const { error: ingredientsError } = await supabase
-          .from('production_order_ingredients')
-          .insert(ingredientsToInsert);
-        
-        // التحقق من نجاح إضافة المكونات
-        if (ingredientsError) {
-          console.error('[ERROR] فشل في إضافة مكونات أمر الإنتاج:', ingredientsError);
-          
-          // محاولة حذف الأمر الذي تم إنشاؤه لإلغاء العملية
-          await supabase
-            .from('production_orders')
-            .delete()
-            .eq('id', orderData.id);
-          
-          throw ingredientsError;
-        }
-        
-        console.log(`[DEBUG] تم إضافة ${ingredientsToInsert.length} من المكونات بنجاح`);
-        
-        // إعادة تهيئة الأمر بالصيغة المطلوبة
-        return {
-          id: orderData.id,
-          code: orderData.code,
-          productCode: orderData.product_code,
-          productName: orderData.product_name,
-          quantity: orderData.quantity,
-          unit: orderData.unit,
-          status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
-          date: orderData.date,
-          ingredients: ingredients.map(ingredient => ({
-            id: 0, // سيتم تحديثه لاحقًا
-            code: ingredient.code,
-            name: ingredient.name,
-            requiredQuantity: ingredient.requiredQuantity,
-            available: true
-          })),
-          totalCost: orderData.total_cost
-        };
-      } catch (innerError) {
-        // في حالة حدوث خطأ أثناء إضافة المكونات، نحاول إلغاء العملية بالكامل
-        console.error('[ERROR] حدث خطأ أثناء إضافة مكونات أمر الإنتاج:', innerError);
-        
-        // محاولة حذف الأمر الذي تم إنشاؤه لإلغاء العملية
-        await supabase
-          .from('production_orders')
-          .delete()
-          .eq('id', orderData.id);
-        
-        throw innerError;
-      }
+      // إعادة تهيئة الأمر بالصيغة المطلوبة
+      return {
+        id: orderData.id,
+        code: orderData.code,
+        productCode: orderData.product_code,
+        productName: orderData.product_name,
+        quantity: orderData.quantity,
+        unit: orderData.unit,
+        status: orderData.status as "pending" | "inProgress" | "completed" | "cancelled",
+        date: orderData.date,
+        ingredients: ingredients.map(ingredient => ({
+          id: 0, // سيتم تحديثه لاحقًا
+          code: ingredient.code,
+          name: ingredient.name,
+          requiredQuantity: ingredient.requiredQuantity,
+          available: true
+        })),
+        totalCost: orderData.total_cost
+      };
     } catch (error) {
-      console.error('[ERROR] فشلت عملية إنشاء أمر الإنتاج:', error);
+      console.error('Error creating production order:', error);
       toast.error('حدث خطأ أثناء إنشاء أمر الإنتاج');
       return null;
     }
