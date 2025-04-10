@@ -29,7 +29,7 @@ export const useBackupRestore = () => {
         const jsonData = JSON.parse(fileContent);
         
         // التحقق من وجود البيانات الأساسية
-        const requiredTables = ['parties', 'party_balances'];
+        const requiredTables = ['parties', 'party_balances', 'financial_balance'];
         const missingTables = requiredTables.filter(table => !jsonData[table] || jsonData[table].length === 0);
         
         if (missingTables.length > 0) {
@@ -38,6 +38,21 @@ export const useBackupRestore = () => {
             metadata: null,
             error: `النسخة الاحتياطية غير مكتملة. الجداول التالية غير موجودة أو فارغة: ${missingTables.join(', ')}`
           };
+        }
+        
+        // التحقق من العلاقة بين الأطراف وأرصدتهم
+        if (jsonData['parties'] && jsonData['party_balances']) {
+          const partyIds = new Set(jsonData['parties'].map((p: any) => p.id));
+          const balancePartyIds = new Set(jsonData['party_balances'].map((b: any) => b.party_id));
+          
+          // عدد الأطراف التي ليس لها أرصدة
+          const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
+          
+          if (partiesWithoutBalances.length > 0) {
+            console.warn(`تحذير: هناك ${partiesWithoutBalances.length} من الأطراف بدون أرصدة في النسخة الاحتياطية`);
+            
+            // يمكن إضافة سجلات أرصدة افتراضية هنا أيضاً، ولكن من الأفضل تركها للخادم
+          }
         }
         
         // Check for metadata
@@ -65,7 +80,10 @@ export const useBackupRestore = () => {
           metadata: {
             timestamp: new Date().toISOString(),
             tablesCount: tableKeys.length,
-            version: "unknown"
+            version: "unknown",
+            recordsCount: Object.values(jsonData)
+              .reduce((total: number, table: any) => 
+                total + (Array.isArray(table) ? table.length : 0), 0)
           },
           error: null
         };
@@ -98,8 +116,43 @@ export const useBackupRestore = () => {
       const fileContent = await file.text();
       
       try {
-        // Validate JSON first
-        JSON.parse(fileContent);
+        // تحقق من صحة JSON أولاً
+        const jsonData = JSON.parse(fileContent);
+        
+        // التحقق من العلاقة بين الأطراف وأرصدتهم قبل الإرسال للخادم
+        if (jsonData['parties'] && jsonData['party_balances']) {
+          const partyIds = new Set(jsonData['parties'].map((p: any) => p.id));
+          const balancePartyIds = new Set(jsonData['party_balances'].map((b: any) => b.party_id));
+          
+          // إضافة أرصدة للأطراف التي ليس لها أرصدة
+          const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
+          
+          if (partiesWithoutBalances.length > 0) {
+            console.log(`تم العثور على ${partiesWithoutBalances.length} من الأطراف بدون أرصدة. جاري إنشاء الأرصدة المفقودة...`);
+            
+            for (const partyId of partiesWithoutBalances) {
+              const party = jsonData['parties'].find((p: any) => p.id === partyId);
+              if (party) {
+                // حساب الرصيد الافتتاحي بناءً على نوع الرصيد
+                const initialBalance = party.balance_type === 'credit' 
+                  ? -parseFloat(party.opening_balance || 0) 
+                  : parseFloat(party.opening_balance || 0);
+                  
+                // إنشاء سجل رصيد جديد
+                jsonData['party_balances'].push({
+                  id: crypto.randomUUID(),
+                  party_id: partyId,
+                  balance: initialBalance,
+                  last_updated: new Date().toISOString()
+                });
+              }
+            }
+            
+            // تحديث محتوى الملف
+            fileContent = JSON.stringify(jsonData);
+            console.log(`تمت إضافة ${partiesWithoutBalances.length} سجل رصيد للأطراف بدون أرصدة`);
+          }
+        }
       } catch (e) {
         return {
           success: false,
@@ -143,6 +196,18 @@ export const useBackupRestore = () => {
             
           if (balanceCheckError) {
             console.error("Error checking party balances:", balanceCheckError);
+          }
+          
+          // التحقق من أرصدة الخزينة
+          const { data: financialBalance, error: financialError } = await supabase
+            .from('financial_balance')
+            .select('*')
+            .single();
+            
+          if (financialError) {
+            console.error("Error checking financial balance:", financialError);
+          } else {
+            console.log("Financial balance restored:", financialBalance);
           }
         } catch (verificationError) {
           console.error("Error during verification:", verificationError);

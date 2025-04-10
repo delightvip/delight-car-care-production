@@ -67,41 +67,43 @@ export async function getBackupData(supabaseAdmin: any) {
       }
       
       console.log(`Completed backup of ${table}: ${backupData[table].length} records`);
-      
-      // التحقق من العلاقات بين الأطراف والأرصدة
-      if (table === 'party_balances' && backupData['parties']) {
-        const partyIds = new Set(backupData['parties'].map((p: any) => p.id));
-        const balancePartyIds = new Set(backupData['party_balances'].map((b: any) => b.party_id));
-        
-        const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
-        if (partiesWithoutBalances.length > 0) {
-          console.log(`WARNING: Found ${partiesWithoutBalances.length} parties without balances`);
-          
-          // إنشاء سجلات أرصدة للأطراف التي ليس لها أرصدة
-          for (const partyId of partiesWithoutBalances) {
-            const party = backupData['parties'].find((p: any) => p.id === partyId);
-            if (party) {
-              const initialBalance = party.balance_type === 'credit' 
-                ? -parseFloat(party.opening_balance || 0) 
-                : parseFloat(party.opening_balance || 0);
-                
-              console.log(`Creating balance for party ${party.name}: ${initialBalance}`);
-              
-              backupData['party_balances'].push({
-                id: crypto.randomUUID(),
-                party_id: partyId,
-                balance: initialBalance,
-                last_updated: new Date().toISOString()
-              });
-            }
-          }
-          
-          console.log(`Added ${partiesWithoutBalances.length} missing balances`);
-        }
-      }
     } catch (err) {
       console.error(`Exception fetching data from ${table}:`, err);
       errors.push({ table, error: err.message });
+    }
+  }
+  
+  // بعد جمع كل البيانات، نتحقق من اكتمال العلاقات بين الأطراف وأرصدتهم
+  if (backupData['parties'] && backupData['party_balances']) {
+    const partyIds = new Set(backupData['parties'].map((p: any) => p.id));
+    const balancePartyIds = new Set(backupData['party_balances'].map((b: any) => b.party_id));
+    
+    // البحث عن الأطراف التي ليس لها أرصدة
+    const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
+    
+    if (partiesWithoutBalances.length > 0) {
+      console.log(`Found ${partiesWithoutBalances.length} parties without balance records. Creating missing balances...`);
+      
+      // إنشاء سجلات أرصدة افتراضية للأطراف التي ليس لها أرصدة
+      for (const partyId of partiesWithoutBalances) {
+        const party = backupData['parties'].find((p: any) => p.id === partyId);
+        if (party) {
+          // حساب الرصيد الافتتاحي بناءً على نوع الرصيد
+          const initialBalance = party.balance_type === 'credit' 
+            ? -parseFloat(party.opening_balance || 0) 
+            : parseFloat(party.opening_balance || 0);
+            
+          // إنشاء سجل رصيد جديد
+          backupData['party_balances'].push({
+            id: crypto.randomUUID(),
+            party_id: partyId,
+            balance: initialBalance,
+            last_updated: new Date().toISOString()
+          });
+        }
+      }
+      
+      console.log(`Added ${partiesWithoutBalances.length} balance records for parties without balances`);
     }
   }
   
@@ -111,7 +113,7 @@ export async function getBackupData(supabaseAdmin: any) {
     console.warn(`Backup completed with ${errors.length} errors`);
   }
   
-  // اضافة معلومات حول الاحصائيات
+  // إضافة معلومات إحصائية
   const totalRecords = Object.keys(backupData)
     .filter(key => key !== '__metadata')
     .reduce((total, table) => total + (Array.isArray(backupData[table]) ? backupData[table].length : 0), 0);
