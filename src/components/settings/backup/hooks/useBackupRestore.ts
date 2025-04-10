@@ -75,15 +75,17 @@ export const useBackupRestore = () => {
         }
         
         // Create generic metadata for files without it
+        const totalRecords = Object.values(jsonData)
+          .reduce((total: number, table: any) => 
+            total + (Array.isArray(table) ? table.length : 0), 0);
+            
         return {
           valid: true,
           metadata: {
             timestamp: new Date().toISOString(),
             tablesCount: tableKeys.length,
             version: "unknown",
-            recordsCount: Object.values(jsonData)
-              .reduce((total: number, table: any) => 
-                total + (Array.isArray(table) ? table.length : 0), 0)
+            recordsCount: totalRecords
           },
           error: null
         };
@@ -113,7 +115,7 @@ export const useBackupRestore = () => {
   }> => {
     try {
       // Read the file
-      const fileContent = await file.text();
+      let fileContent = await file.text();  // Changed from const to let
       
       try {
         // تحقق من صحة JSON أولاً
