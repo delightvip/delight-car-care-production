@@ -42,6 +42,7 @@ serve(async (req) => {
       // First clear all tables with foreign key relationships
       // Financial module - Transactions first
       'financial_transactions',
+      'cash_operations', // إضافة جدول حركات الخزينة
       
       // Commercial module - Returns
       'return_items',
