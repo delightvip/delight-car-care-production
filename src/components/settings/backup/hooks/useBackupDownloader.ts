@@ -1,66 +1,49 @@
 
-import { useState } from "react";
-import { format } from 'date-fns';
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { useState } from 'react';
 
 export const useBackupDownloader = () => {
-  const [isDownloading, setIsDownloading] = useState(false);
-  
-  const downloadBackup = async (backupData: any) => {
-    setIsDownloading(true);
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
+
+  const downloadBackup = async (data: any) => {
     try {
-      // إضافة البيانات الوصفية للنسخة الاحتياطية
-      const currentDate = new Date();
-      const formattedDate = format(currentDate, 'yyyy-MM-dd_HH-mm-ss');
+      setDownloadStatus('downloading');
+
+      // Create a json string from the data
+      const jsonData = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
       
-      // التأكد من أن جميع البيانات متاحة ولا يوجد قيود على حجم البيانات
-      if (!backupData) {
-        throw new Error("لم يتم استلام بيانات النسخة الاحتياطية");
-      }
+      // Create a Blob from the JSON string
+      const blob = new Blob([jsonData], { type: 'application/json' });
       
-      // إضافة بيانات وصفية للنسخة الاحتياطية
-      if (!backupData.__metadata) {
-        backupData.__metadata = {
-          timestamp: currentDate.toISOString(),
-          version: "1.0",
-          tablesCount: Object.keys(backupData).filter(key => key !== "__metadata").length,
-          recordsCount: Object.keys(backupData)
-            .filter(key => key !== "__metadata")
-            .reduce((total, table) => total + (Array.isArray(backupData[table]) ? backupData[table].length : 0), 0)
-        };
-      }
-      
-      // تحويل البيانات إلى نص JSON مع مسافات بادئة للقراءة البشرية
-      const jsonString = JSON.stringify(backupData, null, 2);
-      
-      // إنشاء كائن Blob للتنزيل
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      // Create a download URL
       const url = URL.createObjectURL(blob);
       
-      // إنشاء عنصر رابط وتنزيل الملف
-      const link = document.createElement('a');
+      // Create a timestamp for the filename
+      const timestamp = new Date().toISOString().split("T")[0];
+      
+      // Set up the download link
+      const link = document.createElement("a");
       link.href = url;
-      link.download = `backup_${formattedDate}.json`;
+      link.download = `backup-${timestamp}.json`;
+      
+      // Add to DOM, click, and remove
       document.body.appendChild(link);
       link.click();
-      
-      // تنظيف
-      URL.revokeObjectURL(url);
       document.body.removeChild(link);
       
+      // Clean up the URL object
+      URL.revokeObjectURL(url);
+      
+      setDownloadStatus('success');
       return true;
     } catch (error) {
       console.error("Error downloading backup:", error);
-      toast.error("حدث خطأ أثناء تنزيل النسخة الاحتياطية");
+      setDownloadStatus('error');
       return false;
-    } finally {
-      setIsDownloading(false);
     }
   };
-  
-  return {
-    downloadBackup,
-    isDownloading
+
+  return { 
+    downloadBackup, 
+    downloadStatus 
   };
 };
