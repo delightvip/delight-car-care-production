@@ -103,6 +103,35 @@ export const useBackupRestore = () => {
     }
   };
   
+  // تحسين: إضافة آلية محاولة إعادة الاتصال
+  const callRestoreFunction = async (fileContent: string, retries = 2): Promise<any> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("restore-backup", {
+        body: { backup: fileContent },
+        // تحسين: زيادة مهلة الاتصال لملفات كبيرة
+        headers: { "Supabase-Connection-Timeout": "60000" }
+      });
+      
+      if (error) {
+        console.error("Backup restoration error:", error);
+        throw error;
+      }
+      
+      return { data, error: null };
+    } catch (error: any) {
+      console.warn(`Error calling restore function (retries left: ${retries}):`, error);
+      
+      if (retries > 0) {
+        console.log(`Retrying restoration... (${retries} attempts left)`);
+        // تأخير قبل إعادة المحاولة
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return callRestoreFunction(fileContent, retries - 1);
+      }
+      
+      throw error;
+    }
+  };
+  
   const restoreBackup = async (file: File): Promise<{
     success: boolean;
     errors: RestoreError[] | null;
@@ -153,58 +182,68 @@ export const useBackupRestore = () => {
         };
       }
       
-      const { data, error } = await supabase.functions.invoke("restore-backup", {
-        body: { backup: fileContent }
-      });
-      
-      if (error) {
+      try {
+        // استخدام الدالة المُحسّنة مع محاولات إعادة الاتصال
+        const { data, error } = await callRestoreFunction(fileContent);
+        
+        if (error) {
+          console.error("Backup restoration error:", error);
+          return {
+            success: false,
+            errors: [{ 
+              table: 'system',
+              operation: 'restore',
+              error: error.message 
+            }]
+          };
+        }
+        
+        console.log("Backup restoration response:", data);
+        
+        if (data.success) {
+          try {
+            console.log("Verifying party balances after restoration...");
+            const { data: partyBalancesCheck, error: balanceCheckError } = await supabase
+              .from('party_balances')
+              .select('count(*)')
+              .single();
+              
+            console.log("Party balances check result:", partyBalancesCheck);
+              
+            if (balanceCheckError) {
+              console.error("Error checking party balances:", balanceCheckError);
+            }
+            
+            const { data: financialBalance, error: financialError } = await supabase
+              .from('financial_balance')
+              .select('*')
+              .single();
+              
+            if (financialError) {
+              console.error("Error checking financial balance:", financialError);
+            } else {
+              console.log("Financial balance restored:", financialBalance);
+            }
+          } catch (verificationError) {
+            console.error("Error during verification:", verificationError);
+          }
+        }
+        
+        return {
+          success: data.success,
+          errors: data.errors || null
+        };
+      } catch (error: any) {
         console.error("Backup restoration error:", error);
         return {
           success: false,
           errors: [{ 
             table: 'system',
             operation: 'restore',
-            error: error.message 
+            error: error?.message || 'حدث خطأ غير معروف' 
           }]
         };
       }
-      
-      console.log("Backup restoration response:", data);
-      
-      if (data.success) {
-        try {
-          console.log("Verifying party balances after restoration...");
-          const { data: partyBalancesCheck, error: balanceCheckError } = await supabase
-            .from('party_balances')
-            .select('count(*)')
-            .single();
-            
-          console.log("Party balances check result:", partyBalancesCheck);
-            
-          if (balanceCheckError) {
-            console.error("Error checking party balances:", balanceCheckError);
-          }
-          
-          const { data: financialBalance, error: financialError } = await supabase
-            .from('financial_balance')
-            .select('*')
-            .single();
-            
-          if (financialError) {
-            console.error("Error checking financial balance:", financialError);
-          } else {
-            console.log("Financial balance restored:", financialBalance);
-          }
-        } catch (verificationError) {
-          console.error("Error during verification:", verificationError);
-        }
-      }
-      
-      return {
-        success: data.success,
-        errors: data.errors || null
-      };
-      
     } catch (error: any) {
       console.error("Backup restoration error:", error);
       return {

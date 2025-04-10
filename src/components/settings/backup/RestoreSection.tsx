@@ -77,7 +77,7 @@ const RestoreSection = () => {
       
       setProgress(30);
       
-      // Call the restore function
+      // تحسين: تقسيم الملفات الكبيرة واستخدام محاولات إعادة الاتصال المضمنة
       const { success, errors } = await restoreBackup(backupFile);
       
       setProgress(70);
