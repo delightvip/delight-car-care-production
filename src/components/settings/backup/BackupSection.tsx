@@ -40,7 +40,7 @@ const BackupSection = () => {
       
       setProgress(70); // تحضير للتنزيل
       
-      // التحقق من وجود جميع الجداول الأساسية
+      // التأكد من وجود جميع الجداول الأساسية
       const essentialTables = ['parties', 'party_balances', 'financial_balance', 'financial_transactions', 'cash_operations'];
       const missingTables = essentialTables.filter(table => !data[table]);
       
@@ -50,25 +50,13 @@ const BackupSection = () => {
       
       setProgress(80); // جاري التنزيل
       
-      // التحقق من وجود العلاقة بين الأطراف والأرصدة
+      // التأكد من وجود العلاقة بين الأطراف والأرصدة
       if (data['parties'] && data['party_balances']) {
         const partyCount = data['parties'].length;
         const balanceCount = data['party_balances'].length;
         
-        // التحقق من أن عدد الأطراف مساوٍ لعدد سجلات الأرصدة
-        if (partyCount !== balanceCount) {
-          console.log(`تنبيه: عدد الأطراف (${partyCount}) لا يتطابق مع عدد سجلات الأرصدة (${balanceCount}) في النسخة الاحتياطية`);
-          
-          // تحقق إضافي من أي أطراف بدون أرصدة
-          const partyIds = new Set(data['parties'].map((party: any) => party.id));
-          const balancePartyIds = new Set(data['party_balances'].map((balance: any) => balance.party_id));
-          
-          const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
-          if (partiesWithoutBalances.length > 0) {
-            console.log(`هناك ${partiesWithoutBalances.length} من الأطراف بدون أرصدة في النسخة الاحتياطية`);
-          }
-        } else {
-          console.log(`تحقق ناجح: عدد الأطراف (${partyCount}) يتطابق مع عدد سجلات الأرصدة`);
+        if (partyCount > balanceCount) {
+          console.log(`تنبيه: هناك ${partyCount - balanceCount} من الأطراف بدون أرصدة في النسخة الاحتياطية`);
         }
       }
       

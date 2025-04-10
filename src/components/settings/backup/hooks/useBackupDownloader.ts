@@ -23,22 +23,18 @@ export const useBackupDownloader = () => {
       const requiredTables = ['parties', 'party_balances', 'financial_balance'];
       const missingTables = requiredTables.filter(table => !backupData[table] || backupData[table].length === 0);
       
-      if (missingTables.length > 0) {
-        toast.warning(`تنبيه: بعض الجداول الأساسية غير موجودة في النسخة الاحتياطية: ${missingTables.join(', ')}`);
-        
-        // إنشاء جدول أرصدة الخزينة إذا كان غير موجوداً
-        if (missingTables.includes('financial_balance')) {
-          backupData['financial_balance'] = [{
-            id: '1',
-            cash_balance: 0,
-            bank_balance: 0,
-            last_updated: new Date().toISOString()
-          }];
-          console.log('تم إنشاء بيانات افتراضية للأرصدة المالية');
-        }
+      if (missingTables.length > 0 && missingTables.includes('financial_balance')) {
+        // إضافة قيم افتراضية للجداول الأساسية الناقصة
+        backupData['financial_balance'] = [{
+          id: '1',
+          cash_balance: 0,
+          bank_balance: 0,
+          last_updated: new Date().toISOString()
+        }];
+        console.log('تم إضافة بيانات افتراضية للتوازن المالي');
       }
       
-      // التحقق من وجود العلاقة بين الأطراف وأرصدتهم
+      // التحقق من وجود علاقة بين العملاء وأرصدتهم
       if (backupData['parties'] && backupData['party_balances']) {
         const partyIds = new Set(backupData['parties'].map((party: any) => party.id));
         const balancePartyIds = new Set(backupData['party_balances'].map((balance: any) => balance.party_id));
@@ -58,7 +54,7 @@ export const useBackupDownloader = () => {
                 : parseFloat(party.opening_balance || 0);
                 
               backupData['party_balances'].push({
-                id: crypto.randomUUID(),
+                id: crypto.randomUUID(), // إنشاء UUID جديد
                 party_id: partyId,
                 balance: initialBalance,
                 last_updated: new Date().toISOString()
