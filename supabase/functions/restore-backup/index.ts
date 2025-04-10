@@ -74,51 +74,6 @@ serve(async (req) => {
     // Combine all errors
     const allErrors = [...clearErrors, ...sequenceErrors, ...restoreErrors];
 
-    // إضافة خطوة إضافية للتحقق من أرصدة العملاء وإعادة ضبطها إذا لزم الأمر
-    if (backupData['parties'] && backupData['party_balances']) {
-      console.log('Verifying party balances after restoration...');
-      try {
-        // التحقق من وجود جميع أرصدة العملاء
-        const partyCount = backupData['parties'].length;
-        const balanceCount = backupData['party_balances'].length;
-        
-        console.log(`Parties: ${partyCount}, Party Balances: ${balanceCount}`);
-        
-        if (partyCount > balanceCount) {
-          console.log(`Warning: Found ${partyCount - balanceCount} parties without balances`);
-        }
-      } catch (balanceVerificationError) {
-        console.error('Error during final balance verification:', balanceVerificationError);
-      }
-    }
-
-    // Check financial balance
-    try {
-      const { data: financialBalance, error: fbError } = await supabaseAdmin
-        .from('financial_balance')
-        .select('*')
-        .eq('id', '1')
-        .maybeSingle();
-        
-      if (fbError) {
-        console.error('Error checking financial balance:', fbError);
-      } else if (!financialBalance) {
-        console.log('Financial balance not found, creating default');
-        await supabaseAdmin
-          .from('financial_balance')
-          .upsert([{
-            id: '1',
-            cash_balance: 0,
-            bank_balance: 0,
-            last_updated: new Date().toISOString()
-          }]);
-      } else {
-        console.log('Financial balance verified:', financialBalance);
-      }
-    } catch (fbVerificationError) {
-      console.error('Error verifying financial balance:', fbVerificationError);
-    }
-
     // Include results in the response
     const result = {
       success: true, // Return success even with some errors to avoid blocking the user
