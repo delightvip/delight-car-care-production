@@ -1,33 +1,30 @@
 
 // Comprehensive list of all tables to back up in the right order
 export const tablesToBackup = [
-  // المعلومات الأساسية أولاً (بدون تبعيات)
+  // Base tables (no dependencies)
   'financial_categories',
   'raw_materials',
   'semi_finished_products',
   'packaging_materials',
   'finished_products',
-  
-  // الأطراف التجارية وأرصدتهم - مهم جداً أن يتم حفظهم بهذا الترتيب
   'parties',
-  'party_balances',
+  'financial_balance',
   
-  // الجداول العلائقية
+  // Relational tables
   'semi_finished_ingredients',
   'finished_product_packaging',
+  'party_balances',
   
-  // جداول الإنتاج
+  // Production tables
   'production_orders',
   'production_order_ingredients',
   'packaging_orders',
   'packaging_order_materials',
   
-  // الحسابات والمعاملات المالية
-  'financial_balance',
+  // Financial tables
   'financial_transactions',
-  'cash_operations',
   
-  // المعاملات التجارية
+  // Commercial tables
   'invoices',
   'invoice_items',
   'payments',
@@ -36,6 +33,6 @@ export const tablesToBackup = [
   'profits',
   'ledger',
   
-  // حركات المخزون
+  // Movement tables
   'inventory_movements'
 ];
