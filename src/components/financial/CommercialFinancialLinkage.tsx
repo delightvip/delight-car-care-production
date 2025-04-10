@@ -32,12 +32,13 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
   onLinkCreated
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
   const financialService = FinancialService.getInstance();
   
   const { data: linkedTransactions, isLoading, error, refetch } = useQuery({
     queryKey: ['financial-links', commercialId],
     queryFn: () => financialService.findLinkedFinancialTransactions(commercialId),
-    enabled: !!commercialId
+    enabled: !!commercialId && expanded
   });
   
   const getCommercialInfo = () => {
@@ -67,7 +68,12 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
   const commercialInfo = getCommercialInfo();
   
   const handleCreateLink = async () => {
+    if (isCreatingLink) return;
+
     try {
+      setIsCreatingLink(true);
+      const toastId = toast.loading("جاري إنشاء الارتباط المالي...");
+      
       let success = false;
       
       if (commercialType === 'invoice') {
@@ -79,15 +85,19 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
       }
       
       if (success) {
-        toast.success('تم إنشاء الارتباط المالي بنجاح');
-        refetch();
+        toast.success('تم إنشاء الارتباط المالي بنجاح', { id: toastId });
+        await refetch();
         if (onLinkCreated) {
           onLinkCreated();
         }
+      } else {
+        toast.error('فشل إنشاء الارتباط المالي', { id: toastId });
       }
     } catch (error) {
       console.error('Error creating financial link:', error);
       toast.error('حدث خطأ أثناء إنشاء الارتباط المالي');
+    } finally {
+      setIsCreatingLink(false);
     }
   };
   
@@ -110,7 +120,17 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
           <CardTitle className="text-lg">الارتباط المالي</CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => {
+              setExpanded(!expanded);
+              // عند توسيع البطاقة، قم بإعادة تحميل البيانات
+              if (!expanded) {
+                refetch();
+              }
+            }}
+          >
             {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </Button>
         </div>
@@ -191,9 +211,12 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
                 <AlertCircle className="h-10 w-10 text-muted-foreground" />
                 <p className="text-muted-foreground">لا توجد معاملات مالية مرتبطة بهذه المعاملة التجارية</p>
                 {commercialInfo.status === 'confirmed' && (
-                  <Button onClick={handleCreateLink}>
+                  <Button 
+                    onClick={handleCreateLink}
+                    disabled={isCreatingLink}
+                  >
                     <ArrowRight className="h-4 w-4 ml-2" />
-                    إنشاء معاملة مالية مرتبطة
+                    {isCreatingLink ? 'جاري إنشاء الارتباط...' : 'إنشاء معاملة مالية مرتبطة'}
                   </Button>
                 )}
               </div>
@@ -201,9 +224,13 @@ const CommercialFinancialLinkage: React.FC<CommercialFinancialLinkageProps> = ({
             
             {hasLinkedTransactions && commercialInfo.status === 'confirmed' && (
               <div className="flex justify-end mt-4">
-                <Button onClick={handleCreateLink} variant="outline">
+                <Button 
+                  onClick={handleCreateLink} 
+                  variant="outline" 
+                  disabled={isCreatingLink}
+                >
                   <Check className="h-4 w-4 ml-2" />
-                  إنشاء ارتباط مالي إضافي
+                  {isCreatingLink ? 'جاري إنشاء الارتباط...' : 'إنشاء ارتباط مالي إضافي'}
                 </Button>
               </div>
             )}

@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 interface TransactionStatusActionsProps {
   status: 'draft' | 'confirmed' | 'cancelled';
@@ -33,28 +34,62 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
 }) => {
   const [isConfirmLoading, setIsConfirmLoading] = React.useState(false);
   const [isCancelLoading, setIsCancelLoading] = React.useState(false);
+  const [isDialogOpen, setIsDialogOpen] = React.useState(false);
 
   const handleConfirm = async () => {
     if (!onConfirm) return;
-    setIsConfirmLoading(true);
-    await onConfirm();
-    setIsConfirmLoading(false);
+    try {
+      setIsConfirmLoading(true);
+      // تحديث حالة الحوار لمنع إعادة النقر
+      setIsDialogOpen(false);
+      
+      // إظهار إشعار بدء العملية
+      const toastId = toast.loading("جاري تنفيذ العملية...");
+      
+      await onConfirm();
+      
+      // تحديث الإشعار بعد انتهاء العملية
+      toast.success("تم تنفيذ العملية بنجاح", { id: toastId });
+    } catch (error) {
+      console.error("Error in confirm operation:", error);
+      toast.error("حدث خطأ أثناء تنفيذ العملية");
+    } finally {
+      setIsConfirmLoading(false);
+    }
   };
 
   const handleCancel = async () => {
     if (!onCancel) return;
-    setIsCancelLoading(true);
-    await onCancel();
-    setIsCancelLoading(false);
+    try {
+      setIsCancelLoading(true);
+      // تحديث حالة الحوار لمنع إعادة النقر
+      setIsDialogOpen(false);
+      
+      // إظهار إشعار بدء العملية
+      const toastId = toast.loading("جاري تنفيذ عملية الإلغاء...");
+      
+      await onCancel();
+      
+      // تحديث الإشعار بعد انتهاء العملية
+      toast.success("تم إلغاء العملية بنجاح", { id: toastId });
+    } catch (error) {
+      console.error("Error in cancel operation:", error);
+      toast.error("حدث خطأ أثناء تنفيذ عملية الإلغاء");
+    } finally {
+      setIsCancelLoading(false);
+    }
   };
 
   if (status === 'draft') {
     return (
       <div className="flex flex-wrap gap-2">
         {onConfirm && (
-          <AlertDialog>
+          <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <AlertDialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700">
+              <Button 
+                className="bg-green-600 hover:bg-green-700"
+                disabled={isConfirmLoading}
+              >
                 <CheckCircle className="ml-2 h-4 w-4" />
                 تأكيد المعاملة
               </Button>
@@ -67,9 +102,12 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>إلغاء</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={handleConfirm}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleConfirm();
+                  }}
                   className="bg-green-600 hover:bg-green-700"
                   disabled={isConfirmLoading}
                 >
@@ -81,7 +119,11 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
         )}
         
         {onDelete && (
-          <Button variant="outline" onClick={onDelete} className="border-gray-400">
+          <Button 
+            variant="outline" 
+            onClick={onDelete} 
+            className="border-gray-400"
+          >
             <XCircle className="ml-2 h-4 w-4" />
             حذف
           </Button>
@@ -92,9 +134,12 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
 
   if (status === 'confirmed' && onCancel) {
     return (
-      <AlertDialog>
+      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <AlertDialogTrigger asChild>
-          <Button variant="destructive">
+          <Button 
+            variant="destructive"
+            disabled={isCancelLoading}
+          >
             <RotateCcw className="ml-2 h-4 w-4" />
             إلغاء المعاملة
           </Button>
@@ -107,9 +152,12 @@ const TransactionStatusActions: React.FC<TransactionStatusActionsProps> = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>تراجع</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>تراجع</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleCancel}
+              onClick={(e) => {
+                e.preventDefault();
+                handleCancel();
+              }}
               className="bg-red-600 hover:bg-red-700"
               disabled={isCancelLoading}
             >

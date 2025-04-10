@@ -24,38 +24,40 @@ class PaymentProcessingService extends BaseCommercialService {
   
   public async confirmPayment(paymentId: string): Promise<boolean> {
     try {
+      console.log('Starting payment confirmation process:', paymentId);
+      
       // استخدام خدمة تأكيد الدفعات للقيام بالعمل الفعلي
       const success = await this.paymentConfirmationService.confirmPayment(paymentId);
       
       if (success) {
-        toast.success('تم تأكيد المعاملة بنجاح');
+        console.log('Payment confirmation completed successfully:', paymentId);
         return true;
       } else {
-        toast.error('حدث خطأ أثناء تأكيد المعاملة');
+        console.error('Payment confirmation failed with error from service:', paymentId);
         return false;
       }
     } catch (error) {
       console.error('Error confirming payment:', error);
-      toast.error('حدث خطأ أثناء تأكيد المعاملة');
       return false;
     }
   }
   
   public async cancelPayment(paymentId: string): Promise<boolean> {
     try {
+      console.log('Starting payment cancellation process:', paymentId);
+      
       // استخدام خدمة تأكيد الدفعات للقيام بالعمل الفعلي
       const success = await this.paymentConfirmationService.cancelPayment(paymentId);
       
       if (success) {
-        toast.success('تم إلغاء المعاملة بنجاح');
+        console.log('Payment cancellation completed successfully:', paymentId);
         return true;
       } else {
-        toast.error('حدث خطأ أثناء إلغاء المعاملة');
+        console.error('Payment cancellation failed with error from service:', paymentId);
         return false;
       }
     } catch (error) {
       console.error('Error cancelling payment:', error);
-      toast.error('حدث خطأ أثناء إلغاء المعاملة');
       return false;
     }
   }
@@ -68,10 +70,13 @@ class PaymentProcessingService extends BaseCommercialService {
         .eq('id', id)
         .single();
       
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Error fetching payment data:', fetchError);
+        throw fetchError;
+      }
       
       if (payment.payment_status !== 'draft') {
-        toast.error('يمكن تعديل المدفوعات في حالة المسودة فقط');
+        console.warn('Cannot update non-draft payment:', id);
         return false;
       }
       
@@ -93,13 +98,15 @@ class PaymentProcessingService extends BaseCommercialService {
         })
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating payment:', error);
+        throw error;
+      }
       
-      toast.success('تم تحديث المعاملة بنجاح');
+      console.log('Payment updated successfully:', id);
       return true;
     } catch (error) {
       console.error('Error updating payment:', error);
-      toast.error('حدث خطأ أثناء تحديث المعاملة');
       return false;
     }
   }
@@ -112,10 +119,13 @@ class PaymentProcessingService extends BaseCommercialService {
         .eq('id', id)
         .single();
       
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Error fetching payment data for deletion:', fetchError);
+        throw fetchError;
+      }
       
       if (payment.payment_status !== 'draft') {
-        toast.error('يمكن حذف المدفوعات في حالة المسودة فقط');
+        console.warn('Cannot delete non-draft payment:', id);
         return false;
       }
       
@@ -124,13 +134,15 @@ class PaymentProcessingService extends BaseCommercialService {
         .delete()
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting payment:', error);
+        throw error;
+      }
       
-      toast.success('تم حذف المعاملة بنجاح');
+      console.log('Payment deleted successfully:', id);
       return true;
     } catch (error) {
       console.error('Error deleting payment:', error);
-      toast.error('حدث خطأ أثناء حذف المعاملة');
       return false;
     }
   }
