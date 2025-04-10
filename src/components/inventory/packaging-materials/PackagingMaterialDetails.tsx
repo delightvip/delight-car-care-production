@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useQuery } from '@tanstack/react-query';
 import { rpcFunctions } from '@/integrations/supabase/client';
-import ImportanceBadge from '@/components/inventory/low-stock/ImportanceBadge';
+import { ImportanceBadge } from '@/components/inventory/low-stock/ImportanceBadge';
 
 interface PackagingMaterialDetailsProps {
   isOpen: boolean;

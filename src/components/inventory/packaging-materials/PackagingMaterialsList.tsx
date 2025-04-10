@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -14,7 +13,7 @@ import { Pencil, Trash2, Eye } from 'lucide-react';
 import InventoryService, { PackagingMaterial } from '@/services/InventoryService';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import ImportanceBadge from '@/components/inventory/low-stock/ImportanceBadge';
+import { ImportanceBadge } from '@/components/inventory/low-stock/ImportanceBadge';
 
 interface PackagingMaterialsListProps {
   filterType: 'all' | 'low-stock' | 'high-value';
@@ -72,7 +71,6 @@ const PackagingMaterialsList: React.FC<PackagingMaterialsListProps> = ({
     );
   }
   
-  // تطبيق الفلتر
   let filteredMaterials = [...packagingMaterials];
   
   if (filterType === 'low-stock') {
@@ -81,7 +79,6 @@ const PackagingMaterialsList: React.FC<PackagingMaterialsListProps> = ({
     filteredMaterials = filteredMaterials.filter(material => material.unit_cost * material.quantity > 1000);
   }
   
-  // تطبيق البحث
   if (searchQuery) {
     const query = searchQuery.toLowerCase();
     filteredMaterials = filteredMaterials.filter(material => 
@@ -90,7 +87,6 @@ const PackagingMaterialsList: React.FC<PackagingMaterialsListProps> = ({
     );
   }
   
-  // ترتيب النتائج
   filteredMaterials.sort((a, b) => {
     const fieldA = a[sortField as keyof PackagingMaterial];
     const fieldB = b[sortField as keyof PackagingMaterial];
