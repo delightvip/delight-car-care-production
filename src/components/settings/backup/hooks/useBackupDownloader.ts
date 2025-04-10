@@ -14,56 +14,9 @@ export const useBackupDownloader = () => {
       const currentDate = new Date();
       const formattedDate = format(currentDate, 'yyyy-MM-dd_HH-mm-ss');
       
-      // التأكد من أن جميع البيانات متاحة
+      // التأكد من أن جميع البيانات متاحة ولا يوجد قيود على حجم البيانات
       if (!backupData) {
         throw new Error("لم يتم استلام بيانات النسخة الاحتياطية");
-      }
-      
-      // التحقق من وجود جداول أساسية
-      const requiredTables = ['parties', 'party_balances', 'financial_balance'];
-      const missingTables = requiredTables.filter(table => !backupData[table] || backupData[table].length === 0);
-      
-      if (missingTables.length > 0 && missingTables.includes('financial_balance')) {
-        // إضافة قيم افتراضية للجداول الأساسية الناقصة
-        backupData['financial_balance'] = [{
-          id: '1',
-          cash_balance: 0,
-          bank_balance: 0,
-          last_updated: new Date().toISOString()
-        }];
-        console.log('تم إضافة بيانات افتراضية للتوازن المالي');
-      }
-      
-      // التحقق من وجود علاقة بين العملاء وأرصدتهم
-      if (backupData['parties'] && backupData['party_balances']) {
-        const partyIds = new Set(backupData['parties'].map((party: any) => party.id));
-        const balancePartyIds = new Set(backupData['party_balances'].map((balance: any) => balance.party_id));
-        
-        // الأطراف التي ليس لها أرصدة
-        const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
-        
-        if (partiesWithoutBalances.length > 0) {
-          console.log(`هناك ${partiesWithoutBalances.length} من الأطراف بدون أرصدة، سيتم إنشاء أرصدة افتراضية لهم`);
-          
-          // إنشاء أرصدة افتراضية للأطراف التي ليس لها أرصدة
-          for (const partyId of partiesWithoutBalances) {
-            const party = backupData['parties'].find((p: any) => p.id === partyId);
-            if (party) {
-              const initialBalance = party.balance_type === 'credit' 
-                ? -parseFloat(party.opening_balance || 0) 
-                : parseFloat(party.opening_balance || 0);
-                
-              backupData['party_balances'].push({
-                id: crypto.randomUUID(), // إنشاء UUID جديد
-                party_id: partyId,
-                balance: initialBalance,
-                last_updated: new Date().toISOString()
-              });
-            }
-          }
-          
-          console.log(`تم إنشاء ${partiesWithoutBalances.length} سجل رصيد جديد للأطراف بدون أرصدة`);
-        }
       }
       
       // إضافة بيانات وصفية للنسخة الاحتياطية
@@ -81,7 +34,7 @@ export const useBackupDownloader = () => {
       // تحويل البيانات إلى نص JSON مع مسافات بادئة للقراءة البشرية
       const jsonString = JSON.stringify(backupData, null, 2);
       
-      // معالجة الملفات الكبيرة بتقنية Blob
+      // إنشاء كائن Blob للتنزيل
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       

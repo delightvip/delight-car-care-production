@@ -13,12 +13,12 @@ export const useBackupRestore = () => {
   }> => {
     setIsValidating(true);
     try {
-      // Check file size - زيادة الحد الأقصى إلى 50 ميجابايت
-      if (file.size > 50 * 1024 * 1024) {
+      // Check file size
+      if (file.size > 20 * 1024 * 1024) { // 20MB limit
         return {
           valid: false,
           metadata: null,
-          error: "حجم الملف كبير جداً. الحد الأقصى هو 50 ميجابايت"
+          error: "حجم الملف كبير جداً. الحد الأقصى هو 20 ميجابايت"
         };
       }
       
@@ -27,18 +27,6 @@ export const useBackupRestore = () => {
       
       try {
         const jsonData = JSON.parse(fileContent);
-        
-        // التحقق من وجود البيانات الأساسية
-        const requiredTables = ['parties', 'party_balances'];
-        const missingTables = requiredTables.filter(table => !jsonData[table] || jsonData[table].length === 0);
-        
-        if (missingTables.length > 0) {
-          return {
-            valid: false,
-            metadata: null,
-            error: `النسخة الاحتياطية غير مكتملة. الجداول التالية غير موجودة أو فارغة: ${missingTables.join(', ')}`
-          };
-        }
         
         // Check for metadata
         if (jsonData['__metadata']) {
@@ -129,25 +117,6 @@ export const useBackupRestore = () => {
       }
       
       console.log("Backup restoration response:", data);
-      
-      // التحقق من استعادة أرصدة العملاء
-      if (data.success) {
-        try {
-          console.log("Verifying party balances after restoration...");
-          const { data: partyBalancesCheck, error: balanceCheckError } = await supabase
-            .from('party_balances')
-            .select('count(*)')
-            .single();
-            
-          console.log("Party balances check result:", partyBalancesCheck);
-            
-          if (balanceCheckError) {
-            console.error("Error checking party balances:", balanceCheckError);
-          }
-        } catch (verificationError) {
-          console.error("Error during verification:", verificationError);
-        }
-      }
       
       return {
         success: data.success,
