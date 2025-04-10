@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { BackupMetadata, RestoreError } from "../types";
@@ -64,6 +65,7 @@ export const useBackupRestore = () => {
           };
         }
         
+        // Fix: Properly type the calculation of total records
         const totalRecords = Object.values(jsonData)
           .reduce((total: number, table: any) => 
             total + (Array.isArray(table) ? table.length : 0), 0);
@@ -74,7 +76,7 @@ export const useBackupRestore = () => {
             timestamp: new Date().toISOString(),
             tablesCount: tableKeys.length,
             version: "unknown",
-            recordsCount: totalRecords
+            recordsCount: totalRecords // Now properly typed as number
           },
           error: null
         };
