@@ -59,9 +59,14 @@ export class PaymentService {
       const payment = await PaymentEntity.fetchById(paymentId);
       
       if (!payment) {
-        console.error('Payment not found:', paymentId);
+        toast.error("لم يتم العثور على معاملة الدفع");
         return false;
       }
+      
+      // عرض رسالة مبدئية للمستخدم
+      toast.loading("جاري تأكيد المعاملة...", {
+        id: `confirm-payment-${paymentId}`,
+      });
       
       // معالجة الدفع أولاً - وتأكيد صحة البيانات
       const isValid = await this.paymentProcessor.processPayment({
@@ -71,7 +76,9 @@ export class PaymentService {
       });
       
       if (!isValid) {
-        console.error('Payment validation failed:', paymentId);
+        toast.error("فشل تأكيد المعاملة - بيانات الدفع غير صالحة", {
+          id: `confirm-payment-${paymentId}`,
+        });
         return false;
       }
       
@@ -89,13 +96,22 @@ export class PaymentService {
         );
         
         console.log('Payment confirmation succeeded for:', paymentId);
+        toast.success("تم تأكيد المعاملة بنجاح", {
+          id: `confirm-payment-${paymentId}`,
+        });
         return true;
       } else {
         console.log('Payment confirmation failed for:', paymentId);
+        toast.error("فشل تأكيد المعاملة", {
+          id: `confirm-payment-${paymentId}`,
+        });
         return false;
       }
     } catch (error) {
       console.error(`Error in confirmPayment(${paymentId}):`, error);
+      toast.error("حدث خطأ أثناء تأكيد المعاملة", {
+        id: `confirm-payment-${paymentId}`,
+      });
       return false;
     }
   }
@@ -108,15 +124,22 @@ export class PaymentService {
       const payment = await PaymentEntity.fetchById(paymentId);
       
       if (!payment) {
-        console.error('Payment not found for cancellation:', paymentId);
+        toast.error("لم يتم العثور على معاملة الدفع");
         return false;
       }
+      
+      // عرض رسالة مبدئية للمستخدم
+      toast.loading("جاري إلغاء المعاملة...", {
+        id: `cancel-payment-${paymentId}`,
+      });
       
       // إلغاء الدفع
       const isValid = await this.paymentProcessor.voidPayment(payment.id);
       
       if (!isValid) {
-        console.error('Payment void validation failed:', paymentId);
+        toast.error("فشل إلغاء المعاملة", {
+          id: `cancel-payment-${paymentId}`,
+        });
         return false;
       }
       
@@ -136,13 +159,22 @@ export class PaymentService {
         }
         
         console.log('Payment cancellation succeeded for:', paymentId);
+        toast.success("تم إلغاء المعاملة بنجاح", {
+          id: `cancel-payment-${paymentId}`,
+        });
         return true;
       } else {
         console.log('Payment cancellation failed for:', paymentId);
+        toast.error("فشل إلغاء المعاملة", {
+          id: `cancel-payment-${paymentId}`,
+        });
         return false;
       }
     } catch (error) {
       console.error(`Error in cancelPayment(${paymentId}):`, error);
+      toast.error("حدث خطأ أثناء إلغاء المعاملة", {
+        id: `cancel-payment-${paymentId}`,
+      });
       return false;
     }
   }
