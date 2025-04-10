@@ -11,9 +11,9 @@ export const tablesToBackup = [
   'financial_balance',
   
   // Relational tables
+  'party_balances', // تم وضعه مباشرة بعد الأطراف لضمان استعادته بشكل صحيح
   'semi_finished_ingredients',
   'finished_product_packaging',
-  'party_balances',
   
   // Production tables
   'production_orders',
@@ -23,6 +23,7 @@ export const tablesToBackup = [
   
   // Financial tables
   'financial_transactions',
+  'cash_operations', // تأكد من تضمين جدول حركات الخزينة
   
   // Commercial tables
   'invoices',

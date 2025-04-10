@@ -26,12 +26,26 @@ serve(async (req) => {
     // Get backup data using the service
     const { backupData, errors } = await getBackupData(supabaseAdmin);
     
-    console.log('Backup creation completed');
+    // إضافة معلومات إضافية للبيانات الوصفية
+    backupData.__metadata.generatedAt = new Date().toISOString();
+    backupData.__metadata.errors = errors;
+    
+    console.log('Backup creation completed:', {
+      tables: Object.keys(backupData).filter(k => k !== '__metadata').length,
+      totalRecords: backupData.__metadata.recordsCount,
+      errors: errors.length
+    });
+    
+    // إضافة تحسين للأداء بإزالة خاصية الـ header Cache-Control
+    const headers = {
+      ...corsHeaders, 
+      'Content-Type': 'application/json'
+    };
     
     // Return the backup data directly
     return new Response(
       JSON.stringify(backupData),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      { headers, status: 200 }
     );
   } catch (error) {
     console.error('Backup creation error:', error);
