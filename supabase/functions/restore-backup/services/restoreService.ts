@@ -68,42 +68,7 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
   const uuidFields = ['id', 'party_id', 'category_id', 'invoice_id', 'return_id', 
                       'transaction_id', 'related_invoice_id', 'reference_id'];
   
-  // تحليل حالة الأرصدة قبل الاستعادة
-  try {
-    const { data: partiesCount, error: partiesCountError } = await supabaseAdmin
-      .from('parties')
-      .select('count(*)');
-      
-    console.log(`الحالة الأولية: عدد الأطراف = ${partiesCount ? partiesCount[0].count : 'غير متاح'}`);
-    
-    if (partiesCountError) {
-      console.error("خطأ في التحقق من عدد الأطراف:", partiesCountError);
-    }
-    
-    const { data: balancesCount, error: balancesCountError } = await supabaseAdmin
-      .from('party_balances')
-      .select('count(*)');
-      
-    console.log(`الحالة الأولية: عدد أرصدة الأطراف = ${balancesCount ? balancesCount[0].count : 'غير متاح'}`);
-    
-    if (balancesCountError) {
-      console.error("خطأ في التحقق من عدد أرصدة الأطراف:", balancesCountError);
-    }
-  } catch (initialCheckError) {
-    console.error("خطأ في الفحص الأولي:", initialCheckError);
-  }
-
-  // تعديل ترتيب الاستعادة للتأكد من استعادة الأطراف قبل أرصدتهم
-  // إنشاء ترتيب استعادة مخصص مع وضع الأطراف أولاً ثم الأرصدة
-  const priorityTables = ['parties', 'party_balances'];
-  const customRestoreOrder = [
-    ...priorityTables,
-    ...tablesToRestore.filter(table => !priorityTables.includes(table))
-  ];
-
-  console.log("ترتيب الاستعادة المخصص:", customRestoreOrder);
-  
-  for (const table of customRestoreOrder) {
+  for (const table of tablesToRestore) {
     if (backupData[table] && backupData[table].length > 0) {
       console.log(`Restoring table ${table} (${backupData[table].length} records)`);
       
@@ -126,11 +91,9 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
         tableData = removeComputedFields(tableData, fieldsToRemove);
       }
       
+      // Insert the backup data in batches to avoid request size limits
       // تقليل حجم الدفعة للتعامل مع كميات كبيرة من البيانات
-      const batchSize = 20; // تم تقليل حجم الدفعة للتعامل بشكل أفضل مع البيانات الكبيرة
-      
-      // تتبع عدد السجلات التي تمت استعادتها بنجاح
-      let successfullyRestoredCount = 0;
+      const batchSize = 25; // تم تقليل حجم الدفعة من 50 إلى 25 للتعامل بشكل أفضل مع البيانات الكبيرة
       
       for (let i = 0; i < tableData.length; i += batchSize) {
         const batch = tableData.slice(i, i + batchSize);
@@ -161,8 +124,6 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
                     
                   if (individualError) {
                     console.error(`Error with individual record in ${table}:`, individualError, record);
-                  } else {
-                    successfullyRestoredCount++;
                   }
                 } catch (indErr) {
                   console.error(`Exception with individual record in ${table}:`, indErr);
@@ -170,7 +131,6 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
               }
             }
           } else {
-            successfullyRestoredCount += batch.length;
             console.log(`Successfully inserted batch ${Math.floor(i/batchSize) + 1} for ${table}`);
           }
         } catch (insertError) {
@@ -195,8 +155,6 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
                   
                 if (retryError) {
                   console.error(`Error with smaller batch in ${table}:`, retryError);
-                } else {
-                  successfullyRestoredCount += smallerBatch.length;
                 }
               } catch (retryErr) {
                 console.error(`Exception with smaller batch in ${table}:`, retryErr);
@@ -206,7 +164,6 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
         }
       }
       
-      console.log(`تم استعادة ${successfullyRestoredCount} من أصل ${tableData.length} سجل في جدول ${table}`);
       tablesRestored.push(table);
     } else {
       console.log(`Skipping table ${table}: no data in backup`);
@@ -214,25 +171,23 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
   }
   
   // بعد الانتهاء من استعادة البيانات، نقوم بإعادة حساب أرصدة العملاء إذا لزم الأمر
-  if (tablesRestored.includes('parties')) {
+  if (tablesRestored.includes('parties') && tablesRestored.includes('party_balances')) {
     console.log('Verifying party balances...');
     try {
       // التحقق من تطابق عدد سجلات العملاء مع سجلات الأرصدة
       const { data: parties, error: partiesError } = await supabaseAdmin
         .from('parties')
-        .select('id, name, opening_balance, balance_type');
+        .select('id');
         
       const { data: balances, error: balancesError } = await supabaseAdmin
         .from('party_balances')
-        .select('party_id, balance');
+        .select('party_id');
         
       if (partiesError) {
         console.error('Error fetching parties:', partiesError);
       } else if (balancesError) {
         console.error('Error fetching party balances:', balancesError);
       } else if (parties && balances) {
-        console.log(`عدد الأطراف بعد الاستعادة: ${parties.length}, عدد الأرصدة: ${balances.length}`);
-        
         const partyIds = new Set(parties.map(p => p.id));
         const balancePartyIds = new Set(balances.map(b => b.party_id));
         
@@ -243,11 +198,13 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
           
           for (const partyId of missingBalances) {
             // الحصول على بيانات الطرف
-            const party = parties.find(p => p.id === partyId);
+            const { data: party } = await supabaseAdmin
+              .from('parties')
+              .select('*')
+              .eq('id', partyId)
+              .single();
               
             if (party) {
-              console.log(`Creating balance for party ${party.name} (${party.id})`);
-              
               // إنشاء رصيد مبدئي بناءً على نوع الرصيد والرصيد الافتتاحي
               const initialBalance = party.balance_type === 'credit' 
                 ? -parseFloat(party.opening_balance || 0) 
@@ -263,24 +220,8 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
                 
               if (createBalanceError) {
                 console.error(`Error creating balance for party ${partyId}:`, createBalanceError);
-              } else {
-                console.log(`Successfully created balance for party ${party.name}: ${initialBalance}`);
               }
             }
-          }
-        }
-        
-        // التحقق من أرصدة العملاء بعد الاستعادة
-        const { data: verifiedBalances, error: verificationError } = await supabaseAdmin
-          .from('party_balances')
-          .select('count(*)');
-          
-        if (verificationError) {
-          console.error('Error verifying balances:', verificationError);
-        } else {
-          console.log(`Verified balances after restoration: ${verifiedBalances[0].count}`);
-          if (verifiedBalances[0].count < parties.length) {
-            console.error(`WARNING: Still missing balances for some parties. Found ${verifiedBalances[0].count} balances for ${parties.length} parties`);
           }
         }
       }
