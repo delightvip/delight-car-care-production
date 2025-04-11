@@ -38,6 +38,13 @@ export const useBackupRestore = () => {
           };
         }
         
+        // التحقق من وجود بنود الفواتير
+        if (!jsonData['invoice_items'] || jsonData['invoice_items'].length === 0) {
+          console.warn("تحذير: لا توجد بنود فواتير في النسخة الاحتياطية");
+        } else {
+          console.log(`تم العثور على ${jsonData['invoice_items'].length} بند فاتورة في النسخة الاحتياطية`);
+        }
+        
         if (jsonData['parties'] && jsonData['party_balances']) {
           const partyIds = new Set(jsonData['parties'].map((p: any) => p.id));
           const balancePartyIds = new Set(jsonData['party_balances'].map((b: any) => b.party_id));
@@ -62,6 +69,25 @@ export const useBackupRestore = () => {
           
           if (duplicateBalances.length > 0) {
             console.warn(`تحذير: هناك ${duplicateBalances.length} أرصدة مكررة في النسخة الاحتياطية. سيتم معالجتها أثناء الاستعادة.`);
+          }
+        }
+        
+        // التحقق من الفواتير وبنودها
+        if (jsonData['invoices'] && jsonData['invoice_items']) {
+          const invoiceIds = new Set(jsonData['invoices'].map((inv: any) => inv.id));
+          const invoiceItemInvoiceIds = new Set(jsonData['invoice_items'].map((item: any) => item.invoice_id));
+          
+          const itemsWithoutInvoice = [...invoiceItemInvoiceIds].filter(id => !invoiceIds.has(id));
+          const invoicesWithoutItems = [...invoiceIds].filter(id => 
+            !jsonData['invoice_items'].some((item: any) => item.invoice_id === id)
+          );
+          
+          if (itemsWithoutInvoice.length > 0) {
+            console.warn(`تحذير: هناك ${itemsWithoutInvoice.length} بند فاتورة بدون فاتورة مرتبطة`);
+          }
+          
+          if (invoicesWithoutItems.length > 0) {
+            console.warn(`تحذير: هناك ${invoicesWithoutItems.length} فاتورة بدون بنود`);
           }
         }
         
@@ -203,26 +229,40 @@ export const useBackupRestore = () => {
       }
     }
     
-    // إذا كان جدول invoice_items موجودًا، نتأكد من حقل total
+    // معالجة خاصة لجدول invoice_items
     if (jsonData['invoice_items'] && jsonData['invoice_items'].length > 0) {
       console.log(`معالجة عناصر الفواتير (${jsonData['invoice_items'].length} عنصر)...`);
       
-      // إزالة حقل total من عناصر الفواتير
+      // إحصاء الفواتير المرتبطة ببنود الفواتير
+      const invoiceIdSet = new Set();
       jsonData['invoice_items'].forEach((item: any) => {
-        // احتفظ بحقل total كمرجع
-        const oldTotal = item.total;
-        
-        // احسب total الصحيح
-        const calculatedTotal = parseFloat(item.quantity) * parseFloat(item.unit_price);
-        
-        // تحديث total
-        item.total = calculatedTotal;
-        
-        // سجل التغييرات إذا كانت كبيرة
-        if (oldTotal && Math.abs(parseFloat(oldTotal) - calculatedTotal) > 0.01) {
-          console.log(`تم تصحيح قيمة total من ${oldTotal} إلى ${calculatedTotal} للعنصر ${item.id}`);
+        if (item.invoice_id) {
+          invoiceIdSet.add(item.invoice_id);
         }
       });
+      console.log(`عدد الفواتير المختلفة في جدول invoice_items: ${invoiceIdSet.size}`);
+      
+      // إعادة حساب حقل total لجميع بنود الفواتير
+      jsonData['invoice_items'] = jsonData['invoice_items'].map((item: any) => {
+        // تحويل القيم إلى أرقام
+        const quantity = parseFloat(item.quantity || 0);
+        const unitPrice = parseFloat(item.unit_price || 0);
+        
+        // حساب المجموع الصحيح
+        const calculatedTotal = quantity * unitPrice;
+        
+        // إنشاء نسخة معدلة من العنصر
+        return {
+          ...item,
+          quantity: quantity,
+          unit_price: unitPrice,
+          total: calculatedTotal
+        };
+      });
+      
+      console.log(`تم إعادة حساب حقل total لجميع بنود الفواتير (${jsonData['invoice_items'].length} بند)`);
+    } else {
+      console.warn("لا توجد بنود فواتير في النسخة الاحتياطية!");
     }
     
     // إذا كان جدول ledger موجودًا، نتأكد من حقل balance_after
@@ -261,6 +301,43 @@ export const useBackupRestore = () => {
         // تحديث balance_after
         entry.balance_after = partyBalances[entry.party_id];
       });
+    }
+    
+    // التحقق من الفواتير وحسابها
+    if (jsonData['invoices'] && jsonData['invoices'].length > 0) {
+      const invoicesWithoutTotal = jsonData['invoices'].filter((inv: any) => 
+        inv.total_amount === null || inv.total_amount === undefined
+      );
+      
+      if (invoicesWithoutTotal.length > 0) {
+        console.log(`هناك ${invoicesWithoutTotal.length} فاتورة بدون قيمة إجمالية`);
+      }
+      
+      // إعادة حساب مجاميع الفواتير
+      if (jsonData['invoice_items'] && jsonData['invoice_items'].length > 0) {
+        // حساب مجموع كل فاتورة بناءً على بنودها
+        const invoiceTotals: Record<string, number> = {};
+        
+        jsonData['invoice_items'].forEach((item: any) => {
+          if (item.invoice_id) {
+            const itemTotal = parseFloat(item.quantity || 0) * parseFloat(item.unit_price || 0);
+            invoiceTotals[item.invoice_id] = (invoiceTotals[item.invoice_id] || 0) + itemTotal;
+          }
+        });
+        
+        // تحديث مجاميع الفواتير
+        jsonData['invoices'] = jsonData['invoices'].map((invoice: any) => {
+          if (invoiceTotals[invoice.id]) {
+            return {
+              ...invoice,
+              total_amount: invoiceTotals[invoice.id]
+            };
+          }
+          return invoice;
+        });
+        
+        console.log(`تم تحديث مجاميع ${Object.keys(invoiceTotals).length} فاتورة`);
+      }
     }
     
     return jsonData;
@@ -359,6 +436,8 @@ export const useBackupRestore = () => {
               
             if (itemsCheckError) {
               console.error("Error checking invoice items:", itemsCheckError);
+            } else if (invoiceItemsCount === 0) {
+              console.warn("تحذير: لم يتم استعادة أي بنود فواتير!");
             }
           } catch (verificationError) {
             console.error("Error during verification:", verificationError);

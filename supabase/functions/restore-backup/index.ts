@@ -82,6 +82,26 @@ serve(async (req) => {
       }
     }
     
+    // طباعة معلومات عن invoice_items
+    if (backupData['invoice_items']) {
+      console.log(`توجد بنود فواتير في النسخة الاحتياطية: ${backupData['invoice_items'].length} بند`);
+      
+      // إحصاء عدد الفواتير الفريدة
+      const uniqueInvoiceIds = new Set(backupData['invoice_items'].map((item: any) => item.invoice_id));
+      console.log(`عدد الفواتير الفريدة في بنود الفواتير: ${uniqueInvoiceIds.size}`);
+      
+      // التحقق من وجود قيم فارغة أو خاطئة
+      const itemsWithoutTotal = backupData['invoice_items'].filter((item: any) => !item.total);
+      const itemsWithZeroQuantity = backupData['invoice_items'].filter((item: any) => !item.quantity || parseFloat(item.quantity) === 0);
+      const itemsWithZeroPrice = backupData['invoice_items'].filter((item: any) => !item.unit_price || parseFloat(item.unit_price) === 0);
+      
+      console.log(`بنود بدون مجموع: ${itemsWithoutTotal.length}`);
+      console.log(`بنود بكمية صفر: ${itemsWithZeroQuantity.length}`);
+      console.log(`بنود بسعر صفر: ${itemsWithZeroPrice.length}`);
+    } else {
+      console.log('لا توجد بنود فواتير في النسخة الاحتياطية');
+    }
+    
     // Step 1: Disable foreign key constraints
     console.log('Temporarily disabling foreign key constraints...');
     await disableForeignKeyConstraints(supabaseAdmin);

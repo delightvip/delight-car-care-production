@@ -89,6 +89,33 @@ function prepareTableDataForRestore(table: string, data: any[]) {
     preparedData = cleanUuids(preparedData, uuidFields);
   }
   
+  // معالجة خاصة لجدول invoice_items لتصحيح مشكلة استعادة أصناف الفواتير
+  if (table === 'invoice_items') {
+    console.log(`Special handling for invoice_items table (${preparedData.length} records)`);
+    
+    // تأكد من حساب حقل total بشكل صحيح وإزالة أي قيم null
+    preparedData = preparedData.map(item => {
+      // تحويل القيم إلى أرقام للتأكد من إجراء الحسابات بشكل صحيح
+      const quantity = parseFloat(item.quantity) || 0;
+      const unitPrice = parseFloat(item.unit_price) || 0;
+      
+      // حساب المجموع كحاصل ضرب الكمية في سعر الوحدة
+      const calculatedTotal = quantity * unitPrice;
+      
+      // إرجاع العنصر مع الحقول المحدثة
+      return {
+        ...item,
+        quantity: quantity,
+        unit_price: unitPrice,
+        // إزالة حقل total تمامًا ليتم حسابه من قبل قاعدة البيانات
+        // أو إعادة تعيينه إلى القيمة المحسوبة
+        total: calculatedTotal
+      };
+    });
+    
+    console.log(`Processed ${preparedData.length} invoice_items with calculated totals`);
+  }
+  
   return preparedData;
 }
 
@@ -97,9 +124,37 @@ async function processBatchWithRetry(supabaseAdmin: any, table: string, batch: a
   console.log(`Inserting batch ${batchIndex + 1} of ${totalBatches} for ${table}`);
   
   try {
+    // معالجة خاصة لجدول invoice_items لتجنب مشكلات الإدراج
+    let processedBatch = batch;
+    
+    if (table === 'invoice_items') {
+      // معالجة خاصة لجدول invoice_items
+      processedBatch = batch.map(item => {
+        // تحويل القيم إلى أرقام
+        const quantity = parseFloat(item.quantity) || 0;
+        const unitPrice = parseFloat(item.unit_price) || 0;
+        
+        // إعداد كائن العنصر مع الحقول المطلوبة فقط
+        const processedItem: any = {
+          id: item.id,
+          invoice_id: item.invoice_id,
+          item_id: item.item_id,
+          item_type: item.item_type,
+          item_name: item.item_name,
+          quantity: quantity,
+          unit_price: unitPrice
+          // نحذف حقل total ليتم حسابه تلقائيًا بواسطة trigger في قاعدة البيانات
+        };
+        
+        return processedItem;
+      });
+      
+      console.log(`Processed ${processedBatch.length} invoice_items (removing total field)`);
+    }
+    
     const { error } = await supabaseAdmin
       .from(table)
-      .upsert(batch, { onConflict: 'id', ignoreDuplicates: false });
+      .upsert(processedBatch, { onConflict: 'id', ignoreDuplicates: false });
       
     if (error) {
       console.error(`Error restoring batch for ${table}:`, error);
@@ -108,16 +163,24 @@ async function processBatchWithRetry(supabaseAdmin: any, table: string, batch: a
       console.log(`Attempting individual inserts for ${table}`);
       let successCount = 0;
       
-      for (const record of batch) {
+      for (const record of processedBatch) {
         try {
+          // لجدول invoice_items، نتأكد من إزالة حقل total قبل الإدراج
+          const recordToInsert = table === 'invoice_items' 
+            ? { ...record, total: undefined } // إزالة حقل total
+            : record;
+            
           const { error: indError } = await supabaseAdmin
             .from(table)
-            .upsert([record], { onConflict: 'id' });
+            .upsert([recordToInsert], { onConflict: 'id' });
             
           if (!indError) {
             successCount++;
+          } else {
+            console.error(`Error inserting individual record for ${table}:`, indError, record);
           }
         } catch (e) {
+          console.error(`Exception inserting individual record for ${table}:`, e);
           // استمرار المحاولة مع السجل التالي
         }
       }
@@ -191,6 +254,16 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
 
   console.log("ترتيب الاستعادة المخصص:", customRestoreOrder);
   
+  // طباعة معلومات عن بنود الفواتير قبل الاستعادة
+  if (backupData['invoice_items']) {
+    console.log(`عدد بنود الفواتير في النسخة الاحتياطية: ${backupData['invoice_items'].length}`);
+    if (backupData['invoice_items'].length > 0) {
+      console.log(`نموذج لبند فاتورة في النسخة الاحتياطية:`, backupData['invoice_items'][0]);
+    }
+  } else {
+    console.log(`لا توجد بنود فواتير في النسخة الاحتياطية`);
+  }
+  
   for (const table of customRestoreOrder) {
     if (backupData[table] && backupData[table].length > 0) {
       console.log(`Restoring table ${table} (${backupData[table].length} records)`);
@@ -242,6 +315,13 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
   const balanceErrors = await recalculatePartyBalances(supabaseAdmin);
   if (balanceErrors.length > 0) {
     errors.push(...balanceErrors);
+  }
+  
+  // إعادة حساب مجاميع الفواتير بعد استعادة جميع البيانات
+  console.log("بدء إعادة حساب مجاميع الفواتير...");
+  const invoiceTotalErrors = await recalculateInvoiceTotals(supabaseAdmin);
+  if (invoiceTotalErrors.length > 0) {
+    errors.push(...invoiceTotalErrors);
   }
   
   return errors;
@@ -464,30 +544,38 @@ export async function recalculateInvoiceTotals(supabaseAdmin: any): Promise<any[
           continue;
         }
         
+        console.log(`تم العثور على ${items?.length || 0} بند للفاتورة ${invoice.id}`);
+        
         // حساب مجموع الفاتورة
         let totalAmount = 0;
         
-        for (const item of items) {
-          // تحديث حقل total لكل بند إذا كان فارغاً
-          const calculatedItemTotal = parseFloat(item.quantity) * parseFloat(item.unit_price);
-          
-          if (!item.total || parseFloat(item.total) !== calculatedItemTotal) {
-            const { error: updateItemError } = await supabaseAdmin
-              .from('invoice_items')
-              .update({ total: calculatedItemTotal })
-              .eq('invoice_id', invoice.id)
-              .eq('quantity', item.quantity)
-              .eq('unit_price', item.unit_price);
-              
-            if (updateItemError) {
-              console.error(`خطأ في تحديث حقل total لبند الفاتورة:`, updateItemError);
+        if (items && items.length > 0) {
+          for (const item of items) {
+            // تحديث حقل total لكل بند إذا كان فارغاً أو null
+            const calculatedItemTotal = parseFloat(item.quantity) * parseFloat(item.unit_price);
+            
+            if (!item.total || parseFloat(item.total) !== calculatedItemTotal) {
+              console.log(`تحديث حقل total للبند من ${item.total} إلى ${calculatedItemTotal}`);
+              const { error: updateItemError } = await supabaseAdmin
+                .from('invoice_items')
+                .update({ total: calculatedItemTotal })
+                .eq('invoice_id', invoice.id)
+                .eq('quantity', item.quantity)
+                .eq('unit_price', item.unit_price);
+                
+              if (updateItemError) {
+                console.error(`خطأ في تحديث حقل total لبند الفاتورة:`, updateItemError);
+              }
             }
+            
+            totalAmount += calculatedItemTotal;
           }
-          
-          totalAmount += calculatedItemTotal;
+        } else {
+          console.warn(`لا توجد بنود للفاتورة ${invoice.id}!`);
         }
         
         // تحديث مجموع الفاتورة
+        console.log(`تحديث مجموع الفاتورة ${invoice.id} إلى ${totalAmount}`);
         const { error: updateInvoiceError } = await supabaseAdmin
           .from('invoices')
           .update({ total_amount: totalAmount })
