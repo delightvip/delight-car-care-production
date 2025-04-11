@@ -19,6 +19,7 @@ const RestoreSection = () => {
   const [backupMetadata, setBackupMetadata] = useState<BackupMetadata | null>(null);
   const [restoreErrors, setRestoreErrors] = useState<any[]>([]);
   const [progress, setProgress] = useState(0);
+  const [restoreStage, setRestoreStage] = useState<string>('');
   
   const { validateFile, restoreBackup, isValidating } = useBackupRestore();
 
@@ -26,6 +27,7 @@ const RestoreSection = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setProgress(10);
+      setRestoreStage('validating');
       toast.info("جاري التحقق من صحة ملف النسخة الاحتياطية...");
       
       const { valid, metadata, error } = await validateFile(file);
@@ -34,6 +36,7 @@ const RestoreSection = () => {
         toast.error(error || "ملف النسخة الاحتياطية غير صالح");
         e.target.value = '';
         setProgress(0);
+        setRestoreStage('');
         return;
       }
       
@@ -41,6 +44,7 @@ const RestoreSection = () => {
       setBackupMetadata(metadata);
       setRestoreErrors([]);
       setProgress(0);
+      setRestoreStage('');
       
       // عرض معلومات إضافية عن الملف
       toast.success("تم التحقق من صحة النسخة الاحتياطية بنجاح");
@@ -65,11 +69,13 @@ const RestoreSection = () => {
     setIsRestoring(true);
     setRestoreErrors([]);
     setProgress(10);
+    setRestoreStage('preparing');
     
     try {
       toast.info("جاري استعادة النسخة الاحتياطية، قد يستغرق هذا بعض الوقت...");
       
       setProgress(20);
+      setRestoreStage('processing');
       
       // إظهار حجم الملف المراد استعادته
       const fileSizeInMB = (backupFile.size / (1024 * 1024)).toFixed(2);
@@ -80,18 +86,29 @@ const RestoreSection = () => {
       // تحسين: تقسيم الملفات الكبيرة واستخدام محاولات إعادة الاتصال المضمنة
       const { success, errors } = await restoreBackup(backupFile);
       
-      setProgress(70);
+      setProgress(65);
       
       if (success) {
+        setRestoreStage('balances');
+        setProgress(75);
+        toast.info("جاري إعادة حساب أرصدة الأطراف التجارية...");
+        
+        // نضيف تأخير قصير لتعكس واجهة المستخدم مرحلة إعادة حساب الأرصدة
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        setProgress(85);
+        setRestoreStage('verifying');
+        
         if (errors && errors.length > 0) {
-          setProgress(90);
+          setProgress(95);
           toast.warning(`تمت استعادة النسخة الاحتياطية مع وجود بعض الأخطاء (${errors.length})`);
           setRestoreErrors(errors);
           
           console.warn("Restoration completed with errors:", errors);
         } else {
           setProgress(100);
-          toast.success("تمت استعادة النسخة الاحتياطية بنجاح");
+          setRestoreStage('completed');
+          toast.success("تمت استعادة النسخة الاحتياطية وإعادة حساب الأرصدة بنجاح");
           
           // بيانات إضافية عن الاستعادة
           const metadata = backupMetadata || {};
@@ -104,6 +121,7 @@ const RestoreSection = () => {
         }
       } else {
         setProgress(0);
+        setRestoreStage('');
         toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
         if (errors) {
           setRestoreErrors(errors);
@@ -114,6 +132,7 @@ const RestoreSection = () => {
       console.error("Backup restoration error:", error);
       toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
       setProgress(0);
+      setRestoreStage('');
     } finally {
       setIsRestoring(false);
     }
@@ -124,10 +143,33 @@ const RestoreSection = () => {
     setBackupMetadata(null);
     setRestoreErrors([]);
     setProgress(0);
+    setRestoreStage('');
     // Reset the file input
     const fileInput = document.getElementById('backupFile') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
+    }
+  };
+
+  const getProgressMessage = () => {
+    switch (restoreStage) {
+      case 'validating':
+        return 'جاري تحليل النسخة الاحتياطية...';
+      case 'preparing':
+        return 'جاري الإعداد لاستعادة البيانات...';
+      case 'processing':
+        return 'جاري استعادة البيانات...';
+      case 'balances':
+        return 'جاري إعادة حساب أرصدة الأطراف التجارية...';
+      case 'verifying':
+        return 'جاري التحقق من اكتمال الاستعادة...';
+      case 'completed':
+        return 'اكتملت الاستعادة، جاري الإعداد...';
+      default:
+        return progress < 30 ? 'جاري تحليل النسخة الاحتياطية...' : 
+               progress < 70 ? 'جاري استعادة البيانات...' : 
+               progress < 90 ? 'جاري التحقق من اكتمال الاستعادة...' :
+               'اكتملت الاستعادة، جاري الإعداد...';
     }
   };
 
@@ -168,10 +210,7 @@ const RestoreSection = () => {
           <div className="space-y-2">
             <Progress value={progress} className="h-2" />
             <p className="text-sm text-muted-foreground text-center">
-              {progress < 30 ? 'جاري تحليل النسخة الاحتياطية...' : 
-               progress < 70 ? 'جاري استعادة البيانات...' : 
-               progress < 90 ? 'جاري التحقق من اكتمال الاستعادة...' :
-               'اكتملت الاستعادة، جاري الإعداد...'}
+              {getProgressMessage()}
             </p>
           </div>
         )}

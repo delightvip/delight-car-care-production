@@ -71,6 +71,29 @@ serve(async (req) => {
         
         console.log(`Added ${partiesWithoutBalances.length} missing balance records`);
       }
+      
+      // تحسين: التأكد من عدم وجود أرصدة مكررة للطرف الواحد
+      const partyBalancesMap = new Map();
+      const duplicateBalances = [];
+      
+      // تحديد الأرصدة المكررة
+      backupData['party_balances'].forEach((balance: any) => {
+        if (partyBalancesMap.has(balance.party_id)) {
+          duplicateBalances.push(balance);
+        } else {
+          partyBalancesMap.set(balance.party_id, balance);
+        }
+      });
+      
+      if (duplicateBalances.length > 0) {
+        console.log(`Found ${duplicateBalances.length} duplicate party balances. Removing duplicates...`);
+        
+        // إزالة الأرصدة المكررة والاحتفاظ بالرصيد الأول فقط
+        backupData['party_balances'] = Array.from(partyBalancesMap.values());
+        
+        console.log(`Removed ${duplicateBalances.length} duplicate balances. New count: ${backupData['party_balances'].length}`);
+        backupData.__metadata.duplicateBalancesRemoved = duplicateBalances.length;
+      }
     }
     
     console.log('Backup creation completed:', {

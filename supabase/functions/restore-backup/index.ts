@@ -12,6 +12,174 @@ import {
   resetSequencesForTables 
 } from './services/restoreService.ts';
 
+// خدمة جديدة لحساب وتحديث أرصدة الأطراف
+async function recalculatePartyBalances(supabaseAdmin: any): Promise<any[]> {
+  const errors = [];
+  
+  try {
+    console.log('بدء إعادة حساب أرصدة الأطراف...');
+    
+    // الحصول على جميع الأطراف
+    const { data: parties, error: partiesError } = await supabaseAdmin
+      .from('parties')
+      .select('id, name, opening_balance, balance_type');
+      
+    if (partiesError) {
+      console.error('خطأ في جلب الأطراف:', partiesError);
+      return [{ table: 'parties', operation: 'select', error: partiesError.message }];
+    }
+    
+    console.log(`تم العثور على ${parties.length} طرف`);
+    
+    // لكل طرف، نحسب الرصيد الصحيح
+    for (const party of parties) {
+      try {
+        console.log(`إعادة حساب رصيد الطرف ${party.name} (${party.id})...`);
+        
+        // تحديد الرصيد الافتتاحي
+        let currentBalance = party.balance_type === 'credit' 
+          ? -parseFloat(party.opening_balance || 0) 
+          : parseFloat(party.opening_balance || 0);
+          
+        console.log(`الرصيد الافتتاحي: ${currentBalance}`);
+        
+        // جلب كل المعاملات من سجل الحساب للطرف بترتيب تاريخي
+        const { data: ledgerEntries, error: ledgerError } = await supabaseAdmin
+          .from('ledger')
+          .select('*')
+          .eq('party_id', party.id)
+          .order('date', { ascending: true });
+          
+        if (ledgerError) {
+          console.error(`خطأ في جلب سجل حساب الطرف ${party.id}:`, ledgerError);
+          errors.push({ 
+            table: 'ledger', 
+            operation: 'select', 
+            party_id: party.id, 
+            error: ledgerError.message 
+          });
+          continue;
+        }
+        
+        if (ledgerEntries.length === 0) {
+          console.log(`لا توجد معاملات للطرف ${party.name} - سيتم استخدام الرصيد الافتتاحي فقط`);
+        } else {
+          console.log(`تم العثور على ${ledgerEntries.length} معاملة للطرف ${party.name}`);
+          
+          // إعادة حساب الرصيد المتوقع كما لو كنا نعيد تشغيل جميع المعاملات
+          for (const entry of ledgerEntries) {
+            const debit = parseFloat(entry.debit || 0);
+            const credit = parseFloat(entry.credit || 0);
+            
+            currentBalance += debit - credit;
+          }
+          
+          console.log(`الرصيد المحسوب: ${currentBalance}`);
+        }
+        
+        // تحديث رصيد الطرف في جدول الأرصدة
+        // أولاً، نتحقق من وجود سجل للرصيد
+        const { data: existingBalance, error: balanceCheckError } = await supabaseAdmin
+          .from('party_balances')
+          .select('*')
+          .eq('party_id', party.id);
+          
+        if (balanceCheckError) {
+          console.error(`خطأ في التحقق من رصيد الطرف ${party.id}:`, balanceCheckError);
+          errors.push({ 
+            table: 'party_balances', 
+            operation: 'select', 
+            party_id: party.id, 
+            error: balanceCheckError.message 
+          });
+          continue;
+        }
+        
+        if (existingBalance && existingBalance.length > 0) {
+          // إذا كان هناك أكثر من سجل، نحذف السجلات الزائدة
+          if (existingBalance.length > 1) {
+            console.warn(`تم العثور على ${existingBalance.length} سجل رصيد للطرف ${party.name} - سيتم حذف السجلات الزائدة`);
+            
+            // الاحتفاظ بالسجل الأول وحذف الباقي
+            for (let i = 1; i < existingBalance.length; i++) {
+              const { error: deleteError } = await supabaseAdmin
+                .from('party_balances')
+                .delete()
+                .eq('id', existingBalance[i].id);
+                
+              if (deleteError) {
+                console.error(`خطأ في حذف سجل الرصيد الزائد ${existingBalance[i].id}:`, deleteError);
+                errors.push({ 
+                  table: 'party_balances', 
+                  operation: 'delete', 
+                  party_id: party.id, 
+                  error: deleteError.message 
+                });
+              }
+            }
+          }
+          
+          // تحديث السجل الموجود
+          const { error: updateError } = await supabaseAdmin
+            .from('party_balances')
+            .update({ 
+              balance: currentBalance, 
+              last_updated: new Date().toISOString() 
+            })
+            .eq('id', existingBalance[0].id);
+            
+          if (updateError) {
+            console.error(`خطأ في تحديث رصيد الطرف ${party.id}:`, updateError);
+            errors.push({ 
+              table: 'party_balances', 
+              operation: 'update', 
+              party_id: party.id, 
+              error: updateError.message 
+            });
+          } else {
+            console.log(`تم تحديث رصيد الطرف ${party.name} بنجاح إلى ${currentBalance}`);
+          }
+        } else {
+          // إنشاء سجل جديد للرصيد
+          const { error: insertError } = await supabaseAdmin
+            .from('party_balances')
+            .insert([{ 
+              party_id: party.id, 
+              balance: currentBalance, 
+              last_updated: new Date().toISOString() 
+            }]);
+            
+          if (insertError) {
+            console.error(`خطأ في إنشاء رصيد للطرف ${party.id}:`, insertError);
+            errors.push({ 
+              table: 'party_balances', 
+              operation: 'insert', 
+              party_id: party.id, 
+              error: insertError.message 
+            });
+          } else {
+            console.log(`تم إنشاء رصيد للطرف ${party.name} بنجاح بقيمة ${currentBalance}`);
+          }
+        }
+      } catch (partyError) {
+        console.error(`خطأ في معالجة الطرف ${party.id}:`, partyError);
+        errors.push({ 
+          table: 'parties', 
+          operation: 'process', 
+          party_id: party.id, 
+          error: partyError.message 
+        });
+      }
+    }
+    
+    console.log(`اكتملت إعادة حساب أرصدة الأطراف. عدد الأخطاء: ${errors.length}`);
+    return errors;
+  } catch (error) {
+    console.error('خطأ أثناء إعادة حساب أرصدة الأطراف:', error);
+    return [{ table: 'party_balances', operation: 'recalculate', error: error.message }];
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -88,74 +256,17 @@ serve(async (req) => {
     // Step 4: Restore the backup data
     console.log('Restoring backup data...');
     const restoreErrors = await restoreBackupData(supabaseAdmin, backupData);
-    
+
     // Step 5: Re-enable foreign key constraints
     console.log('Re-enabling foreign key constraints...');
     await enableForeignKeyConstraints(supabaseAdmin);
 
-    // Combine all errors
-    const allErrors = [...clearErrors, ...sequenceErrors, ...restoreErrors];
+    // Step 6: Recalculate party balances (خطوة جديدة)
+    console.log('إعادة حساب أرصدة الأطراف بعد الاستعادة...');
+    const balanceErrors = await recalculatePartyBalances(supabaseAdmin);
 
-    // إضافة خطوة إضافية للتحقق من أرصدة العملاء وإعادة ضبطها إذا لزم الأمر
-    try {
-      console.log('Verifying party balances after restoration...');
-      
-      // التحقق من وجود جميع أرصدة العملاء
-      const { data: parties, error: partiesError } = await supabaseAdmin
-        .from('parties')
-        .select('id, name, opening_balance, balance_type');
-        
-      if (partiesError) {
-        console.error('Error fetching parties after restoration:', partiesError);
-      } else {
-        console.log(`Found ${parties.length} parties after restoration`);
-        
-        const { data: balances, error: balancesError } = await supabaseAdmin
-          .from('party_balances')
-          .select('party_id, balance');
-          
-        if (balancesError) {
-          console.error('Error fetching party balances after restoration:', balancesError);
-        } else {
-          console.log(`Found ${balances.length} party balances after restoration`);
-          
-          const partyIds = new Set(parties.map(p => p.id));
-          const balancePartyIds = new Set(balances.map(b => b.party_id));
-          
-          const missingBalances = Array.from(partyIds).filter(id => !balancePartyIds.has(id));
-          if (missingBalances.length > 0) {
-            console.log(`Creating ${missingBalances.length} missing party balances`);
-            
-            for (const partyId of missingBalances) {
-              const party = parties.find(p => p.id === partyId);
-              if (party) {
-                const initialBalance = party.balance_type === 'credit' 
-                  ? -parseFloat(party.opening_balance || 0) 
-                  : parseFloat(party.opening_balance || 0);
-                  
-                console.log(`Creating balance for party ${party.name}: ${initialBalance}`);
-                
-                const { error: createError } = await supabaseAdmin
-                  .from('party_balances')
-                  .upsert([{
-                    party_id: partyId,
-                    balance: initialBalance,
-                    last_updated: new Date().toISOString()
-                  }]);
-                  
-                if (createError) {
-                  console.error(`Error creating balance for party ${partyId}:`, createError);
-                } else {
-                  console.log(`Successfully created balance for party ${party.name}`);
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (balanceVerificationError) {
-      console.error('Error verifying party balances after restoration:', balanceVerificationError);
-    }
+    // Combine all errors
+    const allErrors = [...clearErrors, ...sequenceErrors, ...restoreErrors, ...balanceErrors];
 
     // Check financial balance
     try {
@@ -182,29 +293,6 @@ serve(async (req) => {
       }
     } catch (fbVerificationError) {
       console.error('Error verifying financial balance:', fbVerificationError);
-    }
-    
-    // التأكد من وجود سجل الأرصدة المالية
-    try {
-      const { data: financialBalance, error: fbError } = await supabaseAdmin
-        .from('financial_balance')
-        .select('*')
-        .eq('id', '1')
-        .maybeSingle();
-        
-      if (!financialBalance || fbError) {
-        console.log('Ensuring financial balance exists');
-        await supabaseAdmin
-          .from('financial_balance')
-          .upsert([{
-            id: '1',
-            cash_balance: backupData['financial_balance']?.[0]?.cash_balance || 0,
-            bank_balance: backupData['financial_balance']?.[0]?.bank_balance || 0,
-            last_updated: new Date().toISOString()
-          }], { onConflict: 'id' });
-      }
-    } catch (fbError) {
-      console.error('Error ensuring financial balance:', fbError);
     }
 
     // Include results in the response

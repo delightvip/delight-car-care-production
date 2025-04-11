@@ -46,6 +46,22 @@ export const useBackupRestore = () => {
           if (partiesWithoutBalances.length > 0) {
             console.warn(`تحذير: هناك ${partiesWithoutBalances.length} من الأطراف بدون أرصدة في النسخة الاحتياطية`);
           }
+          
+          // تحقق من وجود أرصدة مكررة
+          const partyBalancesMap = new Map();
+          const duplicateBalances = [];
+          
+          jsonData['party_balances'].forEach((balance: any) => {
+            if (partyBalancesMap.has(balance.party_id)) {
+              duplicateBalances.push(balance);
+            } else {
+              partyBalancesMap.set(balance.party_id, balance);
+            }
+          });
+          
+          if (duplicateBalances.length > 0) {
+            console.warn(`تحذير: هناك ${duplicateBalances.length} أرصدة مكررة في النسخة الاحتياطية. سيتم معالجتها أثناء الاستعادة.`);
+          }
         }
         
         if (jsonData['__metadata']) {
@@ -65,11 +81,11 @@ export const useBackupRestore = () => {
           };
         }
         
-        // Fix: Properly calculate and type the total records count
+        // Fix: Calculate total records count properly
         let totalRecords = 0;
-        Object.values(jsonData).forEach((table: any) => {
-          if (Array.isArray(table)) {
-            totalRecords += table.length;
+        Object.entries(jsonData).forEach(([key, table]) => {
+          if (key !== '__metadata' && Array.isArray(table)) {
+            totalRecords += (table as any[]).length;
           }
         });
             
@@ -104,12 +120,12 @@ export const useBackupRestore = () => {
   };
   
   // تحسين: إضافة آلية محاولة إعادة الاتصال
-  const callRestoreFunction = async (fileContent: string, retries = 2): Promise<any> => {
+  const callRestoreFunction = async (fileContent: string, retries = 3): Promise<any> => {
     try {
       const { data, error } = await supabase.functions.invoke("restore-backup", {
         body: { backup: fileContent },
         // تحسين: زيادة مهلة الاتصال لملفات كبيرة
-        headers: { "Supabase-Connection-Timeout": "60000" }
+        headers: { "Supabase-Connection-Timeout": "120000" } // زيادة مهلة الاتصال إلى دقيقتين
       });
       
       if (error) {
@@ -123,13 +139,68 @@ export const useBackupRestore = () => {
       
       if (retries > 0) {
         console.log(`Retrying restoration... (${retries} attempts left)`);
-        // تأخير قبل إعادة المحاولة
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // تأخير قبل إعادة المحاولة - كل مرة سنزيد فترة الانتظار
+        await new Promise(resolve => setTimeout(resolve, (4 - retries) * 3000));
         return callRestoreFunction(fileContent, retries - 1);
       }
       
       throw error;
     }
+  };
+  
+  const preprocessBackupData = (jsonData: any): any => {
+    console.log("Preprocessing backup data...");
+    
+    if (jsonData['parties'] && jsonData['party_balances']) {
+      const partyIds = new Set(jsonData['parties'].map((p: any) => p.id));
+      const balancePartyIds = new Set(jsonData['party_balances'].map((b: any) => b.party_id));
+      
+      // إضافة الأرصدة المفقودة
+      const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
+      
+      if (partiesWithoutBalances.length > 0) {
+        console.log(`تم العثور على ${partiesWithoutBalances.length} من الأطراف بدون أرصدة. جاري إنشاء الأرصدة المفقودة...`);
+        
+        for (const partyId of partiesWithoutBalances) {
+          const party = jsonData['parties'].find((p: any) => p.id === partyId);
+          if (party) {
+            const initialBalance = party.balance_type === 'credit' 
+              ? -parseFloat(party.opening_balance || 0) 
+              : parseFloat(party.opening_balance || 0);
+              
+            jsonData['party_balances'].push({
+              id: crypto.randomUUID(),
+              party_id: partyId,
+              balance: initialBalance,
+              last_updated: new Date().toISOString()
+            });
+          }
+        }
+        
+        console.log(`تمت إضافة ${partiesWithoutBalances.length} سجل رصيد للأطراف بدون أرصدة`);
+      }
+      
+      // إزالة الأرصدة المكررة
+      const partyBalancesMap = new Map();
+      let duplicateCount = 0;
+      
+      // الاحتفاظ بأول سجل لكل طرف فقط
+      jsonData['party_balances'].forEach((balance: any) => {
+        if (!partyBalancesMap.has(balance.party_id)) {
+          partyBalancesMap.set(balance.party_id, balance);
+        } else {
+          duplicateCount++;
+        }
+      });
+      
+      if (duplicateCount > 0) {
+        console.log(`تم العثور على ${duplicateCount} أرصدة مكررة. جاري إزالة التكرارات...`);
+        jsonData['party_balances'] = Array.from(partyBalancesMap.values());
+        console.log(`تمت إزالة الأرصدة المكررة. العدد الجديد: ${jsonData['party_balances'].length}`);
+      }
+    }
+    
+    return jsonData;
   };
   
   const restoreBackup = async (file: File): Promise<{
@@ -140,37 +211,15 @@ export const useBackupRestore = () => {
       let fileContent = await file.text();
       
       try {
+        // تحليل البيانات
         const jsonData = JSON.parse(fileContent);
         
-        if (jsonData['parties'] && jsonData['party_balances']) {
-          const partyIds = new Set(jsonData['parties'].map((p: any) => p.id));
-          const balancePartyIds = new Set(jsonData['party_balances'].map((b: any) => b.party_id));
-          
-          const partiesWithoutBalances = [...partyIds].filter(id => !balancePartyIds.has(id));
-          
-          if (partiesWithoutBalances.length > 0) {
-            console.log(`تم العثور على ${partiesWithoutBalances.length} من الأطراف بدون أرصدة. جاري إنشاء الأرصدة المفقودة...`);
-            
-            for (const partyId of partiesWithoutBalances) {
-              const party = jsonData['parties'].find((p: any) => p.id === partyId);
-              if (party) {
-                const initialBalance = party.balance_type === 'credit' 
-                  ? -parseFloat(party.opening_balance || 0) 
-                  : parseFloat(party.opening_balance || 0);
-                  
-                jsonData['party_balances'].push({
-                  id: crypto.randomUUID(),
-                  party_id: partyId,
-                  balance: initialBalance,
-                  last_updated: new Date().toISOString()
-                });
-              }
-            }
-            
-            fileContent = JSON.stringify(jsonData);
-            console.log(`تمت إضافة ${partiesWithoutBalances.length} سجل رصيد للأطراف بدون أرصدة`);
-          }
-        }
+        // معالجة البيانات قبل الاستعادة
+        const processedData = preprocessBackupData(jsonData);
+        
+        // تحويل البيانات المعالجة إلى نص
+        fileContent = JSON.stringify(processedData);
+        
       } catch (e) {
         return {
           success: false,
@@ -202,7 +251,9 @@ export const useBackupRestore = () => {
         
         if (data.success) {
           try {
-            console.log("Verifying party balances after restoration...");
+            console.log("Verifying restoration results...");
+            
+            // التحقق من أرصدة الأطراف
             const { data: partyBalancesCheck, error: balanceCheckError } = await supabase
               .from('party_balances')
               .select('count(*)')
@@ -214,6 +265,7 @@ export const useBackupRestore = () => {
               console.error("Error checking party balances:", balanceCheckError);
             }
             
+            // التحقق من الرصيد المالي
             const { data: financialBalance, error: financialError } = await supabase
               .from('financial_balance')
               .select('*')
