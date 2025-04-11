@@ -3,6 +3,104 @@
  * تكوين جداول قاعدة البيانات
  * يحدد ترتيب استعادة الجداول والحقول المفتاحية والإعدادات الخاصة بكل جدول
  */
+
+// قائمة الجداول التي سيتم مسحها قبل استعادة النسخة الاحتياطية
+export const tablesToClear = [
+  'party_balances',
+  'parties',
+  'financial_balance',
+  'financial_transactions',
+  'cash_operations',
+  'financial_categories',
+  'invoices',
+  'invoice_items',
+  'payments',
+  'returns',
+  'return_items',
+  'profits',
+  'ledger',
+  'raw_materials',
+  'semi_finished_products',
+  'packaging_materials',
+  'finished_products',
+  'semi_finished_ingredients',
+  'finished_product_packaging',
+  'production_orders',
+  'production_order_ingredients',
+  'packaging_orders',
+  'packaging_order_materials',
+  'inventory_movements'
+];
+
+// قائمة الجداول التي سيتم استعادتها من النسخة الاحتياطية
+export const tablesToRestore = [
+  'financial_categories',
+  'raw_materials',
+  'semi_finished_products',
+  'packaging_materials',
+  'finished_products',
+  'parties',
+  'party_balances',
+  'semi_finished_ingredients',
+  'finished_product_packaging',
+  'production_orders',
+  'production_order_ingredients',
+  'packaging_orders',
+  'packaging_order_materials',
+  'financial_balance',
+  'financial_transactions',
+  'cash_operations',
+  'invoices',
+  'invoice_items',
+  'payments',
+  'returns',
+  'return_items',
+  'profits',
+  'ledger',
+  'inventory_movements'
+];
+
+// الجداول التي تستخدم معرفات صحيحة كمفاتيح أساسية وتحتاج إلى إعادة تعيين تسلسل
+export const tablesWithIntegerPrimaryKeys = [
+  'raw_materials',
+  'semi_finished_products',
+  'packaging_materials',
+  'finished_products',
+  'semi_finished_ingredients',
+  'finished_product_packaging',
+  'production_orders',
+  'production_order_ingredients',
+  'packaging_orders',
+  'packaging_order_materials'
+];
+
+// الجداول التي تحتوي على حقول UUID وتحتاج إلى التحقق منها
+export const tablesWithUuids = [
+  'parties',
+  'party_balances',
+  'financial_transactions',
+  'invoices',
+  'invoice_items',
+  'payments',
+  'returns',
+  'return_items',
+  'profits',
+  'ledger',
+  'inventory_movements'
+];
+
+// الحقول المحسوبة التي يجب إزالتها قبل الإدراج
+export const tablesWithComputedFields = {
+  'invoices': ['total_amount'],
+  'payments': [],
+  'returns': [],
+  'ledger': ['balance_after']
+};
+
+/**
+ * تكوين الجداول
+ * يحدد الإعدادات والسلوك الخاص بكل جدول أثناء الاستعادة
+ */
 export const tableConfig = {
   /**
    * ترتيب الجداول للاستعادة

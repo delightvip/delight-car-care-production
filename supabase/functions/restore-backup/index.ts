@@ -181,9 +181,15 @@ async function recalculatePartyBalances(supabaseAdmin: any): Promise<any[]> {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // تحسين: إضافة معالجة CORS مناسبة
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Max-Age': '86400'
+      }
+    });
   }
 
   // Create a Supabase client with the Admin key
@@ -311,13 +317,27 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Access-Control-Expose-Headers': 'Content-Length, X-JSON'
+        }, 
+        status: 200 
+      }
     );
   } catch (error) {
     console.error('Backup restoration error:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Access-Control-Expose-Headers': 'Content-Length, X-JSON'
+        }, 
+        status: 500 
+      }
     );
   }
 });
