@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders } from './utils/corsHeaders.ts';
@@ -77,7 +78,7 @@ async function recalculatePartyBalances(supabaseAdmin: any): Promise<any[]> {
         }
         
         // تحديث رصيد الطرف في جدول الأرصدة
-        // أولاً، نتحقق من وجود سجل للرصيد
+        // أولاً، نتحقق من وجود سجل للرصيد - تعديل طريقة الاستعلام
         const { data: existingBalance, error: balanceCheckError } = await supabaseAdmin
           .from('party_balances')
           .select('*')

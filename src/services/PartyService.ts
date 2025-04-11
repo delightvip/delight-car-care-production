@@ -59,25 +59,35 @@ class PartyService {
       
       if (error) throw error;
       
-      return data.map(party => ({
-        id: party.id,
-        name: party.name,
-        type: party.type as 'customer' | 'supplier' | 'other',
-        phone: party.phone || '',
-        email: party.email || '',
-        address: party.address || '',
-        opening_balance: party.opening_balance || 0,
-        balance_type: party.balance_type as 'credit' | 'debit',
-        balance: party.party_balances[0]?.balance || 0,
-        created_at: party.created_at,
-        notes: party.notes || '',
-        code: party.code || ''
-      }));
+      return data.map(party => {
+        const balance = party.party_balances && party.party_balances.length > 0 
+          ? party.party_balances[0]?.balance 
+          : this.calculateDefaultBalance(party.opening_balance || 0, party.balance_type as 'credit' | 'debit');
+          
+        return {
+          id: party.id,
+          name: party.name,
+          type: party.type as 'customer' | 'supplier' | 'other',
+          phone: party.phone || '',
+          email: party.email || '',
+          address: party.address || '',
+          opening_balance: party.opening_balance || 0,
+          balance_type: party.balance_type as 'credit' | 'debit',
+          balance: balance || 0,
+          created_at: party.created_at,
+          notes: party.notes || '',
+          code: party.code || ''
+        };
+      });
     } catch (error) {
       console.error('Error fetching parties:', error);
       toast.error('حدث خطأ أثناء جلب الأطراف التجارية');
       return [];
     }
+  }
+  
+  private calculateDefaultBalance(openingBalance: number, balanceType: 'credit' | 'debit'): number {
+    return balanceType === 'credit' ? -openingBalance : openingBalance;
   }
   
   public async getPartyById(id: string): Promise<Party | null> {
@@ -89,9 +99,38 @@ class PartyService {
           party_balances(balance)
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
+      if (!data) return null;
+      
+      const balance = data.party_balances && data.party_balances.length > 0 
+        ? data.party_balances[0]?.balance 
+        : this.calculateDefaultBalance(data.opening_balance || 0, data.balance_type as 'credit' | 'debit');
+      
+      if (!data.party_balances || data.party_balances.length === 0) {
+        console.log(`لم يتم العثور على رصيد للطرف ${data.name}. جاري إنشاء سجل رصيد جديد...`);
+        
+        try {
+          const initialBalance = this.calculateDefaultBalance(data.opening_balance || 0, data.balance_type as 'credit' | 'debit');
+          
+          const { error: createBalanceError } = await this.supabase
+            .from('party_balances')
+            .insert({
+              party_id: id,
+              balance: initialBalance,
+              last_updated: new Date().toISOString()
+            });
+            
+          if (createBalanceError) {
+            console.error(`خطأ في إنشاء رصيد للطرف ${id}:`, createBalanceError);
+          } else {
+            console.log(`تم إنشاء رصيد للطرف ${data.name} بنجاح بقيمة ${initialBalance}`);
+          }
+        } catch (balanceError) {
+          console.error(`خطأ أثناء إنشاء رصيد للطرف ${id}:`, balanceError);
+        }
+      }
       
       return {
         id: data.id,
@@ -102,7 +141,7 @@ class PartyService {
         address: data.address || '',
         opening_balance: data.opening_balance || 0,
         balance_type: data.balance_type as 'credit' | 'debit',
-        balance: data.party_balances[0]?.balance || 0,
+        balance: balance || 0,
         created_at: data.created_at,
         notes: data.notes || '',
         code: data.code || ''
@@ -239,15 +278,36 @@ class PartyService {
         newBalance -= amount;
       }
       
-      const { error: balanceError } = await this.supabase
+      const { data: existingBalance, error: balanceCheckError } = await this.supabase
         .from('party_balances')
-        .update({ balance: newBalance, last_updated: new Date().toISOString() })
-        .eq('party_id', partyId);
+        .select('id')
+        .eq('party_id', partyId)
+        .maybeSingle();
       
-      if (balanceError) throw balanceError;
+      if (balanceCheckError) {
+        console.error(`خطأ في التحقق من رصيد الطرف ${partyId}:`, balanceCheckError);
+        throw balanceCheckError;
+      }
       
-      // تحديد وتصنيف أنواع المعاملات بشكل أكثر دقة
-      // قائمة محددة بأنواع المعاملات المتعلقة بالمرتجعات التي يجب استبعادها من لوحة التحكم المالية
+      if (existingBalance) {
+        const { error: balanceError } = await this.supabase
+          .from('party_balances')
+          .update({ balance: newBalance, last_updated: new Date().toISOString() })
+          .eq('id', existingBalance.id);
+        
+        if (balanceError) throw balanceError;
+      } else {
+        const { error: createBalanceError } = await this.supabase
+          .from('party_balances')
+          .insert({
+            party_id: partyId,
+            balance: newBalance,
+            last_updated: new Date().toISOString()
+          });
+          
+        if (createBalanceError) throw createBalanceError;
+      }
+      
       const returnRelatedTypes = [
         'sales_return',                // مرتجع مبيعات
         'purchase_return',             // مرتجع مشتريات
@@ -259,12 +319,9 @@ class PartyService {
         'purchase_return_cancellation' // إلغاء مرتجع مشتريات
       ];
       
-      // تحديد ما إذا كان نوع المعاملة متعلق بالمرتجعات
       const isReturnRelatedTransaction = returnRelatedTypes.includes(transactionType) ||
                                         transactionType.includes('return_cancellation');
-
-      // لا تقم بإنشاء معاملات مالية في لوحة التحكم المالية إذا كان النوع متعلق بالمرتجعات
-      // هنا ستتم إضافة السجل إلى دفتر الحسابات فقط، وليس إلى المعاملات المالية
+      
       const { error: ledgerError } = await this.supabase
         .from('ledger')
         .insert({
@@ -280,17 +337,12 @@ class PartyService {
       
       if (ledgerError) throw ledgerError;
       
-      // إنشاء معاملة مالية في لوحة التحكم المالية فقط إذا لم تكن معاملة متعلقة بالمرتجعات
       if (!isReturnRelatedTransaction && amount > 0) {
-        // تحديد نوع المعاملة المالية (إيراد أو مصروف)
-        // أي معاملة تزيد من رصيد العميل (isDebit=true) هي مصروف (لأننا نسدد للعملاء/الموردين)
-        // وأي معاملة تنقص من رصيد العميل (isDebit=false) هي إيراد (لأننا نستلم من العملاء/الموردين)
         const type = isDebit ? 'expense' : 'income';
         const category_id = type === 'income' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181';
         
         console.log(`إنشاء معاملة مالية للمعاملة ${transactionType}، نوع: ${type}، القيمة: ${amount}`);
         
-        // إنشاء المعاملة المالية في لوحة التحكم المالية
         const { error: financialError } = await this.supabase
           .from('financial_transactions')
           .insert({
@@ -461,15 +513,38 @@ class PartyService {
       
       const newBalance = currentParty.balance + balanceDifference;
       
-      const { error: balanceError } = await this.supabase
+      const { data: existingBalance, error: balanceCheckError } = await this.supabase
         .from('party_balances')
-        .update({ 
-          balance: newBalance,
-          last_updated: new Date().toISOString()
-        })
-        .eq('party_id', partyId);
+        .select('id')
+        .eq('party_id', partyId)
+        .maybeSingle();
       
-      if (balanceError) throw balanceError;
+      if (balanceCheckError) {
+        console.error(`خطأ في التحقق من رصيد الطرف ${partyId}:`, balanceCheckError);
+        throw balanceCheckError;
+      }
+      
+      if (existingBalance) {
+        const { error: balanceError } = await this.supabase
+          .from('party_balances')
+          .update({ 
+            balance: newBalance,
+            last_updated: new Date().toISOString()
+          })
+          .eq('id', existingBalance.id);
+        
+        if (balanceError) throw balanceError;
+      } else {
+        const { error: createBalanceError } = await this.supabase
+          .from('party_balances')
+          .insert({
+            party_id: partyId,
+            balance: newBalance,
+            last_updated: new Date().toISOString()
+          });
+          
+        if (createBalanceError) throw createBalanceError;
+      }
       
       const { error: ledgerError } = await this.supabase
         .from('ledger')
