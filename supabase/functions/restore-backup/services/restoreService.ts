@@ -4,7 +4,10 @@ import {
   tablesToRestore, 
   tablesWithComputedFields,
   tablesWithIntegerPrimaryKeys,
-  tablesWithUuids
+  tablesWithUuids,
+  priorityRestoreOrder,
+  tableRelationships,
+  tableConfig
 } from '../config/tableConfig.ts';
 import { cleanUuids, removeComputedFields } from '../utils/dataValidation.ts';
 
@@ -59,14 +62,98 @@ export async function resetSequencesForTables(supabaseAdmin: any, backupData: an
   return errors;
 }
 
+// تحضير البيانات قبل الاستعادة باستخدام المعالجات المخصصة لكل جدول
+function prepareTableDataForRestore(table: string, data: any[]) {
+  const config = tableConfig.tables[table as keyof typeof tableConfig.tables];
+  
+  // التحقق مما إذا كان هناك معالج مخصص لهذا الجدول
+  if (config && typeof config.prepareForRestore === 'function') {
+    console.log(`Using custom prepare handler for table ${table}`);
+    return config.prepareForRestore(data);
+  }
+  
+  // إذا لم يكن هناك معالج مخصص، نقوم بمعالجة البيانات بشكل قياسي
+  let preparedData = [...data];
+  
+  // إزالة الحقول المحسوبة إذا كان ذلك مطلوباً
+  if (table in tablesWithComputedFields) {
+    const fieldsToRemove = tablesWithComputedFields[table as keyof typeof tablesWithComputedFields];
+    console.log(`Removing computed fields ${fieldsToRemove.join(', ')} from ${table}`);
+    preparedData = removeComputedFields(preparedData, fieldsToRemove);
+  }
+  
+  // تنظيف حقول UUID إذا كان ذلك مطلوباً
+  if (tablesWithUuids.includes(table)) {
+    const uuidFields = ['id', 'party_id', 'category_id', 'invoice_id', 'return_id', 
+                      'transaction_id', 'related_invoice_id', 'reference_id'];
+    preparedData = cleanUuids(preparedData, uuidFields);
+  }
+  
+  return preparedData;
+}
+
+// معالجة دفعات البيانات بأحجام أصغر لتجنب أخطاء الاتصال
+async function processBatchWithRetry(supabaseAdmin: any, table: string, batch: any[], batchIndex: number, totalBatches: number) {
+  console.log(`Inserting batch ${batchIndex + 1} of ${totalBatches} for ${table}`);
+  
+  try {
+    const { error } = await supabaseAdmin
+      .from(table)
+      .upsert(batch, { onConflict: 'id', ignoreDuplicates: false });
+      
+    if (error) {
+      console.error(`Error restoring batch for ${table}:`, error);
+      
+      // محاولة إدراج السجلات واحداً تلو الآخر في حالة فشل الدفعة
+      console.log(`Attempting individual inserts for ${table}`);
+      let successCount = 0;
+      
+      for (const record of batch) {
+        try {
+          const { error: indError } = await supabaseAdmin
+            .from(table)
+            .upsert([record], { onConflict: 'id' });
+            
+          if (!indError) {
+            successCount++;
+          }
+        } catch (e) {
+          // استمرار المحاولة مع السجل التالي
+        }
+      }
+      
+      console.log(`Successfully inserted ${successCount} of ${batch.length} records individually`);
+      return { error, successCount };
+    }
+    
+    return { error: null, successCount: batch.length };
+  } catch (e) {
+    console.error(`Exception inserting batch for ${table}:`, e);
+    
+    // محاولة بحجم دفعة أصغر
+    if (batch.length > 1) {
+      console.log(`Retrying with smaller batches for ${table}`);
+      const mid = Math.floor(batch.length / 2);
+      const firstHalf = batch.slice(0, mid);
+      const secondHalf = batch.slice(mid);
+      
+      const result1 = await processBatchWithRetry(supabaseAdmin, table, firstHalf, batchIndex * 2, totalBatches * 2);
+      const result2 = await processBatchWithRetry(supabaseAdmin, table, secondHalf, batchIndex * 2 + 1, totalBatches * 2);
+      
+      return { 
+        error: e,
+        successCount: result1.successCount + result2.successCount
+      };
+    }
+    
+    return { error: e, successCount: 0 };
+  }
+}
+
 // Function to restore backup data
 export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
   const errors = [];
   const tablesRestored = [];
-  
-  // UUID fields to check and clean
-  const uuidFields = ['id', 'party_id', 'category_id', 'invoice_id', 'return_id', 
-                      'transaction_id', 'related_invoice_id', 'reference_id'];
   
   // تحليل حالة الأرصدة قبل الاستعادة
   try {
@@ -95,12 +182,11 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
     console.error("خطأ في الفحص الأولي:", initialCheckError);
   }
 
-  // تعديل ترتيب الاستعادة للتأكد من استعادة الأطراف قبل أرصدتهم
-  // إنشاء ترتيب استعادة مخصص مع وضع الأطراف أولاً ثم الأرصدة
-  const priorityTables = ['parties', 'party_balances'];
+  // استخدام ترتيب استعادة مخصص للجداول المرتبطة
+  // تعطي الأولوية للجداول المحددة في priorityRestoreOrder ثم باقي الجداول
   const customRestoreOrder = [
-    ...priorityTables,
-    ...tablesToRestore.filter(table => !priorityTables.includes(table))
+    ...priorityRestoreOrder,
+    ...tablesToRestore.filter(table => !priorityRestoreOrder.includes(table))
   ];
 
   console.log("ترتيب الاستعادة المخصص:", customRestoreOrder);
@@ -109,188 +195,330 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
     if (backupData[table] && backupData[table].length > 0) {
       console.log(`Restoring table ${table} (${backupData[table].length} records)`);
       
-      // Pre-process data for tables with UUID fields
-      let tableData = backupData[table];
-      if (tablesWithUuids.includes(table)) {
-        const originalCount = tableData.length;
-        tableData = cleanUuids(tableData, uuidFields);
-        
-        const filteredCount = originalCount - tableData.length;
-        if (filteredCount > 0) {
-          console.log(`Filtered out ${filteredCount} records from ${table} with invalid UUID format`);
-        }
-      }
-      
-      // Clean data before insertion if this table has computed fields
-      if (table in tablesWithComputedFields) {
-        const fieldsToRemove = tablesWithComputedFields[table as keyof typeof tablesWithComputedFields];
-        console.log(`Removing computed fields ${fieldsToRemove.join(', ')} from ${table}`);
-        tableData = removeComputedFields(tableData, fieldsToRemove);
-      }
+      // تحضير البيانات قبل الاستعادة
+      let tableData = prepareTableDataForRestore(table, backupData[table]);
       
       // تقليل حجم الدفعة للتعامل مع كميات كبيرة من البيانات
-      const batchSize = 20; // تم تقليل حجم الدفعة للتعامل بشكل أفضل مع البيانات الكبيرة
+      const batchSize = 20; // حجم دفعة صغير للتعامل مع البيانات الكبيرة
+      const totalBatches = Math.ceil(tableData.length / batchSize);
       
       // تتبع عدد السجلات التي تمت استعادتها بنجاح
       let successfullyRestoredCount = 0;
       
       for (let i = 0; i < tableData.length; i += batchSize) {
         const batch = tableData.slice(i, i + batchSize);
-        console.log(`Inserting batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(tableData.length/batchSize)} for ${table}`);
+        const batchIndex = Math.floor(i / batchSize);
         
-        try {
-          const { error } = await supabaseAdmin
-            .from(table)
-            .upsert(batch, { onConflict: 'id', ignoreDuplicates: false });
-            
-          if (error) {
-            console.error(`Error restoring data for ${table}:`, error);
-            errors.push({ 
-              table, 
-              operation: 'upsert', 
-              batch: Math.floor(i/batchSize) + 1, 
-              error: error.message 
-            });
-            
-            // إذا فشلت الدفعة، نحاول تنفيذ كل سجل على حدة
-            if (batch.length > 1) {
-              console.log(`Attempting individual inserts for ${table}`);
-              for (const record of batch) {
-                try {
-                  const { error: individualError } = await supabaseAdmin
-                    .from(table)
-                    .upsert([record], { onConflict: 'id' });
-                    
-                  if (individualError) {
-                    console.error(`Error with individual record in ${table}:`, individualError, record);
-                  } else {
-                    successfullyRestoredCount++;
-                  }
-                } catch (indErr) {
-                  console.error(`Exception with individual record in ${table}:`, indErr);
-                }
-              }
-            }
-          } else {
-            successfullyRestoredCount += batch.length;
-            console.log(`Successfully inserted batch ${Math.floor(i/batchSize) + 1} for ${table}`);
-          }
-        } catch (insertError) {
-          console.error(`Exception restoring data for ${table}:`, insertError);
-          errors.push({ 
-            table, 
-            operation: 'upsert', 
-            batch: Math.floor(i/batchSize) + 1, 
-            error: insertError.message 
-          });
-          
-          // محاولة مع حجم دفعة أصغر في حالة الفشل
-          if (batch.length > 5) {
-            console.log(`Retrying with smaller batch size for ${table}`);
-            const smallerBatchSize = 5;
-            for (let j = 0; j < batch.length; j += smallerBatchSize) {
-              const smallerBatch = batch.slice(j, j + smallerBatchSize);
-              try {
-                const { error: retryError } = await supabaseAdmin
-                  .from(table)
-                  .upsert(smallerBatch, { onConflict: 'id' });
-                  
-                if (retryError) {
-                  console.error(`Error with smaller batch in ${table}:`, retryError);
-                } else {
-                  successfullyRestoredCount += smallerBatch.length;
-                }
-              } catch (retryErr) {
-                console.error(`Exception with smaller batch in ${table}:`, retryErr);
-              }
-            }
-          }
-        }
+        const { successCount } = await processBatchWithRetry(
+          supabaseAdmin, 
+          table, 
+          batch, 
+          batchIndex, 
+          totalBatches
+        );
+        
+        successfullyRestoredCount += successCount;
       }
       
       console.log(`تم استعادة ${successfullyRestoredCount} من أصل ${tableData.length} سجل في جدول ${table}`);
       tablesRestored.push(table);
+      
+      // استدعاء وظيفة afterRestore إذا كانت موجودة لهذا الجدول
+      const config = tableConfig.tables[table as keyof typeof tableConfig.tables];
+      if (config && typeof config.afterRestore === 'function') {
+        console.log(`Running afterRestore for ${table}`);
+        try {
+          await config.afterRestore(supabaseAdmin, tableData);
+        } catch (afterRestoreError) {
+          console.error(`Error in afterRestore for ${table}:`, afterRestoreError);
+        }
+      }
     } else {
       console.log(`Skipping table ${table}: no data in backup`);
     }
   }
   
-  // بعد الانتهاء من استعادة البيانات، نقوم بإعادة حساب أرصدة العملاء إذا لزم الأمر
-  if (tablesRestored.includes('parties')) {
-    console.log('Verifying party balances...');
-    try {
-      // التحقق من تطابق عدد سجلات العملاء مع سجلات الأرصدة
-      const { data: parties, error: partiesError } = await supabaseAdmin
-        .from('parties')
-        .select('id, name, opening_balance, balance_type');
-        
-      const { data: balances, error: balancesError } = await supabaseAdmin
-        .from('party_balances')
-        .select('party_id, balance');
-        
-      if (partiesError) {
-        console.error('Error fetching parties:', partiesError);
-      } else if (balancesError) {
-        console.error('Error fetching party balances:', balancesError);
-      } else if (parties && balances) {
-        console.log(`عدد الأطراف بعد الاستعادة: ${parties.length}, عدد الأرصدة: ${balances.length}`);
-        
-        const partyIds = new Set(parties.map(p => p.id));
-        const balancePartyIds = new Set(balances.map(b => b.party_id));
-        
-        // إذا كان هناك طرف بدون رصيد، نقوم بإنشاء رصيد له
-        const missingBalances = Array.from(partyIds).filter(id => !balancePartyIds.has(id));
-        if (missingBalances.length > 0) {
-          console.log(`Creating missing party balances for ${missingBalances.length} parties`);
-          
-          for (const partyId of missingBalances) {
-            // الحصول على بيانات الطرف
-            const party = parties.find(p => p.id === partyId);
-              
-            if (party) {
-              console.log(`Creating balance for party ${party.name} (${party.id})`);
-              
-              // إنشاء رصيد مبدئي بناءً على نوع الرصيد والرصيد الافتتاحي
-              const initialBalance = party.balance_type === 'credit' 
-                ? -parseFloat(party.opening_balance || 0) 
-                : parseFloat(party.opening_balance || 0);
-                
-              const { error: createBalanceError } = await supabaseAdmin
-                .from('party_balances')
-                .upsert([{
-                  party_id: partyId,
-                  balance: initialBalance,
-                  last_updated: new Date().toISOString()
-                }]);
-                
-              if (createBalanceError) {
-                console.error(`Error creating balance for party ${partyId}:`, createBalanceError);
-              } else {
-                console.log(`Successfully created balance for party ${party.name}: ${initialBalance}`);
-              }
-            }
-          }
-        }
-        
-        // التحقق من أرصدة العملاء بعد الاستعادة - تعديل طريقة الاستعلام
-        const { count: verifiedBalancesCount, error: verificationError } = await supabaseAdmin
-          .from('party_balances')
-          .select('*', { count: 'exact', head: true });
-          
-        if (verificationError) {
-          console.error('Error verifying balances:', verificationError);
-        } else {
-          console.log(`Verified balances after restoration: ${verifiedBalancesCount}`);
-          if (verifiedBalancesCount < parties.length) {
-            console.error(`WARNING: Still missing balances for some parties. Found ${verifiedBalancesCount} balances for ${parties.length} parties`);
-          }
-        }
-      }
-    } catch (balanceVerificationError) {
-      console.error('Error verifying party balances:', balanceVerificationError);
-    }
+  // إعادة حساب أرصدة الأطراف بعد استعادة جميع البيانات
+  const balanceErrors = await recalculatePartyBalances(supabaseAdmin);
+  if (balanceErrors.length > 0) {
+    errors.push(...balanceErrors);
   }
   
   return errors;
 }
 
+// وظيفة لإعادة حساب أرصدة الأطراف بناءً على سجل الحساب
+export async function recalculatePartyBalances(supabaseAdmin: any): Promise<any[]> {
+  const errors = [];
+  
+  try {
+    console.log('بدء إعادة حساب أرصدة الأطراف...');
+    
+    // الحصول على جميع الأطراف
+    const { data: parties, error: partiesError } = await supabaseAdmin
+      .from('parties')
+      .select('id, name, opening_balance, balance_type');
+      
+    if (partiesError) {
+      console.error('خطأ في جلب الأطراف:', partiesError);
+      return [{ table: 'parties', operation: 'select', error: partiesError.message }];
+    }
+    
+    console.log(`تم العثور على ${parties.length} طرف`);
+    
+    // لكل طرف، نحسب الرصيد الصحيح
+    for (const party of parties) {
+      try {
+        console.log(`إعادة حساب رصيد الطرف ${party.name} (${party.id})...`);
+        
+        // تحديد الرصيد الافتتاحي
+        let currentBalance = party.balance_type === 'credit' 
+          ? -parseFloat(party.opening_balance || 0) 
+          : parseFloat(party.opening_balance || 0);
+          
+        console.log(`الرصيد الافتتاحي: ${currentBalance}`);
+        
+        // جلب كل المعاملات من سجل الحساب للطرف بترتيب تاريخي
+        const { data: ledgerEntries, error: ledgerError } = await supabaseAdmin
+          .from('ledger')
+          .select('*')
+          .eq('party_id', party.id)
+          .order('date', { ascending: true });
+          
+        if (ledgerError) {
+          console.error(`خطأ في جلب سجل حساب الطرف ${party.id}:`, ledgerError);
+          errors.push({ 
+            table: 'ledger', 
+            operation: 'select', 
+            party_id: party.id, 
+            error: ledgerError.message 
+          });
+          continue;
+        }
+        
+        if (ledgerEntries.length === 0) {
+          console.log(`لا توجد معاملات للطرف ${party.name} - سيتم استخدام الرصيد الافتتاحي فقط`);
+        } else {
+          console.log(`تم العثور على ${ledgerEntries.length} معاملة للطرف ${party.name}`);
+          
+          // إعادة حساب الرصيد المتوقع كما لو كنا نعيد تشغيل جميع المعاملات
+          for (const entry of ledgerEntries) {
+            const debit = parseFloat(entry.debit || 0);
+            const credit = parseFloat(entry.credit || 0);
+            
+            currentBalance += debit - credit;
+            
+            // تحديث حقل balance_after في سجل الحساب
+            const { error: updateError } = await supabaseAdmin
+              .from('ledger')
+              .update({ balance_after: currentBalance })
+              .eq('id', entry.id);
+              
+            if (updateError) {
+              console.error(`خطأ في تحديث حقل balance_after لمعاملة ${entry.id}:`, updateError);
+            }
+          }
+          
+          console.log(`الرصيد المحسوب: ${currentBalance}`);
+        }
+        
+        // تحديث رصيد الطرف في جدول الأرصدة
+        // أولاً، نتحقق من وجود سجل للرصيد - تعديل طريقة الاستعلام
+        const { data: existingBalance, error: balanceCheckError } = await supabaseAdmin
+          .from('party_balances')
+          .select('*')
+          .eq('party_id', party.id);
+          
+        if (balanceCheckError) {
+          console.error(`خطأ في التحقق من رصيد الطرف ${party.id}:`, balanceCheckError);
+          errors.push({ 
+            table: 'party_balances', 
+            operation: 'select', 
+            party_id: party.id, 
+            error: balanceCheckError.message 
+          });
+          continue;
+        }
+        
+        if (existingBalance && existingBalance.length > 0) {
+          // إذا كان هناك أكثر من سجل، نحذف السجلات الزائدة
+          if (existingBalance.length > 1) {
+            console.warn(`تم العثور على ${existingBalance.length} سجل رصيد للطرف ${party.name} - سيتم حذف السجلات الزائدة`);
+            
+            // الاحتفاظ بالسجل الأول وحذف الباقي
+            for (let i = 1; i < existingBalance.length; i++) {
+              const { error: deleteError } = await supabaseAdmin
+                .from('party_balances')
+                .delete()
+                .eq('id', existingBalance[i].id);
+                
+              if (deleteError) {
+                console.error(`خطأ في حذف سجل الرصيد الزائد ${existingBalance[i].id}:`, deleteError);
+                errors.push({ 
+                  table: 'party_balances', 
+                  operation: 'delete', 
+                  party_id: party.id, 
+                  error: deleteError.message 
+                });
+              }
+            }
+          }
+          
+          // تحديث السجل الموجود
+          const { error: updateError } = await supabaseAdmin
+            .from('party_balances')
+            .update({ 
+              balance: currentBalance, 
+              last_updated: new Date().toISOString() 
+            })
+            .eq('id', existingBalance[0].id);
+            
+          if (updateError) {
+            console.error(`خطأ في تحديث رصيد الطرف ${party.id}:`, updateError);
+            errors.push({ 
+              table: 'party_balances', 
+              operation: 'update', 
+              party_id: party.id, 
+              error: updateError.message 
+            });
+          } else {
+            console.log(`تم تحديث رصيد الطرف ${party.name} بنجاح إلى ${currentBalance}`);
+          }
+        } else {
+          // إنشاء سجل جديد للرصيد
+          const { error: insertError } = await supabaseAdmin
+            .from('party_balances')
+            .insert([{ 
+              party_id: party.id, 
+              balance: currentBalance, 
+              last_updated: new Date().toISOString() 
+            }]);
+            
+          if (insertError) {
+            console.error(`خطأ في إنشاء رصيد للطرف ${party.id}:`, insertError);
+            errors.push({ 
+              table: 'party_balances', 
+              operation: 'insert', 
+              party_id: party.id, 
+              error: insertError.message 
+            });
+          } else {
+            console.log(`تم إنشاء رصيد للطرف ${party.name} بنجاح بقيمة ${currentBalance}`);
+          }
+        }
+      } catch (partyError) {
+        console.error(`خطأ في معالجة الطرف ${party.id}:`, partyError);
+        errors.push({ 
+          table: 'parties', 
+          operation: 'process', 
+          party_id: party.id, 
+          error: partyError.message 
+        });
+      }
+    }
+    
+    console.log(`اكتملت إعادة حساب أرصدة الأطراف. عدد الأخطاء: ${errors.length}`);
+    return errors;
+  } catch (error) {
+    console.error('خطأ أثناء إعادة حساب أرصدة الأطراف:', error);
+    return [{ table: 'party_balances', operation: 'recalculate', error: error.message }];
+  }
+}
+
+// إعادة حساب مجاميع الفواتير بعد استعادة البيانات
+export async function recalculateInvoiceTotals(supabaseAdmin: any): Promise<any[]> {
+  const errors = [];
+  
+  try {
+    console.log('بدء إعادة حساب مجاميع الفواتير...');
+    
+    // الحصول على جميع الفواتير
+    const { data: invoices, error: invoicesError } = await supabaseAdmin
+      .from('invoices')
+      .select('id');
+      
+    if (invoicesError) {
+      console.error('خطأ في جلب الفواتير:', invoicesError);
+      return [{ table: 'invoices', operation: 'select', error: invoicesError.message }];
+    }
+    
+    console.log(`تم العثور على ${invoices.length} فاتورة`);
+    
+    // لكل فاتورة، نحسب المجموع الصحيح
+    for (const invoice of invoices) {
+      try {
+        // جلب بنود الفاتورة
+        const { data: items, error: itemsError } = await supabaseAdmin
+          .from('invoice_items')
+          .select('quantity, unit_price, total')
+          .eq('invoice_id', invoice.id);
+          
+        if (itemsError) {
+          console.error(`خطأ في جلب بنود الفاتورة ${invoice.id}:`, itemsError);
+          errors.push({ 
+            table: 'invoice_items', 
+            operation: 'select', 
+            invoice_id: invoice.id, 
+            error: itemsError.message 
+          });
+          continue;
+        }
+        
+        // حساب مجموع الفاتورة
+        let totalAmount = 0;
+        
+        for (const item of items) {
+          // تحديث حقل total لكل بند إذا كان فارغاً
+          const calculatedItemTotal = parseFloat(item.quantity) * parseFloat(item.unit_price);
+          
+          if (!item.total || parseFloat(item.total) !== calculatedItemTotal) {
+            const { error: updateItemError } = await supabaseAdmin
+              .from('invoice_items')
+              .update({ total: calculatedItemTotal })
+              .eq('invoice_id', invoice.id)
+              .eq('quantity', item.quantity)
+              .eq('unit_price', item.unit_price);
+              
+            if (updateItemError) {
+              console.error(`خطأ في تحديث حقل total لبند الفاتورة:`, updateItemError);
+            }
+          }
+          
+          totalAmount += calculatedItemTotal;
+        }
+        
+        // تحديث مجموع الفاتورة
+        const { error: updateInvoiceError } = await supabaseAdmin
+          .from('invoices')
+          .update({ total_amount: totalAmount })
+          .eq('id', invoice.id);
+          
+        if (updateInvoiceError) {
+          console.error(`خطأ في تحديث مجموع الفاتورة ${invoice.id}:`, updateInvoiceError);
+          errors.push({ 
+            table: 'invoices', 
+            operation: 'update', 
+            invoice_id: invoice.id, 
+            error: updateInvoiceError.message 
+          });
+        } else {
+          console.log(`تم تحديث مجموع الفاتورة ${invoice.id} بنجاح إلى ${totalAmount}`);
+        }
+      } catch (invoiceError) {
+        console.error(`خطأ في معالجة الفاتورة ${invoice.id}:`, invoiceError);
+        errors.push({ 
+          table: 'invoices', 
+          operation: 'process', 
+          invoice_id: invoice.id, 
+          error: invoiceError.message 
+        });
+      }
+    }
+    
+    console.log(`اكتملت إعادة حساب مجاميع الفواتير. عدد الأخطاء: ${errors.length}`);
+    return errors;
+  } catch (error) {
+    console.error('خطأ أثناء إعادة حساب مجاميع الفواتير:', error);
+    return [{ table: 'invoices', operation: 'recalculate', error: error.message }];
+  }
+}

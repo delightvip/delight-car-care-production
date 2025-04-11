@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { BackupMetadata, RestoreError } from "../types";
+import { toast } from "sonner";
 
 export const useBackupRestore = () => {
   const [isValidating, setIsValidating] = useState(false);
@@ -81,7 +82,7 @@ export const useBackupRestore = () => {
           };
         }
         
-        // Fix: Calculate total records count properly
+        // حساب إجمالي عدد السجلات بشكل صحيح
         let totalRecords = 0;
         Object.entries(jsonData).forEach(([key, table]) => {
           if (key !== '__metadata' && Array.isArray(table)) {
@@ -119,12 +120,12 @@ export const useBackupRestore = () => {
     }
   };
   
-  // تحسين: إضافة آلية محاولة إعادة الاتصال
+  // استدعاء وظيفة استعادة النسخة الاحتياطية مع آلية محاولة إعادة الاتصال
   const callRestoreFunction = async (fileContent: string, retries = 3): Promise<any> => {
     try {
       console.log("Calling restore function with retry mechanism...");
       
-      // تغيير طريقة الاستدعاء لتجنب مشكلة CORS - إزالة الهيدر المسبب للمشكلة
+      // استدعاء وظيفة استعادة النسخة الاحتياطية مع التعامل مع CORS
       const { data, error } = await supabase.functions.invoke("restore-backup", {
         body: { backup: fileContent }
       });
@@ -149,6 +150,7 @@ export const useBackupRestore = () => {
     }
   };
   
+  // معالجة البيانات قبل الاستعادة
   const preprocessBackupData = (jsonData: any): any => {
     console.log("Preprocessing backup data...");
     
@@ -199,6 +201,66 @@ export const useBackupRestore = () => {
         jsonData['party_balances'] = Array.from(partyBalancesMap.values());
         console.log(`تمت إزالة الأرصدة المكررة. العدد الجديد: ${jsonData['party_balances'].length}`);
       }
+    }
+    
+    // إذا كان جدول invoice_items موجودًا، نتأكد من حقل total
+    if (jsonData['invoice_items'] && jsonData['invoice_items'].length > 0) {
+      console.log(`معالجة عناصر الفواتير (${jsonData['invoice_items'].length} عنصر)...`);
+      
+      // إزالة حقل total من عناصر الفواتير
+      jsonData['invoice_items'].forEach((item: any) => {
+        // احتفظ بحقل total كمرجع
+        const oldTotal = item.total;
+        
+        // احسب total الصحيح
+        const calculatedTotal = parseFloat(item.quantity) * parseFloat(item.unit_price);
+        
+        // تحديث total
+        item.total = calculatedTotal;
+        
+        // سجل التغييرات إذا كانت كبيرة
+        if (oldTotal && Math.abs(parseFloat(oldTotal) - calculatedTotal) > 0.01) {
+          console.log(`تم تصحيح قيمة total من ${oldTotal} إلى ${calculatedTotal} للعنصر ${item.id}`);
+        }
+      });
+    }
+    
+    // إذا كان جدول ledger موجودًا، نتأكد من حقل balance_after
+    if (jsonData['ledger'] && jsonData['ledger'].length > 0) {
+      console.log(`معالجة سجلات الحساب (${jsonData['ledger'].length} سجل)...`);
+      
+      // فرز سجلات الحساب حسب الطرف والتاريخ
+      jsonData['ledger'].sort((a: any, b: any) => {
+        if (a.party_id !== b.party_id) {
+          return a.party_id > b.party_id ? 1 : -1;
+        }
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+      
+      // إعادة حساب balance_after
+      const partyBalances: Record<string, number> = {};
+      
+      jsonData['ledger'].forEach((entry: any) => {
+        if (!partyBalances[entry.party_id]) {
+          // البحث عن الرصيد الافتتاحي للطرف
+          const party = jsonData['parties']?.find((p: any) => p.id === entry.party_id);
+          if (party) {
+            partyBalances[entry.party_id] = party.balance_type === 'credit' 
+              ? -parseFloat(party.opening_balance || 0) 
+              : parseFloat(party.opening_balance || 0);
+          } else {
+            partyBalances[entry.party_id] = 0;
+          }
+        }
+        
+        // تحديث الرصيد بناءً على الحركة
+        const debit = parseFloat(entry.debit || 0);
+        const credit = parseFloat(entry.credit || 0);
+        partyBalances[entry.party_id] += debit - credit;
+        
+        // تحديث balance_after
+        entry.balance_after = partyBalances[entry.party_id];
+      });
     }
     
     return jsonData;
@@ -254,7 +316,7 @@ export const useBackupRestore = () => {
           try {
             console.log("Verifying restoration results...");
             
-            // التحقق من أرصدة الأطراف - تعديل طريقة الاستعلام
+            // التحقق من أرصدة الأطراف
             const { count: partyBalancesCount, error: balanceCheckError } = await supabase
               .from('party_balances')
               .select('*', { count: 'exact', head: true });
@@ -275,6 +337,28 @@ export const useBackupRestore = () => {
               console.error("Error checking financial balance:", financialError);
             } else {
               console.log("Financial balance restored:", financialBalance);
+            }
+            
+            // التحقق من استعادة الفواتير
+            const { count: invoicesCount, error: invoicesCheckError } = await supabase
+              .from('invoices')
+              .select('*', { count: 'exact', head: true });
+              
+            console.log("Invoices restored:", invoicesCount);
+              
+            if (invoicesCheckError) {
+              console.error("Error checking invoices:", invoicesCheckError);
+            }
+            
+            // التحقق من استعادة بنود الفواتير
+            const { count: invoiceItemsCount, error: itemsCheckError } = await supabase
+              .from('invoice_items')
+              .select('*', { count: 'exact', head: true });
+              
+            console.log("Invoice items restored:", invoiceItemsCount);
+              
+            if (itemsCheckError) {
+              console.error("Error checking invoice items:", itemsCheckError);
             }
           } catch (verificationError) {
             console.error("Error during verification:", verificationError);

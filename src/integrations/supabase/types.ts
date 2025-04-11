@@ -366,6 +366,7 @@ export type Database = {
           credit: number | null
           date: string
           debit: number | null
+          description: string | null
           id: string
           party_id: string | null
           transaction_id: string
@@ -377,6 +378,7 @@ export type Database = {
           credit?: number | null
           date?: string
           debit?: number | null
+          description?: string | null
           id?: string
           party_id?: string | null
           transaction_id: string
@@ -388,6 +390,7 @@ export type Database = {
           credit?: number | null
           date?: string
           debit?: number | null
+          description?: string | null
           id?: string
           party_id?: string | null
           transaction_id?: string

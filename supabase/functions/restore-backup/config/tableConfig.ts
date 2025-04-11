@@ -92,9 +92,35 @@ export const tablesWithUuids = [
 // الحقول المحسوبة التي يجب إزالتها قبل الإدراج
 export const tablesWithComputedFields = {
   'invoices': ['total_amount'],
+  'invoice_items': ['total'],
   'payments': [],
   'returns': [],
   'ledger': ['balance_after']
+};
+
+// الجداول التي تحتاج إلى استعادة بترتيب خاص للتعامل مع العلاقات
+export const priorityRestoreOrder = [
+  'parties',               // استعادة الأطراف أولاً
+  'party_balances',        // ثم أرصدة الأطراف
+  'invoices',              // ثم الفواتير
+  'invoice_items',         // ثم بنود الفواتير
+  'ledger'                 // ثم سجل الحساب
+];
+
+// إعدادات العلاقات بين الجداول
+export const tableRelationships = {
+  'invoice_items': {
+    parentTable: 'invoices',
+    foreignKey: 'invoice_id'
+  },
+  'ledger': {
+    parentTable: 'parties',
+    foreignKey: 'party_id'
+  },
+  'party_balances': {
+    parentTable: 'parties',
+    foreignKey: 'party_id'
+  }
 };
 
 /**
@@ -151,7 +177,7 @@ export const tableConfig = {
    * يحدد الإعدادات والسلوك الخاص بكل جدول أثناء الاستعادة
    */
   tables: {
-    // يمكن إضافة إعدادات خاصة لبعض الجداول
+    // إعدادات خاصة لجدول party_balances
     'party_balances': {
       mustLinkTo: 'parties', // يجب أن يكون هناك ارتباط بجدول الأطراف
       foreignKey: 'party_id', // اسم حقل المفتاح الخارجي
@@ -226,6 +252,190 @@ export const tableConfig = {
       }
     },
     
+    // إعدادات خاصة لجدول invoice_items
+    'invoice_items': {
+      mustLinkTo: 'invoices', // يجب أن يكون هناك ارتباط بجدول الفواتير
+      foreignKey: 'invoice_id', // اسم حقل المفتاح الخارجي
+      primaryTable: 'invoices', // الجدول الأساسي المرتبط به
+      primaryKey: 'id', // اسم حقل المفتاح الأساسي في الجدول الأساسي
+      
+      // وظيفة خاصة تُستدعى قبل استعادة البيانات لهذا الجدول
+      prepareForRestore: (items: any[]) => {
+        console.log(`Preparing ${items.length} invoice items for restore...`);
+        
+        // إزالة حقل total من جميع العناصر لأنه يتم حسابه تلقائيًا
+        return items.map(item => {
+          const { total, ...itemWithoutTotal } = item;
+          
+          // حساب total كعملية ضرب الكمية بسعر الوحدة
+          const calculatedTotal = parseFloat(item.quantity) * parseFloat(item.unit_price);
+          
+          // إعادة العنصر مع تحديث حقل total فقط إذا كان هناك سبب لتعيينه (اختياري)
+          return {
+            ...itemWithoutTotal,
+            // إعادة حساب حقل total لضمان دقته
+            total: calculatedTotal
+          };
+        });
+      }
+    },
+    
+    // إعدادات خاصة لجدول ledger (سجل الحساب)
+    'ledger': {
+      mustLinkTo: 'parties', // يجب أن يكون هناك ارتباط بجدول الأطراف
+      foreignKey: 'party_id', // اسم حقل المفتاح الخارجي
+      primaryTable: 'parties', // الجدول الأساسي المرتبط به
+      primaryKey: 'id', // اسم حقل المفتاح الأساسي في الجدول الأساسي
+      
+      // وظيفة خاصة تُستدعى قبل استعادة البيانات لهذا الجدول
+      prepareForRestore: (entries: any[]) => {
+        console.log(`Preparing ${entries.length} ledger entries for restore...`);
+        
+        // فرز المدخلات حسب تاريخ الإنشاء والطرف التجاري
+        const sortedEntries = [...entries].sort((a, b) => {
+          // أولاً، رتب حسب الطرف التجاري
+          if (a.party_id !== b.party_id) {
+            return a.party_id > b.party_id ? 1 : -1;
+          }
+          // ثم رتب حسب التاريخ
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+        
+        // إنشاء مخطط للأرصدة لكل طرف تجاري
+        const partyBalanceMap: Record<string, number> = {};
+        
+        // تحديث حقل balance_after لكل مدخل
+        return sortedEntries.map(entry => {
+          // الحصول على رصيد الطرف الحالي، أو تعيينه إلى 0 إذا لم يكن موجوداً
+          if (!partyBalanceMap[entry.party_id]) {
+            partyBalanceMap[entry.party_id] = 0;
+          }
+          
+          // حساب الرصيد بعد الحركة
+          const debit = parseFloat(entry.debit || 0);
+          const credit = parseFloat(entry.credit || 0);
+          
+          // تحديث رصيد الطرف
+          partyBalanceMap[entry.party_id] += debit - credit;
+          
+          // إنشاء نسخة جديدة من المدخل مع تحديث balance_after
+          return {
+            ...entry,
+            balance_after: partyBalanceMap[entry.party_id]
+          };
+        });
+      },
+      
+      // وظيفة خاصة تُستدعى بعد استعادة البيانات لهذا الجدول
+      afterRestore: async (client: any, data: any[]) => {
+        try {
+          console.log('Updating party balances based on ledger entries...');
+          
+          // الحصول على جميع الأطراف
+          const { data: parties, error: partiesError } = await client
+            .from('parties')
+            .select('id, name, balance_type, opening_balance');
+            
+          if (partiesError) {
+            console.error('Error fetching parties:', partiesError);
+            return;
+          }
+          
+          // لكل طرف، نحدث رصيده بناءً على آخر حركة في سجل الحساب
+          for (const party of parties) {
+            try {
+              // الحصول على آخر حركة في سجل الحساب للطرف
+              const { data: latestEntry, error: entryError } = await client
+                .from('ledger')
+                .select('balance_after')
+                .eq('party_id', party.id)
+                .order('date', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+                
+              if (entryError) {
+                console.error(`Error fetching latest ledger entry for party ${party.id}:`, entryError);
+                continue;
+              }
+              
+              // إذا كان هناك حركات في سجل الحساب، نستخدم آخر رصيد
+              // وإلا نستخدم الرصيد الافتتاحي
+              let finalBalance;
+              
+              if (latestEntry) {
+                finalBalance = latestEntry.balance_after;
+              } else {
+                // الرصيد الافتتاحي، مع مراعاة نوع الرصيد
+                finalBalance = party.balance_type === 'credit' 
+                  ? -Number(party.opening_balance || 0) 
+                  : Number(party.opening_balance || 0);
+              }
+              
+              // تحديث رصيد الطرف
+              const { data: existingBalance, error: balanceError } = await client
+                .from('party_balances')
+                .select('*')
+                .eq('party_id', party.id);
+                
+              if (balanceError) {
+                console.error(`Error checking balance for party ${party.id}:`, balanceError);
+                continue;
+              }
+              
+              if (existingBalance && existingBalance.length > 0) {
+                // إذا كان هناك أكثر من سجل، نحذف السجلات الزائدة
+                if (existingBalance.length > 1) {
+                  console.warn(`Found ${existingBalance.length} balance records for party ${party.id}, keeping only one`);
+                  
+                  // حذف السجلات الزائدة
+                  for (let i = 1; i < existingBalance.length; i++) {
+                    await client
+                      .from('party_balances')
+                      .delete()
+                      .eq('id', existingBalance[i].id);
+                  }
+                }
+                
+                // تحديث سجل الرصيد الموجود
+                const { error: updateError } = await client
+                  .from('party_balances')
+                  .update({ 
+                    balance: finalBalance,
+                    last_updated: new Date().toISOString()
+                  })
+                  .eq('id', existingBalance[0].id);
+                  
+                if (updateError) {
+                  console.error(`Error updating balance for party ${party.id}:`, updateError);
+                } else {
+                  console.log(`Updated balance for party ${party.id} to ${finalBalance}`);
+                }
+              } else {
+                // إنشاء سجل جديد للرصيد
+                const { error: insertError } = await client
+                  .from('party_balances')
+                  .insert({
+                    party_id: party.id,
+                    balance: finalBalance,
+                    last_updated: new Date().toISOString()
+                  });
+                  
+                if (insertError) {
+                  console.error(`Error creating balance for party ${party.id}:`, insertError);
+                } else {
+                  console.log(`Created balance for party ${party.id} with value ${finalBalance}`);
+                }
+              }
+            } catch (error) {
+              console.error(`Error processing party ${party.id}:`, error);
+            }
+          }
+        } catch (error) {
+          console.error('Error in ledger afterRestore:', error);
+        }
+      }
+    },
+    
     'financial_balance': {
       // التأكد من وجود سجل واحد على الأقل لأرصدة الخزينة
       afterRestore: async (client: any, data: any[]) => {
@@ -267,4 +477,15 @@ export const tableConfig = {
       }
     }
   }
+};
+
+export default {
+  tablesToClear,
+  tablesToRestore,
+  tablesWithIntegerPrimaryKeys,
+  tablesWithUuids,
+  tablesWithComputedFields,
+  priorityRestoreOrder,
+  tableRelationships,
+  tableConfig
 };
