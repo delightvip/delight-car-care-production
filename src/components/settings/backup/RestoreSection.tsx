@@ -83,10 +83,8 @@ const RestoreSection = () => {
       
       setProgress(30);
       
-      // تحسين: تقسيم الملفات الكبيرة واستخدام محاولات إعادة الاتصال المضمنة
+      // تحسين: استخدام آلية الاسترداد المضمنة في useBackupRestore
       const { success, errors } = await restoreBackup(backupFile);
-      
-      setProgress(65);
       
       if (success) {
         setRestoreStage('balances');
@@ -122,15 +120,31 @@ const RestoreSection = () => {
       } else {
         setProgress(0);
         setRestoreStage('');
-        toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
-        if (errors) {
-          setRestoreErrors(errors);
-          console.error("Restoration failed with errors:", errors);
+        
+        // تحسين رسائل الخطأ لأخطاء CORS وغيرها
+        if (errors && errors.length > 0 && errors[0].error?.includes("Failed to send a request to the Edge Function")) {
+          toast.error("حدث خطأ في الاتصال بخدمة استعادة النسخ الاحتياطية. يرجى التحقق من اتصالك بالإنترنت أو المحاولة لاحقًا.");
+          console.error("CORS or connection error:", errors);
+        } else {
+          toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
+          if (errors) {
+            setRestoreErrors(errors);
+            console.error("Restoration failed with errors:", errors);
+          }
         }
       }
     } catch (error) {
       console.error("Backup restoration error:", error);
-      toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
+      
+      // تحسين رسائل الخطأ
+      if (error instanceof Error && error.message.includes("CORS")) {
+        toast.error("حدث خطأ في الاتصال: مشكلة CORS. يرجى التحقق من إعدادات الخادم.");
+      } else if (error instanceof Error && error.message.includes("network")) {
+        toast.error("حدث خطأ في الشبكة. يرجى التحقق من اتصالك بالإنترنت.");
+      } else {
+        toast.error("حدث خطأ أثناء استعادة النسخة الاحتياطية");
+      }
+      
       setProgress(0);
       setRestoreStage('');
     } finally {

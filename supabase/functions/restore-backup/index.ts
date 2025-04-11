@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders } from './utils/corsHeaders.ts';
@@ -184,11 +183,8 @@ serve(async (req) => {
   // تحسين: إضافة معالجة CORS مناسبة
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
-      headers: {
-        ...corsHeaders,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Max-Age': '86400'
-      }
+      headers: corsHeaders,
+      status: 204
     });
   }
 

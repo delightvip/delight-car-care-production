@@ -122,10 +122,13 @@ export const useBackupRestore = () => {
   // تحسين: إضافة آلية محاولة إعادة الاتصال
   const callRestoreFunction = async (fileContent: string, retries = 3): Promise<any> => {
     try {
+      console.log("Calling restore function with retry mechanism...");
+      
+      // تغيير طريقة الاستدعاء لتجنب مشكلة CORS
       const { data, error } = await supabase.functions.invoke("restore-backup", {
         body: { backup: fileContent },
-        // تحسين: زيادة مهلة الاتصال لملفات كبيرة
-        headers: { "Supabase-Connection-Timeout": "120000" } // زيادة مهلة الاتصال إلى دقيقتين
+        // إزالة الرأس الذي كان يسبب المشكلة
+        // headers: { "Supabase-Connection-Timeout": "120000" }
       });
       
       if (error) {
