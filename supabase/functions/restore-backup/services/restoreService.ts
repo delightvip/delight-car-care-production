@@ -70,21 +70,23 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
   
   // تحليل حالة الأرصدة قبل الاستعادة
   try {
-    const { data: partiesCount, error: partiesCountError } = await supabaseAdmin
+    // تغيير طريقة استعلام عدد الأطراف لاستخدام صيغة مدعومة من PostgREST
+    const { count: partiesCount, error: partiesCountError } = await supabaseAdmin
       .from('parties')
-      .select('count(*)');
+      .select('*', { count: 'exact', head: true });
       
-    console.log(`الحالة الأولية: عدد الأطراف = ${partiesCount ? partiesCount[0].count : 'غير متاح'}`);
+    console.log(`الحالة الأولية: عدد الأطراف = ${partiesCount || 'غير متاح'}`);
     
     if (partiesCountError) {
       console.error("خطأ في التحقق من عدد الأطراف:", partiesCountError);
     }
     
-    const { data: balancesCount, error: balancesCountError } = await supabaseAdmin
+    // تغيير طريقة استعلام عدد أرصدة الأطراف لاستخدام صيغة مدعومة من PostgREST
+    const { count: balancesCount, error: balancesCountError } = await supabaseAdmin
       .from('party_balances')
-      .select('count(*)');
+      .select('*', { count: 'exact', head: true });
       
-    console.log(`الحالة الأولية: عدد أرصدة الأطراف = ${balancesCount ? balancesCount[0].count : 'غير متاح'}`);
+    console.log(`الحالة الأولية: عدد أرصدة الأطراف = ${balancesCount || 'غير متاح'}`);
     
     if (balancesCountError) {
       console.error("خطأ في التحقق من عدد أرصدة الأطراف:", balancesCountError);
@@ -270,17 +272,17 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
           }
         }
         
-        // التحقق من أرصدة العملاء بعد الاستعادة
-        const { data: verifiedBalances, error: verificationError } = await supabaseAdmin
+        // التحقق من أرصدة العملاء بعد الاستعادة - تعديل طريقة الاستعلام
+        const { count: verifiedBalancesCount, error: verificationError } = await supabaseAdmin
           .from('party_balances')
-          .select('count(*)');
+          .select('*', { count: 'exact', head: true });
           
         if (verificationError) {
           console.error('Error verifying balances:', verificationError);
         } else {
-          console.log(`Verified balances after restoration: ${verifiedBalances[0].count}`);
-          if (verifiedBalances[0].count < parties.length) {
-            console.error(`WARNING: Still missing balances for some parties. Found ${verifiedBalances[0].count} balances for ${parties.length} parties`);
+          console.log(`Verified balances after restoration: ${verifiedBalancesCount}`);
+          if (verifiedBalancesCount < parties.length) {
+            console.error(`WARNING: Still missing balances for some parties. Found ${verifiedBalancesCount} balances for ${parties.length} parties`);
           }
         }
       }
@@ -291,3 +293,4 @@ export async function restoreBackupData(supabaseAdmin: any, backupData: any) {
   
   return errors;
 }
+
