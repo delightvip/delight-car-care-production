@@ -124,9 +124,11 @@ export const useBackupRestore = () => {
     try {
       console.log("Calling restore function with retry mechanism...");
       
-      // تغيير طريقة الاستدعاء لتجنب مشكلة CORS - إزالة الهيدر المسبب للمشكلة
+      // تغيير طريقة الاستدعاء لتجنب مشكلة CORS
       const { data, error } = await supabase.functions.invoke("restore-backup", {
-        body: { backup: fileContent }
+        body: { backup: fileContent },
+        // إزالة الرأس الذي كان يسبب المشكلة
+        // headers: { "Supabase-Connection-Timeout": "120000" }
       });
       
       if (error) {
@@ -254,12 +256,13 @@ export const useBackupRestore = () => {
           try {
             console.log("Verifying restoration results...");
             
-            // التحقق من أرصدة الأطراف - تعديل طريقة الاستعلام
-            const { count: partyBalancesCount, error: balanceCheckError } = await supabase
+            // التحقق من أرصدة الأطراف
+            const { data: partyBalancesCheck, error: balanceCheckError } = await supabase
               .from('party_balances')
-              .select('*', { count: 'exact', head: true });
+              .select('count(*)')
+              .single();
               
-            console.log("Party balances check result:", partyBalancesCount);
+            console.log("Party balances check result:", partyBalancesCheck);
               
             if (balanceCheckError) {
               console.error("Error checking party balances:", balanceCheckError);
@@ -269,7 +272,7 @@ export const useBackupRestore = () => {
             const { data: financialBalance, error: financialError } = await supabase
               .from('financial_balance')
               .select('*')
-              .maybeSingle();
+              .single();
               
             if (financialError) {
               console.error("Error checking financial balance:", financialError);
