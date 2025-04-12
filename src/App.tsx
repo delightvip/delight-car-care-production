@@ -1,4 +1,3 @@
-
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
@@ -58,6 +57,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Index />} />
             <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="analytics/inventory-analytics" element={<InventoryAnalytics />} />
             <Route path="analytics/inventory-distribution" element={<InventoryDistributionPage />} />
             
             {/* Inventory Routes */}

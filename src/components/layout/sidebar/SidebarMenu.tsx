@@ -17,7 +17,9 @@ import {
   RotateCw,
   TrendingUp,
   LucideIcon,
-  CalendarRange
+  CalendarRange,
+  ActivitySquare,
+  Database
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -72,6 +74,8 @@ const SidebarMenu = () => {
     ],
     analytics: [
       { icon: BarChart3, title: 'التقارير والتحليل', path: '/analytics' },
+      { icon: Database, title: 'تحليلات المخزون المتقدمة', path: '/analytics/inventory-analytics' },
+      { icon: ActivitySquare, title: 'توزيع المخزون', path: '/analytics/inventory-distribution' },
     ],
     settings: [
       { icon: Settings, title: 'الإعدادات', path: '/settings' },

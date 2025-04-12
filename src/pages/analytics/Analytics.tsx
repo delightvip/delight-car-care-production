@@ -1,20 +1,22 @@
-
 import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import InventoryDistribution from '@/components/dashboard/InventoryDistribution';
 import ProductionChart from '@/components/dashboard/ProductionChart';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Link, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { ActivitySquare, ArrowRight, BarChart3, Database } from 'lucide-react';
 
 const Analytics = () => {
+  const navigate = useNavigate();
   const { data: inventoryStats, isLoading: inventoryLoading } = useQuery({
     queryKey: ['inventoryStats'],
     queryFn: async () => {
       try {
-        // جلب إحصائيات المخزون
         const { data: rawMaterialsResponse, error: rawMaterialsError } = await supabase
           .from('raw_materials')
           .select('quantity, unit_cost');
@@ -31,19 +33,16 @@ const Analytics = () => {
           .from('finished_products')
           .select('quantity, unit_cost');
         
-        // Check for errors
         if (rawMaterialsError) throw rawMaterialsError;
         if (semiFinishedError) throw semiFinishedError;
         if (packagingError) throw packagingError;
         if (finishedError) throw finishedError;
         
-        // Safely handle empty or null data with default values
         const rawMaterialsData = rawMaterialsResponse || [];
         const semiFinishedData = semiFinishedResponse || [];
         const packagingData = packagingResponse || [];
         const finishedData = finishedResponse || [];
         
-        // حساب إجمالي القيمة لكل نوع
         const rawMaterialsValue = rawMaterialsData.reduce(
           (sum, item) => sum + ((item.quantity || 0) * (item.unit_cost || 0)), 0
         );
@@ -62,7 +61,6 @@ const Analytics = () => {
         
         const totalValue = rawMaterialsValue + semiFinishedValue + packagingValue + finishedValue;
         
-        // استخراج عدد العناصر
         const rawMaterialsCount = rawMaterialsData.length || 0;
         const semiFinishedCount = semiFinishedData.length || 0;
         const packagingCount = packagingData.length || 0;
@@ -93,7 +91,6 @@ const Analytics = () => {
         };
       } catch (error) {
         console.error("Error fetching inventory stats:", error);
-        // Return default values structure instead of throwing to prevent component crash
         return {
           values: {
             rawMaterials: 0,
@@ -115,7 +112,6 @@ const Analytics = () => {
     refetchInterval: 60000
   });
   
-  // بيانات توزيع المخزون للتمريرها إلى مكون الرسم البياني
   const distributionData = React.useMemo(() => {
     if (!inventoryStats) return [];
     
@@ -212,6 +208,12 @@ const Analytics = () => {
                     </div>
                   )}
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button variant="outline" className="gap-2" onClick={() => navigate('/analytics/inventory-analytics')}>
+                    <span>تحليلات المخزون المتقدمة</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </CardFooter>
               </Card>
               
               <Card>
@@ -223,6 +225,50 @@ const Analytics = () => {
                 </CardHeader>
                 <CardContent>
                   <InventoryDistribution data={distributionData} />
+                </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button variant="outline" className="gap-2" onClick={() => navigate('/analytics/inventory-distribution')}>
+                    <span>تفاصيل توزيع المخزون</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+            
+            <div className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>الأدوات التحليلية المتقدمة</CardTitle>
+                  <CardDescription>
+                    أدوات تحليلية متقدمة للمخزون والإنتاج
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Button onClick={() => navigate('/analytics/inventory-analytics')} variant="outline" className="h-auto py-6 flex flex-col items-center gap-4">
+                      <Database className="h-8 w-8 text-primary" />
+                      <div className="text-center">
+                        <div className="font-medium">تحليلات المخزون المتقدمة</div>
+                        <p className="text-sm text-muted-foreground mt-1">خوارزميات ذكية للتنبؤ وتحليل المخزون</p>
+                      </div>
+                    </Button>
+                    
+                    <Button onClick={() => navigate('/analytics/inventory-distribution')} variant="outline" className="h-auto py-6 flex flex-col items-center gap-4">
+                      <BarChart3 className="h-8 w-8 text-primary" />
+                      <div className="text-center">
+                        <div className="font-medium">توزيع المخزون</div>
+                        <p className="text-sm text-muted-foreground mt-1">تحليل توزيع المخزون والقيمة</p>
+                      </div>
+                    </Button>
+                    
+                    <Button onClick={() => navigate('/inventory/reports')} variant="outline" className="h-auto py-6 flex flex-col items-center gap-4">
+                      <ActivitySquare className="h-8 w-8 text-primary" />
+                      <div className="text-center">
+                        <div className="font-medium">تقارير المخزون</div>
+                        <p className="text-sm text-muted-foreground mt-1">تقارير تفصيلية لحركة المخزون</p>
+                      </div>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
