@@ -1,3 +1,4 @@
+
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
@@ -16,6 +17,7 @@ import Invoices from '@/pages/commercial/Invoices';
 // Lazy loaded pages
 const Dashboard = lazy(() => import('@/pages/Index'));
 const AnalyticsPage = lazy(() => import('@/pages/analytics/Analytics'));
+const InventoryAnalytics = lazy(() => import('@/pages/analytics/InventoryAnalytics'));
 const InventoryRawMaterials = lazy(() => import('@/pages/inventory/InventoryRawMaterials'));
 const SemiFinishedProducts = lazy(() => import('@/pages/inventory/SemiFinishedProducts'));
 const PackagingMaterials = lazy(() => import('@/pages/inventory/PackagingMaterials'));
