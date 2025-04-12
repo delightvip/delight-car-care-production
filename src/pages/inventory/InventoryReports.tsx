@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Button } from '@/components/ui/button';
@@ -55,7 +54,6 @@ const InventoryReports = () => {
   const [selectedItem, setSelectedItem] = useState<string | null>(params.id || null);
   const [reportType, setReportType] = useState<string>('movement');
   
-  // Fetch categories (raw materials, packaging, etc)
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['inventory-categories'],
     queryFn: async () => {
@@ -82,7 +80,6 @@ const InventoryReports = () => {
     }
   });
   
-  // Fetch items by category
   const { data: items, isLoading: isLoadingItems } = useQuery({
     queryKey: ['inventory-items', selectedCategory],
     queryFn: async () => {
@@ -110,7 +107,6 @@ const InventoryReports = () => {
     enabled: !!selectedCategory
   });
   
-  // Fetch selected item details
   const { data: selectedItemDetails, isLoading: isLoadingItemDetails } = useQuery({
     queryKey: ['inventory-item-details', selectedCategory, selectedItem],
     queryFn: async () => {
@@ -142,7 +138,6 @@ const InventoryReports = () => {
     enabled: !!selectedItem && !!selectedCategory
   });
 
-  // Fetch price trends data for all raw materials and packaging
   const { data: priceTrendsData, isLoading: isLoadingPriceTrends } = useQuery({
     queryKey: ['price-trends'],
     queryFn: async () => {
@@ -167,44 +162,38 @@ const InventoryReports = () => {
     enabled: activeTab === 'price-trends'
   });
 
-  // Fetch top consumed materials based on inventory movements
   const { data: topConsumedMaterials, isLoading: isLoadingTopConsumed } = useQuery({
     queryKey: ['top-consumed-materials', timeRange],
     queryFn: async () => {
-      // For raw materials
       const rawMaterialsQuery = await supabase
         .from('inventory_movements')
         .select('item_id, item_type, quantity')
         .eq('item_type', 'raw')
-        .lt('quantity', 0) // Only count outgoing movements
+        .lt('quantity', 0)
         .order('created_at', { ascending: false });
         
-      // For packaging materials
       const packagingQuery = await supabase
         .from('inventory_movements')
         .select('item_id, item_type, quantity')
         .eq('item_type', 'packaging')
-        .lt('quantity', 0) // Only count outgoing movements
+        .lt('quantity', 0)
         .order('created_at', { ascending: false });
         
       if (rawMaterialsQuery.error) console.error('Error fetching raw materials consumption data:', rawMaterialsQuery.error);
       if (packagingQuery.error) console.error('Error fetching packaging consumption data:', packagingQuery.error);
       
-      // Process raw materials consumption
       const rawConsumption: Record<string, number> = {};
       for (const movement of rawMaterialsQuery.data || []) {
         if (!rawConsumption[movement.item_id]) rawConsumption[movement.item_id] = 0;
         rawConsumption[movement.item_id] += Math.abs(movement.quantity);
       }
       
-      // Process packaging consumption
       const packagingConsumption: Record<string, number> = {};
       for (const movement of packagingQuery.data || []) {
         if (!packagingConsumption[movement.item_id]) packagingConsumption[movement.item_id] = 0;
         packagingConsumption[movement.item_id] += Math.abs(movement.quantity);
       }
       
-      // Fetch names for the top consumed items
       const topRawIds = Object.entries(rawConsumption)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
@@ -215,22 +204,23 @@ const InventoryReports = () => {
         .slice(0, 10)
         .map(entry => entry[0]);
         
-      // Get item details for raw materials
+      const topRawIdsAsNumbers = topRawIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+      
+      const topPackagingIdsAsNumbers = topPackagingIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+      
       const topRawMaterialsQuery = await supabase
         .from('raw_materials')
         .select('id, code, name, unit')
-        .in('id', topRawIds);
+        .in('id', topRawIdsAsNumbers);
         
-      // Get item details for packaging materials
       const topPackagingMaterialsQuery = await supabase
         .from('packaging_materials')
         .select('id, code, name, unit')
-        .in('id', topPackagingIds);
+        .in('id', topPackagingIdsAsNumbers);
         
       if (topRawMaterialsQuery.error) console.error('Error fetching top raw materials details:', topRawMaterialsQuery.error);
       if (topPackagingMaterialsQuery.error) console.error('Error fetching top packaging details:', topPackagingMaterialsQuery.error);
       
-      // Combine the data
       const rawMaterialsResult = (topRawMaterialsQuery.data || []).map(item => ({
         id: item.id,
         code: item.code,
@@ -257,26 +247,21 @@ const InventoryReports = () => {
     enabled: activeTab === 'consumption' || activeTab === 'least-used'
   });
 
-  // Fetch materials dependency data (materials used in products)
   const { data: materialsDependency, isLoading: isLoadingDependency } = useQuery({
     queryKey: ['materials-dependency'],
     queryFn: async () => {
-      // Fetch semi-finished product ingredients
       const semiFinishedIngredientsQuery = await supabase
         .from('semi_finished_ingredients')
         .select('raw_material_id, semi_finished_id');
         
-      // Fetch finished product packaging materials
       const finishedProductPackagingQuery = await supabase
         .from('finished_product_packaging')
         .select('packaging_material_id, finished_product_id');
         
-      // Fetch all raw materials
       const rawMaterialsQuery = await supabase
         .from('raw_materials')
         .select('id, code, name');
         
-      // Fetch all packaging materials
       const packagingMaterialsQuery = await supabase
         .from('packaging_materials')
         .select('id, code, name');
@@ -286,7 +271,6 @@ const InventoryReports = () => {
       if (rawMaterialsQuery.error) console.error('Error fetching raw materials:', rawMaterialsQuery.error);
       if (packagingMaterialsQuery.error) console.error('Error fetching packaging materials:', packagingMaterialsQuery.error);
       
-      // Count dependencies for raw materials
       const rawMaterialDependencies: Record<string, number> = {};
       for (const ingredient of semiFinishedIngredientsQuery.data || []) {
         const materialId = ingredient.raw_material_id.toString();
@@ -294,7 +278,6 @@ const InventoryReports = () => {
         rawMaterialDependencies[materialId]++;
       }
       
-      // Count dependencies for packaging materials
       const packagingDependencies: Record<string, number> = {};
       for (const packaging of finishedProductPackagingQuery.data || []) {
         const materialId = packaging.packaging_material_id.toString();
@@ -302,7 +285,6 @@ const InventoryReports = () => {
         packagingDependencies[materialId]++;
       }
       
-      // Combine with material details
       const rawMaterialsResult = (rawMaterialsQuery.data || []).map(material => ({
         id: material.id,
         code: material.code,
@@ -355,7 +337,6 @@ const InventoryReports = () => {
       }))
     ];
     
-    // Group data by month for the chart
     const monthlyData: Record<string, any> = {};
     combinedItems.forEach(item => {
       const date = new Date(item.updated_at);
@@ -365,7 +346,6 @@ const InventoryReports = () => {
         monthlyData[monthYear] = { month: monthYear };
       }
       
-      // Use the code as a key
       monthlyData[monthYear][item.code] = item.unit_cost;
     });
     
@@ -535,7 +515,6 @@ const InventoryReports = () => {
   const getLeastUsedMaterials = () => {
     if (!topConsumedMaterials) return { rawMaterials: [], packaging: [] };
     
-    // Combine all materials and sort by consumption (ascending)
     const allRawMaterials = [...topConsumedMaterials.rawMaterials].sort((a, b) => a.consumption - b.consumption);
     const allPackaging = [...topConsumedMaterials.packaging].sort((a, b) => a.consumption - b.consumption);
     
