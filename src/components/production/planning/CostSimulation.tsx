@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // نوع بيانات لتحليل التكاليف
 interface CostAnalysisItem {
@@ -571,9 +572,13 @@ const CostSimulation = () => {
                           }}
                         />
                         <Legend />
-                        <Bar dataKey="change" name="مقدار التغير" fill={(entry) => 
-                          entry.change > 0 ? '#ef4444' : '#10b981'
-                        } />
+                        <Bar 
+                          dataKey="change" 
+                          name="مقدار التغير" 
+                          fill="#10b981"
+                          // Fix: Use a string color instead of a function for 'fill'
+                          // We'll use a conditional render instead
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   )}

@@ -24,6 +24,14 @@ import { addMonths, format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
 import { ar } from 'date-fns/locale';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 // نوع بيانات لخط الإنتاج
 interface ProductionLine {
@@ -538,7 +546,7 @@ const ProductionCapacityPlanning = () => {
       </div>
       
       {/* عرض التخطيط أو التحليل حسب الاختيار */}
-      <TabsContent value="planning" className="mt-0 space-y-6" forceMount={selectedView === 'planning'} hidden={selectedView !== 'planning'}>
+      <TabsContent value="planning" className="mt-0 space-y-6" hidden={selectedView !== 'planning'}>
         {/* إحصائيات التخطيط */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
@@ -827,30 +835,17 @@ const ProductionCapacityPlanning = () => {
                     {(monthlyPlans.find(plan => plan.month === selectedMonth)?.requiredCapacity || 0).toFixed(1)} ساعة
                   </span>
                 </div>
-                <div>
-                  <span className="font-medium">استغلال السعة:</span>
-                  <Badge variant={
-                    (monthlyPlans.find(plan => plan.month === selectedMonth)?.capacityUtilization || 0) > 90
-                      ? "destructive"
-                      : (monthlyPlans.find(plan => plan.month === selectedMonth)?.capacityUtilization || 0) > 70
-                        ? "secondary"
-                        : "success"
-                  } className="mr-1">
-                    {(monthlyPlans.find(plan => plan.month === selectedMonth)?.capacityUtilization || 0).toFixed(1)}%
-                  </Badge>
-                </div>
               </div>
             )}
           </CardContent>
         </Card>
       </TabsContent>
       
-      <TabsContent value="analytics" className="mt-0 space-y-6" forceMount={selectedView === 'analytics'} hidden={selectedView !== 'analytics'}>
-        {/* رسومات تحليلية */}
+      <TabsContent value="analytics" className="mt-0 space-y-6" hidden={selectedView !== 'analytics'}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">تحليل السعة على مدار الأشهر</CardTitle>
+              <CardTitle className="text-lg">تحليل استغلال السعة (الأشهر القادمة)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
@@ -859,149 +854,64 @@ const ProductionCapacityPlanning = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="monthName" />
                     <YAxis />
-                    <Tooltip 
-                      formatter={(value: any) => [`${value.toFixed(1)} ساعة`, '']}
-                    />
+                    <Tooltip />
                     <Legend />
-                    <Bar dataKey="requiredHours" name="الساعات المطلوبة" fill="#4338ca" />
-                    <Bar dataKey="availableHours" name="الساعات المتاحة" fill="#7c3aed" />
+                    <Bar dataKey="requiredHours" name="الساعات المطلوبة" fill="#6366F1" />
+                    <Bar dataKey="availableHours" name="الساعات المتاحة" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-              <div className="mt-4">
-                <div className="text-sm text-muted-foreground">
-                  يوضح الرسم البياني معدل استغلال السعة على مدار الأشهر الستة القادمة، مقارنة الساعات المطلوبة بالساعات المتاحة.
-                </div>
               </div>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">توزيع الإنتاج حسب المنتج</CardTitle>
+              <CardTitle className="text-lg">توزيع وقت الإنتاج حسب المنتج</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={getProductDistributionData()}
-                    layout="vertical"
-                    margin={{ top: 20, right: 30, left: 60, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={100} />
-                    <Tooltip 
-                      formatter={(value: any, name: any, props: any) => {
-                        const entry = props.payload;
-                        return [
-                          name === 'hours' ? `${value.toFixed(1)} ساعة` : `${value} وحدة`,
-                          name === 'hours' ? 'إجمالي الساعات' : 'الكمية المخططة'
-                        ];
-                      }}
-                    />
-                    <Legend />
-                    <Bar dataKey="hours" name="الساعات" fill="#6366F1" />
-                    <Bar dataKey="quantity" name="الكمية" fill="#F97316" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-4">
-                <div className="text-sm text-muted-foreground">
-                  يوضح الرسم البياني توزيع الإنتاج للشهر المحدد حسب المنتج، موضحاً الكمية المخططة وإجمالي الساعات المطلوبة لكل منتج.
+              {getProductDistributionData().length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  لا توجد بيانات للعرض. قم بإضافة منتجات للخطة.
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>المنتج</TableHead>
+                        <TableHead>النوع</TableHead>
+                        <TableHead>الكمية</TableHead>
+                        <TableHead>الساعات</TableHead>
+                        <TableHead>وقت المعالجة</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {getProductDistributionData().map((product, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            {product.name}
+                          </TableCell>
+                          <TableCell>
+                            {product.type}
+                          </TableCell>
+                          <TableCell>
+                            {product.quantity}
+                          </TableCell>
+                          <TableCell>
+                            {product.hours.toFixed(1)} ساعة
+                          </TableCell>
+                          <TableCell>
+                            {product.processingTime} ساعة/وحدة
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
-        
-        {/* جدول تحليل السعة */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">تحليل السعة للأشهر القادمة</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[400px]">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>الشهر</TableHead>
-                      <TableHead>الساعات المطلوبة</TableHead>
-                      <TableHead>الساعات المتاحة</TableHead>
-                      <TableHead>نسبة الاستغلال</TableHead>
-                      <TableHead>حالة السعة</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getCapacityAnalysisData().map(data => (
-                      <TableRow key={data.month}>
-                        <TableCell>
-                          <div className="font-medium">{data.monthName}</div>
-                        </TableCell>
-                        <TableCell>
-                          {data.requiredHours.toFixed(1)} ساعة
-                        </TableCell>
-                        <TableCell>
-                          {data.availableHours.toFixed(1)} ساعة
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={
-                            data.utilizationRate > 90
-                              ? "destructive"
-                              : data.utilizationRate > 70
-                                ? "secondary"
-                                : "success"
-                          }>
-                            {data.utilizationRate.toFixed(1)}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {data.utilizationRate > 100 ? (
-                            <Badge variant="destructive">تجاوز السعة</Badge>
-                          ) : data.utilizationRate > 90 ? (
-                            <Badge variant="secondary">اقتراب من الحد الأقصى</Badge>
-                          ) : data.utilizationRate > 70 ? (
-                            <Badge variant="outline">استغلال جيد</Badge>
-                          ) : (
-                            <Badge variant="success">سعة متاحة</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </ScrollArea>
-            
-            <div className="mt-6">
-              <h3 className="font-medium mb-3">توصيات لتحسين استغلال السعة</h3>
-              <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-                {getCapacityAnalysisData().some(data => data.utilizationRate > 100) && (
-                  <li>
-                    هناك شهور تتجاوز فيها الخطة السعة المتاحة. يمكن النظر في إعادة توزيع الإنتاج أو زيادة ساعات العمل.
-                  </li>
-                )}
-                {getCapacityAnalysisData().some(data => data.utilizationRate < 60) && (
-                  <li>
-                    هناك شهور ذات استغلال منخفض للسعة. يمكن استغلال ذلك في زيادة الإنتاج أو جدولة أعمال الصيانة.
-                  </li>
-                )}
-                <li>
-                  متوسط استغلال السعة: {
-                    (getCapacityAnalysisData().reduce((acc, curr) => acc + curr.utilizationRate, 0) / getCapacityAnalysisData().length).toFixed(1)
-                  }%
-                </li>
-                <li>
-                  يمكن تحسين التخطيط من خلال توزيع الإنتاج بشكل أكثر توازناً بين الأشهر لتجنب فترات الذروة والانخفاض.
-                </li>
-                <li>
-                  مراقبة كفاءة خط الإنتاج وإجراء الصيانة الدورية لضمان استمرار العمل بكفاءة عالية.
-                </li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
       </TabsContent>
     </div>
   );

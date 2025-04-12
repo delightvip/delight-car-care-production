@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -595,7 +594,6 @@ const MaterialsForecasting = () => {
                     <DatePicker
                       date={newSupply.supplyDate}
                       setDate={(date) => setNewSupply({ ...newSupply, supplyDate: date })}
-                      locale={ar}
                     />
                   </div>
                   
