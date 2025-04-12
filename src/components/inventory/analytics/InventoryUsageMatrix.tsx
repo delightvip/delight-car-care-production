@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
@@ -35,22 +34,37 @@ const InventoryUsageMatrix: React.FC<InventoryUsageMatrixProps> = ({
         
         // جلب مكونات المنتجات نصف المصنعة
         if (inventoryType === 'all' || inventoryType === 'raw') {
+          // تعديل استعلام Supabase لتفادي مشكلة العلاقات المتعددة
           const { data: ingredients } = await supabase
             .from('semi_finished_ingredients')
             .select(`
               id,
               raw_material_id,
               semi_finished_id,
-              semi_finished:semi_finished_id(id, code, name),
               raw_material:raw_material_id(id, code, name)
             `);
           
           if (ingredients) {
+            // للحصول على معلومات المنتجات نصف المصنعة عن طريق استعلام منفصل
+            const semiFinishedIds = ingredients
+              .filter(i => i.semi_finished_id)
+              .map(i => i.semi_finished_id);
+            
+            const { data: semiProducts } = await supabase
+              .from('semi_finished_products')
+              .select('id, code, name')
+              .in('id', semiFinishedIds);
+            
+            const semiProductsMap = new Map(
+              (semiProducts || []).map(product => [product.id, product])
+            );
+            
             // إنشاء خريطة استخدام للمواد الخام
             ingredients.forEach(ingredient => {
               const rawMaterialId = ingredient.raw_material_id;
               const rawMaterial = ingredient.raw_material;
-              const semiFinished = ingredient.semi_finished;
+              const semiFinishedId = ingredient.semi_finished_id;
+              const semiFinished = semiProductsMap.get(semiFinishedId);
               
               if (rawMaterial && semiFinished) {
                 const key = `raw-${rawMaterialId}`;
@@ -200,7 +214,7 @@ const InventoryUsageMatrix: React.FC<InventoryUsageMatrixProps> = ({
                 const key = `semi-${semiFinishedId}`;
                 
                 if (!materialUsageMap[key]) {
-                  // الحصول على معلومات المنتج نصف المصنع
+                  // الحصول على معلومات المنتج نصف المصن��
                   supabase
                     .from('semi_finished_products')
                     .select('code, name')

@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
@@ -6,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, TrendingDown, TrendingUp, Clock, Activity } from 'lucide-react';
-import { calculateRemainingDays, calculateConfidenceLevel } from '@/utils/inventoryAnalytics';
+import { calculateRemainingDays, calculateConfidenceLevel, convertToNumberArray } from '@/utils/inventoryAnalytics';
 
 interface InventoryForecastProps {
   inventoryType?: string;
@@ -37,10 +36,13 @@ const InventoryForecast: React.FC<InventoryForecastProps> = ({
         let inventoryItems: any[] = [];
         
         if (inventoryType === 'all' || inventoryType === 'raw') {
+          // تحويل المصفوفة النصية إلى مصفوفة أرقام للاستخدام في استعلام .in()
+          const numberIds = selectedItems.length > 0 ? convertToNumberArray(selectedItems) : [];
+          
           const { data: rawMaterials } = await supabase
             .from('raw_materials')
             .select('id, code, name, quantity, min_stock, unit, unit_cost')
-            .in('id', selectedItems.length > 0 ? selectedItems.map(id => parseInt(id)) : selectedItems);
+            .in('id', numberIds.length > 0 ? numberIds : selectedItems.length > 0 ? [0] : []);
           
           if (rawMaterials) {
             inventoryItems = [...inventoryItems, ...rawMaterials.map(item => ({ ...item, type: 'raw' }))];
@@ -48,10 +50,13 @@ const InventoryForecast: React.FC<InventoryForecastProps> = ({
         }
         
         if (inventoryType === 'all' || inventoryType === 'packaging') {
+          // تحويل المصفوفة النصية إلى مصفوفة أرقام للاستخدام في استعلام .in()
+          const numberIds = selectedItems.length > 0 ? convertToNumberArray(selectedItems) : [];
+          
           const { data: packagingMaterials } = await supabase
             .from('packaging_materials')
             .select('id, code, name, quantity, min_stock, unit, unit_cost')
-            .in('id', selectedItems.length > 0 ? selectedItems.map(id => parseInt(id)) : selectedItems);
+            .in('id', numberIds.length > 0 ? numberIds : selectedItems.length > 0 ? [0] : []);
           
           if (packagingMaterials) {
             inventoryItems = [...inventoryItems, ...packagingMaterials.map(item => ({ ...item, type: 'packaging' }))];
@@ -59,10 +64,13 @@ const InventoryForecast: React.FC<InventoryForecastProps> = ({
         }
         
         if (inventoryType === 'all' || inventoryType === 'semi') {
+          // تحويل المصفوفة النصية إلى مصفوفة أرقام للاستخدام في استعلام .in()
+          const numberIds = selectedItems.length > 0 ? convertToNumberArray(selectedItems) : [];
+          
           const { data: semiFinishedProducts } = await supabase
             .from('semi_finished_products')
             .select('id, code, name, quantity, min_stock, unit, unit_cost')
-            .in('id', selectedItems.length > 0 ? selectedItems.map(id => parseInt(id)) : selectedItems);
+            .in('id', numberIds.length > 0 ? numberIds : selectedItems.length > 0 ? [0] : []);
           
           if (semiFinishedProducts) {
             inventoryItems = [...inventoryItems, ...semiFinishedProducts.map(item => ({ ...item, type: 'semi' }))];
@@ -70,10 +78,13 @@ const InventoryForecast: React.FC<InventoryForecastProps> = ({
         }
         
         if (inventoryType === 'all' || inventoryType === 'finished') {
+          // تحويل المصفوفة النصية إلى مصفوفة أرقام للاستخدام في استعلام .in()
+          const numberIds = selectedItems.length > 0 ? convertToNumberArray(selectedItems) : [];
+          
           const { data: finishedProducts } = await supabase
             .from('finished_products')
             .select('id, code, name, quantity, min_stock, unit, unit_cost')
-            .in('id', selectedItems.length > 0 ? selectedItems.map(id => parseInt(id)) : selectedItems);
+            .in('id', numberIds.length > 0 ? numberIds : selectedItems.length > 0 ? [0] : []);
           
           if (finishedProducts) {
             inventoryItems = [...inventoryItems, ...finishedProducts.map(item => ({ ...item, type: 'finished' }))];

@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
@@ -9,7 +8,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { 
   calculateEOQ, 
   calculateReorderPoint, 
-  calculateOptimalInventoryLevel 
+  calculateOptimalInventoryLevel,
+  convertToNumberArray 
 } from '@/utils/inventoryAnalytics';
 import { Settings, ArrowUp, ArrowDown, BadgeDollarSign } from 'lucide-react';
 
@@ -49,10 +49,13 @@ const OptimalInventoryAnalysis: React.FC<OptimalInventoryAnalysisProps> = ({
         let inventoryItems: any[] = [];
         
         if (inventoryType === 'all' || inventoryType === 'raw') {
+          // تحويل المصفوفة النصية إلى مصفوفة أرقام للاستخدام في استعلام .in()
+          const numberIds = selectedItems.length > 0 ? convertToNumberArray(selectedItems) : [];
+          
           const { data: rawMaterials } = await supabase
             .from('raw_materials')
             .select('id, code, name, quantity, min_stock, unit, unit_cost')
-            .in('id', selectedItems.length > 0 ? selectedItems.map(id => parseInt(id)) : selectedItems);
+            .in('id', numberIds.length > 0 ? numberIds : selectedItems.length > 0 ? [0] : []);
           
           if (rawMaterials) {
             inventoryItems = [...inventoryItems, ...rawMaterials.map(item => ({ ...item, type: 'raw' }))];
@@ -60,10 +63,13 @@ const OptimalInventoryAnalysis: React.FC<OptimalInventoryAnalysisProps> = ({
         }
         
         if (inventoryType === 'all' || inventoryType === 'packaging') {
+          // تحويل المصفوفة النصية إلى مصفوفة أرقام للاستخدام في استعلام .in()
+          const numberIds = selectedItems.length > 0 ? convertToNumberArray(selectedItems) : [];
+          
           const { data: packagingMaterials } = await supabase
             .from('packaging_materials')
             .select('id, code, name, quantity, min_stock, unit, unit_cost')
-            .in('id', selectedItems.length > 0 ? selectedItems.map(id => parseInt(id)) : selectedItems);
+            .in('id', numberIds.length > 0 ? numberIds : selectedItems.length > 0 ? [0] : []);
           
           if (packagingMaterials) {
             inventoryItems = [...inventoryItems, ...packagingMaterials.map(item => ({ ...item, type: 'packaging' }))];

@@ -135,3 +135,15 @@ export const analyzeConsumptionTrend = (historicalData: Array<{ date: Date, quan
 export const calculateOptimalInventoryLevel = (eoq: number, reorderPoint: number): number => {
   return reorderPoint + (eoq / 2);
 };
+
+/**
+ * تحويل مصفوفة نصية إلى مصفوفة أرقام
+ * @param strArray مصفوفة نصية
+ * @returns مصفوفة أرقام
+ */
+export const convertToNumberArray = (strArray: string[]): number[] => {
+  // تحويل كل عنصر إلى رقم، وتصفية أي قيم غير رقمية
+  return strArray
+    .map(str => parseInt(str, 10))
+    .filter(num => !isNaN(num));
+};
