@@ -19,6 +19,12 @@ import ReportFilterCard from '@/components/inventory/reports/ReportFilterCard';
 import ReportInfoCard from '@/components/inventory/reports/ReportInfoCard';
 import ReportContent from '@/components/inventory/reports/ReportContent';
 
+// Import the new components
+import InventoryDashboardSummary from '@/components/inventory/reports/InventoryDashboardSummary';
+import { ExportReportOptions } from '@/components/inventory/reports/ExportReportOptions';
+import AdvancedTimeFilter from '@/components/inventory/reports/AdvancedTimeFilter';
+import InventoryInsights from '@/components/inventory/reports/InventoryInsights';
+
 export interface ItemCategory {
   id: string;
   name: string;
@@ -533,14 +539,12 @@ const InventoryReports = () => {
             <p className="text-muted-foreground mt-1">تحليل وإحصائيات حركة المخزون والتوزيع</p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              className="gap-2"
-              onClick={handleExportReport}
-            >
-              <Download size={16} />
-              تصدير التقرير
-            </Button>
+            <ExportReportOptions
+              inventoryType={selectedCategory}
+              itemId={selectedItem || undefined}
+              timeRange={timeRange}
+              reportType={reportType}
+            />
             {isItemReport && (
               <Button 
                 variant="outline" 
@@ -552,6 +556,12 @@ const InventoryReports = () => {
           </div>
         </div>
         
+        {/* لوحة الإحصائيات الموجزة */}
+        {!isItemReport && <InventoryDashboardSummary />}
+        
+        {/* مكون التحليلات والملاحظات */}
+        {!isItemReport && <InventoryInsights inventoryType={selectedCategory} timeRange={timeRange} />}
+
         {isItemReport ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -667,20 +677,20 @@ const InventoryReports = () => {
                   </div>
                 </TabsContent>
                 
-                <TabsContent value="price-trends" className="mt-0">
-                  <div className="flex justify-between items-center mb-6">
+                <TabsContent value="price-trends" className="mt-0">                  <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-semibold">اتجاهات أسعار المواد</h2>
                     <div className="flex items-center gap-2">
-                      <Select defaultValue={timeRange} onValueChange={setTimeRange}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="الفترة الزمنية" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="month">شهري</SelectItem>
-                          <SelectItem value="quarter">ربع سنوي</SelectItem>
-                          <SelectItem value="year">سنوي</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <AdvancedTimeFilter 
+                        onChange={(range) => {
+                          const preset = range.preset || 'month';
+                          setTimeRange(preset);
+                        }}
+                        defaultValue={{
+                          from: new Date(new Date().setMonth(new Date().getMonth() - 1)),
+                          to: new Date(),
+                          preset: timeRange
+                        }}
+                      />
                     </div>
                   </div>
                   
