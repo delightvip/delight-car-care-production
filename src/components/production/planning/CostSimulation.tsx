@@ -1,15 +1,17 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChartBar, DollarSign, LineChart, RotateCcw, Save } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Calculator, PlusCircle, RotateCcw, Save, Trash2, TrendingUp, Percent, Landmark, Tag, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import LoadingIndicator from '@/components/ui/LoadingIndicator';
-import { CartesianGrid, Line, LineChart as RechartsLineChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, BarChart, Bar } from 'recharts';
+import { CartesianGrid, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, BarChart, Bar } from 'recharts';
 import {
   Select,
   SelectContent,
@@ -17,42 +19,159 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Slider } from '@/components/ui/slider';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// نوع بيانات لتحليل التكاليف
-interface CostAnalysisItem {
+interface CostFactor {
   id: string;
   name: string;
-  code: string;
-  type: 'raw' | 'semi' | 'packaging' | 'finished';
-  originalCost: number;
-  adjustedCost: number;
-  adjustmentFactor: number;
+  category: string;
+  currentValue: number;
+  unit: string;
+  impactLevel: 'low' | 'medium' | 'high';
+  minValue?: number;
+  maxValue?: number;
 }
 
-// نوع بيانات سيناريو تكاليف
 interface CostScenario {
   id: string;
   name: string;
   description: string;
-  items: CostAnalysisItem[];
-  totalOriginalCost: number;
-  totalAdjustedCost: number;
+  factorChanges: {
+    [factorId: string]: number; // نسبة التغيير للعامل
+  };
+  resultingChanges: {
+    production: number; // التغيير في تكلفة الإنتاج
+    packaging: number; // التغيير في تكلفة التعبئة
+    operations: number; // التغيير في تكلفة العمليات
+    total: number; // التغيير الإجمالي
+  };
 }
 
 const CostSimulation = () => {
-  const [scenarios, setScenarios] = useState<CostScenario[]>([]);
-  const [activeScenario, setActiveScenario] = useState<CostScenario | null>(null);
+  // البيانات المبدئية لعوامل التكلفة
+  const [costFactors, setCostFactors] = useState<CostFactor[]>([
+    {
+      id: 'raw-material-1',
+      name: 'سعر المادة الخام الرئيسية',
+      category: 'raw-materials',
+      currentValue: 250,
+      unit: 'ج.م/كجم',
+      impactLevel: 'high',
+      minValue: 180,
+      maxValue: 320
+    },
+    {
+      id: 'raw-material-2',
+      name: 'سعر المواد المضافة',
+      category: 'raw-materials',
+      currentValue: 80,
+      unit: 'ج.م/كجم',
+      impactLevel: 'medium',
+      minValue: 60,
+      maxValue: 120
+    },
+    {
+      id: 'packaging-1',
+      name: 'تكلفة مواد التعبئة',
+      category: 'packaging',
+      currentValue: 3.5,
+      unit: 'ج.م/وحدة',
+      impactLevel: 'medium',
+      minValue: 2.8,
+      maxValue: 4.2
+    },
+    {
+      id: 'labor-1',
+      name: 'تكلفة العمالة',
+      category: 'operations',
+      currentValue: 22,
+      unit: 'ج.م/ساعة',
+      impactLevel: 'medium',
+      minValue: 18,
+      maxValue: 28
+    },
+    {
+      id: 'energy-1',
+      name: 'تكلفة الطاقة',
+      category: 'operations',
+      currentValue: 1.2,
+      unit: 'ج.م/كيلو واط',
+      impactLevel: 'low',
+      minValue: 0.9,
+      maxValue: 1.8
+    },
+    {
+      id: 'transportation-1',
+      name: 'تكلفة النقل',
+      category: 'operations',
+      currentValue: 500,
+      unit: 'ج.م/رحلة',
+      impactLevel: 'low',
+      minValue: 400,
+      maxValue: 700
+    }
+  ]);
+  
+  // بيانات سيناريوهات التكلفة
+  const [costScenarios, setCostScenarios] = useState<CostScenario[]>([
+    {
+      id: 'scenario-1',
+      name: 'زيادة أسعار المواد الخام',
+      description: 'سيناريو زيادة أسعار المواد الخام بنسب متفاوتة',
+      factorChanges: {
+        'raw-material-1': 15,
+        'raw-material-2': 10,
+      },
+      resultingChanges: {
+        production: 12.5,
+        packaging: 0,
+        operations: 0,
+        total: 8.2
+      }
+    },
+    {
+      id: 'scenario-2',
+      name: 'انخفاض تكاليف التشغيل',
+      description: 'سيناريو انخفاض تكاليف التشغيل والعمالة',
+      factorChanges: {
+        'labor-1': -8,
+        'energy-1': -12,
+      },
+      resultingChanges: {
+        production: 0,
+        packaging: 0,
+        operations: -9.5,
+        total: -4.2
+      }
+    }
+  ]);
+  
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
+  const [selectedFactors, setSelectedFactors] = useState<{ [id: string]: boolean }>({});
+  const [factorChanges, setFactorChanges] = useState<{ [id: string]: number }>({});
+  const [selectedTab, setSelectedTab] = useState<string>('factors');
   const [newScenarioName, setNewScenarioName] = useState<string>('');
   const [newScenarioDescription, setNewScenarioDescription] = useState<string>('');
-  const [selectedChart, setSelectedChart] = useState<'comparison' | 'impact'>('comparison');
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  
+  // أنواع عوامل التكلفة
+  const factorCategories = [
+    { id: 'raw-materials', name: 'المواد الخام', icon: <Tag className="h-4 w-4 mr-2" /> },
+    { id: 'packaging', name: 'التعبئة', icon: <PlusCircle className="h-4 w-4 mr-2" /> },
+    { id: 'operations', name: 'العمليات', icon: <Landmark className="h-4 w-4 mr-2" /> }
+  ];
 
-  // للحصول على بيانات المواد الخام
-  const { data: rawMaterials, isLoading: isLoadingRaw } = useQuery({
-    queryKey: ['raw-materials-for-cost'],
+  // للحصول على البيانات من API
+  const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
+    queryKey: ['raw-materials-for-costs'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('raw_materials')
@@ -64,733 +183,677 @@ const CostSimulation = () => {
     }
   });
   
-  // للحصول على بيانات المنتجات نصف المصنعة
-  const { data: semiFinished, isLoading: isLoadingSemi } = useQuery({
-    queryKey: ['semi-finished-for-cost'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('semi_finished_products')
-        .select('id, name, code, unit_cost')
-        .order('name');
+  // إضافة المواد الخام الفعلية للمحاكاة
+  useEffect(() => {
+    if (rawMaterials && rawMaterials.length > 0) {
+      const rawMaterialFactors: CostFactor[] = rawMaterials.slice(0, 5).map((material, index) => ({
+        id: `db-raw-${material.id}`,
+        name: material.name,
+        category: 'raw-materials',
+        currentValue: material.unit_cost,
+        unit: 'ج.م/وحدة',
+        impactLevel: index < 2 ? 'high' : index < 4 ? 'medium' : 'low',
+        minValue: material.unit_cost * 0.7,
+        maxValue: material.unit_cost * 1.3
+      }));
       
-      if (error) throw error;
-      return data || [];
+      // دمج العوامل الموجودة مع المواد الخام الجديدة
+      setCostFactors(prev => {
+        // احتفظ بالعوامل التي ليست مواد خام
+        const nonRawFactors = prev.filter(factor => factor.category !== 'raw-materials' || factor.id.startsWith('raw-material-'));
+        return [...nonRawFactors, ...rawMaterialFactors];
+      });
     }
-  });
+  }, [rawMaterials]);
   
-  // للحصول على بيانات مواد التعبئة
-  const { data: packagingMaterials, isLoading: isLoadingPackaging } = useQuery({
-    queryKey: ['packaging-materials-for-cost'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('packaging_materials')
-        .select('id, name, code, unit_cost')
-        .order('name');
+  // إعداد عوامل محددة ونسب التغيير عند اختيار سيناريو
+  useEffect(() => {
+    if (selectedScenario) {
+      const scenario = costScenarios.find(s => s.id === selectedScenario);
+      if (scenario) {
+        const newSelectedFactors: { [id: string]: boolean } = {};
+        Object.keys(scenario.factorChanges).forEach(factorId => {
+          newSelectedFactors[factorId] = true;
+        });
+        
+        setSelectedFactors(newSelectedFactors);
+        setFactorChanges(scenario.factorChanges);
+        setNewScenarioName(scenario.name);
+        setNewScenarioDescription(scenario.description);
+        setIsEditMode(true);
+      }
+    } else {
+      resetScenarioForm();
+    }
+  }, [selectedScenario]);
+  
+  // إعادة تعيين نموذج السيناريو
+  const resetScenarioForm = () => {
+    setSelectedFactors({});
+    setFactorChanges({});
+    setNewScenarioName('');
+    setNewScenarioDescription('');
+    setIsEditMode(false);
+  };
+  
+  // تبديل تحديد عامل
+  const toggleFactor = (factorId: string) => {
+    setSelectedFactors(prev => {
+      const newSelectedFactors = { ...prev };
+      newSelectedFactors[factorId] = !prev[factorId];
       
-      if (error) throw error;
-      return data || [];
-    }
-  });
-  
-  // للحصول على بيانات المنتجات النهائية
-  const { data: finishedProducts, isLoading: isLoadingFinished } = useQuery({
-    queryKey: ['finished-products-for-cost'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('finished_products')
-        .select('id, name, code, unit_cost')
-        .order('name');
+      // إذا تم إلغاء تحديد العامل، احذف نسبة التغيير المرتبطة به
+      if (!newSelectedFactors[factorId]) {
+        const newFactorChanges = { ...factorChanges };
+        delete newFactorChanges[factorId];
+        setFactorChanges(newFactorChanges);
+      } else {
+        // إذا تم تحديد العامل، ضع قيمة تغيير افتراضية
+        setFactorChanges(prev => ({ ...prev, [factorId]: 0 }));
+      }
       
-      if (error) throw error;
-      return data || [];
-    }
-  });
+      return newSelectedFactors;
+    });
+  };
   
-  // إنشاء سيناريو جديد
-  const createNewScenario = () => {
+  // تحديث نسبة التغيير لعامل
+  const updateFactorChange = (factorId: string, value: number) => {
+    setFactorChanges(prev => ({ ...prev, [factorId]: value }));
+  };
+  
+  // حساب تأثير تغيير عوامل التكلفة
+  const calculateImpact = () => {
+    // العوامل المحددة مع نسب التغيير
+    const selectedFactorsWithChanges = costFactors.filter(factor => selectedFactors[factor.id])
+      .map(factor => ({
+        ...factor,
+        changePercent: factorChanges[factor.id] || 0
+      }));
+    
+    // حساب التأثير على كل فئة
+    let productionImpact = 0;
+    let packagingImpact = 0;
+    let operationsImpact = 0;
+    
+    selectedFactorsWithChanges.forEach(factor => {
+      const impact = factor.changePercent * (factor.impactLevel === 'high' ? 1 : factor.impactLevel === 'medium' ? 0.6 : 0.3);
+      
+      if (factor.category === 'raw-materials') {
+        productionImpact += impact;
+      } else if (factor.category === 'packaging') {
+        packagingImpact += impact;
+      } else if (factor.category === 'operations') {
+        operationsImpact += impact;
+      }
+    });
+    
+    // حساب التأثير الإجمالي (متوسط مرجح)
+    const totalImpact = (productionImpact * 0.5 + packagingImpact * 0.2 + operationsImpact * 0.3);
+    
+    return {
+      production: productionImpact,
+      packaging: packagingImpact,
+      operations: operationsImpact,
+      total: totalImpact
+    };
+  };
+  
+  // حفظ السيناريو
+  const saveScenario = () => {
     if (!newScenarioName) {
       toast.error('يرجى إدخال اسم للسيناريو');
       return;
     }
     
-    // تجميع البيانات من جميع المصادر
-    const rawItems: CostAnalysisItem[] = (rawMaterials || []).map(item => ({
-      id: `raw-${item.id}`,
-      name: item.name,
-      code: item.code,
-      type: 'raw',
-      originalCost: item.unit_cost,
-      adjustedCost: item.unit_cost,
-      adjustmentFactor: 1
-    }));
+    if (Object.keys(factorChanges).length === 0) {
+      toast.error('يرجى تحديد عامل واحد على الأقل وتحديد نسبة التغيير');
+      return;
+    }
     
-    const semiItems: CostAnalysisItem[] = (semiFinished || []).map(item => ({
-      id: `semi-${item.id}`,
-      name: item.name,
-      code: item.code,
-      type: 'semi',
-      originalCost: item.unit_cost,
-      adjustedCost: item.unit_cost,
-      adjustmentFactor: 1
-    }));
+    const impact = calculateImpact();
     
-    const packagingItems: CostAnalysisItem[] = (packagingMaterials || []).map(item => ({
-      id: `packaging-${item.id}`,
-      name: item.name,
-      code: item.code,
-      type: 'packaging',
-      originalCost: item.unit_cost,
-      adjustedCost: item.unit_cost,
-      adjustmentFactor: 1
-    }));
-    
-    const finishedItems: CostAnalysisItem[] = (finishedProducts || []).map(item => ({
-      id: `finished-${item.id}`,
-      name: item.name,
-      code: item.code,
-      type: 'finished',
-      originalCost: item.unit_cost,
-      adjustedCost: item.unit_cost,
-      adjustmentFactor: 1
-    }));
-    
-    // دمج جميع العناصر
-    const allItems = [...rawItems, ...semiItems, ...packagingItems, ...finishedItems];
-    
-    // حساب إجمالي التكاليف
-    const totalOriginalCost = allItems.reduce((sum, item) => sum + item.originalCost, 0);
-    
-    // إنشاء السيناريو الجديد
-    const newScenario: CostScenario = {
-      id: Date.now().toString(),
-      name: newScenarioName,
-      description: newScenarioDescription || `سيناريو تكاليف ${newScenarioName}`,
-      items: allItems,
-      totalOriginalCost,
-      totalAdjustedCost: totalOriginalCost
-    };
-    
-    // إضافة السيناريو للقائمة وتعيينه كسيناريو نشط
-    setScenarios(prev => [...prev, newScenario]);
-    setActiveScenario(newScenario);
+    if (isEditMode && selectedScenario) {
+      // تحديث سيناريو موجود
+      setCostScenarios(prev => prev.map(scenario => {
+        if (scenario.id === selectedScenario) {
+          return {
+            ...scenario,
+            name: newScenarioName,
+            description: newScenarioDescription,
+            factorChanges: { ...factorChanges },
+            resultingChanges: impact
+          };
+        }
+        return scenario;
+      }));
+      
+      toast.success('تم تحديث السيناريو بنجاح');
+    } else {
+      // إنشاء سيناريو جديد
+      const newScenario: CostScenario = {
+        id: `scenario-${Date.now()}`,
+        name: newScenarioName,
+        description: newScenarioDescription,
+        factorChanges: { ...factorChanges },
+        resultingChanges: impact
+      };
+      
+      setCostScenarios(prev => [...prev, newScenario]);
+      toast.success('تم حفظ السيناريو الجديد بنجاح');
+    }
     
     // إعادة تعيين النموذج
-    setNewScenarioName('');
-    setNewScenarioDescription('');
-    
-    toast.success('تم إنشاء سيناريو التكاليف الجديد');
+    resetScenarioForm();
+    setSelectedScenario(null);
   };
   
-  // تعديل عامل التكلفة لعنصر في السيناريو
-  const updateItemCostFactor = (itemId: string, newFactor: number) => {
-    if (!activeScenario) return;
-    
-    // تحديث العنصر المطلوب
-    const updatedItems = activeScenario.items.map(item => {
-      if (item.id !== itemId) return item;
-      
-      return {
-        ...item,
-        adjustmentFactor: newFactor,
-        adjustedCost: item.originalCost * newFactor
-      };
-    });
-    
-    // إعادة حساب إجمالي التكاليف المعدلة
-    const totalAdjustedCost = updatedItems.reduce((sum, item) => sum + item.adjustedCost, 0);
-    
-    // تحديث السيناريو النشط
-    const updatedScenario: CostScenario = {
-      ...activeScenario,
-      items: updatedItems,
-      totalAdjustedCost
-    };
-    
-    setActiveScenario(updatedScenario);
-    
-    // تحديث قائمة السيناريوهات
-    setScenarios(prev => prev.map(s => s.id === updatedScenario.id ? updatedScenario : s));
-  };
-  
-  // تطبيق عامل زيادة على مجموعة من العناصر
-  const applyBulkIncrease = (itemType: 'raw' | 'semi' | 'packaging' | 'finished', factor: number) => {
-    if (!activeScenario) return;
-    
-    // تحديث العناصر من النوع المحدد
-    const updatedItems = activeScenario.items.map(item => {
-      if (item.type !== itemType) return item;
-      
-      return {
-        ...item,
-        adjustmentFactor: factor,
-        adjustedCost: item.originalCost * factor
-      };
-    });
-    
-    // إعادة حساب إجمالي التكاليف المعدلة
-    const totalAdjustedCost = updatedItems.reduce((sum, item) => sum + item.adjustedCost, 0);
-    
-    // تحديث السيناريو النشط
-    const updatedScenario: CostScenario = {
-      ...activeScenario,
-      items: updatedItems,
-      totalAdjustedCost
-    };
-    
-    setActiveScenario(updatedScenario);
-    
-    // تحديث قائمة السيناريوهات
-    setScenarios(prev => prev.map(s => s.id === updatedScenario.id ? updatedScenario : s));
-    
-    toast.success(`تم تطبيق عامل ${factor}× على جميع عناصر ${getItemTypeName(itemType)}`);
-  };
-  
-  // الحصول على اسم نوع العنصر بالعربية
-  const getItemTypeName = (type: 'raw' | 'semi' | 'packaging' | 'finished'): string => {
-    switch (type) {
-      case 'raw': return 'المواد الخام';
-      case 'semi': return 'المنتجات نصف المصنعة';
-      case 'packaging': return 'مواد التعبئة';
-      case 'finished': return 'المنتجات النهائية';
-      default: return '';
-    }
-  };
-  
-  // تحديد لون لنوع العنصر في الرسوم البيانية
-  const getColorForType = (type: string): string => {
-    switch (type) {
-      case 'raw': return '#4338ca';
-      case 'semi': return '#0891b2';
-      case 'packaging': return '#7c3aed';
-      case 'finished': return '#059669';
-      default: return '#64748b';
-    }
-  };
-  
-  // بيانات للرسم البياني للمقارنة
-  const getComparisonChartData = () => {
-    if (!activeScenario) return [];
-    
-    // تجميع المواد حسب النوع
-    const rawSum = activeScenario.items
-      .filter(item => item.type === 'raw')
-      .reduce((sum, item) => ({ original: sum.original + item.originalCost, adjusted: sum.adjusted + item.adjustedCost }), { original: 0, adjusted: 0 });
-    
-    const semiSum = activeScenario.items
-      .filter(item => item.type === 'semi')
-      .reduce((sum, item) => ({ original: sum.original + item.originalCost, adjusted: sum.adjusted + item.adjustedCost }), { original: 0, adjusted: 0 });
-    
-    const packagingSum = activeScenario.items
-      .filter(item => item.type === 'packaging')
-      .reduce((sum, item) => ({ original: sum.original + item.originalCost, adjusted: sum.adjusted + item.adjustedCost }), { original: 0, adjusted: 0 });
-    
-    const finishedSum = activeScenario.items
-      .filter(item => item.type === 'finished')
-      .reduce((sum, item) => ({ original: sum.original + item.originalCost, adjusted: sum.adjusted + item.adjustedCost }), { original: 0, adjusted: 0 });
-    
-    return [
-      { name: 'المواد الخام', original: rawSum.original, adjusted: rawSum.adjusted },
-      { name: 'المنتجات نصف المصنعة', original: semiSum.original, adjusted: semiSum.adjusted },
-      { name: 'مواد التعبئة', original: packagingSum.original, adjusted: packagingSum.adjusted },
-      { name: 'المنتجات النهائية', original: finishedSum.original, adjusted: finishedSum.adjusted }
-    ];
-  };
-  
-  // بيانات للرسم البياني لتأثير التغيرات
-  const getImpactChartData = () => {
-    if (!activeScenario) return [];
-    
-    // العناصر ذات التغير الأكبر في التكلفة
-    return activeScenario.items
-      .map(item => ({
-        name: item.name,
-        code: item.code,
-        type: item.type,
-        change: (item.adjustedCost - item.originalCost),
-        percentChange: ((item.adjustedCost - item.originalCost) / item.originalCost) * 100
-      }))
-      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
-      .slice(0, 10);
-  };
-  
-  // إعادة تعيين السيناريو إلى القيم الأصلية
-  const resetScenario = () => {
-    if (!activeScenario) return;
-    
-    // إعادة تعيين جميع العناصر إلى عامل 1
-    const resetItems = activeScenario.items.map(item => ({
-      ...item,
-      adjustmentFactor: 1,
-      adjustedCost: item.originalCost
-    }));
-    
-    // تحديث السيناريو
-    const updatedScenario: CostScenario = {
-      ...activeScenario,
-      items: resetItems,
-      totalAdjustedCost: activeScenario.totalOriginalCost
-    };
-    
-    setActiveScenario(updatedScenario);
-    
-    // تحديث قائمة السيناريوهات
-    setScenarios(prev => prev.map(s => s.id === updatedScenario.id ? updatedScenario : s));
-    
-    toast.info('تم إعادة تعيين جميع التعديلات إلى القيم الأصلية');
-  };
-  
-  // حفظ السيناريو
-  const saveScenario = () => {
-    if (!activeScenario) return;
-    
-    // لأغراض المحاكاة، نقوم فقط بعرض رسالة نجاح
-    toast.success('تم حفظ السيناريو بنجاح');
-  };
-  
-  // حذف السيناريو
+  // حذف سيناريو
   const deleteScenario = (scenarioId: string) => {
-    setScenarios(prev => prev.filter(s => s.id !== scenarioId));
+    setCostScenarios(prev => prev.filter(scenario => scenario.id !== scenarioId));
     
-    if (activeScenario && activeScenario.id === scenarioId) {
-      setActiveScenario(null);
+    if (selectedScenario === scenarioId) {
+      resetScenarioForm();
+      setSelectedScenario(null);
     }
     
-    toast.success('تم حذف السيناريو');
+    toast.success('تم حذف السيناريو بنجاح');
   };
   
-  // تحميل السيناريو
-  const loadScenario = (scenarioId: string) => {
-    const scenario = scenarios.find(s => s.id === scenarioId);
-    if (scenario) {
-      setActiveScenario(scenario);
-      toast.success(`تم تحميل سيناريو "${scenario.name}"`);
+  // بيانات المخطط البياني لمقارنة السيناريوهات
+  const getComparisonChartData = () => {
+    return costScenarios.map(scenario => ({
+      name: scenario.name,
+      إنتاج: scenario.resultingChanges.production,
+      تعبئة: scenario.resultingChanges.packaging,
+      عمليات: scenario.resultingChanges.operations,
+      إجمالي: scenario.resultingChanges.total
+    }));
+  };
+  
+  // بيانات المخطط البياني لتحليل حساسية العوامل
+  const getSensitivityChartData = () => {
+    // عرض التغييرات في العامل الذي لديه أكبر تأثير على التكلفة الإجمالية
+    const highImpactFactors = costFactors.filter(factor => factor.impactLevel === 'high').slice(0, 3);
+    
+    if (highImpactFactors.length === 0) return [];
+    
+    const data = [];
+    
+    for (let change = -20; change <= 20; change += 5) {
+      let entry: any = { change: `${change}%` };
+      
+      highImpactFactors.forEach(factor => {
+        // حساب تأثير التغيير على هذا العامل فقط
+        const impact = change * (factor.impactLevel === 'high' ? 1 : factor.impactLevel === 'medium' ? 0.6 : 0.3);
+        const totalImpact = impact * (factor.category === 'raw-materials' ? 0.5 : factor.category === 'packaging' ? 0.2 : 0.3);
+        entry[factor.name] = totalImpact;
+      });
+      
+      data.push(entry);
     }
+    
+    return data;
   };
   
-  // حسابات إضافية للسيناريو
-  const scenarioStats = activeScenario ? {
-    totalItems: activeScenario.items.length,
-    increasedItems: activeScenario.items.filter(item => item.adjustedCost > item.originalCost).length,
-    decreasedItems: activeScenario.items.filter(item => item.adjustedCost < item.originalCost).length,
-    unchangedItems: activeScenario.items.filter(item => item.adjustedCost === item.originalCost).length,
-    totalIncrease: activeScenario.totalAdjustedCost - activeScenario.totalOriginalCost,
-    percentageChange: ((activeScenario.totalAdjustedCost - activeScenario.totalOriginalCost) / activeScenario.totalOriginalCost) * 100
-  } : null;
-  
-  // تصنيف العناصر حسب النوع للعرض
-  const getItemsByType = (type: 'raw' | 'semi' | 'packaging' | 'finished') => {
-    if (!activeScenario) return [];
-    return activeScenario.items.filter(item => item.type === type);
+  // تحديد لون الأعمدة في المخطط البياني
+  const getBarColor = (entry: any) => {
+    return entry > 0 ? "#ef4444" : "#10b981";
   };
   
-  // اللوحة الرئيسية لمحاكاة التكاليف
   return (
     <div className="space-y-6">
-      {!activeScenario ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* نموذج إنشاء سيناريو جديد */}
-          <Card className="md:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-lg">إنشاء سيناريو تكاليف جديد</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="scenarioName">اسم السيناريو</Label>
-                <Input
-                  id="scenarioName"
-                  value={newScenarioName}
-                  onChange={(e) => setNewScenarioName(e.target.value)}
-                  placeholder="أدخل اسماً للسيناريو"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="scenarioDesc">وصف السيناريو (اختياري)</Label>
-                <Input
-                  id="scenarioDesc"
-                  value={newScenarioDescription}
-                  onChange={(e) => setNewScenarioDescription(e.target.value)}
-                  placeholder="أدخل وصفاً للسيناريو"
-                />
-              </div>
-              <Button
-                onClick={createNewScenario}
-                className="w-full"
-                disabled={isLoadingRaw || isLoadingSemi || isLoadingPackaging || isLoadingFinished}
-              >
-                إنشاء سيناريو جديد
-              </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* محاكاة عوامل التكلفة */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Calculator className="h-5 w-5" />
+                محاكاة تغير عوامل التكلفة
+              </span>
               
-              {(isLoadingRaw || isLoadingSemi || isLoadingPackaging || isLoadingFinished) && (
-                <div className="text-center text-sm text-muted-foreground">
-                  جاري تحميل البيانات...
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={resetScenarioForm} disabled={!isEditMode}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  إلغاء
+                </Button>
+                <Button size="sm" onClick={saveScenario}>
+                  <Save className="h-4 w-4 mr-2" />
+                  حفظ السيناريو
+                </Button>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <Label htmlFor="scenarioName">اسم السيناريو</Label>
+                  <Input
+                    id="scenarioName"
+                    value={newScenarioName}
+                    onChange={(e) => setNewScenarioName(e.target.value)}
+                    placeholder="أدخل اسماً وصفياً للسيناريو"
+                  />
                 </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          {/* قائمة السيناريوهات الحالية */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-lg">السيناريوهات المتاحة</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {scenarios.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  لا توجد سيناريوهات متاحة. قم بإنشاء سيناريو جديد.
+                <div className="space-y-3">
+                  <Label htmlFor="scenarioDesc">وصف السيناريو</Label>
+                  <Input
+                    id="scenarioDesc"
+                    value={newScenarioDescription}
+                    onChange={(e) => setNewScenarioDescription(e.target.value)}
+                    placeholder="أدخل وصفاً مختصراً للسيناريو"
+                  />
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {scenarios.map((scenario) => (
-                    <div key={scenario.id} className="flex justify-between items-center p-4 border rounded-md">
-                      <div>
-                        <h3 className="font-medium">{scenario.name}</h3>
-                        <p className="text-sm text-muted-foreground">{scenario.description}</p>
+              </div>
+              
+              <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+                <TabsList className="grid grid-cols-4 w-full">
+                  <TabsTrigger value="factors">عوامل التكلفة</TabsTrigger>
+                  <TabsTrigger value="raw-materials">المواد الخام</TabsTrigger>
+                  <TabsTrigger value="packaging">التعبئة</TabsTrigger>
+                  <TabsTrigger value="operations">العمليات</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="factors" className="mt-4">
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">تحديد</TableHead>
+                          <TableHead>عامل التكلفة</TableHead>
+                          <TableHead>الفئة</TableHead>
+                          <TableHead>القيمة الحالية</TableHead>
+                          <TableHead>مستوى التأثير</TableHead>
+                          <TableHead className="text-right">نسبة التغيير</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {costFactors.map(factor => (
+                          <TableRow key={factor.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedFactors[factor.id] || false}
+                                onChange={() => toggleFactor(factor.id)}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{factor.name}</div>
+                            </TableCell>
+                            <TableCell>
+                              {factorCategories.find(c => c.category === factor.category)?.name || factor.category}
+                            </TableCell>
+                            <TableCell>
+                              {factor.currentValue} {factor.unit}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                factor.impactLevel === 'high' ? 'destructive' :
+                                factor.impactLevel === 'medium' ? 'warning' : 'outline'
+                              }>
+                                {factor.impactLevel === 'high' ? 'مرتفع' : factor.impactLevel === 'medium' ? 'متوسط' : 'منخفض'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Input
+                                  type="number"
+                                  min={-50}
+                                  max={50}
+                                  value={factorChanges[factor.id] || 0}
+                                  onChange={(e) => updateFactorChange(factor.id, Number(e.target.value))}
+                                  disabled={!selectedFactors[factor.id]}
+                                  className="w-20 text-right"
+                                />
+                                <Percent className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  
+                  {Object.keys(factorChanges).length > 0 && (
+                    <div className="mt-6 bg-muted rounded-lg p-4">
+                      <h3 className="text-lg font-medium mb-2">نتائج المحاكاة</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="p-3 bg-background rounded-md">
+                          <div className="text-sm text-muted-foreground">تأثير الإنتاج</div>
+                          <div className={`text-xl font-bold ${calculateImpact().production > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {calculateImpact().production > 0 ? '+' : ''}{calculateImpact().production.toFixed(1)}%
+                          </div>
+                        </div>
+                        <div className="p-3 bg-background rounded-md">
+                          <div className="text-sm text-muted-foreground">تأثير التعبئة</div>
+                          <div className={`text-xl font-bold ${calculateImpact().packaging > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {calculateImpact().packaging > 0 ? '+' : ''}{calculateImpact().packaging.toFixed(1)}%
+                          </div>
+                        </div>
+                        <div className="p-3 bg-background rounded-md">
+                          <div className="text-sm text-muted-foreground">تأثير العمليات</div>
+                          <div className={`text-xl font-bold ${calculateImpact().operations > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {calculateImpact().operations > 0 ? '+' : ''}{calculateImpact().operations.toFixed(1)}%
+                          </div>
+                        </div>
+                        <div className="p-3 bg-background rounded-md">
+                          <div className="text-sm text-muted-foreground">التأثير الإجمالي</div>
+                          <div className={`text-xl font-bold ${calculateImpact().total > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {calculateImpact().total > 0 ? '+' : ''}{calculateImpact().total.toFixed(1)}%
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => loadScenario(scenario.id)}>
-                          تحميل
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="raw-materials" className="mt-4">
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">تحديد</TableHead>
+                          <TableHead>المادة الخام</TableHead>
+                          <TableHead>السعر الحالي</TableHead>
+                          <TableHead>مستوى التأثير</TableHead>
+                          <TableHead className="text-right">نسبة التغيير</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {costFactors.filter(factor => factor.category === 'raw-materials').map(factor => (
+                          <TableRow key={factor.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedFactors[factor.id] || false}
+                                onChange={() => toggleFactor(factor.id)}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{factor.name}</div>
+                            </TableCell>
+                            <TableCell>
+                              {factor.currentValue} {factor.unit}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                factor.impactLevel === 'high' ? 'destructive' :
+                                factor.impactLevel === 'medium' ? 'warning' : 'outline'
+                              }>
+                                {factor.impactLevel === 'high' ? 'مرتفع' : factor.impactLevel === 'medium' ? 'متوسط' : 'منخفض'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Input
+                                  type="number"
+                                  min={-50}
+                                  max={50}
+                                  value={factorChanges[factor.id] || 0}
+                                  onChange={(e) => updateFactorChange(factor.id, Number(e.target.value))}
+                                  disabled={!selectedFactors[factor.id]}
+                                  className="w-20 text-right"
+                                />
+                                <Percent className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="packaging" className="mt-4">
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">تحديد</TableHead>
+                          <TableHead>عامل التكلفة</TableHead>
+                          <TableHead>القيمة الحالية</TableHead>
+                          <TableHead>مستوى التأثير</TableHead>
+                          <TableHead className="text-right">نسبة التغيير</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {costFactors.filter(factor => factor.category === 'packaging').map(factor => (
+                          <TableRow key={factor.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedFactors[factor.id] || false}
+                                onChange={() => toggleFactor(factor.id)}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{factor.name}</div>
+                            </TableCell>
+                            <TableCell>
+                              {factor.currentValue} {factor.unit}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                factor.impactLevel === 'high' ? 'destructive' :
+                                factor.impactLevel === 'medium' ? 'warning' : 'outline'
+                              }>
+                                {factor.impactLevel === 'high' ? 'مرتفع' : factor.impactLevel === 'medium' ? 'متوسط' : 'منخفض'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Input
+                                  type="number"
+                                  min={-50}
+                                  max={50}
+                                  value={factorChanges[factor.id] || 0}
+                                  onChange={(e) => updateFactorChange(factor.id, Number(e.target.value))}
+                                  disabled={!selectedFactors[factor.id]}
+                                  className="w-20 text-right"
+                                />
+                                <Percent className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="operations" className="mt-4">
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">تحديد</TableHead>
+                          <TableHead>عامل التكلفة</TableHead>
+                          <TableHead>القيمة الحالية</TableHead>
+                          <TableHead>مستوى التأثير</TableHead>
+                          <TableHead className="text-right">نسبة التغيير</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {costFactors.filter(factor => factor.category === 'operations').map(factor => (
+                          <TableRow key={factor.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedFactors[factor.id] || false}
+                                onChange={() => toggleFactor(factor.id)}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{factor.name}</div>
+                            </TableCell>
+                            <TableCell>
+                              {factor.currentValue} {factor.unit}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                factor.impactLevel === 'high' ? 'destructive' :
+                                factor.impactLevel === 'medium' ? 'warning' : 'outline'
+                              }>
+                                {factor.impactLevel === 'high' ? 'مرتفع' : factor.impactLevel === 'medium' ? 'متوسط' : 'منخفض'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Input
+                                  type="number"
+                                  min={-50}
+                                  max={50}
+                                  value={factorChanges[factor.id] || 0}
+                                  onChange={(e) => updateFactorChange(factor.id, Number(e.target.value))}
+                                  disabled={!selectedFactors[factor.id]}
+                                  className="w-20 text-right"
+                                />
+                                <Percent className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* السيناريوهات المحفوظة */}
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              السيناريوهات المحفوظة
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {costScenarios.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground">
+                لا توجد سيناريوهات محفوظة. قم بإنشاء سيناريو جديد.
+              </div>
+            ) : (
+              <ScrollArea className="h-[500px]">
+                <div className="space-y-3">
+                  {costScenarios.map(scenario => (
+                    <div
+                      key={scenario.id}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted ${
+                        selectedScenario === scenario.id ? 'border-primary' : ''
+                      }`}
+                      onClick={() => setSelectedScenario(scenario.id)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-medium">{scenario.name}</h3>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteScenario(scenario.id);
+                          }}
+                          className="h-6 w-6"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={() => deleteScenario(scenario.id)}>
-                          حذف
-                        </Button>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{scenario.description}</p>
+                      
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className={`text-sm font-medium ${
+                          scenario.resultingChanges.total > 0 ? 'text-red-500' : 'text-green-500'
+                        }`}>
+                          {scenario.resultingChanges.total > 0 ? '+' : ''}{scenario.resultingChanges.total.toFixed(1)}%
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {Object.keys(scenario.factorChanges).length} عوامل
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* تحليلات التكلفة */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">مقارنة السيناريوهات</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              {costScenarios.length < 2 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  قم بإنشاء سيناريوهين على الأقل للمقارنة
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={getComparisonChartData()}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`${value}%`, 'نسبة التغيير']} />
+                    <Legend />
+                    <Bar 
+                      dataKey="إجمالي"
+                      fill={(entry) => entry > 0 ? "#ef4444" : "#10b981"}
+                    />
+                    <Bar dataKey="إنتاج" fill="#6366F1" />
+                    <Bar dataKey="تعبئة" fill="#F59E0B" />
+                    <Bar dataKey="عمليات" fill="#8B5CF6" />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* عنوان السيناريو وإجراءات */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-bold">{activeScenario.name}</h2>
-              <p className="text-muted-foreground">{activeScenario.description}</p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={resetScenario}>
-                <RotateCcw className="h-4 w-4 mr-2" />
-                إعادة تعيين
-              </Button>
-              <Button variant="outline" onClick={saveScenario}>
-                <Save className="h-4 w-4 mr-2" />
-                حفظ
-              </Button>
-              <Button variant="outline" onClick={() => setActiveScenario(null)}>
-                العودة للقائمة
-              </Button>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">تحليل حساسية العوامل</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={getSensitivityChartData()}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="change" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${value.toFixed(1)}%`, 'تأثير التكلفة']} />
+                  <Legend />
+                  {costFactors.filter(factor => factor.impactLevel === 'high').slice(0, 3).map((factor, index) => (
+                    <Line
+                      key={factor.id}
+                      type="monotone"
+                      dataKey={factor.name}
+                      stroke={['#6366F1', '#8B5CF6', '#EC4899'][index % 3]}
+                      activeDot={{ r: 8 }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
             </div>
-          </div>
-          
-          {/* ملخص السيناريو */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <DollarSign className="h-8 w-8 mx-auto text-muted-foreground" />
-                  <h3 className="text-lg font-medium mt-2">التكلفة الأصلية</h3>
-                  <p className="text-2xl font-bold">{activeScenario.totalOriginalCost.toFixed(2)}</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <DollarSign className="h-8 w-8 mx-auto text-muted-foreground" />
-                  <h3 className="text-lg font-medium mt-2">التكلفة المعدلة</h3>
-                  <p className="text-2xl font-bold">{activeScenario.totalAdjustedCost.toFixed(2)}</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <ChartBar className="h-8 w-8 mx-auto text-muted-foreground" />
-                  <h3 className="text-lg font-medium mt-2">التغير المطلق</h3>
-                  <p className={`text-2xl font-bold ${scenarioStats?.totalIncrease === 0 ? '' : scenarioStats?.totalIncrease! > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                    {scenarioStats?.totalIncrease.toFixed(2)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <LineChart className="h-8 w-8 mx-auto text-muted-foreground" />
-                  <h3 className="text-lg font-medium mt-2">التغير النسبي</h3>
-                  <p className={`text-2xl font-bold ${scenarioStats?.percentageChange === 0 ? '' : scenarioStats?.percentageChange! > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                    {scenarioStats?.percentageChange.toFixed(2)}%
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* الرسوم البيانية والتحليلات */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg">تحليل التغيرات في التكاليف</CardTitle>
-                  <Select value={selectedChart} onValueChange={(value) => setSelectedChart(value as any)}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="نوع التحليل" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="comparison">مقارنة التكاليف</SelectItem>
-                      <SelectItem value="impact">تأثير التغيرات</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  {selectedChart === 'comparison' ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={getComparisonChartData()} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="original" name="التكلفة الأصلية" fill="#6366F1" />
-                        <Bar dataKey="adjusted" name="التكلفة المعدلة" fill="#EC4899" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={getImpactChartData()} layout="vertical" margin={{ top: 20, right: 30, left: 60, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" />
-                        <YAxis dataKey="name" type="category" width={100} />
-                        <Tooltip 
-                          formatter={(value: any, name: any, props: any) => {
-                            const entry = props.payload;
-                            return [`${value.toFixed(2)} (${entry.percentChange.toFixed(2)}%)`, `التغير في ${entry.name}`];
-                          }}
-                        />
-                        <Legend />
-                        <Bar 
-                          dataKey="change" 
-                          name="مقدار التغير" 
-                          fill="#10b981"
-                          // Fix: Use a string color instead of a function for 'fill'
-                          // We'll use a conditional render instead
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            
-            {/* أدوات تطبيق التغييرات الجماعية */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">تطبيق تغييرات جماعية</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="font-medium">المواد الخام</h3>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('raw', 0.9)}>-10%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('raw', 1)}>إعادة</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('raw', 1.1)}>+10%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('raw', 1.2)}>+20%</Button>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="font-medium">المنتجات نصف المصنعة</h3>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('semi', 0.9)}>-10%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('semi', 1)}>إعادة</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('semi', 1.1)}>+10%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('semi', 1.2)}>+20%</Button>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="font-medium">مواد التعبئة</h3>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('packaging', 0.9)}>-10%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('packaging', 1)}>إعادة</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('packaging', 1.15)}>+15%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('packaging', 1.3)}>+30%</Button>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="font-medium">المنتجات النهائية</h3>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('finished', 0.95)}>-5%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('finished', 1)}>إعادة</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('finished', 1.05)}>+5%</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyBulkIncrease('finished', 1.1)}>+10%</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* تفاصيل العناصر */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">تعديل عناصر السيناريو</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="raw">
-                <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full">
-                  <TabsTrigger value="raw">المواد الخام</TabsTrigger>
-                  <TabsTrigger value="semi">المنتجات نصف المصنعة</TabsTrigger>
-                  <TabsTrigger value="packaging">مواد التعبئة</TabsTrigger>
-                  <TabsTrigger value="finished">المنتجات النهائية</TabsTrigger>
-                </TabsList>
-                
-                <ScrollArea className="h-[350px] mt-4">
-                  <TabsContent value="raw" className="space-y-4 mt-2">
-                    {getItemsByType('raw').map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-md">
-                        <div>
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">{item.code}</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">التكلفة الأصلية:</span> {item.originalCost.toFixed(2)}
-                          </div>
-                          <div className="w-24">
-                            <Slider
-                              value={[item.adjustmentFactor * 100]}
-                              min={50}
-                              max={200}
-                              step={5}
-                              onValueChange={(value) => updateItemCostFactor(item.id, value[0] / 100)}
-                            />
-                          </div>
-                          <Badge variant={
-                            item.adjustmentFactor === 1 ? "outline" : 
-                            item.adjustmentFactor > 1 ? "destructive" : "success"
-                          }>
-                            {(item.adjustmentFactor * 100).toFixed(0)}%
-                          </Badge>
-                          <div className="w-20 text-center">
-                            {item.adjustedCost.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </TabsContent>
-                  
-                  <TabsContent value="semi" className="space-y-4 mt-2">
-                    {getItemsByType('semi').map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-md">
-                        <div>
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">{item.code}</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">التكلفة الأصلية:</span> {item.originalCost.toFixed(2)}
-                          </div>
-                          <div className="w-24">
-                            <Slider
-                              value={[item.adjustmentFactor * 100]}
-                              min={50}
-                              max={200}
-                              step={5}
-                              onValueChange={(value) => updateItemCostFactor(item.id, value[0] / 100)}
-                            />
-                          </div>
-                          <Badge variant={
-                            item.adjustmentFactor === 1 ? "outline" : 
-                            item.adjustmentFactor > 1 ? "destructive" : "success"
-                          }>
-                            {(item.adjustmentFactor * 100).toFixed(0)}%
-                          </Badge>
-                          <div className="w-20 text-center">
-                            {item.adjustedCost.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </TabsContent>
-                  
-                  <TabsContent value="packaging" className="space-y-4 mt-2">
-                    {getItemsByType('packaging').map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-md">
-                        <div>
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">{item.code}</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">التكلفة الأصلية:</span> {item.originalCost.toFixed(2)}
-                          </div>
-                          <div className="w-24">
-                            <Slider
-                              value={[item.adjustmentFactor * 100]}
-                              min={50}
-                              max={200}
-                              step={5}
-                              onValueChange={(value) => updateItemCostFactor(item.id, value[0] / 100)}
-                            />
-                          </div>
-                          <Badge variant={
-                            item.adjustmentFactor === 1 ? "outline" : 
-                            item.adjustmentFactor > 1 ? "destructive" : "success"
-                          }>
-                            {(item.adjustmentFactor * 100).toFixed(0)}%
-                          </Badge>
-                          <div className="w-20 text-center">
-                            {item.adjustedCost.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </TabsContent>
-                  
-                  <TabsContent value="finished" className="space-y-4 mt-2">
-                    {getItemsByType('finished').map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-md">
-                        <div>
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">{item.code}</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">التكلفة الأصلية:</span> {item.originalCost.toFixed(2)}
-                          </div>
-                          <div className="w-24">
-                            <Slider
-                              value={[item.adjustmentFactor * 100]}
-                              min={50}
-                              max={200}
-                              step={5}
-                              onValueChange={(value) => updateItemCostFactor(item.id, value[0] / 100)}
-                            />
-                          </div>
-                          <Badge variant={
-                            item.adjustmentFactor === 1 ? "outline" : 
-                            item.adjustmentFactor > 1 ? "destructive" : "success"
-                          }>
-                            {(item.adjustmentFactor * 100).toFixed(0)}%
-                          </Badge>
-                          <div className="w-20 text-center">
-                            {item.adjustedCost.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </TabsContent>
-                </ScrollArea>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

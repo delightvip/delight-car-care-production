@@ -2,24 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { 
-  Calculator, 
-  Loader2, 
-  Package2, 
-  Plus, 
-  RotateCcw, 
-  Trash2
-} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Calculator, Box, Package, Loader2, Plus, RotateCcw, Save, Truck, Trash2, ArrowRight, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Table,
   TableBody,
@@ -28,655 +18,746 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
-import LoadingIndicator from '@/components/ui/LoadingIndicator';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// نوع البيانات لمواد التعبئة المطلوبة في المحاكاة
-interface SimulationPackagingMaterial {
+// نوع بيانات المنتج المعبأ
+interface PackagedProduct {
   id: string;
   code: string;
   name: string;
-  requiredQuantity: number;
-  originalCost: number;
-  adjustedCost: number;
-  available: boolean;
+  unit: string;
+  quantity: number;
+  unitCost: number;
 }
 
-// نوع البيانات لمحاكاة أمر تعبئة
-interface SimulationPackagingOrder {
+// نوع بيانات مادة التعبئة
+interface PackagingMaterial {
   id: string;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  unitCost: number;
+}
+
+// نوع بيانات متطلبات التعبئة
+interface PackagingRequirement {
+  productId: string;
+  materialId: string;
+  quantityPerUnit: number;
+}
+
+// نوع بيانات محاكاة التعبئة
+interface PackagingSimulationItem {
+  id: string;
+  productId: string;
   productCode: string;
   productName: string;
   quantity: number;
   unit: string;
-  semiFinished: {
-    code: string;
-    name: string;
-    quantity: number;
-    originalCost: number;
-    adjustedCost: number;
-    available: boolean;
-  };
-  packagingMaterials: SimulationPackagingMaterial[];
-  originalTotalCost: number;
-  adjustedTotalCost: number;
+  materials: {
+    id: string;
+    materialId: string;
+    materialCode: string;
+    materialName: string;
+    requiredQuantity: number;
+    availableQuantity: number;
+    isSufficient: boolean;
+    unitCost: number;
+    totalCost: number;
+  }[];
+  isComplete: boolean;
+  totalPackagingCost: number;
 }
 
 const PackagingSimulation = () => {
-  const [simulationOrders, setSimulationOrders] = useState<SimulationPackagingOrder[]>([]);
-  const [selectedFinishedProductId, setSelectedFinishedProductId] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(1);
+  const [simulationItems, setSimulationItems] = useState<PackagingSimulationItem[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [quantity, setQuantity] = useState<number>(100);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
+  const [showSummary, setShowSummary] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<string>('setup');
   
-  // للحصول على المنتجات النهائية من قاعدة البيانات
-  const { data: finishedProducts, isLoading: isLoadingFinished } = useQuery({
-    queryKey: ['finished-products'],
+  // للحصول على بيانات المنتجات النهائية
+  const { data: finishedProducts, isLoading: isLoadingProducts } = useQuery({
+    queryKey: ['finished-products-for-packaging'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('finished_products')
-        .select('id, code, name, unit, unit_cost, semi_finished_id, semi_finished_quantity, quantity')
+        .select('id, code, name, unit, unit_cost')
         .order('name');
       
       if (error) throw error;
-      return data || [];
-    }
-  });
-  
-  // للحصول على المنتجات نصف المصنعة من قاعدة البيانات
-  const { data: semiFinishedProducts, isLoading: isLoadingSemiFinished } = useQuery({
-    queryKey: ['semi-finished-products-for-packaging'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('semi_finished_products')
-        .select('id, code, name, unit, unit_cost, quantity');
       
-      if (error) throw error;
-      return data || [];
+      return (data || []).map(product => ({
+        id: product.id.toString(),
+        code: product.code,
+        name: product.name,
+        unit: product.unit || 'وحدة',
+        quantity: 0, // ليست مهمة في المحاكاة
+        unitCost: product.unit_cost || 0
+      }));
     }
   });
   
-  // للحصول على مواد التعبئة المرتبطة بالمنتجات النهائية
-  const { data: packagingMaterialsRelations, isLoading: isLoadingPackagingRelations } = useQuery({
-    queryKey: ['finished-product-packaging'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('finished_product_packaging')
-        .select('id, finished_product_id, packaging_material_id, quantity');
-      
-      if (error) throw error;
-      return data || [];
-    }
-  });
-  
-  // للحصول على مواد التعبئة
-  const { data: packagingMaterials, isLoading: isLoadingPackagingMaterials } = useQuery({
-    queryKey: ['packaging-materials'],
+  // للحصول على بيانات مواد التعبئة
+  const { data: packagingMaterials, isLoading: isLoadingMaterials } = useQuery({
+    queryKey: ['packaging-materials-for-simulation'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('packaging_materials')
-        .select('id, code, name, unit, unit_cost, quantity');
+        .select('id, code, name, unit, unit_cost, quantity')
+        .order('name');
       
       if (error) throw error;
-      return data || [];
+      
+      return (data || []).map(material => ({
+        id: material.id.toString(),
+        code: material.code,
+        name: material.name,
+        unit: material.unit || 'وحدة',
+        quantity: material.quantity || 0,
+        unitCost: material.unit_cost || 0
+      }));
     }
   });
   
-  // إضافة أمر تعبئة جديد للمحاكاة
-  const addSimulationOrder = () => {
-    if (!selectedFinishedProductId || quantity <= 0) {
+  // بيانات متطلبات التعبئة (يمكن أن تأتي من قاعدة البيانات في التطبيق الحقيقي)
+  const [packagingRequirements, setPackagingRequirements] = useState<PackagingRequirement[]>([]);
+  
+  // إعداد متطلبات التعبئة الافتراضية عند تحميل البيانات
+  useEffect(() => {
+    if (packagingMaterials && packagingMaterials.length > 0 && finishedProducts && finishedProducts.length > 0) {
+      const defaultRequirements: PackagingRequirement[] = [];
+      
+      // توليد متطلبات افتراضية
+      finishedProducts.forEach(product => {
+        // لكل منتج، نضيف متطلبات لمواد تعبئة مختلفة (عشوائية للمحاكاة)
+        const numberOfMaterials = 2 + Math.floor(Math.random() * 3); // عدد عشوائي من 2 إلى 4 مواد
+        
+        const shuffledMaterials = [...packagingMaterials].sort(() => 0.5 - Math.random());
+        const selectedMaterials = shuffledMaterials.slice(0, Math.min(numberOfMaterials, shuffledMaterials.length));
+        
+        selectedMaterials.forEach(material => {
+          defaultRequirements.push({
+            productId: product.id,
+            materialId: material.id,
+            quantityPerUnit: 0.1 + Math.random() * 0.9 // كمية عشوائية بين 0.1 و 1 لكل وحدة
+          });
+        });
+      });
+      
+      setPackagingRequirements(defaultRequirements);
+    }
+  }, [packagingMaterials, finishedProducts]);
+  
+  // إضافة عنصر جديد للمحاكاة
+  const addSimulationItem = () => {
+    if (!selectedProductId || quantity <= 0) {
       toast.error('يرجى اختيار منتج وكمية صحيحة');
       return;
     }
     
-    const selectedProduct = finishedProducts?.find(p => p.id.toString() === selectedFinishedProductId);
+    const selectedProduct = finishedProducts?.find(p => p.id === selectedProductId);
     
     if (!selectedProduct) {
       toast.error('لم يتم العثور على المنتج المحدد');
       return;
     }
     
-    // البحث عن المنتج نصف المصنع المرتبط
-    const semiFinished = semiFinishedProducts?.find(s => s.id === selectedProduct.semi_finished_id);
+    // العثور على متطلبات التعبئة للمنتج المحدد
+    const productRequirements = packagingRequirements.filter(req => req.productId === selectedProductId);
     
-    if (!semiFinished) {
-      toast.error('لم يتم العثور على المنتج نصف المصنع المرتبط');
-      return;
+    if (productRequirements.length === 0) {
+      toast.warning('لا توجد متطلبات تعبئة محددة لهذا المنتج');
     }
     
-    // البحث عن مواد التعبئة المرتبطة بالمنتج النهائي
-    const productPackagingRelations = packagingMaterialsRelations?.filter(
-      relation => relation.finished_product_id.toString() === selectedFinishedProductId
-    ) || [];
-    
-    // إعداد بيانات المنتج نصف المصنع للمحاكاة
-    const requiredSemiFinishedQty = selectedProduct.semi_finished_quantity * quantity;
-    const semiFinishedOriginalCost = requiredSemiFinishedQty * semiFinished.unit_cost;
-    
-    const simulationSemiFinished = {
-      code: semiFinished.code,
-      name: semiFinished.name,
-      quantity: requiredSemiFinishedQty,
-      originalCost: semiFinishedOriginalCost,
-      adjustedCost: semiFinishedOriginalCost, // في البداية تكون نفس التكلفة الأصلية
-      available: semiFinished.quantity >= requiredSemiFinishedQty
-    };
-    
-    // تحويل مواد التعبئة إلى الشكل المطلوب للمحاكاة
-    const simulationPackagingMaterials: SimulationPackagingMaterial[] = productPackagingRelations.map(relation => {
-      const packagingMaterial = packagingMaterials?.find(pm => pm.id === relation.packaging_material_id);
+    // إنشاء عنصر المحاكاة
+    const materialsForProduct = productRequirements.map(req => {
+      const material = packagingMaterials?.find(m => m.id === req.materialId);
       
-      if (!packagingMaterial) {
-        return {
-          id: relation.id.toString(),
-          code: 'غير متوفر',
-          name: 'غير متوفر',
-          requiredQuantity: relation.quantity * quantity,
-          originalCost: 0,
-          adjustedCost: 0,
-          available: false
-        };
-      }
+      if (!material) return null;
       
-      const requiredQty = relation.quantity * quantity;
-      const originalCost = requiredQty * packagingMaterial.unit_cost;
+      const requiredQuantity = req.quantityPerUnit * quantity;
+      const isSufficient = material.quantity >= requiredQuantity;
       
       return {
-        id: relation.id.toString(),
-        code: packagingMaterial.code,
-        name: packagingMaterial.name,
-        requiredQuantity: requiredQty,
-        originalCost: originalCost,
-        adjustedCost: originalCost, // في البداية تكون نفس التكلفة الأصلية
-        available: packagingMaterial.quantity >= requiredQty
+        id: `${Date.now()}-${material.id}`,
+        materialId: material.id,
+        materialCode: material.code,
+        materialName: material.name,
+        requiredQuantity,
+        availableQuantity: material.quantity,
+        isSufficient,
+        unitCost: material.unitCost,
+        totalCost: requiredQuantity * material.unitCost
       };
-    });
+    }).filter(Boolean) as NonNullable<typeof materialsForProduct[number]>[];
     
-    // حساب إجمالي التكاليف
-    const materialsOriginalCost = simulationPackagingMaterials.reduce(
-      (sum, item) => sum + item.originalCost, 0
-    );
-    const totalOriginalCost = semiFinishedOriginalCost + materialsOriginalCost;
+    const totalPackagingCost = materialsForProduct.reduce((sum, material) => sum + material.totalCost, 0);
+    const isComplete = materialsForProduct.every(material => material.isSufficient);
     
-    // إنشاء أمر المحاكاة الجديد
-    const newSimulationOrder: SimulationPackagingOrder = {
-      id: Date.now().toString(), // معرف مؤقت للمحاكاة
+    const newSimulationItem: PackagingSimulationItem = {
+      id: `sim-${Date.now()}`,
+      productId: selectedProduct.id,
       productCode: selectedProduct.code,
       productName: selectedProduct.name,
-      quantity: quantity,
+      quantity,
       unit: selectedProduct.unit,
-      semiFinished: simulationSemiFinished,
-      packagingMaterials: simulationPackagingMaterials,
-      originalTotalCost: totalOriginalCost,
-      adjustedTotalCost: totalOriginalCost // في البداية نفس التكلفة الأصلية
+      materials: materialsForProduct,
+      isComplete,
+      totalPackagingCost
     };
     
-    // إضافة أمر المحاكاة للقائمة
-    setSimulationOrders(prev => [...prev, newSimulationOrder]);
-    toast.success('تمت إضافة أمر التعبئة للمحاكاة');
+    setSimulationItems(prev => [...prev, newSimulationItem]);
     
-    // إعادة تعيين النموذج
-    setSelectedFinishedProductId('');
-    setQuantity(1);
+    // إعادة تعيين حقول الإدخال
+    setSelectedProductId('');
+    setQuantity(100);
+    
+    toast.success('تمت إضافة عنصر للمحاكاة');
   };
   
-  // حذف أمر من المحاكاة
-  const removeSimulationOrder = (orderId: string) => {
-    setSimulationOrders(prev => prev.filter(order => order.id !== orderId));
-    toast.success('تم حذف الأمر من المحاكاة');
+  // حذف عنصر من المحاكاة
+  const removeSimulationItem = (itemId: string) => {
+    setSimulationItems(prev => prev.filter(item => item.id !== itemId));
+    toast.success('تم حذف العنصر من المحاكاة');
   };
   
-  // تعديل كمية مادة تعبئة في المحاكاة
-  const updatePackagingMaterialQuantity = (orderId: string, materialId: string, newQuantity: number) => {
-    setSimulationOrders(prev => {
-      return prev.map(order => {
-        if (order.id !== orderId) return order;
+  // تعديل كمية المنتج وإعادة حساب متطلبات التعبئة
+  const updateProductQuantity = (itemId: string, newQuantity: number) => {
+    setSimulationItems(prev => {
+      return prev.map(item => {
+        if (item.id !== itemId) return item;
         
-        const updatedMaterials = order.packagingMaterials.map(material => {
-          if (material.id !== materialId) return material;
+        const updatedMaterials = item.materials.map(material => {
+          const requirement = packagingRequirements.find(
+            req => req.productId === item.productId && req.materialId === material.materialId
+          );
           
-          const packagingMaterial = packagingMaterials?.find(pm => pm.code === material.code);
-          const unitCost = packagingMaterial ? packagingMaterial.unit_cost : 0;
+          if (!requirement) return material;
           
-          return {
-            ...material,
-            requiredQuantity: newQuantity,
-            originalCost: newQuantity * unitCost,
-            adjustedCost: newQuantity * unitCost,
-            available: packagingMaterial ? packagingMaterial.quantity >= newQuantity : false
-          };
-        });
-        
-        // إعادة حساب إجمالي التكاليف
-        const materialsOriginalCost = updatedMaterials.reduce(
-          (sum, item) => sum + item.originalCost, 0
-        );
-        const totalOriginalCost = order.semiFinished.originalCost + materialsOriginalCost;
-        const materialsAdjustedCost = updatedMaterials.reduce(
-          (sum, item) => sum + item.adjustedCost, 0
-        );
-        const totalAdjustedCost = order.semiFinished.adjustedCost + materialsAdjustedCost;
-        
-        return {
-          ...order,
-          packagingMaterials: updatedMaterials,
-          originalTotalCost: totalOriginalCost,
-          adjustedTotalCost: totalAdjustedCost
-        };
-      });
-    });
-  };
-  
-  // تعديل تكلفة مادة تعبئة في المحاكاة
-  const updatePackagingMaterialCost = (orderId: string, materialId: string, costAdjustmentFactor: number) => {
-    setSimulationOrders(prev => {
-      return prev.map(order => {
-        if (order.id !== orderId) return order;
-        
-        const updatedMaterials = order.packagingMaterials.map(material => {
-          if (material.id !== materialId) return material;
+          const requiredQuantity = requirement.quantityPerUnit * newQuantity;
+          const isSufficient = material.availableQuantity >= requiredQuantity;
           
           return {
             ...material,
-            adjustedCost: material.originalCost * costAdjustmentFactor
+            requiredQuantity,
+            isSufficient,
+            totalCost: requiredQuantity * material.unitCost
           };
         });
         
-        // إعادة حساب إجمالي التكاليف المعدلة
-        const materialsAdjustedCost = updatedMaterials.reduce(
-          (sum, item) => sum + item.adjustedCost, 0
-        );
-        const totalAdjustedCost = order.semiFinished.adjustedCost + materialsAdjustedCost;
+        const totalPackagingCost = updatedMaterials.reduce((sum, material) => sum + material.totalCost, 0);
+        const isComplete = updatedMaterials.every(material => material.isSufficient);
         
         return {
-          ...order,
-          packagingMaterials: updatedMaterials,
-          adjustedTotalCost: totalAdjustedCost
-        };
-      });
-    });
-  };
-  
-  // تعديل تكلفة المنتج نصف المصنع في المحاكاة
-  const updateSemiFinishedCost = (orderId: string, costAdjustmentFactor: number) => {
-    setSimulationOrders(prev => {
-      return prev.map(order => {
-        if (order.id !== orderId) return order;
-        
-        const updatedSemiFinished = {
-          ...order.semiFinished,
-          adjustedCost: order.semiFinished.originalCost * costAdjustmentFactor
-        };
-        
-        // إعادة حساب إجمالي التكاليف المعدلة
-        const materialsAdjustedCost = order.packagingMaterials.reduce(
-          (sum, item) => sum + item.adjustedCost, 0
-        );
-        const totalAdjustedCost = updatedSemiFinished.adjustedCost + materialsAdjustedCost;
-        
-        return {
-          ...order,
-          semiFinished: updatedSemiFinished,
-          adjustedTotalCost: totalAdjustedCost
-        };
-      });
-    });
-  };
-  
-  // تعديل كمية المنتج نصف المصنع في المحاكاة
-  const updateSemiFinishedQuantity = (orderId: string, newQuantity: number) => {
-    setSimulationOrders(prev => {
-      return prev.map(order => {
-        if (order.id !== orderId) return order;
-        
-        const semiFinished = semiFinishedProducts?.find(s => s.code === order.semiFinished.code);
-        const unitCost = semiFinished ? semiFinished.unit_cost : 0;
-        
-        const updatedSemiFinished = {
-          ...order.semiFinished,
+          ...item,
           quantity: newQuantity,
-          originalCost: newQuantity * unitCost,
-          adjustedCost: newQuantity * unitCost,
-          available: semiFinished ? semiFinished.quantity >= newQuantity : false
-        };
-        
-        // إعادة حساب إجمالي التكاليف
-        const materialsOriginalCost = order.packagingMaterials.reduce(
-          (sum, item) => sum + item.originalCost, 0
-        );
-        const totalOriginalCost = updatedSemiFinished.originalCost + materialsOriginalCost;
-        const materialsAdjustedCost = order.packagingMaterials.reduce(
-          (sum, item) => sum + item.adjustedCost, 0
-        );
-        const totalAdjustedCost = updatedSemiFinished.adjustedCost + materialsAdjustedCost;
-        
-        return {
-          ...order,
-          semiFinished: updatedSemiFinished,
-          originalTotalCost: totalOriginalCost,
-          adjustedTotalCost: totalAdjustedCost
+          materials: updatedMaterials,
+          isComplete,
+          totalPackagingCost
         };
       });
     });
+  };
+  
+  // إعادة تعيين المحاكاة
+  const resetSimulation = () => {
+    const confirm = window.confirm('هل أنت متأكد من إعادة تعيين المحاكاة؟ سيتم حذف جميع العناصر.');
+    
+    if (confirm) {
+      setSimulationItems([]);
+      setSelectedProductId('');
+      setQuantity(100);
+      setShowSummary(false);
+      setActiveTab('setup');
+      toast.info('تم إعادة تعيين المحاكاة');
+    }
   };
   
   // بدء المحاكاة
   const startSimulation = () => {
-    if (simulationOrders.length === 0) {
-      toast.error('يرجى إضافة أوامر تعبئة للمحاكاة أولاً');
+    if (simulationItems.length === 0) {
+      toast.error('يرجى إضافة عناصر للمحاكاة أولاً');
       return;
     }
     
     setIsSimulating(true);
     
-    // محاكاة معالجة البيانات
     setTimeout(() => {
-      toast.success('تمت المحاكاة بنجاح');
+      setShowSummary(true);
+      setActiveTab('results');
       setIsSimulating(false);
+      toast.success('تمت المحاكاة بنجاح');
     }, 1500);
   };
   
-  // إعادة تعيين المحاكاة
-  const resetSimulation = () => {
-    setSimulationOrders([]);
-    setSelectedFinishedProductId('');
-    setQuantity(1);
-    toast.info('تم إعادة تعيين المحاكاة');
+  // حفظ المحاكاة (محاكاة فقط)
+  const saveSimulation = () => {
+    toast.success('تم حفظ نتائج المحاكاة');
   };
   
-  // اللوحة الرئيسية للمحاكاة
+  // حساب إجمالي تكاليف التعبئة
+  const getTotalPackagingCost = () => {
+    return simulationItems.reduce((sum, item) => sum + item.totalPackagingCost, 0);
+  };
+  
+  // التحقق من توفر جميع مواد التعبئة
+  const areAllMaterialsAvailable = () => {
+    return simulationItems.every(item => item.isComplete);
+  };
+  
+  // الحصول على قائمة المواد غير المتوفرة بكميات كافية
+  const getInsufficientMaterials = () => {
+    const insufficientMaterials: { name: string, code: string, required: number, available: number, unit: string }[] = [];
+    
+    simulationItems.forEach(item => {
+      item.materials.forEach(material => {
+        if (!material.isSufficient) {
+          const existingIndex = insufficientMaterials.findIndex(m => m.code === material.materialCode);
+          
+          if (existingIndex >= 0) {
+            insufficientMaterials[existingIndex].required += material.requiredQuantity;
+          } else {
+            const materialData = packagingMaterials?.find(m => m.id === material.materialId);
+            
+            insufficientMaterials.push({
+              name: material.materialName,
+              code: material.materialCode,
+              required: material.requiredQuantity,
+              available: material.availableQuantity,
+              unit: materialData?.unit || 'وحدة'
+            });
+          }
+        }
+      });
+    });
+    
+    return insufficientMaterials;
+  };
+  
+  // تجميع متطلبات مواد التعبئة من جميع العناصر
+  const getAggregatedMaterialsRequirements = () => {
+    const aggregatedMaterials: { [key: string]: { 
+      id: string, 
+      name: string, 
+      code: string, 
+      requiredQuantity: number, 
+      availableQuantity: number,
+      unit: string,
+      unitCost: number,
+      totalCost: number,
+      isSufficient: boolean 
+    } } = {};
+    
+    simulationItems.forEach(item => {
+      item.materials.forEach(material => {
+        if (aggregatedMaterials[material.materialId]) {
+          aggregatedMaterials[material.materialId].requiredQuantity += material.requiredQuantity;
+          aggregatedMaterials[material.materialId].totalCost += material.totalCost;
+          aggregatedMaterials[material.materialId].isSufficient = 
+            aggregatedMaterials[material.materialId].availableQuantity >= 
+            aggregatedMaterials[material.materialId].requiredQuantity;
+        } else {
+          const materialData = packagingMaterials?.find(m => m.id === material.materialId);
+          
+          aggregatedMaterials[material.materialId] = {
+            id: material.materialId,
+            name: material.materialName,
+            code: material.materialCode,
+            requiredQuantity: material.requiredQuantity,
+            availableQuantity: material.availableQuantity,
+            unit: materialData?.unit || 'وحدة',
+            unitCost: material.unitCost,
+            totalCost: material.totalCost,
+            isSufficient: material.isSufficient
+          };
+        }
+      });
+    });
+    
+    return Object.values(aggregatedMaterials);
+  };
+  
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* نموذج إضافة أمر تعبئة للمحاكاة */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Plus className="h-5 w-5" />
-              إضافة أمر تعبئة للمحاكاة
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="finishedProduct">المنتج النهائي</Label>
-              {isLoadingFinished ? (
-                <div className="flex items-center justify-center h-10 bg-muted rounded-md">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <Select value={selectedFinishedProductId} onValueChange={setSelectedFinishedProductId}>
-                  <SelectTrigger id="finishedProduct">
-                    <SelectValue placeholder="اختر المنتج" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {finishedProducts?.map(product => (
-                      <SelectItem key={product.id} value={product.id.toString()}>
-                        {product.name} ({product.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="quantity">الكمية</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-              />
-            </div>
-            
-            <Button
-              onClick={addSimulationOrder}
-              className="w-full"
-              disabled={isLoadingFinished || isLoadingSemiFinished || isLoadingPackagingMaterials || isLoadingPackagingRelations}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              إضافة للمحاكاة
-            </Button>
-          </CardContent>
-        </Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-3 w-full sm:w-[400px]">
+          <TabsTrigger value="setup" disabled={isSimulating}>إعداد المحاكاة</TabsTrigger>
+          <TabsTrigger value="materials" disabled={isSimulating || simulationItems.length === 0}>المواد</TabsTrigger>
+          <TabsTrigger value="results" disabled={isSimulating || !showSummary}>النتائج</TabsTrigger>
+        </TabsList>
         
-        {/* ملخص المحاكاة */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Package2 className="h-5 w-5" />
-                ملخص محاكاة التعبئة
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={resetSimulation}
-                  disabled={simulationOrders.length === 0 || isSimulating}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  إعادة تعيين
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={startSimulation}
-                  disabled={simulationOrders.length === 0 || isSimulating}
-                >
-                  {isSimulating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      جاري المحاكاة...
-                    </>
+        <TabsContent value="setup" className="space-y-6 mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* نموذج إضافة منتج للتعبئة */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  إضافة منتج للتعبئة
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="product">المنتج النهائي</Label>
+                  {isLoadingProducts ? (
+                    <div className="flex items-center justify-center h-10 bg-muted rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
                   ) : (
-                    <>
-                      <Package2 className="h-4 w-4 mr-2" />
-                      بدء المحاكاة
-                    </>
+                    <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                      <SelectTrigger id="product">
+                        <SelectValue placeholder="اختر المنتج" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {finishedProducts?.map(product => (
+                          <SelectItem key={product.id} value={product.id}>
+                            {product.name} ({product.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="quantity">الكمية</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                  />
+                </div>
+                
+                <Button
+                  onClick={addSimulationItem}
+                  className="w-full"
+                  disabled={isLoadingProducts || isLoadingMaterials}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  إضافة للمحاكاة
                 </Button>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {simulationOrders.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                قم بإضافة أوامر تعبئة للمحاكاة
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="bg-muted rounded-lg p-4 text-center">
-                    <div className="text-sm font-medium text-muted-foreground">إجمالي الأوامر</div>
-                    <div className="text-2xl font-bold mt-1">{simulationOrders.length}</div>
+              </CardContent>
+            </Card>
+            
+            {/* قائمة منتجات المحاكاة */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    منتجات المحاكاة
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={resetSimulation}
+                      disabled={simulationItems.length === 0 || isSimulating}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      إعادة تعيين
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={startSimulation}
+                      disabled={simulationItems.length === 0 || isSimulating}
+                    >
+                      {isSimulating ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          جاري المحاكاة...
+                        </>
+                      ) : (
+                        <>
+                          <Calculator className="h-4 w-4 mr-2" />
+                          بدء المحاكاة
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <div className="bg-muted rounded-lg p-4 text-center">
-                    <div className="text-sm font-medium text-muted-foreground">التكلفة الأصلية</div>
-                    <div className="text-2xl font-bold mt-1">
-                      {simulationOrders.reduce((sum, order) => sum + order.originalTotalCost, 0).toFixed(2)}
-                    </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {simulationItems.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    قم بإضافة منتجات للمحاكاة
                   </div>
-                  <div className="bg-muted rounded-lg p-4 text-center">
-                    <div className="text-sm font-medium text-muted-foreground">التكلفة المعدلة</div>
-                    <div className="text-2xl font-bold mt-1">
-                      {simulationOrders.reduce((sum, order) => sum + order.adjustedTotalCost, 0).toFixed(2)}
+                ) : (
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-4">
+                      {simulationItems.map(item => (
+                        <div key={item.id} className="border rounded-md p-4">
+                          <div className="flex justify-between items-center mb-3">
+                            <div>
+                              <h3 className="font-bold">{item.productName}</h3>
+                              <div className="text-sm text-muted-foreground">
+                                الكود: {item.productCode}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge variant={item.isComplete ? "outline" : "destructive"}>
+                                {item.isComplete ? 'مكتمل' : 'غير مكتمل'}
+                              </Badge>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => removeSimulationItem(item.id)}
+                                className="h-8 w-8"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div className="space-y-2">
+                              <Label htmlFor={`quantity-${item.id}`}>الكمية</Label>
+                              <div className="flex gap-2 items-center">
+                                <Input
+                                  id={`quantity-${item.id}`}
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => updateProductQuantity(item.id, Number(e.target.value))}
+                                  className="w-28"
+                                />
+                                <span>{item.unit}</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>تكلفة التعبئة</Label>
+                              <div className="font-bold text-lg">{item.totalPackagingCost.toFixed(2)} ج.م</div>
+                            </div>
+                          </div>
+                          
+                          <div className="border-t pt-3">
+                            <h4 className="font-medium mb-2">مواد التعبئة المطلوبة</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                              {item.materials.map(material => (
+                                <div 
+                                  key={material.id} 
+                                  className={`p-2 border rounded-md ${!material.isSufficient ? 'border-red-200 bg-red-50' : ''}`}
+                                >
+                                  <div className="font-medium text-sm">{material.materialName}</div>
+                                  <div className="flex justify-between mt-1">
+                                    <span className="text-xs text-muted-foreground">المطلوب:</span>
+                                    <span className="text-xs font-medium">{material.requiredQuantity.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-xs text-muted-foreground">المتوفر:</span>
+                                    <span className={`text-xs font-medium ${!material.isSufficient ? 'text-red-500' : ''}`}>
+                                      {material.availableQuantity.toFixed(2)}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="materials" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Box className="h-5 w-5" />
+                متطلبات مواد التعبئة
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>المادة</TableHead>
+                      <TableHead>الكمية المطلوبة</TableHead>
+                      <TableHead>الكمية المتوفرة</TableHead>
+                      <TableHead>الحالة</TableHead>
+                      <TableHead>تكلفة الوحدة</TableHead>
+                      <TableHead>التكلفة الإجمالية</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getAggregatedMaterialsRequirements().map(material => (
+                      <TableRow key={material.id}>
+                        <TableCell>
+                          <div className="font-medium">{material.name}</div>
+                          <div className="text-xs text-muted-foreground">{material.code}</div>
+                        </TableCell>
+                        <TableCell>{material.requiredQuantity.toFixed(2)} {material.unit}</TableCell>
+                        <TableCell>{material.availableQuantity.toFixed(2)} {material.unit}</TableCell>
+                        <TableCell>
+                          {material.isSufficient ? (
+                            <Badge variant="outline" className="bg-green-50">
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-green-500" />
+                              متوفر
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive">
+                              <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                              غير كافي
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{material.unitCost.toFixed(2)} ج.م</TableCell>
+                        <TableCell>{material.totalCost.toFixed(2)} ج.م</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              <div className="mt-6 flex justify-between items-center p-4 bg-muted rounded-md">
+                <div>
+                  <span className="font-medium">إجمالي تكلفة مواد التعبئة:</span>
+                  <span className="font-bold text-lg mr-2">{getTotalPackagingCost().toFixed(2)} ج.م</span>
+                </div>
+                <div>
+                  <span className="font-medium">عدد المواد:</span>
+                  <span className="font-bold mr-2">{getAggregatedMaterialsRequirements().length}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="results" className="space-y-6 mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  نتائج المحاكاة
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-muted rounded-md">
+                    <div className="text-sm text-muted-foreground">عدد المنتجات</div>
+                    <div className="text-2xl font-bold mt-1">{simulationItems.length}</div>
+                  </div>
+                  <div className="p-4 bg-muted rounded-md">
+                    <div className="text-sm text-muted-foreground">إجمالي التكلفة</div>
+                    <div className="text-2xl font-bold mt-1">{getTotalPackagingCost().toFixed(2)} ج.م</div>
                   </div>
                 </div>
                 
-                <ScrollArea className="h-[350px]">
-                  {simulationOrders.map((order, orderIndex) => (
-                    <div key={order.id} className="mb-6 border rounded-lg p-4">
-                      <div className="flex justify-between items-center mb-3">
-                        <div>
-                          <h3 className="font-bold">{order.productName}</h3>
-                          <div className="text-sm text-muted-foreground">
-                            الكمية: {order.quantity} {order.unit} | الكود: {order.productCode}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={order.originalTotalCost === order.adjustedTotalCost ? "outline" : "secondary"}>
-                            {order.adjustedTotalCost.toFixed(2)}
-                          </Badge>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeSimulationOrder(order.id)}
-                            className="h-8 w-8"
-                            disabled={isSimulating}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      {/* معلومات المنتج نصف المصنع */}
-                      <div className="mb-4 border-b pb-4">
-                        <div className="font-medium mb-2">المنتج نصف المصنع</div>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <div>
-                            <div className="text-sm text-muted-foreground mb-1">المنتج</div>
-                            <div>{order.semiFinished.name} ({order.semiFinished.code})</div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-muted-foreground mb-1">الكمية</div>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={order.semiFinished.quantity}
-                              onChange={(e) => updateSemiFinishedQuantity(
-                                order.id,
-                                Number(e.target.value)
-                              )}
-                              className="h-8"
-                              disabled={isSimulating}
-                            />
-                          </div>
-                          <div>
-                            <div className="text-sm text-muted-foreground mb-1">التكلفة</div>
-                            <Badge variant={
-                              order.semiFinished.originalCost === order.semiFinished.adjustedCost
-                                ? "outline"
-                                : order.semiFinished.adjustedCost > order.semiFinished.originalCost
-                                  ? "destructive"
-                                  : "success"
-                            }>
-                              {order.semiFinished.adjustedCost.toFixed(2)}
-                            </Badge>
-                          </div>
-                          <div>
-                            <div className="text-sm text-muted-foreground mb-1">عامل التعديل</div>
-                            <Select
-                              defaultValue="1"
-                              onValueChange={(value) => updateSemiFinishedCost(
-                                order.id,
-                                Number(value)
-                              )}
-                              disabled={isSimulating}
-                            >
-                              <SelectTrigger className="h-8">
-                                <SelectValue placeholder="×1" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="0.5">×0.5</SelectItem>
-                                <SelectItem value="0.8">×0.8</SelectItem>
-                                <SelectItem value="0.9">×0.9</SelectItem>
-                                <SelectItem value="1">×1</SelectItem>
-                                <SelectItem value="1.1">×1.1</SelectItem>
-                                <SelectItem value="1.2">×1.2</SelectItem>
-                                <SelectItem value="1.5">×1.5</SelectItem>
-                                <SelectItem value="2">×2</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* مواد التعبئة */}
-                      <div>
-                        <div className="font-medium mb-2">مواد التعبئة</div>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>المادة</TableHead>
-                              <TableHead>الكمية</TableHead>
-                              <TableHead>التكلفة</TableHead>
-                              <TableHead>عامل التعديل</TableHead>
+                {!areAllMaterialsAvailable() && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>تنبيه: نقص في المواد</AlertTitle>
+                    <AlertDescription>
+                      هناك نقص في بعض مواد التعبئة. تحقق من قائمة المواد غير المتوفرة أدناه.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                {areAllMaterialsAvailable() && (
+                  <Alert variant="default" className="bg-green-50 border-green-200">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <AlertTitle>جميع المواد متوفرة</AlertTitle>
+                    <AlertDescription>
+                      جميع مواد التعبئة المطلوبة متوفرة بالكميات الكافية.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                <div className="flex justify-center">
+                  <Button onClick={saveSimulation}>
+                    <Save className="h-4 w-4 mr-2" />
+                    حفظ نتائج المحاكاة
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Truck className="h-5 w-5" />
+                  {!areAllMaterialsAvailable() ? 'المواد غير المتوفرة' : 'تفاصيل مواد التعبئة'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!areAllMaterialsAvailable() ? (
+                  <>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>المادة</TableHead>
+                            <TableHead>الكمية المطلوبة</TableHead>
+                            <TableHead>الكمية المتوفرة</TableHead>
+                            <TableHead>النقص</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {getInsufficientMaterials().map((material, index) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <div className="font-medium">{material.name}</div>
+                                <div className="text-xs text-muted-foreground">{material.code}</div>
+                              </TableCell>
+                              <TableCell>{material.required.toFixed(2)} {material.unit}</TableCell>
+                              <TableCell>{material.available.toFixed(2)} {material.unit}</TableCell>
+                              <TableCell className="text-red-500 font-medium">
+                                {(material.required - material.available).toFixed(2)} {material.unit}
+                              </TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {order.packagingMaterials.map((material) => (
-                              <TableRow key={material.id}>
-                                <TableCell>
-                                  <div className="font-medium">{material.name}</div>
-                                  <div className="text-xs text-muted-foreground">{material.code}</div>
-                                </TableCell>
-                                <TableCell>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={material.requiredQuantity}
-                                    onChange={(e) => updatePackagingMaterialQuantity(
-                                      order.id,
-                                      material.id,
-                                      Number(e.target.value)
-                                    )}
-                                    className="h-8 w-20"
-                                    disabled={isSimulating}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant={
-                                    material.originalCost === material.adjustedCost
-                                      ? "outline"
-                                      : material.adjustedCost > material.originalCost
-                                        ? "destructive"
-                                        : "success"
-                                  }>
-                                    {material.adjustedCost.toFixed(2)}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Select
-                                    defaultValue="1"
-                                    onValueChange={(value) => updatePackagingMaterialCost(
-                                      order.id,
-                                      material.id,
-                                      Number(value)
-                                    )}
-                                    disabled={isSimulating}
-                                  >
-                                    <SelectTrigger className="h-8 w-20">
-                                      <SelectValue placeholder="×1" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="0.5">×0.5</SelectItem>
-                                      <SelectItem value="0.8">×0.8</SelectItem>
-                                      <SelectItem value="0.9">×0.9</SelectItem>
-                                      <SelectItem value="1">×1</SelectItem>
-                                      <SelectItem value="1.1">×1.1</SelectItem>
-                                      <SelectItem value="1.2">×1.2</SelectItem>
-                                      <SelectItem value="1.5">×1.5</SelectItem>
-                                      <SelectItem value="2">×2</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
-                  ))}
-                </ScrollArea>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                    
+                    <div className="mt-4 flex justify-end">
+                      <Button variant="outline" className="gap-2">
+                        <ArrowRight className="h-4 w-4" />
+                        طلب المواد الناقصة
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-12 space-y-4">
+                    <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
+                    <div className="text-lg font-medium">مواد التعبئة جاهزة</div>
+                    <p className="text-muted-foreground">
+                      يمكنك المتابعة بأمان، جميع مواد التعبئة متوفرة بالكميات المطلوبة.
+                    </p>
+                    <Button variant="outline" onClick={() => setActiveTab('materials')}>
+                      عرض تفاصيل المواد
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
