@@ -1,23 +1,7 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowDownIcon, ArrowUpIcon, ListRestart, BarChart3 } from 'lucide-react';
-
-// Define the interface for movements
-interface InventoryMovement {
-  id?: string;
-  item_id: string;
-  item_type: string;
-  quantity: number;
-  movement_type: string;
-  reason?: string;
-  balance_after?: number;
-  date: Date | string;
-  category?: string;
-  type?: 'in' | 'out';
-  note?: string;
-  item_name?: string;
-}
+import { InventoryMovement } from '@/services/InventoryMovementService';
 
 interface StatCardProps {
   title: string;
@@ -63,19 +47,18 @@ const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movemen
   
   // إجمالي حركات الوارد
   const inMovements = filteredMovements.filter(m => m.type === 'in');
-  const totalInQuantity = inMovements.reduce((sum, m) => sum + Number(m.quantity || 0), 0);
+  const totalInQuantity = inMovements.reduce((sum, m) => sum + m.quantity, 0);
   
   // إجمالي حركات الصادر
   const outMovements = filteredMovements.filter(m => m.type === 'out');
-  const totalOutQuantity = outMovements.reduce((sum, m) => sum + Math.abs(Number(m.quantity || 0)), 0);
+  const totalOutQuantity = outMovements.reduce((sum, m) => sum + m.quantity, 0);
   
   // إجمالي الحركات
   const totalMovements = filteredMovements.length;
   
   // التصنيف الأكثر نشاطاً
   const categoryCount = filteredMovements.reduce((acc, movement) => {
-    const category = movement.category || 'unknown';
-    acc[category] = (acc[category] || 0) + 1;
+    acc[movement.category] = (acc[movement.category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   
@@ -83,10 +66,10 @@ const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movemen
   
   const getCategoryName = (category: string) => {
     switch(category) {
-      case 'raw_material': return 'المواد الأولية';
+      case 'raw_materials': return 'المواد الأولية';
       case 'semi_finished': return 'المنتجات النصف مصنعة';
       case 'packaging': return 'مستلزمات التعبئة';
-      case 'finished': return 'المنتجات النهائية';
+      case 'finished_products': return 'المنتجات النهائية';
       default: return category;
     }
   };

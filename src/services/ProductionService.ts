@@ -302,32 +302,71 @@ class ProductionService {
   // إنشاء أمر تعبئة جديد
   public async createPackagingOrder(
     finishedProductCode: string,
-    productName: string,
     quantity: number,
-    unit: string,
-    semiFinished: {
-      code: string;
-      name: string;
-      quantity: number;
-    },
-    packagingMaterials: {
-      code: string;
-      name: string;
-      quantity: number;
-      available: boolean;
-    }[],
     totalCost?: number
   ): Promise<PackagingOrder | null> {
     try {
+      const finishedProducts = await this.inventoryService.getFinishedProducts();
+      const product = finishedProducts.find(p => p.code === finishedProductCode);
+      
+      if (!product) {
+        toast.error('المنتج النهائي غير موجود');
+        return null;
+      }
+      
+      // التحقق من توفر المنتج النصف مصنع
+      const semiFinishedCode = product.semiFinished.code;
+      const semiFinishedQuantity = product.semiFinished.quantity * quantity;
+      const semiAvailable = await this.inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
+      
+      // التحقق من توفر مواد التعبئة
+      const packagingMaterials = await Promise.all(product.packaging.map(async pkg => {
+        const pkgQuantity = pkg.quantity * quantity;
+        const available = await this.inventoryService.checkPackagingAvailability([{
+          code: pkg.code,
+          requiredQuantity: pkgQuantity
+        }]);
+        
+        return {
+          code: pkg.code,
+          name: pkg.name,
+          quantity: pkgQuantity,
+          available
+        };
+      }));
+      
+      // تحديد التكلفة الإجمالية (استخدام القيمة المرسلة إذا تم توفيرها)
+      let finalTotalCost = totalCost;
+      
+      // إذا لم يتم تمرير التكلفة، قم بحسابها
+      if (finalTotalCost === undefined) {
+        // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
+        let unitCost = 0;
+        if (typeof product.unit_cost === 'number') {
+          unitCost = product.unit_cost;
+        } else if (typeof (product as any).unitCost === 'number') {
+          // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
+          unitCost = (product as any).unitCost;
+        }
+        
+        finalTotalCost = unitCost * quantity;
+      }
+      
+      console.log(`إنشاء أمر تعبئة: الكمية=${quantity}, التكلفة المستخدمة=${finalTotalCost}`);
+      
       // إنشاء أمر التعبئة في قاعدة البيانات
       const newOrder = await this.databaseService.createPackagingOrder(
         finishedProductCode,
-        productName,
+        product.name,
         quantity,
-        unit,
-        semiFinished,
+        product.unit,
+        {
+          code: semiFinishedCode,
+          name: product.semiFinished.name,
+          quantity: semiFinishedQuantity
+        },
         packagingMaterials,
-        totalCost
+        finalTotalCost
       );
       
       if (!newOrder) return null;

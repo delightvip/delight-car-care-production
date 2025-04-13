@@ -24,16 +24,16 @@ console.log("Mounting React application with providers");
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-        <QueryClientProvider client={queryClient}>
-          <SidebarProvider>
-            <NotificationProvider>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <QueryClientProvider client={queryClient}>
+        <SidebarProvider>
+          <NotificationProvider>
+            <BrowserRouter>
               <App />
-            </NotificationProvider>
-          </SidebarProvider>
-        </QueryClientProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+            </BrowserRouter>
+          </NotificationProvider>
+        </SidebarProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 )

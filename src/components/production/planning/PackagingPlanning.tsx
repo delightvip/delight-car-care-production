@@ -109,7 +109,7 @@ const PackagingPlanning = () => {
           quantity,
           packaging_material:packaging_material_id(id, code, name, quantity, unit_cost)
         `)
-        .eq('finished_product_id', parseInt(selectedProductId));
+        .eq('finished_product_id', selectedProductId);
       
       if (error) throw error;
       return data;
@@ -129,7 +129,7 @@ const PackagingPlanning = () => {
           semi_finished_quantity,
           semi_finished:semi_finished_id(id, code, name, quantity, unit, unit_cost)
         `)
-        .eq('id', parseInt(selectedProductId))
+        .eq('id', selectedProductId)
         .single();
       
       if (error) throw error;
@@ -150,14 +150,14 @@ const PackagingPlanning = () => {
       let totalPackagingCost = 0;
       
       productPackagingMaterials.forEach(item => {
-        const requiredQty = Number(item.quantity) * quantity;
+        const requiredQty = Number(item.quantity) * Number(quantity);
         const material = item.packaging_material;
         const unitCost = Number(material?.unit_cost || 0);
         const materialCost = unitCost * requiredQty;
         totalPackagingCost += materialCost;
         
         materials.push({
-          packageMaterialId: Number(material?.id || 0),
+          packageMaterialId: material?.id || 0,
           code: material?.code || '',
           name: material?.name || '',
           requiredQuantity: requiredQty,
@@ -185,51 +185,24 @@ const PackagingPlanning = () => {
       }
       
       const packagingMaterialsData = packagingMaterials.map(material => ({
-        packaging_material_code: material.code,
-        packaging_material_name: material.name,
-        required_quantity: material.requiredQuantity
+        code: material.code,
+        name: material.name,
+        quantity: material.requiredQuantity
       }));
       
-      // Create packaging order
-      const { data, error } = await supabase
-        .from('packaging_orders')
-        .insert({
-          code: `PO-${Date.now().toString().slice(-6)}`,
-          product_code: product.code,
-          product_name: product.name,
-          product_unit: product.unit,
-          quantity: productionQuantity,
-          semi_finished_code: semiFinished.code,
-          semi_finished_name: semiFinished.name,
-          semi_finished_quantity: semiFinishedQuantityNeeded,
-          total_cost: totalCost,
-          date: new Date().toISOString(),
-          status: 'pending'
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Add packaging materials to the order
-      if (packagingMaterialsData.length > 0) {
-        for (const material of packagingMaterialsData) {
-          const { error: materialError } = await supabase
-            .from('packaging_order_materials')
-            .insert({
-              packaging_order_id: data.id,
-              packaging_material_code: material.packaging_material_code,
-              packaging_material_name: material.packaging_material_name,
-              required_quantity: material.required_quantity
-            });
-          
-          if (materialError) {
-            console.error('Error adding packaging material to order:', materialError);
-          }
-        }
-      }
-      
-      return data;
+      return await productionService.createPackagingOrder(
+        product.code,
+        product.name,
+        Number(productionQuantity),
+        product.unit,
+        {
+          code: semiFinished.code,
+          name: semiFinished.name,
+          quantity: semiFinishedQuantityNeeded
+        },
+        packagingMaterialsData,
+        totalCost
+      );
     },
     onSuccess: () => {
       toast.success('تم إنشاء أمر التعبئة بنجاح');

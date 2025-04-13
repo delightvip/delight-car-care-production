@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Edit, Trash, Eye, PlusCircle, MinusCircle } from 'lucide-react';
@@ -28,8 +27,8 @@ export const getCommonTableColumns = () => [
     sortable: true,
     render: (value: number, record: any) => {
       // Ensure values are numeric
-      const quantity = ensureNumericValue(value);
-      const minStock = ensureNumericValue(record.min_stock);
+      const quantity = ensureNumericValue(value, 'quantity');
+      const minStock = ensureNumericValue(record.min_stock, 'min_stock');
       
       return (
         <div className="flex items-center">
@@ -66,7 +65,7 @@ export const getCommonTableColumns = () => [
     title: 'التكلفة',
     sortable: true,
     render: (value: number) => {
-      const unitCost = ensureNumericValue(value);
+      const unitCost = ensureNumericValue(value, 'unit_cost');
       return formatCurrency(unitCost);
     }
   },
@@ -75,7 +74,7 @@ export const getCommonTableColumns = () => [
     title: 'سعر البيع',
     sortable: true,
     render: (value: number) => {
-      const salesPrice = ensureNumericValue(value);
+      const salesPrice = ensureNumericValue(value, 'sales_price');
       return salesPrice > 0 ? formatCurrency(salesPrice) : 'غير محدد';
     }
   },
@@ -83,7 +82,7 @@ export const getCommonTableColumns = () => [
     key: 'min_stock', 
     title: 'الحد الأدنى',
     sortable: true,
-    render: (value: number, record: any) => `${ensureNumericValue(value)} ${record.unit}`
+    render: (value: number, record: any) => `${ensureNumericValue(value, 'min_stock')} ${record.unit}`
   },
   { 
     key: 'totalValue', 
@@ -92,11 +91,11 @@ export const getCommonTableColumns = () => [
     render: (value: number, record: any) => {
       // Calculate total value if not provided
       if (value === undefined || value === null) {
-        const quantity = ensureNumericValue(record.quantity);
-        const unitCost = ensureNumericValue(record.unit_cost);
+        const quantity = ensureNumericValue(record.quantity, 'quantity');
+        const unitCost = ensureNumericValue(record.unit_cost, 'unit_cost');
         return formatCurrency(quantity * unitCost);
       }
-      return formatCurrency(ensureNumericValue(value));
+      return formatCurrency(ensureNumericValue(value, 'totalValue'));
     }
   }
 ];
