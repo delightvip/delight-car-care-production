@@ -494,10 +494,13 @@ export function PaymentForm({
                   <div className="flex flex-col space-y-1">
                     <span className="text-sm text-muted-foreground">الفاتورة المرتبطة:</span>
                     <span className="font-medium">{getInvoiceReference(form.getValues('related_invoice_id'))}</span>
-                  </div>
-                  <div className="flex flex-col space-y-1">
+                  </div>                  <div className="flex flex-col space-y-1">
                     <span className="text-sm text-muted-foreground">المبلغ:</span>
-                    <span className="font-medium text-lg">{form.getValues('amount').toFixed(2)} ج.م</span>
+                    <span className="font-medium text-lg">
+                      {typeof form.getValues('amount') === 'number' 
+                        ? form.getValues('amount').toFixed(2) 
+                        : '0.00'} ج.م
+                    </span>
                   </div>
                 </div>
                 {form.getValues('notes') && (
