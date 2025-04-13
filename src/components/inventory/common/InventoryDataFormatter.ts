@@ -1,3 +1,4 @@
+
 /**
  * Utility functions for formatting inventory data
  */
@@ -93,86 +94,40 @@ export const formatInventoryData = (data: any[]): any[] => {
     
     return {
       ...item,
-      quantity,
+      quantity: quantity,
       unit_cost: unitCost,
-      totalValue,
-      // If sales_price exists, convert it to number
-      ...(item.sales_price !== undefined && { sales_price: ensureNumericValue(item.sales_price) })
+      totalValue: totalValue
     };
   });
 };
 
 /**
- * Format a value for display, preventing [object Object] string.
+ * Calculate the cost of a finished product based on components
  * 
- * @param value - The value to format for display
- * @returns A string safe for display
- */
-export const formatDisplayValue = (value: any): string => {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-};
-
-/**
- * Calculate the total cost of a semi-finished product based on its ingredients
- * 
- * @param ingredients - List of ingredients with percentage and cost
- * @param quantity - Total quantity of the semi-finished product
- * @returns Total cost of the semi-finished product
- */
-export const calculateSemiFinishedCost = (ingredients: any[], quantity: number = 1): number => {
-  if (!ingredients || ingredients.length === 0) return 0;
-  
-  let totalCost = 0;
-  
-  ingredients.forEach(ingredient => {
-    const rawMaterialCost = ensureNumericValue(ingredient.raw_materials?.unit_cost || ingredient.unit_cost);
-    const percentage = ensureNumericValue(ingredient.percentage);
-    
-    // Calculate cost contribution of this ingredient
-    // The percentage is out of 100, so we divide by 100
-    const contributionPerUnit = (percentage / 100) * rawMaterialCost;
-    totalCost += contributionPerUnit;
-  });
-  
-  // Return the total cost multiplied by quantity
-  return totalCost * quantity;
-};
-
-/**
- * Calculate the total cost of a finished product based on its components
- * 
- * @param semiFinishedData - Semi-finished product data (with quantity and cost)
- * @param packagingMaterials - List of packaging materials (with quantity and cost)
- * @param quantity - Total quantity of the finished product
- * @returns Total cost of the finished product
+ * @param semiFinished - The semi-finished product data
+ * @param packaging - Array of packaging materials
+ * @param quantity - Quantity of finished product to calculate for (typically 1 for unit cost)
+ * @returns The calculated unit cost
  */
 export const calculateFinishedProductCost = (
-  semiFinishedData: any,
-  packagingMaterials: any[],
+  semiFinished: any,
+  packaging: any[],
   quantity: number = 1
 ): number => {
-  if (!semiFinishedData && (!packagingMaterials || packagingMaterials.length === 0)) return 0;
+  // Get the semi-finished product cost, accounting for the quantity used
+  const semiFinishedCost = ensureNumericValue(semiFinished.unit_cost) * 
+                           ensureNumericValue(semiFinished.quantity);
   
-  let totalCost = 0;
+  // Calculate total cost of packaging materials
+  const packagingCost = packaging.reduce((total, item) => {
+    const itemCost = ensureNumericValue(item.unit_cost, 'unit_cost') * 
+                     ensureNumericValue(item.quantity);
+    return total + itemCost;
+  }, 0);
   
-  // Add semi-finished product cost
-  if (semiFinishedData) {
-    const semiFinishedCost = ensureNumericValue(semiFinishedData.unit_cost);
-    const semiFinishedQuantity = ensureNumericValue(semiFinishedData.quantity || 1);
-    totalCost += semiFinishedCost * semiFinishedQuantity;
-  }
+  // Total cost is semi-finished cost plus packaging cost
+  const totalCost = semiFinishedCost + packagingCost;
   
-  // Add packaging materials cost
-  if (packagingMaterials && packagingMaterials.length > 0) {
-    packagingMaterials.forEach(material => {
-      const materialCost = ensureNumericValue(material.packaging_material?.unit_cost || material.unit_cost);
-      const materialQuantity = ensureNumericValue(material.quantity || 1);
-      totalCost += materialCost * materialQuantity;
-    });
-  }
-  
-  // Return the total cost multiplied by the finished product quantity
-  return totalCost * quantity;
+  // Return the unit cost by dividing by quantity
+  return quantity > 0 ? totalCost / quantity : 0;
 };
