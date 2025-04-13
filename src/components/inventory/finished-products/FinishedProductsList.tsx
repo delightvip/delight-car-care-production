@@ -65,12 +65,12 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
           quantity: pkg.quantity,
           unit_cost: pkg.packaging_material?.unit_cost
         })) || [];
-        
-        // Calculate the unit cost based on the semi-finished product and packaging materials
+          // Calculate the unit cost based on the semi-finished product and packaging materials
+        const semiFinishedQty = Number(product.semi_finished_quantity || 1);
         const calculatedUnitCost = calculateFinishedProductCost(
           product.semi_finished, 
           formattedPackaging, 
-          1 // Calculate for a single unit
+          semiFinishedQty // استخدام كمية المنتج النصف مصنع المطلوبة فعلياً
         );
 
         // Use the calculated cost if it's greater than 0, otherwise use the stored cost
@@ -182,15 +182,14 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
   const handleDecrement = (record: any) => {
     quickUpdateQuantityMutation.mutate({ id: record.id, change: -1 });
   };
-  
-  // Define table columns
+    // Define table columns
   const columns = [
     ...getCommonTableColumns(),
     { 
       key: 'semi_finished', 
       title: 'المنتج النصف مصنع',
       sortable: true,
-      render: (value: any) => value?.name || '-'
+      render: (value: any, record: any) => record.semi_finished?.name || '-'
     }
   ];
 

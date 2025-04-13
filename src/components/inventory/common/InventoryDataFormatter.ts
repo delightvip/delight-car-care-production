@@ -151,7 +151,7 @@ export const calculateSemiFinishedCost = (ingredients: any[], quantity: number =
 export const calculateFinishedProductCost = (
   semiFinishedData: any,
   packagingMaterials: any[],
-  quantity: number = 1
+  semiFinishedQuantity: number = 1
 ): number => {
   if (!semiFinishedData && (!packagingMaterials || packagingMaterials.length === 0)) return 0;
   
@@ -160,11 +160,10 @@ export const calculateFinishedProductCost = (
   // Add semi-finished product cost
   if (semiFinishedData) {
     const semiFinishedCost = ensureNumericValue(semiFinishedData.unit_cost);
-    const semiFinishedQuantity = ensureNumericValue(semiFinishedData.quantity || 1);
+    // استخدام كمية المنتج النصف مصنع المطلوبة فعلياً في المنتج النهائي
     totalCost += semiFinishedCost * semiFinishedQuantity;
   }
-  
-  // Add packaging materials cost
+    // Add packaging materials cost
   if (packagingMaterials && packagingMaterials.length > 0) {
     packagingMaterials.forEach(material => {
       const materialCost = ensureNumericValue(material.packaging_material?.unit_cost || material.unit_cost);
@@ -173,6 +172,6 @@ export const calculateFinishedProductCost = (
     });
   }
   
-  // Return the total cost multiplied by the finished product quantity
-  return totalCost * quantity;
+  // Return the total cost (no need to multiply again as we already accounted for quantities)
+  return totalCost;
 };
