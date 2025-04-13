@@ -1,3 +1,4 @@
+
 // تحقق إذا كان هذا الملف موجود ونضيف الدالة الخاصة بحساب تكلفة المنتج النهائي أو نعدلها إذا كانت موجودة
 
 export const calculateFinishedProductCost = (
@@ -54,4 +55,17 @@ export const formatInventoryData = (data: any[], columns: any[]) => {
     });
     return formattedItem;
   });
+};
+
+// Add the missing formatDisplayValue function
+export const formatDisplayValue = (value: any): string => {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+  
+  if (typeof value === 'number') {
+    return formatCurrency(value);
+  }
+  
+  return String(value);
 };
