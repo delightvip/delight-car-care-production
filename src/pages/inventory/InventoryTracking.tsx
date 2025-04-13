@@ -1,36 +1,36 @@
-import React from 'react';
-import PageTransition from '@/components/ui/PageTransition';
+
+import React, { useState, useEffect } from 'react';
+import { format, subDays } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { DateRange } from 'react-day-picker';
+import { 
+  FileDownIcon, 
+  RefreshCw, 
+  ChartBarIcon,
+  ListIcon,
+  FilterIcon
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery } from '@tanstack/react-query';
-import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import MovementCard from '@/components/inventory/MovementCard';
-import { 
-  fetchInventoryMovements, 
-  filterMovementsByCategory, 
-  InventoryMovementQuery 
-} from '@/services/InventoryMovementService';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { 
-  CalendarIcon, 
-  ChartBarIcon, 
-  FileDownIcon, 
-  FilterIcon, 
-  PlusIcon, 
-  RefreshCw 
-} from 'lucide-react';
-import { format, subDays, isAfter, parseISO } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import PageTransition from '@/components/ui/PageTransition';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+
 import InventoryMovementStats from '@/components/inventory/InventoryMovementStats';
-import InventoryMovementChart from '@/components/inventory/InventoryMovementChart';
+import InventorySourcesChart from '@/components/inventory/InventorySourcesChart';
+import InventoryMovementFilters from '@/components/inventory/InventoryMovementFilters';
+import { InventoryMovementTable } from '@/components/inventory/movement';
 import ManualMovementForm from '@/components/inventory/ManualMovementForm';
-import { DateRange } from 'react-day-picker';
+
+import { 
+  fetchFilteredInventoryMovements, 
+  fetchInventoryMovementStats,
+  exportInventoryMovementsToCSV,
+  MovementFilter
+} from '@/services/InventoryTracking';
+
 import {
   Dialog,
   DialogContent,
@@ -41,148 +41,100 @@ import {
 } from "@/components/ui/dialog";
 
 const InventoryTracking = () => {
-  const [activeTab, setActiveTab] = React.useState('all');
-  const [movementType, setMovementType] = React.useState<string>('all');
-  const [dateRange, setDateRange] = React.useState<DateRange>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
+  const [activeTab, setActiveTab] = useState('all');
+  const [viewMode, setViewMode] = useState<'list' | 'chart'>('list');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [filters, setFilters] = useState<{
+    movementType: string;
+    itemType: string;
+    dateRange: DateRange;
+    searchTerm: string;
+  }>({
+    movementType: 'all',
+    itemType: 'all',
+    dateRange: {
+      from: subDays(new Date(), 30),
+      to: new Date(),
+    },
+    searchTerm: ''
   });
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
-  const [viewMode, setViewMode] = React.useState<'list' | 'chart'>('list');
-  const [dialogOpen, setDialogOpen] = React.useState(false);
   
-  // Definir getCategoryName al principio del componente para evitar
-  // el error "Cannot access 'getCategoryName' before initialization"
-  const getCategoryName = (category: string) => {
-    switch(category) {
-      case 'raw_materials': return 'المواد الأولية';
-      case 'semi_finished': return 'المنتجات النصف مصنعة';
-      case 'packaging': return 'مستلزمات التعبئة';
-      case 'finished_products': return 'المنتجات النهائية';
-      default: return category;
-    }
+  // Convert UI filters to API filters
+  const getMovementFilters = (): MovementFilter => {
+    return {
+      itemType: filters.itemType !== 'all' ? filters.itemType : undefined,
+      movementType: filters.movementType !== 'all' ? filters.movementType : undefined,
+      dateRange: {
+        from: filters.dateRange.from,
+        to: filters.dateRange.to
+      },
+      searchTerm: filters.searchTerm.trim() !== '' ? filters.searchTerm : undefined
+    };
   };
   
-  // Fetch real inventory movements from our service
-  const { data: movementsData, isLoading, error, refetch } = useQuery({
-    queryKey: ['inventoryMovements'],
-    queryFn: () => {
-      const query: InventoryMovementQuery = {
-        dateRange: {
-          from: dateRange.from,
-          to: dateRange.to
-        }
-      };
-      return fetchInventoryMovements(query);
-    },
-    refetchInterval: 60000, // Refresh every minute
+  // Fetch inventory movements filtered by current filters
+  const { 
+    data: movements = [], 
+    isLoading, 
+    error, 
+    refetch 
+  } = useQuery({
+    queryKey: ['inventoryMovements', filters],
+    queryFn: () => fetchFilteredInventoryMovements(getMovementFilters()),
+    refetchInterval: 300000, // 5 minutes
     refetchOnWindowFocus: true
   });
   
-  // Filter movements based on active filters
+  // Fetch inventory movement statistics
+  const { 
+    data: statsData,
+    isLoading: statsLoading 
+  } = useQuery({
+    queryKey: ['inventoryMovementStats', filters],
+    queryFn: () => fetchInventoryMovementStats(getMovementFilters()),
+    refetchInterval: 300000, // 5 minutes
+    enabled: !isLoading
+  });
+  
+  // Filter movements by active tab (category)
   const filteredMovements = React.useMemo(() => {
-    if (!movementsData) return [];
+    if (activeTab === 'all') return movements;
     
-    return movementsData.filter(movement => {
-      // Filter by category
-      if (activeTab !== 'all' && movement.category !== activeTab) {
-        return false;
-      }
-      
-      // Filter by movement type
-      if (movementType !== 'all' && movement.type !== movementType) {
-        return false;
-      }
-      
-      // Filter by date range
-      if (dateRange.from && !isAfter(movement.date, dateRange.from)) {
-        return false;
-      }
-      if (dateRange.to && isAfter(movement.date, dateRange.to)) {
-        return false;
-      }
-      
-      // Filter by search term
-      if (searchTerm.trim() !== '') {
-        const lowercaseSearch = searchTerm.toLowerCase();
-        return (
-          movement.item_name.toLowerCase().includes(lowercaseSearch) ||
-          movement.note.toLowerCase().includes(lowercaseSearch)
-        );
-      }
-      
-      return true;
+    return movements.filter(movement => {
+      if (activeTab === 'raw_materials' && movement.item_type === 'raw') return true;
+      if (activeTab === 'semi_finished' && movement.item_type === 'semi') return true;
+      if (activeTab === 'packaging' && movement.item_type === 'packaging') return true;
+      if (activeTab === 'finished_products' && movement.item_type === 'finished') return true;
+      return false;
     });
-  }, [movementsData, activeTab, movementType, dateRange, searchTerm]);
-
-  // Bulk actions for export
-  const handleExportData = () => {
-    // Convert filtered movements to CSV
-    const headers = ['نوع الحركة', 'التصنيف', 'الصنف', 'الكمية', 'التاريخ', 'ملاحظات'];
-    const csvData = filteredMovements.map(movement => [
-      movement.type === 'in' ? 'وارد' : 'صادر',
-      getCategoryName(movement.category),
-      movement.item_name,
-      movement.quantity,
-      format(movement.date, 'yyyy/MM/dd'),
-      movement.note
-    ]);
-    
-    // Create CSV content
-    const csv = [
-      headers.join(','),
-      ...csvData.map(row => row.join(','))
-    ].join('\n');
-    
-    // Create download link
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `حركة-المخزون-${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  }, [movements, activeTab]);
+  
+  const handleFilterChange = (newFilters: any) => {
+    setFilters(newFilters);
   };
   
-  const getCategoryMovementCount = (category: string) => {
-    if (!movementsData) return 0;
-    return movementsData.filter(m => category === 'all' || m.category === category).length;
+  const resetFilters = () => {
+    setFilters({
+      movementType: 'all',
+      itemType: 'all',
+      dateRange: {
+        from: subDays(new Date(), 30),
+        to: new Date(),
+      },
+      searchTerm: ''
+    });
   };
   
   const handleManualMovementSuccess = () => {
     setDialogOpen(false);
     refetch();
+    toast.success('تم تسجيل حركة المخزون بنجاح');
   };
   
-  if (isLoading) {
-    return (
-      <PageTransition>
-        <div className="space-y-6">
-          <div className="flex flex-col items-start pb-6">
-            <h1 className="text-3xl font-bold tracking-tight">تتبع المخزون</h1>
-            <p className="text-muted-foreground">متابعة حركة المخزون والتعديلات</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            {Array(4).fill(0).map((_, i) => (
-              <Skeleton key={i} className="h-32 w-full" />
-            ))}
-          </div>
-          
-          <Skeleton className="h-10 w-full max-w-md" />
-          
-          <div className="grid gap-6">
-            {Array(5).fill(0).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full" />
-            ))}
-          </div>
-        </div>
-      </PageTransition>
-    );
-  }
+  const handleExportData = () => {
+    exportInventoryMovementsToCSV(filteredMovements);
+    toast.success('تم تصدير البيانات بنجاح');
+  };
   
   if (error) {
     return (
@@ -221,12 +173,8 @@ const InventoryTracking = () => {
           <div className="flex gap-2">
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button 
-                  size="sm"
-                  className="flex gap-2 items-center"
-                >
-                  <PlusIcon className="h-4 w-4" />
-                  <span>إضافة حركة</span>
+                <Button className="flex gap-2 items-center">
+                  إضافة حركة
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[550px]">
@@ -245,16 +193,15 @@ const InventoryTracking = () => {
             
             <Button 
               variant={viewMode === 'list' ? 'default' : 'outline'} 
-              size="sm"
               onClick={() => setViewMode('list')}
               className="flex gap-2 items-center"
             >
+              <ListIcon className="h-4 w-4" />
               <span>قائمة</span>
             </Button>
             
             <Button 
               variant={viewMode === 'chart' ? 'default' : 'outline'} 
-              size="sm"
               onClick={() => setViewMode('chart')}
               className="flex gap-2 items-center"
             >
@@ -264,7 +211,6 @@ const InventoryTracking = () => {
             
             <Button 
               variant="outline" 
-              size="sm"
               onClick={() => refetch()}
               className="flex gap-2 items-center"
             >
@@ -274,7 +220,6 @@ const InventoryTracking = () => {
             
             <Button 
               variant="outline" 
-              size="sm"
               onClick={handleExportData}
               className="flex gap-2 items-center"
             >
@@ -285,204 +230,79 @@ const InventoryTracking = () => {
         </div>
 
         {/* عرض إحصائيات حركة المخزون */}
-        {movementsData && <InventoryMovementStats movements={movementsData} selectedCategory={activeTab} />}
+        {statsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array(4).fill(0).map((_, i) => (
+              <Skeleton key={i} className="h-28 w-full" />
+            ))}
+          </div>
+        ) : (
+          <InventoryMovementStats 
+            totalMovements={statsData?.totalMovements || 0}
+            inMovements={statsData?.inMovements || 0}
+            outMovements={statsData?.outMovements || 0}
+            inQuantity={statsData?.inQuantity || 0}
+            outQuantity={statsData?.outQuantity || 0}
+            selectedCategory={activeTab}
+          />
+        )}
         
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
-            <TabsTrigger value="all" className="relative">
-              الكل
-              <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('all')}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="raw_materials" className="relative">
-              المواد الأولية
-              <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('raw_materials')}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="semi_finished" className="relative">
-              النصف مصنعة
-              <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('semi_finished')}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="packaging" className="relative">
-              مستلزمات التعبئة
-              <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('packaging')}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="finished_products" className="relative">
-              المنتجات النهائية
-              <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('finished_products')}
-              </Badge>
-            </TabsTrigger>
+            <TabsTrigger value="all">الكل</TabsTrigger>
+            <TabsTrigger value="raw_materials">المواد الأولية</TabsTrigger>
+            <TabsTrigger value="semi_finished">النصف مصنعة</TabsTrigger>
+            <TabsTrigger value="packaging">مستلزمات التعبئة</TabsTrigger>
+            <TabsTrigger value="finished_products">المنتجات النهائية</TabsTrigger>
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
-            {viewMode === 'chart' && movementsData ? (
-              <InventoryMovementChart movements={filteredMovements} selectedCategory={activeTab} />
-            ) : (
-              <Card>
-                <CardHeader className="pb-0">
-                  <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                    <CardTitle className="text-lg">حركة المخزون</CardTitle>
-                    
-                    <div className="flex flex-col md:flex-row gap-2">
-                      <div className="flex gap-2 flex-wrap md:flex-nowrap">
-                        <div className="w-full md:w-auto">
-                          <Input
-                            placeholder="بحث في الأصناف والملاحظات..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full md:w-60"
-                          />
-                        </div>
-                        
-                        <Select value={movementType} onValueChange={setMovementType}>
-                          <SelectTrigger className="w-full md:w-40">
-                            <SelectValue placeholder="نوع الحركة" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">جميع الحركات</SelectItem>
-                            <SelectItem value="in">وارد</SelectItem>
-                            <SelectItem value="out">صادر</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        
-                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full md:w-auto justify-start text-left font-normal"
-                            >
-                              <CalendarIcon className="ml-2 h-4 w-4" />
-                              {dateRange.from ? (
-                                dateRange.to ? (
-                                  <>
-                                    {format(dateRange.from, "yyyy/MM/dd")} - {format(dateRange.to, "yyyy/MM/dd")}
-                                  </>
-                                ) : (
-                                  format(dateRange.from, "yyyy/MM/dd")
-                                )
-                              ) : (
-                                "اختر الفترة"
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              initialFocus
-                              mode="range"
-                              defaultMonth={dateRange.from}
-                              selected={dateRange}
-                              onSelect={range => {
-                                setDateRange(range || { from: undefined, to: undefined });
-                                if (range?.from && range?.to) {
-                                  setIsCalendarOpen(false);
-                                }
-                              }}
-                              locale={ar}
-                              numberOfMonths={2}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      
-                      {(searchTerm || movementType !== 'all' || dateRange.from || dateRange.to) && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            setSearchTerm('');
-                            setMovementType('all');
-                            setDateRange({
-                              from: subDays(new Date(), 30),
-                              to: new Date()
-                            });
-                          }}
-                          className="mt-2 md:mt-0"
-                        >
-                          مسح التصفية
-                        </Button>
-                      )}
-                    </div>
+            <Card>
+              <CardHeader className="pb-0">
+                <InventoryMovementFilters 
+                  filters={filters}
+                  onFilterChange={handleFilterChange}
+                  onResetFilters={resetFilters}
+                />
+              </CardHeader>
+              
+              <CardContent>
+                {viewMode === 'chart' && !isLoading && filteredMovements.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <InventorySourcesChart movements={filteredMovements} />
+                    {/* Additional charts can be added here */}
                   </div>
-                  
-                  {filteredMovements.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      <Badge variant="outline" className="bg-muted">
-                        {filteredMovements.length} عنصر
-                      </Badge>
-                      
-                      {activeTab !== 'all' && (
-                        <Badge variant="outline" className="bg-muted">
-                          التصنيف: {getCategoryName(activeTab)}
-                        </Badge>
-                      )}
-                      
-                      {movementType !== 'all' && (
-                        <Badge variant="outline" className="bg-muted">
-                          نوع الحركة: {movementType === 'in' ? 'وارد' : 'صادر'}
-                        </Badge>
-                      )}
-                      
-                      {dateRange.from && (
-                        <Badge variant="outline" className="bg-muted">
-                          من: {format(dateRange.from, 'yyyy/MM/dd')}
-                        </Badge>
-                      )}
-                      
-                      {dateRange.to && (
-                        <Badge variant="outline" className="bg-muted">
-                          إلى: {format(dateRange.to, 'yyyy/MM/dd')}
-                        </Badge>
-                      )}
-                      
-                      {searchTerm && (
-                        <Badge variant="outline" className="bg-muted">
-                          بحث: {searchTerm}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[500px] pr-4">
-                    <div className="space-y-6">
-                      {filteredMovements.length > 0 ? (
-                        filteredMovements.map((movement) => (
-                          <MovementCard key={movement.id} movement={movement} />
-                        ))
-                      ) : (
-                        <div className="text-center py-16 text-muted-foreground">
-                          <FilterIcon className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                          <h3 className="text-xl font-medium mb-2">لا توجد نتائج</h3>
-                          <p>لا توجد حركات مخزون تطابق معايير التصفية الحالية</p>
-                          <Button 
-                            className="mt-4" 
-                            variant="outline"
-                            onClick={() => {
-                              setSearchTerm('');
-                              setMovementType('all');
-                              setDateRange({
-                                from: subDays(new Date(), 30),
-                                to: new Date()
-                              });
-                              setActiveTab('all');
-                            }}
-                          >
-                            مسح جميع المرشحات
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            )}
+                ) : (
+                  <div className="mt-6">
+                    {isLoading ? (
+                      <div className="space-y-4">
+                        {Array(5).fill(0).map((_, i) => (
+                          <Skeleton key={i} className="h-16 w-full" />
+                        ))}
+                      </div>
+                    ) : filteredMovements.length > 0 ? (
+                      <InventoryMovementTable 
+                        movements={filteredMovements} 
+                        isLoading={isLoading} 
+                      />
+                    ) : (
+                      <div className="text-center py-16 text-muted-foreground">
+                        <FilterIcon className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                        <h3 className="text-xl font-medium mb-2">لا توجد نتائج</h3>
+                        <p>لا توجد حركات مخزون تطابق معايير التصفية الحالية</p>
+                        <Button 
+                          className="mt-4" 
+                          variant="outline"
+                          onClick={resetFilters}
+                        >
+                          مسح جميع المرشحات
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
