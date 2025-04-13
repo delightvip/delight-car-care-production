@@ -11,4 +11,9 @@ export interface InventoryMovement {
   updated_at?: string; 
   user_id?: string;
   user_name?: string; // اسم المستخدم الذي قام بالحركة
+  date: Date | string; // Adding date as a required property
+  category?: string;
+  type?: 'in' | 'out';
+  note?: string;
+  item_name?: string;
 }

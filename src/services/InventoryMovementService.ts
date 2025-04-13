@@ -211,7 +211,7 @@ class InventoryMovementService {
         .select('*')
         .eq('item_id', itemId)
         .eq('item_type', itemType)
-        .order('movement_date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching item movements:', error);
@@ -243,7 +243,7 @@ class InventoryMovementService {
       }
 
       // Transform to match expected format by components
-      const movements = data.map(item => {
+      const movements: InventoryMovement[] = data.map(item => {
         const movement: InventoryMovement = {
           id: item.id,
           item_id: item.item_id,

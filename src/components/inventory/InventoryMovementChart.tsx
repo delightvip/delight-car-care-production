@@ -3,24 +3,9 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format, subDays, subMonths, parseISO, isAfter, isBefore } from 'date-fns';
+import { format, subDays, subMonths, isAfter, isBefore } from 'date-fns';
 import { ar } from 'date-fns/locale';
-
-// Define the interface for movements
-interface InventoryMovement {
-  id?: string;
-  item_id: string;
-  item_type: string;
-  quantity: number;
-  movement_type: string;
-  reason?: string;
-  balance_after?: number;
-  date: Date | string;
-  category?: string;
-  type?: 'in' | 'out';
-  note?: string;
-  item_name?: string;
-}
+import { InventoryMovement } from '@/types/inventoryTypes';
 
 interface InventoryMovementChartProps {
   movements: InventoryMovement[];

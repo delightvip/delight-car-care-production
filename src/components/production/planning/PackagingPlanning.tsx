@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -184,24 +185,51 @@ const PackagingPlanning = () => {
       }
       
       const packagingMaterialsData = packagingMaterials.map(material => ({
-        code: material.code,
-        name: material.name,
-        quantity: material.requiredQuantity
+        packaging_material_code: material.code,
+        packaging_material_name: material.name,
+        required_quantity: material.requiredQuantity
       }));
       
-      return await productionService.createPackagingOrder(
-        product.code,
-        product.name,
-        Number(productionQuantity),
-        product.unit,
-        {
-          code: semiFinished.code,
-          name: semiFinished.name,
-          quantity: semiFinishedQuantityNeeded
-        },
-        packagingMaterialsData,
-        totalCost
-      );
+      // Create packaging order
+      const { data, error } = await supabase
+        .from('packaging_orders')
+        .insert({
+          code: `PO-${Date.now().toString().slice(-6)}`,
+          product_code: product.code,
+          product_name: product.name,
+          product_unit: product.unit,
+          quantity: productionQuantity,
+          semi_finished_code: semiFinished.code,
+          semi_finished_name: semiFinished.name,
+          semi_finished_quantity: semiFinishedQuantityNeeded,
+          total_cost: totalCost,
+          date: new Date().toISOString(),
+          status: 'pending'
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Add packaging materials to the order
+      if (packagingMaterialsData.length > 0) {
+        for (const material of packagingMaterialsData) {
+          const { error: materialError } = await supabase
+            .from('packaging_order_materials')
+            .insert({
+              packaging_order_id: data.id,
+              packaging_material_code: material.packaging_material_code,
+              packaging_material_name: material.packaging_material_name,
+              required_quantity: material.required_quantity
+            });
+          
+          if (materialError) {
+            console.error('Error adding packaging material to order:', materialError);
+          }
+        }
+      }
+      
+      return data;
     },
     onSuccess: () => {
       toast.success('تم إنشاء أمر التعبئة بنجاح');

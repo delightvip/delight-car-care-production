@@ -1,3 +1,4 @@
+
 import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +36,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import InventoryMovementService, { InventoryMovement, InventoryMovementQuery } from '@/services/InventoryMovementService';
+import { InventoryMovement as LocalInventoryMovement } from '@/types/inventoryTypes';
 
 const InventoryTracking = () => {
   const [activeTab, setActiveTab] = React.useState('all');
@@ -214,6 +216,10 @@ const InventoryTracking = () => {
     );
   }
   
+  // Cast the movements to the correct type for the components
+  const movementsForComponents = movementsData ? movementsData as unknown as LocalInventoryMovement[] : [];
+  const filteredMovementsForComponents = filteredMovements as unknown as LocalInventoryMovement[];
+  
   return (
     <PageTransition>
       <div className="space-y-6">
@@ -290,7 +296,7 @@ const InventoryTracking = () => {
         </div>
 
         {/* عرض إحصائيات حركة المخزون */}
-        {movementsData && <InventoryMovementStats movements={movementsData} selectedCategory={activeTab} />}
+        {movementsData && <InventoryMovementStats movements={movementsForComponents} selectedCategory={activeTab} />}
         
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
@@ -328,7 +334,7 @@ const InventoryTracking = () => {
           
           <TabsContent value={activeTab} className="mt-0">
             {viewMode === 'chart' && movementsData ? (
-              <InventoryMovementChart movements={filteredMovements} selectedCategory={activeTab} />
+              <InventoryMovementChart movements={filteredMovementsForComponents} selectedCategory={activeTab} />
             ) : (
               <Card>
                 <CardHeader className="pb-0">
@@ -459,7 +465,18 @@ const InventoryTracking = () => {
                     <div className="space-y-6">
                       {filteredMovements.length > 0 ? (
                         filteredMovements.map((movement) => (
-                          <MovementCard key={movement.id} movement={movement} />
+                          <MovementCard 
+                            key={movement.id} 
+                            movement={movement as unknown as { 
+                              id: string;
+                              type: 'in' | 'out';
+                              category: string;
+                              item_name: string;
+                              quantity: number;
+                              date: Date | string;
+                              note: string;
+                            }} 
+                          />
                         ))
                       ) : (
                         <div className="text-center py-16 text-muted-foreground">

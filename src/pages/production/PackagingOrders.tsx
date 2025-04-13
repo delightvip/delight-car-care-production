@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import InventoryMovementService from '@/services/InventoryMovementService';
 
 const PackagingOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -42,6 +44,7 @@ const PackagingOrders = () => {
   const queryClient = useQueryClient();
   
   const productionService = ProductionDatabaseService.getInstance();
+  const inventoryMovementService = InventoryMovementService.getInstance();
   
   const { data: packagingOrders, isLoading, refetch: refetchOrders } = useQuery({
     queryKey: ['packagingOrders'],
@@ -82,12 +85,105 @@ const PackagingOrders = () => {
     setIsViewModalOpen(true);
   };
   
+  // Helper method to consume semi-finished product using the inventory service
+  const consumeSemiFinishedProduct = async (code: string, name: string, quantity: number, reason: string) => {
+    return await inventoryMovementService.consumeStock(
+      { code, name, unit: 'وحدة', type: 'semi_finished' },
+      quantity,
+      reason
+    );
+  };
+  
+  // Helper method to consume packaging material using the inventory service
+  const consumePackagingMaterial = async (code: string, name: string, quantity: number, reason: string) => {
+    return await inventoryMovementService.consumeStock(
+      { code, name, unit: 'وحدة', type: 'packaging' },
+      quantity,
+      reason
+    );
+  };
+  
+  // Helper method to add finished product using the inventory service
+  const addFinishedProduct = async (code: string, name: string, quantity: number, unitCost: number, reason: string) => {
+    try {
+      // Create movement record for adding the finished product
+      const movement = {
+        item_id: code,
+        item_type: 'finished' as 'raw_material' | 'semi_finished' | 'finished' | 'packaging',
+        quantity: quantity,
+        movement_type: 'addition' as 'addition' | 'consumption' | 'transfer' | 'adjustment',
+        reason: reason,
+        note: reason,
+        item_name: name
+      };
+      
+      // Log the inventory movement
+      await inventoryMovementService.logInventoryMovement(movement);
+      
+      // Update the finished product quantity in inventory - this is simplified
+      const { data, error } = await supabase
+        .from('finished_products')
+        .select('quantity')
+        .eq('code', code)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching finished product:', error);
+        return false;
+      }
+      
+      const currentQuantity = data.quantity || 0;
+      const newQuantity = currentQuantity + quantity;
+      
+      const { error: updateError } = await supabase
+        .from('finished_products')
+        .update({ 
+          quantity: newQuantity,
+          unit_cost: unitCost // Update unit cost with the calculated value
+        })
+        .eq('code', code);
+      
+      if (updateError) {
+        console.error('Error updating finished product quantity:', updateError);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error adding finished product:', error);
+      return false;
+    }
+  };
+  
+  // Helper method to update packaging order status
+  const updatePackagingOrderStatus = async (orderId: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from('packaging_orders')
+        .update({ 
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+      
+      if (error) {
+        console.error('Error updating packaging order status:', error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating packaging order status:', error);
+      return false;
+    }
+  };
+  
   const handleApproveOrder = async (order: any) => {
     setProcessingOrderId(order.id);
     
     try {
       // Ensure we're passing the correct data structure to consumeSemiFinishedProduct
-      await productionService.consumeSemiFinishedProduct(
+      await consumeSemiFinishedProduct(
         order.semi_finished_code,
         order.semi_finished_name,
         Number(order.semi_finished_quantity),
@@ -99,7 +195,7 @@ const PackagingOrders = () => {
       
       if (Array.isArray(packagingMaterials)) {
         for (const material of packagingMaterials) {
-          await productionService.consumePackagingMaterial(
+          await consumePackagingMaterial(
             material.packaging_material_code,
             material.packaging_material_name,
             Number(material.required_quantity),
@@ -109,7 +205,7 @@ const PackagingOrders = () => {
       }
       
       // Add the finished product to inventory
-      await productionService.addFinishedProduct(
+      await addFinishedProduct(
         order.product_code,
         order.product_name,
         Number(order.quantity),
@@ -118,7 +214,7 @@ const PackagingOrders = () => {
       );
       
       // Update the order status
-      await productionService.updatePackagingOrderStatus(order.id, 'completed');
+      await updatePackagingOrderStatus(order.id, 'completed');
       
       toast.success(`تم تنفيذ أمر التعبئة رقم ${order.code} بنجاح`);
       
