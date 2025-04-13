@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,8 +12,8 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-import { createManualInventoryMovement } from '@/services/InventoryMovementService';
-import InventoryService from '@/services/InventoryService'; // تصحيح الاستيراد هنا
+import { InventoryMovementService } from '@/services/InventoryMovementService';
+import InventoryService from '@/services/InventoryService';
 
 interface ManualMovementFormProps {
   onSuccess?: () => void;
@@ -42,40 +43,40 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     date: new Date()
   });
 
-  const inventoryService = InventoryService.getInstance(); // استخدام getInstance للحصول على نسخة من خدمة المخزون
+  const inventoryService = InventoryService.getInstance();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
-  // استعلام عن المواد الخام
+  // Query raw materials
   const { data: rawMaterials = [] } = useQuery({
     queryKey: ['rawMaterials'],
     queryFn: () => inventoryService.getRawMaterials(),
     enabled: formState.category === 'raw_materials'
   });
   
-  // استعلام عن مواد التعبئة
+  // Query packaging materials
   const { data: packagingMaterials = [] } = useQuery({
     queryKey: ['packagingMaterials'],
     queryFn: () => inventoryService.getPackagingMaterials(),
     enabled: formState.category === 'packaging'
   });
   
-  // استعلام عن المنتجات نصف مصنعة
+  // Query semi-finished products
   const { data: semiFinishedProducts = [] } = useQuery({
     queryKey: ['semiFinishedProducts'],
     queryFn: () => inventoryService.getSemiFinishedProducts(),
     enabled: formState.category === 'semi_finished'
   });
   
-  // استعلام عن المنتجات النهائية
+  // Query finished products
   const { data: finishedProducts = [] } = useQuery({
     queryKey: ['finishedProducts'],
     queryFn: () => inventoryService.getFinishedProducts(),
     enabled: formState.category === 'finished_products'
   });
   
-  // الحصول على قائمة الأصناف حسب الفئة المحددة
+  // Get items list based on selected category
   const getItemsList = () => {
     switch (formState.category) {
       case 'raw_materials':
@@ -91,7 +92,7 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     }
   };
   
-  // تحديد الوحدة تلقائيًا عند اختيار الصنف
+  // Set unit automatically when item is selected
   const handleItemChange = (id: string) => {
     const items = getItemsList();
     const selectedItem = items.find((item: any) => item.id.toString() === id || item.code === id);
@@ -109,7 +110,7 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     }
   };
   
-  // الحصول على الوحدة الافتراضية حسب الفئة
+  // Get default unit based on category
   const getDefaultUnit = (category: string) => {
     switch (category) {
       case 'raw_materials':
@@ -125,7 +126,7 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     }
   };
   
-  // تغيير الفئة وإعادة ضبط الصنف والوحدة
+  // Reset item and unit when category changes
   const handleCategoryChange = (category: string) => {
     setFormState({
       ...formState,
@@ -136,7 +137,7 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     });
   };
   
-  // التحقق من صحة النموذج
+  // Validate form
   const isFormValid = () => {
     if (!formState.itemId || !formState.itemName) {
       toast.error('يرجى اختيار الصنف');
@@ -156,7 +157,7 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     return true;
   };
   
-  // إرسال النموذج
+  // Submit form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -165,7 +166,7 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     setIsSubmitting(true);
     
     try {
-      const success = await createManualInventoryMovement({
+      const success = await InventoryMovementService.createManualInventoryMovement({
         type: formState.type,
         category: formState.category,
         item_name: formState.itemName,

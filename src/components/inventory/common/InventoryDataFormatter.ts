@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for formatting inventory data
  */
@@ -78,6 +77,37 @@ export const formatCurrency = (value: number): string => {
   
   // Format with 2 decimal places
   return `${numValue.toFixed(2)} ج.م`;
+};
+
+/**
+ * Format display value based on column type
+ * 
+ * @param value - The value to format
+ * @param type - The type of formatting to apply
+ * @returns Formatted string
+ */
+export const formatDisplayValue = (value: any, type: 'currency' | 'number' | 'text' | 'date' | 'percentage' = 'text'): string => {
+  if (value === undefined || value === null) {
+    return '-';
+  }
+
+  switch (type) {
+    case 'currency':
+      return formatCurrency(ensureNumericValue(value));
+    case 'number':
+      return ensureNumericValue(value).toLocaleString('ar-EG');
+    case 'percentage':
+      return `${ensureNumericValue(value).toFixed(1)}%`;
+    case 'date':
+      try {
+        const date = new Date(value);
+        return date.toLocaleDateString('ar-EG');
+      } catch (e) {
+        return String(value);
+      }
+    default:
+      return String(value);
+  }
 };
 
 /**

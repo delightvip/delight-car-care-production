@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowDownIcon, ArrowUpIcon, ListRestart, BarChart3 } from 'lucide-react';
-import { InventoryMovement } from '@/services/InventoryMovementService';
+import { InventoryMovement } from '@/types/inventoryTypes';
 
 interface StatCardProps {
   title: string;
@@ -35,7 +36,7 @@ interface InventoryMovementStatsProps {
 }
 
 const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movements, selectedCategory }) => {
-  // أهم الإحصائيات
+  // Filter movements based on selected category
   const getFilteredMovements = () => {
     if (!selectedCategory || selectedCategory === 'all') {
       return movements;
@@ -45,20 +46,21 @@ const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movemen
   
   const filteredMovements = getFilteredMovements();
   
-  // إجمالي حركات الوارد
-  const inMovements = filteredMovements.filter(m => m.type === 'in');
+  // Calculate total incoming movements
+  const inMovements = filteredMovements.filter(m => m.movement_type === 'in' || m.type === 'in');
   const totalInQuantity = inMovements.reduce((sum, m) => sum + m.quantity, 0);
   
-  // إجمالي حركات الصادر
-  const outMovements = filteredMovements.filter(m => m.type === 'out');
+  // Calculate total outgoing movements
+  const outMovements = filteredMovements.filter(m => m.movement_type === 'out' || m.type === 'out');
   const totalOutQuantity = outMovements.reduce((sum, m) => sum + m.quantity, 0);
   
-  // إجمالي الحركات
+  // Total number of movements
   const totalMovements = filteredMovements.length;
   
-  // التصنيف الأكثر نشاطاً
+  // Find most active category
   const categoryCount = filteredMovements.reduce((acc, movement) => {
-    acc[movement.category] = (acc[movement.category] || 0) + 1;
+    const category = movement.category || 'unknown';
+    acc[category] = (acc[category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   

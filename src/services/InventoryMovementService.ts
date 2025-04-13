@@ -1,23 +1,29 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { InventoryMovement } from '@/types/inventoryTypes';
+import { format, parseISO, subDays } from 'date-fns';
 
-// نوع حركة المخزون
-export interface InventoryMovement {
-  id: string;
-  item_id: string;
-  item_type: string;
-  movement_type: string;
-  quantity: number;
-  balance_after: number;
-  reason: string;
-  created_at: string;
-  user_name?: string;
+// Types for the inventory movement queries
+export interface InventoryMovementQuery {
+  dateRange?: {
+    from?: Date;
+    to?: Date;
+  };
   category?: string;
+  type?: 'in' | 'out' | 'adjustment' | 'all';
+  search?: string;
 }
 
-// أنواع عناصر المخزون
-export type ItemType = 'raw' | 'packaging' | 'semi' | 'finished';
+interface ManualMovementInput {
+  type: 'in' | 'out';
+  category: string;
+  item_id: number;
+  item_name: string;
+  quantity: number;
+  unit: string;
+  note: string;
+  date: Date;
+}
 
 class InventoryMovementService {
   private static instance: InventoryMovementService;
@@ -344,6 +350,162 @@ class InventoryMovementService {
       return false;
     }
   }
+
+  // Fetch inventory movements based on query parameters
+  public static async fetchInventoryMovements(query: InventoryMovementQuery = {}): Promise<InventoryMovement[]> {
+    try {
+      // Call RPC function to get all movements
+      const { data, error } = await supabase.rpc('get_all_inventory_movements');
+
+      if (error) {
+        console.error('Error fetching inventory movements:', error);
+        throw error;
+      }
+
+      // Convert server data to client format
+      let movements = data.map((item: any) => ({
+        id: item.id,
+        item_id: item.item_id,
+        item_type: item.item_type,
+        movement_type: item.movement_type,
+        type: item.movement_type, // Add type alias for compatibility
+        quantity: Number(item.quantity),
+        balance_after: Number(item.balance_after),
+        reason: item.reason,
+        note: item.reason, // Add note alias for compatibility
+        created_at: item.created_at,
+        user_name: item.user_name,
+        category: getItemTypeCategory(item.item_type),
+        item_name: item.item_name || item.item_id,
+        date: parseISO(item.created_at) // Convert string to Date
+      }));
+
+      // Apply date range filter
+      if (query.dateRange) {
+        if (query.dateRange.from) {
+          movements = movements.filter(m => 
+            m.date && m.date >= query.dateRange!.from!
+          );
+        }
+        
+        if (query.dateRange.to) {
+          movements = movements.filter(m => 
+            m.date && m.date <= query.dateRange!.to!
+          );
+        }
+      }
+
+      // Apply category filter
+      if (query.category && query.category !== 'all') {
+        movements = movements.filter(m => m.category === query.category);
+      }
+
+      // Apply type filter
+      if (query.type && query.type !== 'all') {
+        movements = movements.filter(m => m.type === query.type);
+      }
+
+      // Apply search filter
+      if (query.search) {
+        const search = query.search.toLowerCase();
+        movements = movements.filter(m => 
+          (m.item_name?.toLowerCase().includes(search)) || 
+          (m.reason?.toLowerCase().includes(search))
+        );
+      }
+
+      return movements;
+    } catch (error) {
+      console.error('Error in fetchInventoryMovements:', error);
+      return [];
+    }
+  }
+
+  // Filter movements by category
+  public static filterMovementsByCategory(movements: InventoryMovement[], category: string): InventoryMovement[] {
+    if (category === 'all') return movements;
+    return movements.filter(m => m.category === category);
+  }
+
+  // Create a manual inventory movement
+  public static async createManualInventoryMovement(data: ManualMovementInput): Promise<boolean> {
+    try {
+      const movementService = InventoryMovementService.getInstance();
+      
+      // Map category to item_type format
+      let itemType: 'raw' | 'packaging' | 'semi' | 'finished';
+      
+      switch (data.category) {
+        case 'raw_materials':
+          itemType = 'raw';
+          break;
+        case 'packaging':
+          itemType = 'packaging';
+          break;
+        case 'semi_finished':
+          itemType = 'semi';
+          break;
+        case 'finished_products':
+          itemType = 'finished';
+          break;
+        default:
+          throw new Error('Invalid category');
+      }
+      
+      // Record the movement
+      const success = await movementService.recordMovement(
+        data.item_id.toString(),
+        itemType,
+        data.type,
+        data.quantity,
+        data.note
+      );
+      
+      if (success) {
+        toast.success('تم تسجيل حركة المخزون بنجاح');
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('Error creating manual movement:', error);
+      toast.error('حدث خطأ أثناء تسجيل حركة المخزون');
+      return false;
+    }
+  }
+
+  // Helper function to map item type to category
+  private static getItemTypeCategory(itemType: string): string {
+    switch (itemType) {
+      case 'raw':
+        return 'raw_materials';
+      case 'packaging':
+        return 'packaging';
+      case 'semi':
+        return 'semi_finished';
+      case 'finished':
+        return 'finished_products';
+      default:
+        return itemType;
+    }
+  }
 }
 
+// Helper function outside the class
+function getItemTypeCategory(itemType: string): string {
+  switch (itemType) {
+    case 'raw':
+      return 'raw_materials';
+    case 'packaging':
+      return 'packaging';
+    case 'semi':
+      return 'semi_finished';
+    case 'finished':
+      return 'finished_products';
+    default:
+      return itemType;
+  }
+}
+
+export { InventoryMovementService };
+export type { InventoryMovement };
 export default InventoryMovementService;

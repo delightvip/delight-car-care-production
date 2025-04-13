@@ -10,5 +10,12 @@ export interface InventoryMovement {
   created_at: string;
   updated_at?: string; 
   user_id?: string;
-  user_name?: string; // اسم المستخدم الذي قام بالحركة
+  user_name?: string;
+  
+  // Adding missing properties for chart components
+  type?: 'in' | 'out' | 'adjustment';
+  date?: Date;
+  item_name?: string;
+  category?: string;
+  note?: string;
 }

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,11 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MovementCard from '@/components/inventory/MovementCard';
-import { 
-  fetchInventoryMovements, 
-  filterMovementsByCategory, 
-  InventoryMovementQuery 
-} from '@/services/InventoryMovementService';
+import { InventoryMovementService, InventoryMovement } from '@/services/InventoryMovementService';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -52,8 +49,7 @@ const InventoryTracking = () => {
   const [viewMode, setViewMode] = React.useState<'list' | 'chart'>('list');
   const [dialogOpen, setDialogOpen] = React.useState(false);
   
-  // Definir getCategoryName al principio del componente para evitar
-  // el error "Cannot access 'getCategoryName' before initialization"
+  // Define getCategoryName at the beginning of the component
   const getCategoryName = (category: string) => {
     switch(category) {
       case 'raw_materials': return 'المواد الأولية';
@@ -68,13 +64,12 @@ const InventoryTracking = () => {
   const { data: movementsData, isLoading, error, refetch } = useQuery({
     queryKey: ['inventoryMovements'],
     queryFn: () => {
-      const query: InventoryMovementQuery = {
+      return InventoryMovementService.fetchInventoryMovements({
         dateRange: {
           from: dateRange.from,
           to: dateRange.to
         }
-      };
-      return fetchInventoryMovements(query);
+      });
     },
     refetchInterval: 60000, // Refresh every minute
     refetchOnWindowFocus: true
@@ -107,8 +102,8 @@ const InventoryTracking = () => {
       if (searchTerm.trim() !== '') {
         const lowercaseSearch = searchTerm.toLowerCase();
         return (
-          movement.item_name.toLowerCase().includes(lowercaseSearch) ||
-          movement.note.toLowerCase().includes(lowercaseSearch)
+          (movement.item_name?.toLowerCase().includes(lowercaseSearch)) ||
+          (movement.reason?.toLowerCase().includes(lowercaseSearch))
         );
       }
       
@@ -122,11 +117,11 @@ const InventoryTracking = () => {
     const headers = ['نوع الحركة', 'التصنيف', 'الصنف', 'الكمية', 'التاريخ', 'ملاحظات'];
     const csvData = filteredMovements.map(movement => [
       movement.type === 'in' ? 'وارد' : 'صادر',
-      getCategoryName(movement.category),
-      movement.item_name,
+      getCategoryName(movement.category || ''),
+      movement.item_name || movement.item_id,
       movement.quantity,
-      format(movement.date, 'yyyy/MM/dd'),
-      movement.note
+      format(movement.date || new Date(movement.created_at), 'yyyy/MM/dd'),
+      movement.reason || ''
     ]);
     
     // Create CSV content
@@ -149,7 +144,7 @@ const InventoryTracking = () => {
   
   const getCategoryMovementCount = (category: string) => {
     if (!movementsData) return 0;
-    return movementsData.filter(m => category === 'all' || m.category === category).length;
+    return InventoryMovementService.filterMovementsByCategory(movementsData, category).length;
   };
   
   const handleManualMovementSuccess = () => {

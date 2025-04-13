@@ -1,7 +1,8 @@
+
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { InventoryMovement } from '@/services/InventoryMovementService';
+import { InventoryMovement } from '@/types/inventoryTypes';
 import {
   BarChart,
   Bar,
@@ -28,8 +29,7 @@ interface InventoryMovementChartProps {
 const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movements, selectedCategory }) => {
   const [chartType, setChartType] = React.useState('daily');
   
-  // Definir la función getCategoryName al principio del componente
-  // para evitar el error "Cannot access 'getCategoryName' before initialization"
+  // Define the getCategoryName function at the beginning of the component
   const getCategoryName = (category: string) => {
     switch(category) {
       case 'raw_materials': return 'المواد الأولية';
@@ -40,13 +40,13 @@ const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movemen
     }
   };
   
-  // فلترة الحركات حسب الفئة المحددة
+  // Filter movements by the selected category
   const filteredMovements = useMemo(() => {
     if (selectedCategory === 'all') return movements;
     return movements.filter(m => m.category === selectedCategory);
   }, [movements, selectedCategory]);
   
-  // ألوان حسب نوع الفئة
+  // Get category colors
   const getCategoryColor = (category: string) => {
     switch(category) {
       case 'raw_materials': return '#3b82f6';
@@ -57,15 +57,23 @@ const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movemen
     }
   };
   
-  // إعداد بيانات الرسم البياني اليومي
+  // Prepare daily chart data
   const dailyChartData = useMemo(() => {
     const today = new Date();
     const days = Array.from({ length: 7 }, (_, i) => subDays(today, 6 - i));
     
     return days.map(day => {
-      const dayMovements = filteredMovements.filter(m => isSameDay(m.date, day));
-      const inCount = dayMovements.filter(m => m.type === 'in').reduce((acc, curr) => acc + curr.quantity, 0);
-      const outCount = dayMovements.filter(m => m.type === 'out').reduce((acc, curr) => acc + curr.quantity, 0);
+      const dayMovements = filteredMovements.filter(m => 
+        m.date ? isSameDay(m.date, day) : false
+      );
+      
+      const inCount = dayMovements
+        .filter(m => m.type === 'in')
+        .reduce((acc, curr) => acc + curr.quantity, 0);
+        
+      const outCount = dayMovements
+        .filter(m => m.type === 'out')
+        .reduce((acc, curr) => acc + curr.quantity, 0);
       
       return {
         date: format(day, 'yyyy/MM/dd'),
@@ -77,9 +85,10 @@ const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movemen
     });
   }, [filteredMovements]);
   
-  // إعداد بيانات الرسم البياني للفئات
+  // Prepare category chart data
   const categoryChartData = useMemo(() => {
     const categoryCounts = movements.reduce((acc, m) => {
+      if (!m.category) return acc;
       const categoryName = getCategoryName(m.category);
       acc[categoryName] = (acc[categoryName] || 0) + 1;
       return acc;
@@ -88,7 +97,7 @@ const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movemen
     return Object.entries(categoryCounts).map(([name, value]) => ({ name, value }));
   }, [movements]);
   
-  // إعداد بيانات الرسم البياني لأنواع الحركة
+  // Prepare movement type chart data
   const typeChartData = useMemo(() => {
     const inMovements = filteredMovements.filter(m => m.type === 'in').length;
     const outMovements = filteredMovements.filter(m => m.type === 'out').length;
@@ -99,15 +108,13 @@ const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movemen
     ];
   }, [filteredMovements]);
   
-  // إعداد بيانات الرسم البياني للكميات حسب الفئة
+  // Prepare quantity by category chart data
   const quantityByCategoryData = useMemo(() => {
     const categoryQuantities = filteredMovements.reduce((acc, m) => {
+      if (!m.category) return acc;
       const categoryName = getCategoryName(m.category);
-      if (m.type === 'in') {
-        acc[categoryName] = (acc[categoryName] || 0) + m.quantity;
-      } else {
-        acc[categoryName] = (acc[categoryName] || 0) - m.quantity;
-      }
+      const quantity = m.type === 'in' ? m.quantity : -m.quantity;
+      acc[categoryName] = (acc[categoryName] || 0) + quantity;
       return acc;
     }, {} as Record<string, number>);
     
