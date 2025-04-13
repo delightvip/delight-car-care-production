@@ -1,22 +1,73 @@
+
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
-import { Database } from "@/integrations/supabase/types/supabase";
 import { supabase } from "@/integrations/supabase/client";
 
-type RawMaterial = Database['public']['Tables']['raw_materials']['Row'];
-type SemiFinishedProduct = Database['public']['Tables']['semi_finished_products']['Row'];
-type FinishedProduct = Database['public']['Tables']['finished_products']['Row'];
-type PackagingMaterial = Database['public']['Tables']['packaging_materials']['Row'];
-
-interface InventoryMovement {
-  itemId: string;
-  itemType: 'raw_material' | 'semi_finished' | 'finished' | 'packaging';
+// Define missing interfaces
+export interface InventoryMovement {
+  id?: string;
+  item_id: string;
+  item_type: 'raw_material' | 'semi_finished' | 'finished' | 'packaging';
   quantity: number;
-  movementType: 'addition' | 'consumption' | 'transfer' | 'adjustment';
+  movement_type: 'addition' | 'consumption' | 'transfer' | 'adjustment';
   reason?: string;
-  sourceLocation?: string;
-  destinationLocation?: string;
+  source_location?: string;
+  destination_location?: string;
   userId?: string;
+  balance_after?: number;
+  created_at?: string;
+  date?: string;
+  user_name?: string;
+  category?: string;
+  note?: string;
+  item_name?: string;
+  type?: 'in' | 'out';
+}
+
+export interface InventoryMovementQuery {
+  dateRange?: {
+    from?: Date;
+    to?: Date;
+  };
+  category?: string;
+  type?: string;
+}
+
+// Interface for database types
+export interface RawMaterial {
+  id: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_cost: number;
+}
+
+export interface SemiFinishedProduct {
+  id: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_cost: number;
+}
+
+export interface FinishedProduct {
+  id: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_cost: number;
+}
+
+export interface PackagingMaterial {
+  id: number;
+  code: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_cost: number;
 }
 
 class InventoryMovementService {
@@ -39,19 +90,17 @@ class InventoryMovementService {
     try {
       const { data, error } = await supabase
         .from('inventory_movements')
-        .insert([
-          {
-            item_id: movement.itemId,
-            item_type: movement.itemType,
-            quantity: movement.quantity,
-            movement_type: movement.movementType,
-            reason: movement.reason,
-            source_location: movement.sourceLocation,
-            destination_location: movement.destinationLocation,
-            user_id: movement.userId,
-            movement_date: new Date().toISOString(),
-          },
-        ]);
+        .insert({
+          item_id: movement.item_id,
+          item_type: movement.item_type,
+          quantity: movement.quantity,
+          movement_type: movement.movement_type,
+          reason: movement.reason,
+          source_location: movement.source_location,
+          destination_location: movement.destination_location,
+          user_id: movement.userId,
+          balance_after: movement.balance_after || 0 // Add required balance_after
+        });
 
       if (error) {
         console.error('Error logging inventory movement:', error);
@@ -64,6 +113,66 @@ class InventoryMovementService {
       console.error('Error logging inventory movement:', error);
       toast.error('Failed to log inventory movement');
       return false;
+    }
+  }
+
+  // Create a manual inventory movement - used by the UI
+  async createManualInventoryMovement(movement: {
+    itemId: string;
+    itemType: string;
+    quantity: number;
+    movementType: string;
+    reason: string;
+  }): Promise<boolean> {
+    try {
+      // Format the movement to match our interface
+      const formattedMovement: InventoryMovement = {
+        item_id: movement.itemId,
+        item_type: movement.itemType as any,
+        quantity: movement.movementType === 'addition' ? Math.abs(movement.quantity) : -Math.abs(movement.quantity),
+        movement_type: movement.movementType as any,
+        reason: movement.reason
+      };
+      
+      // Log the movement
+      const success = await this.logInventoryMovement(formattedMovement);
+      
+      // Update the item quantity in inventory
+      if (success) {
+        // Use update methods from InventoryService
+        const update = await this.updateItemQuantity(
+          movement.itemId,
+          movement.itemType,
+          formattedMovement.quantity
+        );
+        
+        if (!update) {
+          toast.error('Failed to update inventory quantity');
+          return false;
+        }
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('Error creating manual inventory movement:', error);
+      toast.error('Failed to create inventory movement');
+      return false;
+    }
+  }
+
+  // Helper method to update quantities based on item type
+  private async updateItemQuantity(itemId: string, itemType: string, quantity: number): Promise<boolean> {
+    switch (itemType) {
+      case 'raw_material':
+        return await this.inventoryService.updateRawMaterial(parseInt(itemId), { quantity: quantity });
+      case 'semi_finished':
+        return await this.inventoryService.updateSemiFinishedProduct(parseInt(itemId), { quantity: quantity });
+      case 'finished':
+        return await this.inventoryService.updateFinishedProduct(parseInt(itemId), { quantity: quantity });
+      case 'packaging':
+        return await this.inventoryService.updatePackagingMaterial(parseInt(itemId), { quantity: quantity });
+      default:
+        return false;
     }
   }
 
@@ -91,259 +200,50 @@ class InventoryMovementService {
     }
   }
 
-  // Get all inventory movements
-  async getAllMovements(): Promise<any[]> {
+  // Get all inventory movements - used by InventoryTracking.tsx
+  async fetchInventoryMovements(query?: InventoryMovementQuery): Promise<InventoryMovement[]> {
     try {
+      // Simple implementation for now - can be expanded with query filters
       const { data, error } = await supabase
         .from('inventory_movements')
         .select('*')
-        .order('movement_date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching all movements:', error);
-        toast.error('Failed to fetch all movements');
+        console.error('Error fetching movements:', error);
+        toast.error('فشل في تحميل حركات المخزون');
         return [];
       }
 
-      return data || [];
+      // Transform to match expected format by components
+      return (data || []).map(item => ({
+        id: item.id,
+        item_id: item.item_id,
+        item_type: item.item_type,
+        item_name: item.item_name || 'Unknown item',
+        quantity: item.quantity,
+        movement_type: item.movement_type,
+        reason: item.reason,
+        balance_after: item.balance_after,
+        date: new Date(item.created_at),
+        category: item.item_type,
+        type: item.quantity > 0 ? 'in' : 'out',
+        note: item.reason || ''
+      }));
     } catch (error) {
-      console.error('Error fetching all movements:', error);
-      toast.error('Failed to fetch all movements');
+      console.error('Error fetching movements:', error);
+      toast.error('فشل في تحميل حركات المخزون');
       return [];
     }
   }
 
-  // Record the addition of raw materials to inventory
-  async recordRawMaterialAddition(material: RawMaterial, quantity: number, reason?: string, userId?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: material.code,
-        itemType: 'raw_material',
-        quantity: quantity,
-        movementType: 'addition',
-        reason: reason || 'Raw material addition',
-        userId: userId,
-      });
-
-      // Update the raw material quantity in the inventory
-      const updated = await this.inventoryService.updateRawMaterialQuantity(material.code, quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for raw material: ${material.name}`);
-        return false;
-      }
-
-      toast.success(`Added ${quantity} ${material.unit} of ${material.name} to inventory`);
-      return true;
-    } catch (error) {
-      console.error('Error recording raw material addition:', error);
-      toast.error('Failed to record raw material addition');
-      return false;
-    }
+  // Helper method for filtering movements
+  filterMovementsByCategory(movements: InventoryMovement[], category: string): InventoryMovement[] {
+    if (category === 'all') return movements;
+    return movements.filter(m => m.category === category);
   }
 
-  // Record the consumption of raw materials from inventory
-  async recordRawMaterialConsumption(material: RawMaterial, quantity: number, reason?: string, userId?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: material.code,
-        itemType: 'raw_material',
-        quantity: -quantity,
-        movementType: 'consumption',
-        reason: reason || 'Raw material consumption',
-        userId: userId,
-      });
-
-      // Update the raw material quantity in the inventory
-      const updated = await this.inventoryService.updateRawMaterialQuantity(material.code, -quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for raw material: ${material.name}`);
-        return false;
-      }
-
-      toast.success(`Consumed ${quantity} ${material.unit} of ${material.name} from inventory`);
-      return true;
-    } catch (error) {
-      console.error('Error recording raw material consumption:', error);
-      toast.error('Failed to record raw material consumption');
-      return false;
-    }
-  }
-
-  // Record the addition of semi-finished products to inventory
-  async recordSemiFinishedProductAddition(product: SemiFinishedProduct, quantity: number, reason?: string, userId?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: product.code,
-        itemType: 'semi_finished',
-        quantity: quantity,
-        movementType: 'addition',
-        reason: reason || 'Semi-finished product addition',
-        userId: userId,
-      });
-
-      // Update the semi-finished product quantity in the inventory
-      const updated = await this.inventoryService.updateSemiFinishedProductQuantity(product.code, quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for semi-finished product: ${product.name}`);
-        return false;
-      }
-
-      toast.success(`Added ${quantity} ${product.unit} of ${product.name} to inventory`);
-      return true;
-    } catch (error) {
-      console.error('Error recording semi-finished product addition:', error);
-      toast.error('Failed to record semi-finished product addition');
-      return false;
-    }
-  }
-
-  // Record the consumption of semi-finished products from inventory
-  async recordSemiFinishedProductConsumption(product: SemiFinishedProduct, quantity: number, reason?: string, userId?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: product.code,
-        itemType: 'semi_finished',
-        quantity: -quantity,
-        movementType: 'consumption',
-        reason: reason || 'Semi-finished product consumption',
-        userId: userId,
-      });
-
-      // Update the semi-finished product quantity in the inventory
-      const updated = await this.inventoryService.updateSemiFinishedProductQuantity(product.code, -quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for semi-finished product: ${product.name}`);
-        return false;
-      }
-
-      toast.success(`Consumed ${quantity} ${product.unit} of ${product.name} from inventory`);
-      return true;
-    } catch (error) {
-      console.error('Error recording semi-finished product consumption:', error);
-      toast.error('Failed to record semi-finished product consumption');
-      return false;
-    }
-  }
-
-  // Record the addition of finished products to inventory
-  async recordFinishedProductAddition(product: FinishedProduct, quantity: number, reason?: string, userId?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: product.code,
-        itemType: 'finished',
-        quantity: quantity,
-        movementType: 'addition',
-        reason: reason || 'Finished product addition',
-        userId: userId,
-      });
-
-      // Update the finished product quantity in the inventory
-      const updated = await this.inventoryService.updateFinishedProductQuantity(product.code, quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for finished product: ${product.name}`);
-        return false;
-      }
-
-      toast.success(`Added ${quantity} ${product.unit} of ${product.name} to inventory`);
-      return true;
-    } catch (error) {
-      console.error('Error recording finished product addition:', error);
-      toast.error('Failed to record finished product addition');
-      return false;
-    }
-  }
-
-  // Record the consumption of finished products from inventory (e.g., sales)
-  async recordFinishedProductConsumption(product: FinishedProduct, quantity: number, reason?: string, invoiceReference?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: product.code,
-        itemType: 'finished',
-        quantity: -quantity,
-        movementType: 'consumption',
-        reason: reason || `مبيعات: ${invoiceReference}`,
-      });
-
-      // Update the finished product quantity in the inventory
-      const updated = await this.inventoryService.updateFinishedProductQuantity(product.code, -quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for finished product: ${product.name}`);
-        return false;
-      }
-
-      toast.success(`Sold ${quantity} ${product.unit} of ${product.name}`);
-      return true;
-    } catch (error) {
-      console.error('Error recording finished product consumption:', error);
-      toast.error('Failed to record finished product consumption');
-      return false;
-    }
-  }
-
-  // Record the addition of packaging materials to inventory
-  async recordPackagingMaterialAddition(material: PackagingMaterial, quantity: number, reason?: string, userId?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: material.code,
-        itemType: 'packaging',
-        quantity: quantity,
-        movementType: 'addition',
-        reason: reason || 'Packaging material addition',
-        userId: userId,
-      });
-
-      // Update the packaging material quantity in the inventory
-      const updated = await this.inventoryService.updatePackagingMaterialQuantity(material.code, quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for packaging material: ${material.name}`);
-        return false;
-      }
-
-      toast.success(`Added ${quantity} ${material.unit} of ${material.name} to inventory`);
-      return true;
-    } catch (error) {
-      console.error('Error recording packaging material addition:', error);
-      toast.error('Failed to record packaging material addition');
-      return false;
-    }
-  }
-
-  // Record the consumption of packaging materials from inventory
-  async recordPackagingMaterialConsumption(material: PackagingMaterial, quantity: number, reason?: string, userId?: string): Promise<boolean> {
-    try {
-      // Log the inventory movement
-      await this.logInventoryMovement({
-        itemId: material.code,
-        itemType: 'packaging',
-        quantity: -quantity,
-        movementType: 'consumption',
-        reason: reason || 'Packaging material consumption',
-        userId: userId,
-      });
-
-      // Update the packaging material quantity in the inventory
-      const updated = await this.inventoryService.updatePackagingMaterialQuantity(material.code, -quantity);
-      if (!updated) {
-        toast.error(`Failed to update quantity for packaging material: ${material.name}`);
-        return false;
-      }
-
-      toast.success(`Consumed ${quantity} ${material.unit} of ${material.name} from inventory`);
-      return true;
-    } catch (error) {
-      console.error('Error recording packaging material consumption:', error);
-      toast.error('Failed to record packaging material consumption');
-      return false;
-    }
-  }
-
+  // Record the consumption of stock for any inventory item type
   async consumeStock(product: any, quantity: number, reason?: string, invoiceReference?: string): Promise<boolean> {
     try {
       if (!product) {
@@ -351,36 +251,26 @@ class InventoryMovementService {
         return false;
       }
       
-      // Fix the method call to use logInventoryMovement instead of recordItemMovement
-      await this.inventoryService.logInventoryMovement({
-        itemId: product.code,
-        itemType: product.type === 'raw' ? 'raw_material' : 
+      // Create movement record
+      const movement: InventoryMovement = {
+        item_id: product.code,
+        item_type: product.type === 'raw' ? 'raw_material' : 
                  product.type === 'packaging' ? 'packaging' :
                  product.type === 'semi_finished' ? 'semi_finished' : 'finished',
         quantity: -quantity,
-        movementType: 'consumption',
+        movement_type: 'consumption',
         reason: reason || `مبيعات: ${invoiceReference}`
-      });
+      };
       
-      // Depending on the product type, call the appropriate method to update the quantity
-      let updated: boolean = false;
-      switch (product.type) {
-        case 'raw':
-          updated = await this.inventoryService.updateRawMaterialQuantity(product.code, -quantity);
-          break;
-        case 'semi_finished':
-          updated = await this.inventoryService.updateSemiFinishedProductQuantity(product.code, -quantity);
-          break;
-        case 'finished':
-          updated = await this.inventoryService.updateFinishedProductQuantity(product.code, -quantity);
-          break;
-        case 'packaging':
-          updated = await this.inventoryService.updatePackagingMaterialQuantity(product.code, -quantity);
-          break;
-        default:
-          toast.error('نوع المنتج غير مدعوم');
-          return false;
-      }
+      // Log the inventory movement
+      await this.logInventoryMovement(movement);
+      
+      // Update the quantity using our internal method
+      let updated = await this.updateItemQuantity(
+        product.code, 
+        movement.item_type, 
+        -quantity
+      );
       
       if (!updated) {
         toast.error(`فشل تحديث كمية المنتج: ${product.name}`);

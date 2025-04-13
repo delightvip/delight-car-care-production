@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowDownIcon, ArrowUpIcon, ListRestart, BarChart3 } from 'lucide-react';
@@ -47,18 +48,19 @@ const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movemen
   
   // إجمالي حركات الوارد
   const inMovements = filteredMovements.filter(m => m.type === 'in');
-  const totalInQuantity = inMovements.reduce((sum, m) => sum + m.quantity, 0);
+  const totalInQuantity = inMovements.reduce((sum, m) => sum + Number(m.quantity || 0), 0);
   
   // إجمالي حركات الصادر
   const outMovements = filteredMovements.filter(m => m.type === 'out');
-  const totalOutQuantity = outMovements.reduce((sum, m) => sum + m.quantity, 0);
+  const totalOutQuantity = outMovements.reduce((sum, m) => sum + Math.abs(Number(m.quantity || 0)), 0);
   
   // إجمالي الحركات
   const totalMovements = filteredMovements.length;
   
   // التصنيف الأكثر نشاطاً
   const categoryCount = filteredMovements.reduce((acc, movement) => {
-    acc[movement.category] = (acc[movement.category] || 0) + 1;
+    const category = movement.category || 'unknown';
+    acc[category] = (acc[category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   
@@ -66,10 +68,10 @@ const InventoryMovementStats: React.FC<InventoryMovementStatsProps> = ({ movemen
   
   const getCategoryName = (category: string) => {
     switch(category) {
-      case 'raw_materials': return 'المواد الأولية';
+      case 'raw_material': return 'المواد الأولية';
       case 'semi_finished': return 'المنتجات النصف مصنعة';
       case 'packaging': return 'مستلزمات التعبئة';
-      case 'finished_products': return 'المنتجات النهائية';
+      case 'finished': return 'المنتجات النهائية';
       default: return category;
     }
   };

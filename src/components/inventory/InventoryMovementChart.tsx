@@ -1,23 +1,10 @@
-import React, { useMemo } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InventoryMovement } from '@/services/InventoryMovementService';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-} from 'recharts';
-import { addDays, format, isSameDay, subDays, isWithinInterval, parseISO } from 'date-fns';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { format, subDays, subMonths, parseISO, isAfter, isBefore } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
 interface InventoryMovementChartProps {
@@ -26,235 +13,149 @@ interface InventoryMovementChartProps {
 }
 
 const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movements, selectedCategory }) => {
-  const [chartType, setChartType] = React.useState('daily');
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
   
-  // Definir la función getCategoryName al principio del componente
-  // para evitar el error "Cannot access 'getCategoryName' before initialization"
-  const getCategoryName = (category: string) => {
-    switch(category) {
-      case 'raw_materials': return 'المواد الأولية';
-      case 'semi_finished': return 'المنتجات النصف مصنعة';
-      case 'packaging': return 'مستلزمات التعبئة';
-      case 'finished_products': return 'المنتجات النهائية';
-      default: return category;
+  const getTimeRangeDate = () => {
+    const now = new Date();
+    switch (timeRange) {
+      case 'week': return subDays(now, 7);
+      case 'month': return subMonths(now, 1);
+      case 'quarter': return subMonths(now, 3);
+      case 'year': return subMonths(now, 12);
+      default: return subMonths(now, 1);
     }
   };
   
-  // فلترة الحركات حسب الفئة المحددة
-  const filteredMovements = useMemo(() => {
-    if (selectedCategory === 'all') return movements;
-    return movements.filter(m => m.category === selectedCategory);
-  }, [movements, selectedCategory]);
-  
-  // ألوان حسب نوع الفئة
-  const getCategoryColor = (category: string) => {
-    switch(category) {
-      case 'raw_materials': return '#3b82f6';
-      case 'semi_finished': return '#10b981';
-      case 'packaging': return '#f59e0b';
-      case 'finished_products': return '#8b5cf6';
-      default: return '#6b7280';
+  const formatChartDate = (date: Date) => {
+    switch (timeRange) {
+      case 'week': return format(date, 'EEE', { locale: ar });
+      case 'month': return format(date, 'd MMM', { locale: ar });
+      case 'quarter': return format(date, 'MMM', { locale: ar });
+      case 'year': return format(date, 'MMM', { locale: ar });
+      default: return format(date, 'd MMM', { locale: ar });
     }
   };
   
-  // إعداد بيانات الرسم البياني اليومي
-  const dailyChartData = useMemo(() => {
-    const today = new Date();
-    const days = Array.from({ length: 7 }, (_, i) => subDays(today, 6 - i));
+  const getAggregationKey = (date: Date) => {
+    switch (timeRange) {
+      case 'week': return format(date, 'yyyy-MM-dd');
+      case 'month': return format(date, 'yyyy-MM-dd');
+      case 'quarter': return format(date, 'yyyy-MM');
+      case 'year': return format(date, 'yyyy-MM');
+      default: return format(date, 'yyyy-MM-dd');
+    }
+  };
+  
+  const chartData = useMemo(() => {
+    // فلترة الحركات على أساس التصنيف المحدد
+    const categoryFiltered = selectedCategory === 'all' 
+      ? movements 
+      : movements.filter(m => m.category === selectedCategory);
     
-    return days.map(day => {
-      const dayMovements = filteredMovements.filter(m => isSameDay(m.date, day));
-      const inCount = dayMovements.filter(m => m.type === 'in').reduce((acc, curr) => acc + curr.quantity, 0);
-      const outCount = dayMovements.filter(m => m.type === 'out').reduce((acc, curr) => acc + curr.quantity, 0);
-      
-      return {
-        date: format(day, 'yyyy/MM/dd'),
-        day: format(day, 'E', { locale: ar }),
-        in: inCount,
-        out: outCount,
-        total: inCount - outCount
-      };
+    const startDate = getTimeRangeDate();
+    
+    // فلترة الحركات على أساس الفترة الزمنية
+    const timeFiltered = categoryFiltered.filter(m => {
+      // Make sure date is a Date object
+      const moveDate = m.date instanceof Date ? m.date : new Date(m.date as string);
+      return isAfter(moveDate, startDate);
     });
-  }, [filteredMovements]);
-  
-  // إعداد بيانات الرسم البياني للفئات
-  const categoryChartData = useMemo(() => {
-    const categoryCounts = movements.reduce((acc, m) => {
-      const categoryName = getCategoryName(m.category);
-      acc[categoryName] = (acc[categoryName] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
     
-    return Object.entries(categoryCounts).map(([name, value]) => ({ name, value }));
-  }, [movements]);
-  
-  // إعداد بيانات الرسم البياني لأنواع الحركة
-  const typeChartData = useMemo(() => {
-    const inMovements = filteredMovements.filter(m => m.type === 'in').length;
-    const outMovements = filteredMovements.filter(m => m.type === 'out').length;
+    // تجميع الحركات على أساس اليوم/الشهر
+    const aggregated: Record<string, { in: number; out: number; date: Date }> = {};
     
-    return [
-      { name: 'وارد', value: inMovements, fill: '#10b981' },
-      { name: 'صادر', value: outMovements, fill: '#f59e0b' }
-    ];
-  }, [filteredMovements]);
-  
-  // إعداد بيانات الرسم البياني للكميات حسب الفئة
-  const quantityByCategoryData = useMemo(() => {
-    const categoryQuantities = filteredMovements.reduce((acc, m) => {
-      const categoryName = getCategoryName(m.category);
-      if (m.type === 'in') {
-        acc[categoryName] = (acc[categoryName] || 0) + m.quantity;
-      } else {
-        acc[categoryName] = (acc[categoryName] || 0) - m.quantity;
+    timeFiltered.forEach(m => {
+      // Make sure date is a Date object
+      const moveDate = m.date instanceof Date ? m.date : new Date(m.date as string);
+      const key = getAggregationKey(moveDate);
+      
+      if (!aggregated[key]) {
+        aggregated[key] = { in: 0, out: 0, date: moveDate };
       }
-      return acc;
-    }, {} as Record<string, number>);
+      
+      // Ensure quantity is a number for numeric operations
+      const quantity = Number(m.quantity);
+      if (!isNaN(quantity)) {
+        if (quantity > 0) {
+          aggregated[key].in += quantity;
+        } else {
+          aggregated[key].out += Math.abs(quantity);
+        }
+      }
+    });
     
-    return Object.entries(categoryQuantities).map(([name, quantity]) => ({ 
-      name, 
-      quantity,
-      fill: quantity > 0 ? '#10b981' : '#ef4444'
-    }));
-  }, [filteredMovements]);
+    // تحويل البيانات إلى مصفوفة مرتبة
+    return Object.entries(aggregated)
+      .map(([key, value]) => ({
+        date: key,
+        in: value.in,
+        out: value.out,
+        net: value.in - value.out,
+        displayDate: formatChartDate(value.date)
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [movements, selectedCategory, timeRange]);
   
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+  const chartColors = {
+    in: "#22c55e",
+    out: "#f97316",
+    net: "#3b82f6"
+  };
   
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between gap-4">
-          <CardTitle className="text-lg">تحليل حركة المخزون</CardTitle>
-          <Tabs defaultValue="daily" value={chartType} onValueChange={setChartType}>
-            <TabsList>
-              <TabsTrigger value="daily">تحليل يومي</TabsTrigger>
-              <TabsTrigger value="category">حسب الفئة</TabsTrigger>
-              <TabsTrigger value="type">نوع الحركة</TabsTrigger>
-              <TabsTrigger value="quantity">الكميات</TabsTrigger>
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">حركة المخزون</CardTitle>
+          <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as any)}>
+            <TabsList className="grid grid-cols-4 w-[300px]">
+              <TabsTrigger value="week">أسبوع</TabsTrigger>
+              <TabsTrigger value="month">شهر</TabsTrigger>
+              <TabsTrigger value="quarter">ربع سنة</TabsTrigger>
+              <TabsTrigger value="year">سنة</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </CardHeader>
       <CardContent>
-        <TabsContent value="daily" className="mt-0">
-          <div className="h-80">
+        <div className="h-[350px] w-full">
+          {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={dailyChartData}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
+                data={chartData}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
+                <XAxis dataKey="displayDate" />
                 <YAxis />
-                <Tooltip 
-                  formatter={(value: number, name: string) => {
-                    const nameMap = { in: 'وارد', out: 'صادر', total: 'الإجمالي' };
-                    return [value, nameMap[name as keyof typeof nameMap]];
-                  }}
-                  labelFormatter={(label) => `التاريخ: ${label}`}
+                <Tooltip formatter={(value) => value.toLocaleString('ar-EG')} />
+                <Legend />
+                <Bar 
+                  dataKey="in" 
+                  name="وارد" 
+                  fill={chartColors.in} 
+                  stackId="a" 
                 />
-                <Legend 
-                  formatter={(value: string) => {
-                    const nameMap = { in: 'وارد', out: 'صادر', total: 'الإجمالي' };
-                    return nameMap[value as keyof typeof nameMap];
-                  }}
+                <Bar 
+                  dataKey="out" 
+                  name="صادر" 
+                  fill={chartColors.out} 
+                  stackId="b" 
                 />
-                <Bar dataKey="in" fill="#10b981" name="وارد" />
-                <Bar dataKey="out" fill="#f59e0b" name="صادر" />
-                <Line type="monotone" dataKey="total" stroke="#8884d8" name="الصافي" />
+                <Bar 
+                  dataKey="net" 
+                  name="صافي" 
+                  fill={chartColors.net} 
+                  stackId="c" 
+                />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-          <p className="text-sm text-center text-muted-foreground mt-4">الحركات اليومية خلال آخر 7 أيام</p>
-        </TabsContent>
-        
-        <TabsContent value="category" className="mt-0">
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={categoryChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {categoryChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => [`${value} حركة`, 'عدد الحركات']} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-sm text-center text-muted-foreground mt-4">توزيع حركات المخزون حسب التصنيف</p>
-        </TabsContent>
-        
-        <TabsContent value="type" className="mt-0">
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={typeChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {typeChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => [`${value} حركة`, 'عدد الحركات']} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-sm text-center text-muted-foreground mt-4">توزيع حركات المخزون حسب نوع الحركة (وارد/صادر)</p>
-        </TabsContent>
-        
-        <TabsContent value="quantity" className="mt-0">
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={quantityByCategoryData}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
-                layout="vertical"
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis dataKey="name" type="category" width={150} />
-                <Tooltip
-                  formatter={(value: number) => [`${value}`, 'الكمية']}
-                />
-                <Legend />
-                <Bar dataKey="quantity" name="الكمية">
-                  {quantityByCategoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-sm text-center text-muted-foreground mt-4">صافي الكميات حسب فئة المخزون (وارد - صادر)</p>
-        </TabsContent>
+          ) : (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              لا توجد بيانات كافية لعرض الرسم البياني
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

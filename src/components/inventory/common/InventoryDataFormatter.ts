@@ -29,7 +29,7 @@ export const calculateFinishedProductCost = (
 };
 
 // Updated to support an optional field name parameter
-export const ensureNumericValue = (value: any, fieldName?: string): number => {
+export const ensureNumericValue = (value: any): number => {
   if (value === null || value === undefined) {
     return 0;
   }

@@ -1,830 +1,307 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import PageTransition from '@/components/ui/PageTransition';
-import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, PackageCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
+import ProductionDatabaseService from "@/services/database/ProductionDatabaseService";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, Clock, Edit, Eye, Plus, Trash, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
-import ProductionService from '@/services/ProductionService';
-import InventoryService from '@/services/InventoryService';
-import { PackagingOrder } from '@/services/ProductionService';
-import { FinishedProduct } from '@/services/InventoryService';
-import { useQuery } from '@tanstack/react-query';
-
-const statusTranslations = {
-  pending: 'قيد الانتظار',
-  inProgress: 'قيد التنفيذ',
-  completed: 'مكتمل',
-  cancelled: 'ملغي'
-};
-
-const statusColors = {
-  pending: 'bg-amber-100 text-amber-800',
-  inProgress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800'
-};
-
-const statusIcons = {
-  pending: <Clock className="h-4 w-4 mr-1" />,
-  inProgress: <AlertTriangle className="h-4 w-4 mr-1" />,
-  completed: <CheckCircle2 className="h-4 w-4 mr-1" />
-};
 
 const PackagingOrders = () => {
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<PackagingOrder | null>(null);
-  const [newOrder, setNewOrder] = useState({
-    productCode: '',
-    quantity: 0
-  });
-  const [newStatus, setNewStatus] = useState('');
-  const [editOrder, setEditOrder] = useState({
-    id: 0,
-    productCode: '',
-    productName: '',
-    quantity: 0,
-    unit: ''
-  });
-  const [componentsAvailability, setComponentsAvailability] = useState<{
-    code: string;
-    name: string;
-    requiredQuantity: number;
-    available: boolean;
-    unit: string;
-    type: string;
-  }[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   
-  const productionService = ProductionService.getInstance();
-  const inventoryService = InventoryService.getInstance();
+  const productionService = ProductionDatabaseService.getInstance();
   
-  const { 
-    data: orders = [], 
-    isLoading: isOrdersLoading,
-    refetch: refetchOrders
-  } = useQuery({
+  const { data: packagingOrders, isLoading, refetch: refetchOrders } = useQuery({
     queryKey: ['packagingOrders'],
     queryFn: async () => {
-      try {
-        return await productionService.getPackagingOrders();
-      } catch (error) {
-        console.error("Error loading packaging orders:", error);
-        toast.error("حدث خطأ أثناء تحميل أوامر التعبئة");
-        return [];
-      }
+      const { data, error } = await supabase
+        .from('packaging_orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
     }
   });
   
-  const { 
-    data: finishedProducts = [], 
-    isLoading: isProductsLoading,
-    refetch: refetchProducts
-  } = useQuery({
-    queryKey: ['finishedProducts'],
-    queryFn: async () => {
-      try {
-        const products = await inventoryService.getFinishedProducts();
-        console.log("Fetched finished products:", products);
-        return products;
-      } catch (error) {
-        console.error("Error loading finished products:", error);
-        toast.error("حدث خطأ أثناء تحميل المنتجات النهائية");
-        return [];
-      }
+  useEffect(() => {
+    if (packagingOrders) {
+      setOrders(packagingOrders);
     }
-  });
+  }, [packagingOrders]);
   
-  const isLoading = isOrdersLoading || isProductsLoading;
-  
-  const refreshData = useCallback(() => {
-    refetchOrders();
-    refetchProducts();
-    toast.info("جاري تحديث البيانات...");
-  }, [refetchOrders, refetchProducts]);
-  
-  const checkRealTimeAvailability = useCallback(async (productCode: string, quantity: number) => {
-    if (!productCode || quantity <= 0) {
-      setComponentsAvailability([]);
-      return;
-    }
+  const handleViewOrder = (order: any) => {
+    // Get the packaging materials
+    const packagingMaterials = order.packaging_materials;
     
-    const product = finishedProducts.find(p => p.code === productCode);
-    if (!product) {
-      setComponentsAvailability([]);
-      return;
-    }
-    
-    const semiFinishedCode = product.semiFinished.code;
-    const semiFinishedQuantity = product.semiFinished.quantity * quantity;
-    const semiAvailable = await inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
-    
-    const packagingRequirements = product.packaging.map(pkg => ({
-      code: pkg.code,
-      requiredQuantity: pkg.quantity * quantity
-    }));
-    
-    const packagingAvailabilityResults = await Promise.all(
-      product.packaging.map(async (pkg) => {
-        const pkgQuantity = pkg.quantity * quantity;
-        const available = await inventoryService.checkPackagingAvailability([{
-          code: pkg.code,
-          requiredQuantity: pkgQuantity
-        }]);
-        
-        return {
-          code: pkg.code,
-          name: pkg.name,
-          requiredQuantity: pkgQuantity,
-          available,
-          unit: 'وحدة',
-          type: 'packaging'
-        };
-      })
-    );
-    
-    const availabilityResults = [
-      {
-        code: product.semiFinished.code,
-        name: product.semiFinished.name,
-        requiredQuantity: semiFinishedQuantity,
-        available: semiAvailable,
-        unit: 'وحدة',
-        type: 'semi'
+    // Ensure packaging_materials is properly accessed
+    const formattedOrder = {
+      ...order,
+      semiFinished: {
+        code: order.semi_finished_code,
+        name: order.semi_finished_name,
+        quantity: order.semi_finished_quantity
       },
-      ...packagingAvailabilityResults
-    ];
+      // Make sure packaging_materials is treated as an array of objects
+      packaging: Array.isArray(packagingMaterials) ? packagingMaterials : []
+    };
     
-    setComponentsAvailability(availabilityResults);
-  }, [finishedProducts, inventoryService]);
+    setSelectedOrder(formattedOrder);
+    setIsViewModalOpen(true);
+  };
   
-  useEffect(() => {
-    if (newOrder.productCode && newOrder.quantity > 0) {
-      checkRealTimeAvailability(newOrder.productCode, newOrder.quantity);
-    }
-  }, [newOrder.productCode, newOrder.quantity, checkRealTimeAvailability]);
-  
-  useEffect(() => {
-    if (editOrder.productCode && editOrder.quantity > 0) {
-      checkRealTimeAvailability(editOrder.productCode, editOrder.quantity);
-    }
-  }, [editOrder.productCode, editOrder.quantity, checkRealTimeAvailability]);
-  
-  const columns = [
-    { key: 'code', title: 'كود الأمر' },
-    { key: 'productName', title: 'المنتج' },
-    { 
-      key: 'quantity', 
-      title: 'الكمية',
-      render: (value: number, record: any) => `${value} ${record.unit}`
-    },
-    { 
-      key: 'status', 
-      title: 'الحالة',
-      render: (value: string) => (
-        <Badge className={statusColors[value as keyof typeof statusColors]}>
-          {statusIcons[value as keyof typeof statusIcons]}
-          {statusTranslations[value as keyof typeof statusTranslations]}
-        </Badge>
-      )
-    },
-    { key: 'date', title: 'التاريخ' },
-    { 
-      key: 'totalCost', 
-      title: 'التكلفة الإجمالية',
-      render: (value: number) => `${typeof value === 'number' ? value.toFixed(2) : 0} ج.م`
-    }
-  ];
-  
-  const handleAddOrder = async () => {
-    if (!newOrder.productCode || newOrder.quantity <= 0) {
-      toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
-      return;
-    }
+  const handleApproveOrder = async (order: any) => {
+    setProcessingOrderId(order.id);
     
     try {
-      const allAvailable = componentsAvailability.every(item => item.available);
-      if (!allAvailable) {
-        const confirmation = window.confirm("بعض المكونات غير متوفرة. هل ترغب في المتابعة على أي حال؟");
-        if (!confirmation) {
-          return;
-        }
-      }
+      // Ensure we're passing the correct data structure to consumeSemiFinishedProduct
+      await productionService.consumeSemiFinishedProduct(
+        order.semi_finished_code,
+        order.semi_finished_name,
+        Number(order.semi_finished_quantity),
+        `أمر تعبئة رقم: ${order.code}`
+      );
       
-      const calculatedTotalCost = calculateTotalCost(newOrder.productCode, newOrder.quantity);
-      console.log(`إنشاء أمر تعبئة: الكمية=${newOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
+      // For each packaging material, consume the required quantity
+      const packagingMaterials = order.packaging_materials;
       
-      toast.loading("جاري إنشاء أمر التعبئة...");
-      
-      let attempts = 0;
-      const maxAttempts = 3;
-      let success = false;
-      let errorMsg = "";
-      
-      while (attempts < maxAttempts && !success) {
-        try {
-          const createdOrder = await productionService.createPackagingOrder(
-            newOrder.productCode, 
-            newOrder.quantity,
-            calculatedTotalCost
+      if (Array.isArray(packagingMaterials)) {
+        for (const material of packagingMaterials) {
+          await productionService.consumePackagingMaterial(
+            material.packaging_material_code,
+            material.packaging_material_name,
+            Number(material.required_quantity),
+            `أمر تعبئة رقم: ${order.code}`
           );
-          
-          if (createdOrder) {
-            success = true;
-            toast.dismiss();
-            setTimeout(() => {
-              refetchOrders();
-              setNewOrder({
-                productCode: '',
-                quantity: 0
-              });
-              setComponentsAvailability([]);
-              toast.success(`تم إنشاء أمر تعبئة ${createdOrder.productName} بنجاح`);
-              setIsAddDialogOpen(false);
-            }, 300);
-          }
-        } catch (innerError: any) {
-          attempts++;
-          errorMsg = innerError?.message || "حدث خطأ أثناء إنشاء أمر التعبئة";
-          if (attempts < maxAttempts) {
-            console.log(`محاولة إنشاء أمر التعبئة: ${attempts}/${maxAttempts}`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
         }
       }
       
-      if (!success) {
-        toast.dismiss();
-        toast.error(errorMsg || "حدث خطأ أثناء إنشاء أمر التعبئة");
-      }
-    } catch (error) {
-      toast.dismiss();
-      console.error("Error creating order:", error);
-      toast.error("حدث خطأ أثناء إنشاء أمر التعبئة");
-    }
-  };
-  
-  const handleUpdateStatus = async () => {
-    if (!currentOrder || !newStatus) return;
-    
-    try {
-      const success = await productionService.updatePackagingOrderStatus(
-        currentOrder.id, 
-        newStatus as 'pending' | 'inProgress' | 'completed' | 'cancelled'
-      );
-      if (success) {
-        refetchOrders();
-        setIsStatusDialogOpen(false);
-      }
-    } catch (error) {
-      console.error("Error updating status:", error);
-      toast.error("حدث خطأ أثناء تحديث حالة أمر التعبئة");
-    }
-  };
-  
-  const handleDeleteOrder = async () => {
-    if (!currentOrder) return;
-    
-    try {
-      const success = await productionService.deletePackagingOrder(currentOrder.id);
-      if (success) {
-        refetchOrders();
-        setIsDeleteDialogOpen(false);
-      }
-    } catch (error) {
-      console.error("Error deleting order:", error);
-      toast.error("حدث خطأ أثناء حذف أمر التعبئة");
-    }
-  };
-  
-  const handleEditOrder = async () => {
-    if (!editOrder.id || !editOrder.productCode || editOrder.quantity <= 0) {
-      toast.error("يجب اختيار منتج وت��ديد كمية صحيحة");
-      return;
-    }
-    
-    try {
-      const allAvailable = componentsAvailability.every(item => item.available);
-      if (!allAvailable) {
-        const confirmation = window.confirm("بعض المكونات غير متوفرة. هل ترغب في المتابعة على أي حال؟");
-        if (!confirmation) {
-          return;
-        }
-      }
-      
-      const product = finishedProducts.find(p => p.code === editOrder.productCode);
-      if (!product) {
-        toast.error("المنتج غير موجود");
-        return;
-      }
-      
-      const semiFinished = {
-        code: product.semiFinished.code,
-        name: product.semiFinished.name,
-        quantity: product.semiFinished.quantity * editOrder.quantity
-      };
-      
-      const packagingMaterials = componentsAvailability
-        .filter(comp => comp.type === 'packaging')
-        .map(material => ({
-          code: material.code,
-          name: material.name,
-          quantity: material.requiredQuantity
-        }));
-
-      const calculatedTotalCost = calculateTotalCost(editOrder.productCode, editOrder.quantity);
-      console.log(`تحديث أمر تعبئة: الكمية=${editOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
-      
-      toast.loading("جاري تحديث أمر التعبئة...");
-      
-      const success = await productionService.updatePackagingOrder(
-        editOrder.id,
-        {
-          productCode: editOrder.productCode,
-          productName: product.name,
-          quantity: editOrder.quantity,
-          unit: editOrder.unit,
-          semiFinished,
-          packagingMaterials,
-          totalCost: calculatedTotalCost
-        }
+      // Add the finished product to inventory
+      await productionService.addFinishedProduct(
+        order.product_code,
+        order.product_name,
+        Number(order.quantity),
+        Number(order.total_cost / order.quantity),
+        `أمر تعبئة رقم: ${order.code}`
       );
       
-      if (success) {
-        setIsEditDialogOpen(false);
-        setComponentsAvailability([]);
-        toast.dismiss();
-        
-        setTimeout(() => {
-          refetchOrders();
-          toast.success("تم تحديث أمر التعبئة بنجاح");
-        }, 300);
-      } else {
-        toast.dismiss();
-        toast.error("فشل تحديث أمر التعبئة");
-      }
+      // Update the order status
+      await productionService.updatePackagingOrderStatus(order.id, 'completed');
+      
+      toast.success(`تم تنفيذ أمر التعبئة رقم ${order.code} بنجاح`);
+      
+      // Refresh data
+      refetchOrders();
     } catch (error) {
-      toast.dismiss();
-      console.error("Error updating packaging order:", error);
-      toast.error("حدث خطأ أثناء تحديث أمر التعبئة");
+      console.error('Error approving packaging order:', error);
+      toast.error('حدث خطأ أثناء تنفيذ أمر التعبئة');
+    } finally {
+      setProcessingOrderId(null);
     }
   };
   
-  const calculateTotalCost = (productCode: string, quantity: number) => {
-    const product = finishedProducts.find(p => p.code === productCode);
-    if (!product) return 0;
-    
-    return product.unit_cost * quantity;
-  };
-  
-  const renderActions = (record: PackagingOrder) => (
-    <div className="flex space-x-2 rtl:space-x-reverse">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setCurrentOrder(record);
-          setIsViewDialogOpen(true);
-        }}
-      >
-        <Eye size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setCurrentOrder(record);
-          setNewStatus(record.status);
-          setIsStatusDialogOpen(true);
-        }}
-      >
-        <Edit size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setEditOrder({
-            id: record.id,
-            productCode: record.productCode,
-            productName: record.productName,
-            quantity: record.quantity,
-            unit: record.unit
-          });
-          checkRealTimeAvailability(record.productCode, record.quantity);
-          setIsEditDialogOpen(true);
-        }}
-        disabled={record.status !== 'pending'}
-      >
-        <Edit size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setCurrentOrder(record);
-          setIsDeleteDialogOpen(true);
-        }}
-        disabled={record.status !== 'pending'}
-      >
-        <Trash size={16} />
-      </Button>
-    </div>
-  );
-  
-  return (
-    <PageTransition>
+  const OrderDetails = ({ order }: { order: any }) => {
+    return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">أوامر التعبئة</h1>
-            <p className="text-muted-foreground mt-1">إدارة عمليات تعبئة المنتجات النهائية</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={refreshData}>
-              <RefreshCw size={16} className="ml-2" />
-              تحديث
-            </Button>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus size={18} className="mr-2" />
-                  أمر تعبئة جديد
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl">
-                <DialogHeader>
-                  <DialogTitle>إضافة أمر تعبئة جديد</DialogTitle>
-                  <DialogDescription>
-                    اختر المنتج النهائي وحدد الكمية المطلوب تعبئتها.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="product">المنتج</Label>
-                      <Select 
-                        value={newOrder.productCode} 
-                        onValueChange={value => setNewOrder({...newOrder, productCode: value})}
-                      >
-                        <SelectTrigger id="product">
-                          <SelectValue placeholder="اختر المنتج" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {finishedProducts.map(product => (
-                            <SelectItem key={product.code} value={product.code}>
-                              {product.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="quantity">الكمية</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        value={newOrder.quantity}
-                        onChange={e => setNewOrder({...newOrder, quantity: Number(e.target.value)})}
-                      />
-                    </div>
-                  </div>
-                  
-                  {newOrder.productCode && newOrder.quantity > 0 && (
-                    <div className="border-t pt-4">
-                      <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
-                      <div className="space-y-2">
-                        {componentsAvailability.map((component, index) => (
-                          <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
-                            <div>
-                              <span className="font-medium">{component.name}</span>
-                              <span className="text-sm text-muted-foreground mr-2">
-                                ({component.requiredQuantity.toFixed(2)} {component.unit})
-                              </span>
-                              <Badge 
-                                variant="outline" 
-                                className="mr-2"
-                              >
-                                {component.type === 'semi' ? 'سائل' : 'تعبئة'}
-                              </Badge>
-                            </div>
-                            {component.available ? (
-                              <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                            ) : (
-                              <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <div className="mt-4 p-2 border rounded-md bg-muted/50">
-                        <div className="flex justify-between">
-                          <span className="font-medium">التكلفة الإجمالية:</span>
-                          <span>{calculateTotalCost(newOrder.productCode, newOrder.quantity).toFixed(2)} ج.م</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    إلغاء
-                  </Button>
-                  <Button onClick={handleAddOrder}>
-                    إضافة
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+        <div>
+          <h3 className="text-lg font-medium mb-2">تفاصيل المنتج</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">الكود</div>
+              <div>{order.product_code}</div>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">الاسم</div>
+              <div>{order.product_name}</div>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">الكمية</div>
+              <div>
+                {order.quantity} <Badge variant="outline">{order.product_unit}</Badge>
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">التكلفة الإجمالية</div>
+              <div>{order.total_cost}</div>
+            </div>
           </div>
         </div>
         
-        <DataTableWithLoading
-          columns={columns}
-          data={orders}
-          searchable
-          searchKeys={['code', 'productName']}
-          actions={renderActions}
-          isLoading={isLoading}
-        />
+        <Separator />
         
-        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>تفاصيل أمر التعبئة</DialogTitle>
-            </DialogHeader>
-            {currentOrder && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">كود الأمر</h4>
-                    <p className="font-medium">{currentOrder.code}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">التاريخ</h4>
-                    <p className="font-medium">{currentOrder.date}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">المنتج</h4>
-                    <p className="font-medium">{currentOrder.productName}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">الكمية</h4>
-                    <p className="font-medium">{currentOrder.quantity} {currentOrder.unit}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">الحالة</h4>
-                    <Badge className={statusColors[currentOrder.status as keyof typeof statusColors]}>
-                      {statusIcons[currentOrder.status as keyof typeof statusIcons]}
-                      {statusTranslations[currentOrder.status as keyof typeof statusTranslations]}
-                    </Badge>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">التكلفة الإجمالية</h4>
-                    <p className="font-medium">
-                      {typeof currentOrder.totalCost === 'number' 
-                        ? `${currentOrder.totalCost.toFixed(2)} ج.م` 
-                        : '0 ج.م'}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between p-2 border rounded-md">
-                      <div>
-                        <span className="font-medium">{currentOrder.semiFinished.name}</span>
-                        <span className="text-sm text-muted-foreground mr-2">
-                          ({currentOrder.semiFinished.quantity})
-                        </span>
-                        <Badge variant="outline" className="mr-2">سائل</Badge>
-                      </div>
-                      {currentOrder.semiFinished.available ? (
-                        <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                      ) : (
-                        <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                      )}
-                    </div>
-                    
-                    {currentOrder.packagingMaterials.map((material, index) => (
-                      <div key={`${material.code}-${index}`} className="flex justify-between p-2 border rounded-md">
-                        <div>
-                          <span className="font-medium">{material.name}</span>
-                          <span className="text-sm text-muted-foreground mr-2">
-                            ({material.quantity})
-                          </span>
-                          <Badge variant="outline" className="mr-2">تعبئة</Badge>
-                        </div>
-                        {material.available ? (
-                          <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                        ) : (
-                          <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button onClick={() => setIsViewDialogOpen(false)}>
-                إغلاق
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
-        <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>تحديث حالة أمر التعبئة</DialogTitle>
-              <DialogDescription>
-                تحديث حالة أمر التعبئة {currentOrder?.code}
-              </DialogDescription>
-            </DialogHeader>
-            {currentOrder && (
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="status">الحالة</Label>
-                  <Select 
-                    value={newStatus} 
-                    onValueChange={setNewStatus}
-                  >
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="اختر الحالة" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">قيد الانتظار</SelectItem>
-                      <SelectItem value="inProgress">قيد التنفيذ</SelectItem>
-                      <SelectItem value="completed">مكتمل</SelectItem>
-                      <SelectItem value="cancelled">ملغي</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {newStatus === 'completed' && (
-                  <div className="bg-yellow-50 p-4 rounded-md text-yellow-800">
-                    <h4 className="font-medium mb-1">تنبيه</h4>
-                    <p className="text-sm">
-                      عند تحديث الحالة إلى "مكتمل"، سيتم خصم المكونات من المخزون وإضافة المنتج النهائي.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
-                إلغاء
-              </Button>
-              <Button onClick={handleUpdateStatus}>
-                تحديث
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>حذف أمر تعبئة</DialogTitle>
-              <DialogDescription>
-                هل أنت متأكد من حذف أمر التعبئة؟ لا يمكن التراجع عن هذا الإجراء.
-              </DialogDescription>
-            </DialogHeader>
-            {currentOrder && (
-              <div className="py-4">
-                <p className="font-medium">{currentOrder.code} - {currentOrder.productName}</p>
-                <p className="text-sm text-muted-foreground">الكمية: {currentOrder.quantity} {currentOrder.unit}</p>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                إلغاء
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteOrder}>
-                حذف
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>تعديل أمر تعبئة</DialogTitle>
-              <DialogDescription>
-                تعديل بيانات أمر التعبئة
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-product">المنتج</Label>
-                  <Select 
-                    value={editOrder.productCode} 
-                    onValueChange={value => setEditOrder({...editOrder, productCode: value})}
-                  >
-                    <SelectTrigger id="edit-product">
-                      <SelectValue placeholder="اختر المنتج" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {finishedProducts.map(product => (
-                        <SelectItem key={product.code} value={product.code}>
-                          {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-quantity">الكمية</Label>
-                  <Input
-                    id="edit-quantity"
-                    type="number"
-                    value={editOrder.quantity}
-                    onChange={e => setEditOrder({...editOrder, quantity: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-unit">الوحدة</Label>
-                  <Input
-                    id="edit-unit"
-                    value={editOrder.unit}
-                    onChange={e => setEditOrder({...editOrder, unit: e.target.value})}
-                  />
-                </div>
-              </div>
-              
-              {editOrder.productCode && editOrder.quantity > 0 && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
-                  <div className="space-y-2">
-                    {componentsAvailability.map((component, index) => (
-                      <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
-                        <div>
-                          <span className="font-medium">{component.name}</span>
-                          <span className="text-sm text-muted-foreground mr-2">
-                            ({component.requiredQuantity.toFixed(2)} {component.unit})
-                          </span>
-                          <Badge 
-                            variant="outline" 
-                            className="mr-2"
-                          >
-                            {component.type === 'semi' ? 'سائل' : 'تعبئة'}
-                          </Badge>
-                        </div>
-                        {component.available ? (
-                          <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                        ) : (
-                          <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="mt-4 p-2 border rounded-md bg-muted/50">
-                    <div className="flex justify-between">
-                      <span className="font-medium">التكلفة الإجمالية:</span>
-                      <span>{calculateTotalCost(editOrder.productCode, editOrder.quantity).toFixed(2)} ج.م</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+        <div>
+          <h3 className="text-lg font-medium mb-2">تفاصيل المنتج النصف مصنع</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">الكود</div>
+              <div>{order.semiFinished.code}</div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                إلغاء
-              </Button>
-              <Button onClick={handleEditOrder}>
-                تحديث
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">الاسم</div>
+              <div>{order.semiFinished.name}</div>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">الكمية</div>
+              <div>{order.semiFinished.quantity}</div>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="text-lg font-medium mb-2">مواد التعبئة</h3>
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الكود</TableHead>
+                  <TableHead>الاسم</TableHead>
+                  <TableHead>الكمية</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.isArray(order.packaging_materials) ? (
+                  order.packaging_materials.map((material: any, index: number) => (
+                    <TableRow key={index}>
+                      <TableCell>{material.packaging_material_code}</TableCell>
+                      <TableCell>{material.packaging_material_name}</TableCell>
+                      <TableCell>{material.required_quantity}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center">
+                      لا توجد مواد تعبئة
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       </div>
-    </PageTransition>
+    );
+  };
+  
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PackageCheck className="h-6 w-6" />
+            أوامر التعبئة
+          </CardTitle>
+          <CardDescription>
+            عرض وإدارة أوامر تعبئة المنتجات
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الكود</TableHead>
+                  <TableHead>المنتج</TableHead>
+                  <TableHead>الكمية</TableHead>
+                  <TableHead>التكلفة الإجمالية</TableHead>
+                  <TableHead>الحالة</TableHead>
+                  <TableHead className="text-right">الإجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell>{order.code}</TableCell>
+                    <TableCell>{order.product_name}</TableCell>
+                    <TableCell>
+                      {order.quantity} <Badge variant="outline">{order.product_unit}</Badge>
+                    </TableCell>
+                    <TableCell>{order.total_cost}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{order.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewOrder(order)}
+                      >
+                        عرض
+                      </Button>
+                      {order.status === 'pending' && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          disabled={processingOrderId === order.id}
+                          onClick={() => handleApproveOrder(order)}
+                        >
+                          {processingOrderId === order.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              جاري التنفيذ...
+                            </>
+                          ) : (
+                            'تنفيذ الأمر'
+                          )}
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+      
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>تفاصيل أمر التعبئة</DialogTitle>
+            <DialogDescription>
+              عرض تفاصيل أمر التعبئة المحدد
+            </DialogDescription>
+          </DialogHeader>
+          {selectedOrder && <OrderDetails order={selectedOrder} />}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsViewModalOpen(false)}>
+              إغلاق
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 
