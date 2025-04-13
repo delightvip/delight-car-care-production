@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -364,7 +365,7 @@ const CostSimulation = () => {
       
       highImpactFactors.forEach(factor => {
         const impact = change * (factor.impactLevel === 'high' ? 1 : factor.impactLevel === 'medium' ? 0.6 : 0.3);
-        const totalImpact = impact * (factor.category === 'raw-materials' ? 0.5 : factor.category === 'packaging' ? 0.2 : factor.category === 'operations' ? 0.3);
+        const totalImpact = impact * (factor.category === 'raw-materials' ? 0.5 : factor.category === 'packaging' ? 0.2 : factor.category === 'operations' ? 0.3 : 0);
         entry[factor.name] = totalImpact;
       });
       
@@ -846,4 +847,19 @@ const CostSimulation = () => {
                         key={factor.id}
                         type="monotone"
                         dataKey={factor.name}
-                        stroke={['
+                        stroke={['#6366F1', '#F59E0B', '#10B981'][index % 3]}
+                        activeDot={{ r: 8 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default CostSimulation;
