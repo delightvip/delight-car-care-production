@@ -71,13 +71,16 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
   submitText
 }) => {
   const queryClient = useQueryClient();
-  const isEditing = !!initialData;
-  const [selectedPackaging, setSelectedPackaging] = useState<string>('');
+  const isEditing = !!initialData;  const [selectedPackaging, setSelectedPackaging] = useState<string>('');
   const [packagingQuantity, setPackagingQuantity] = useState<number>(1);
   const [packaging, setPackaging] = useState<PackagingItem[]>([]);
   const [semiFinishedUnitCost, setSemiFinishedUnitCost] = useState<number>(0);
   const [packagingCost, setPackagingCost] = useState<number>(0);
   const [totalCost, setTotalCost] = useState<number>(0);
+  
+  // حالات البحث
+  const [semiFinishedSearchTerm, setSemiFinishedSearchTerm] = useState<string>('');
+  const [packagingSearchTerm, setPackagingSearchTerm] = useState<string>('');
   
   // Fetch semi-finished products
   const { data: semiFinishedProducts = [], isLoading: isSemiFinishedLoading } = useQuery({
@@ -90,8 +93,13 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
       
       if (error) throw error;
       return data;
-    }
-  });
+    }  });
+  
+  // ترشيح المنتجات النصف مصنعة حسب البحث
+  const filteredSemiFinishedProducts = semiFinishedProducts.filter(product => 
+    product.name.toLowerCase().includes(semiFinishedSearchTerm.toLowerCase()) ||
+    product.code.toLowerCase().includes(semiFinishedSearchTerm.toLowerCase())
+  );
   
   // Fetch packaging materials
   const { data: packagingMaterials = [], isLoading: isPackagingLoading } = useQuery({
@@ -101,11 +109,16 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
         .from('packaging_materials')
         .select('id, name, code, unit_cost')
         .order('name', { ascending: true });
-      
-      if (error) throw error;
+        if (error) throw error;
       return data;
     }
   });
+  
+  // ترشيح مواد التعبئة حسب البحث
+  const filteredPackagingMaterials = packagingMaterials.filter(material => 
+    material.name.toLowerCase().includes(packagingSearchTerm.toLowerCase()) ||
+    material.code.toLowerCase().includes(packagingSearchTerm.toLowerCase())
+  );
   
   const form = useForm<z.infer<typeof finishedProductSchema>>({
     resolver: zodResolver(finishedProductSchema),
@@ -370,8 +383,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl">        <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             أدخل بيانات المنتج النهائي مع مكوناته ومواد التعبئة
@@ -379,242 +391,381 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>اسم المنتج</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="أدخل اسم المنتج النهائي" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="unit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>وحدة القياس</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* بيانات المنتج الأساسية */}
+            <div className="bg-secondary/20 p-4 rounded-lg border">
+              <h3 className="text-lg font-semibold mb-4">البيانات الأساسية</h3>
+              
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-medium">اسم المنتج</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="اختر وحدة القياس" />
-                        </SelectTrigger>
+                        <Input {...field} placeholder="أدخل اسم المنتج النهائي" />
                       </FormControl>
-                      <SelectContent>
-                        {units.map(unit => (
-                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>الكمية</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="unit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">وحدة القياس</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="اختر وحدة القياس" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {units.map(unit => (
+                              <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">الكمية</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="min_stock"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">الحد الأدنى للمخزون</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="unit_cost"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">تكلفة الوحدة (محسوبة)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="0" 
+                            step="0.01" 
+                            {...field} 
+                            value={totalCost}
+                            disabled
+                            className="bg-muted"
+                          />
+                        </FormControl>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          * يتم حساب هذه القيمة تلقائياً بناءً على المكونات
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="sales_price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">سعر البيع</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="unit_cost"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>تكلفة الوحدة (محسوبة)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        min="0" 
-                        step="0.01" 
-                        {...field} 
-                        value={totalCost}
-                        disabled
-                        className="bg-muted"
-                      />
-                    </FormControl>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      * يتم حساب هذه القيمة تلقائياً بناءً على المكونات
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* قسم المنتج النصف مصنع */}
+            <div className="bg-primary/10 p-4 rounded-lg border">
+              <h3 className="text-lg font-semibold mb-4">المنتج النصف مصنع</h3>
               
-              <FormField
-                control={form.control}
-                name="sales_price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>سعر البيع</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <FormField
-              control={form.control}
-              name="min_stock"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>الحد الأدنى للمخزون</FormLabel>
-                  <FormControl>
-                    <Input type="number" min="0" step="0.01" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <Separator className="my-4" />
-            
-            <div className="space-y-2">
-              <h3 className="text-md font-medium">المنتج النصف مصنع</h3>
-              
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <FormField
                   control={form.control}
                   name="semi_finished_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>المنتج النصف مصنع</FormLabel>
-                      <Select 
-                        onValueChange={value => field.onChange(parseInt(value))} 
-                        defaultValue={field.value ? String(field.value) : undefined}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="اختر منتج نصف مصنع" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {semiFinishedProducts.map(product => (
-                            <SelectItem key={product.id} value={String(product.id)}>
-                              {product.name} - تكلفة: {product.unit_cost}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="semi_finished_quantity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>كمية المنتج النصف مصنع</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0.1" step="0.01" {...field} />
-                      </FormControl>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        التكلفة: {(semiFinishedUnitCost * field.value).toFixed(2)}
+                      <FormLabel className="font-medium">المنتج النصف مصنع</FormLabel>
+                      <div className="relative">
+                        <div className="flex items-center relative">
+                          <Input
+                            placeholder="ابحث عن منتج نصف مصنع..."
+                            value={semiFinishedSearchTerm}
+                            onChange={(e) => setSemiFinishedSearchTerm(e.target.value)}
+                            className="pr-8" // توفير مساحة للأيقونة
+                          />
+                          <div className="absolute left-2 opacity-70">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                          </div>
+                        </div>                        
+                        {/* عرض نتائج البحث مباشرة أسفل حقل البحث */}
+                        {semiFinishedSearchTerm.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto bg-popover border rounded-md shadow-lg">
+                            {filteredSemiFinishedProducts.length > 0 ? (
+                              filteredSemiFinishedProducts.map(product => (
+                                <div 
+                                  key={product.id} 
+                                  className={`px-3 py-2 cursor-pointer hover:bg-accent transition-colors duration-150 ${
+                                    field.value === product.id ? 'bg-accent/50' : ''
+                                  }`}                                  onClick={() => {
+                                    field.onChange(product.id);
+                                    // اختيار المنتج وإغلاق قائمة البحث
+                                    const selectedProduct = semiFinishedProducts.find(p => p.id === product.id);
+                                    if (selectedProduct) {
+                                      setSemiFinishedUnitCost(Number(selectedProduct.unit_cost));
+                                      // مسح مصطلح البحث لإغلاق القائمة
+                                      setSemiFinishedSearchTerm('');
+                                    }
+                                  }}
+                                >
+                                  <div className="font-medium">{product.name}</div>
+                                  <div className="text-sm text-muted-foreground flex items-center justify-between">
+                                    <span>الكود: {product.code}</span>
+                                    <span className="font-semibold">التكلفة: {product.unit_cost} ج.م</span>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="p-3 text-center text-muted-foreground">لا توجد نتائج مطابقة</div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* عرض المنتج المختار */}
+                        {field.value && !semiFinishedSearchTerm && (
+                          <div className="p-3 border rounded-md mt-2 bg-secondary/10">
+                            {(() => {
+                              const selected = semiFinishedProducts.find(p => p.id === field.value);
+                              return selected ? (
+                                <div className="flex flex-col">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-semibold text-base">{selected.name}</span>
+                                    <span className="bg-primary/20 text-primary rounded-full px-2 py-0.5 text-xs font-bold">
+                                      {selected.code}
+                                    </span>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground mt-1 flex justify-between">
+                                    <span>تكلفة الوحدة:</span>
+                                    <span className="font-semibold">{selected.unit_cost} ج.م</span>
+                                  </div>
+                                </div>
+                              ) : 'اختر منتج نصف مصنع';
+                            })()}
+                          </div>
+                        )}
                       </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <FormField
+                    control={form.control}
+                    name="semi_finished_quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-medium">كمية المنتج النصف مصنع</FormLabel>
+                        <div className="relative">
+                          <FormControl>
+                            <Input type="number" min="0.1" step="0.01" {...field} className="pr-20" />
+                          </FormControl>
+                          <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium px-2 py-1 bg-secondary/30 rounded">
+                            لكل وحدة
+                          </div>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="flex items-end h-full">
+                    <div className="border rounded p-3 w-full bg-secondary/10 h-10 flex items-center justify-between">
+                      <span className="text-sm">تكلفة المكون:</span>
+                      <span className="font-bold text-primary">
+                        {(semiFinishedUnitCost * form.watch('semi_finished_quantity')).toFixed(2)} ج.م
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             
-            <Separator className="my-4" />
-            
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-md font-medium">مواد التعبئة</h3>
-                <div className="text-sm text-muted-foreground">إجمالي تكلفة التعبئة: {packagingCost.toFixed(2)}</div>
+            <div className="bg-accent/10 p-4 rounded-lg border">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">مواد التعبئة</h3>
+                <div className="font-medium text-sm bg-secondary/20 px-3 py-1 rounded-full">
+                  <span>إجمالي التكلفة: </span>
+                  <span className="font-bold text-primary">{packagingCost.toFixed(2)} ج.م</span>
+                </div>
               </div>
               
-              <div className="flex space-x-4 rtl:space-x-reverse">
-                <div className="flex-1">
-                  <FormLabel>مادة التعبئة</FormLabel>
-                  <Select 
-                    value={selectedPackaging} 
-                    onValueChange={setSelectedPackaging}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر مادة تعبئة" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {packagingMaterials.map(material => (
-                        <SelectItem key={material.id} value={String(material.id)}>
-                          {material.name} - تكلفة: {material.unit_cost}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="col-span-2">
+                  <FormLabel className="font-medium">مادة التعبئة</FormLabel>
+                  <div className="relative">
+                    <div className="flex items-center relative">
+                      <Input
+                        placeholder="ابحث عن مادة تعبئة..."
+                        value={packagingSearchTerm}
+                        onChange={(e) => setPackagingSearchTerm(e.target.value)}
+                        className="pr-8"
+                      />
+                      <div className="absolute left-2 opacity-70">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                      </div>
+                    </div>                    
+                    {/* عرض نتائج البحث */}
+                    {packagingSearchTerm.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto bg-popover border rounded-md shadow-lg">
+                        {filteredPackagingMaterials.length > 0 ? (
+                          filteredPackagingMaterials.map(material => (
+                            <div 
+                              key={material.id} 
+                              className={`px-3 py-2 cursor-pointer hover:bg-accent transition-colors duration-150 ${
+                                selectedPackaging === String(material.id) ? 'bg-accent/50' : ''
+                              }`}                              onClick={() => {
+                                setSelectedPackaging(String(material.id));
+                                // مسح مصطلح البحث لإغلاق القائمة
+                                setPackagingSearchTerm('');
+                              }}
+                            >
+                              <div className="font-medium">{material.name}</div>
+                              <div className="text-sm text-muted-foreground flex items-center justify-between">
+                                <span>الكود: {material.code}</span>
+                                <span className="font-semibold">التكلفة: {material.unit_cost} ج.م</span>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-3 text-center text-muted-foreground">لا توجد نتائج مطابقة</div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* عرض المادة المختارة */}
+                    {selectedPackaging && !packagingSearchTerm && (
+                      <div className="p-3 border rounded-md mt-2 bg-secondary/10">
+                        {(() => {
+                          const selected = packagingMaterials.find(m => String(m.id) === selectedPackaging);
+                          return selected ? (
+                            <div className="flex flex-col">
+                              <div className="flex justify-between items-center">
+                                <span className="font-semibold text-base">{selected.name}</span>
+                                <span className="bg-primary/20 text-primary rounded-full px-2 py-0.5 text-xs font-bold">
+                                  {selected.code}
+                                </span>
+                              </div>
+                              <div className="text-sm text-muted-foreground mt-1 flex justify-between">
+                                <span>تكلفة الوحدة:</span>
+                                <span className="font-semibold">{selected.unit_cost} ج.م</span>
+                              </div>
+                            </div>
+                          ) : 'اختر مادة تعبئة';
+                        })()}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
-                <div className="w-32">
-                  <FormLabel>الكمية</FormLabel>
+                <div className="col-span-1">
+                  <FormLabel className="font-medium">الكمية</FormLabel>
                   <Input 
                     type="number" 
                     min="1"
                     value={packagingQuantity}
                     onChange={e => setPackagingQuantity(Number(e.target.value))}
+                    className="h-10"
                   />
                 </div>
                 
-                <div className="flex items-end">
-                  <Button type="button" onClick={handleAddPackaging}>
-                    <PlusCircle size={16} className="mr-2" />
-                    إضافة
+                <div className="col-span-1 flex items-end">
+                  <Button 
+                    type="button" 
+                    onClick={handleAddPackaging} 
+                    className="w-full h-10 bg-primary hover:bg-primary/90"
+                  >
+                    <PlusCircle size={16} className="ml-1" />
+                    <span>إضافة</span>
                   </Button>
                 </div>
               </div>
               
-              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+              {/* قائمة مواد التعبئة المضافة */}
+              <div className="mt-4 border rounded-md divide-y">
                 {packaging.length > 0 ? (
                   packaging.map(pkg => {
                     const material = packagingMaterials.find(m => m.id === pkg.id);
                     const cost = material ? material.unit_cost * pkg.quantity : 0;
                     
                     return (
-                      <div key={pkg.id} className="flex justify-between items-center p-2 border rounded-md">
-                        <div>
-                          <div className="font-medium">{pkg.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            الكمية: {pkg.quantity} | 
-                            التكلفة: {cost.toFixed(2)}
+                      <div key={pkg.id} className="flex justify-between items-center p-3 hover:bg-secondary/10 transition-colors">
+                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                          <div className="w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-package"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+                          </div>
+                          <div>
+                            <div className="font-medium">{pkg.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              الكود: {pkg.code}
+                            </div>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleRemovePackaging(pkg.id)}
-                        >
-                          <X size={16} />
-                        </Button>
+                        <div className="flex items-center space-x-6 rtl:space-x-reverse">
+                          <div className="text-sm text-right">
+                            <div>الكمية: <span className="font-medium">{pkg.quantity}</span></div>
+                            <div>التكلفة: <span className="font-medium">{cost.toFixed(2)} ج.م</span></div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleRemovePackaging(pkg.id)}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          </Button>
+                        </div>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="text-muted-foreground text-center py-2">
-                    لم يتم إضافة مواد تعبئة بعد
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-package mb-2 opacity-30"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+                    <div className="text-center">
+                      <p>لم يتم إضافة مواد تعبئة بعد</p>
+                      <p className="text-xs mt-1">يجب إضافة مادة تعبئة واحدة على الأقل</p>
+                    </div>
                   </div>
                 )}
               </div>
