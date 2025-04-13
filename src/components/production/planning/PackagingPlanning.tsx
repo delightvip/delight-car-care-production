@@ -142,16 +142,16 @@ const PackagingPlanning = () => {
       setSemiFinished(productDetails.semi_finished as SemiFinishedProduct);
       
       const quantity = Number(productionQuantity);
-      const requiredSemiFinishedQty = quantity * (productDetails.semi_finished_quantity || 0);
+      const requiredSemiFinishedQty = quantity * Number(productDetails.semi_finished_quantity || 0);
       setSemiFinishedQuantityNeeded(requiredSemiFinishedQty);
       
       const materials: PackagingPlanningItem[] = [];
       let totalPackagingCost = 0;
       
       productPackagingMaterials.forEach(item => {
-        const requiredQty = Number(item.quantity) * quantity;
+        const requiredQty = Number(item.quantity) * Number(quantity);
         const material = item.packaging_material;
-        const unitCost = material?.unit_cost || 0;
+        const unitCost = Number(material?.unit_cost || 0);
         const materialCost = unitCost * requiredQty;
         totalPackagingCost += materialCost;
         
@@ -161,13 +161,13 @@ const PackagingPlanning = () => {
           name: material?.name || '',
           requiredQuantity: requiredQty,
           unitCost: unitCost,
-          available: (material?.quantity || 0) >= requiredQty
+          available: Number(material?.quantity || 0) >= requiredQty
         });
       });
       
       setPackagingMaterials(materials);
       
-      const semiFinishedCost = (productDetails.semi_finished?.unit_cost || 0) * requiredSemiFinishedQty;
+      const semiFinishedCost = Number(productDetails.semi_finished?.unit_cost || 0) * requiredSemiFinishedQty;
       setTotalCost(semiFinishedCost + totalPackagingCost);
     }
   }, [selectedProductId, productionQuantity, productDetails, productPackagingMaterials]);
