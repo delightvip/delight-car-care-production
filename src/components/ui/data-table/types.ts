@@ -4,22 +4,18 @@ import { ReactNode } from "react";
 export interface Column {
   key: string;
   title: string;
-  render?: (value: any, record?: any) => ReactNode;
-  cell?: (props: { row: { original: any } }) => ReactNode;
+  render?: ((record: any) => ReactNode) | ((value: any, record: any) => ReactNode);
   sortable?: boolean;
   width?: string;
   minWidth?: string;
+  // Keep older properties for backward compatibility
+  accessorKey?: string;
+  cell?: ({ row }: any) => ReactNode;
 }
 
 export interface SortConfig {
   key: string;
   direction: 'asc' | 'desc';
-}
-
-export interface TableSearchProps {
-  searchTerm: string;
-  setSearchTerm: (term: string) => void;
-  placeholder?: string;
 }
 
 export interface DataTableProps {
@@ -38,4 +34,10 @@ export interface DataTableProps {
   containerClassName?: string;
   className?: string;
   emptyState?: ReactNode;
+}
+
+export interface TableSearchProps {
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  placeholder?: string;
 }
