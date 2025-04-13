@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -84,7 +83,6 @@ const PackagingPlanning = () => {
   
   const productionService = ProductionDatabaseService.getInstance();
   
-  // جلب المنتجات النهائية
   const { data: finishedProducts = [], isLoading: isLoadingProducts } = useQuery({
     queryKey: ['finishedProducts'],
     queryFn: async () => {
@@ -98,7 +96,6 @@ const PackagingPlanning = () => {
     }
   });
   
-  // جلب مواد التعبئة للمنتج المحدد
   const { data: productPackagingMaterials = [], isLoading: isLoadingPackaging } = useQuery({
     queryKey: ['productPackaging', selectedProductId],
     queryFn: async () => {
@@ -119,7 +116,6 @@ const PackagingPlanning = () => {
     enabled: !!selectedProductId
   });
   
-  // جلب بيانات المنتج النصف مصنع المرتبط بالمنتج النهائي
   const { data: productDetails } = useQuery({
     queryKey: ['productDetails', selectedProductId],
     queryFn: async () => {
@@ -141,20 +137,19 @@ const PackagingPlanning = () => {
     enabled: !!selectedProductId
   });
   
-  // تحديث البيانات عند اختيار منتج
   useEffect(() => {
     if (productDetails && productDetails.semi_finished) {
       setSemiFinished(productDetails.semi_finished as SemiFinishedProduct);
       
-      const requiredSemiFinishedQty = productionQuantity * productDetails.semi_finished_quantity;
+      const quantity = Number(productionQuantity);
+      const requiredSemiFinishedQty = quantity * (productDetails.semi_finished_quantity || 0);
       setSemiFinishedQuantityNeeded(requiredSemiFinishedQty);
       
-      // جدولة مواد التعبئة المطلوبة
       const materials: PackagingPlanningItem[] = [];
       let totalPackagingCost = 0;
       
       productPackagingMaterials.forEach(item => {
-        const requiredQty = item.quantity * productionQuantity;
+        const requiredQty = item.quantity * quantity;
         const material = item.packaging_material;
         const unitCost = material?.unit_cost || 0;
         const materialCost = unitCost * requiredQty;
@@ -172,13 +167,11 @@ const PackagingPlanning = () => {
       
       setPackagingMaterials(materials);
       
-      // حساب التكلفة الإجمالية
       const semiFinishedCost = (productDetails.semi_finished?.unit_cost || 0) * requiredSemiFinishedQty;
       setTotalCost(semiFinishedCost + totalPackagingCost);
     }
   }, [selectedProductId, productionQuantity, productDetails, productPackagingMaterials]);
   
-  // إنشاء أمر تعبئة جديد
   const createOrderMutation = useMutation({
     mutationFn: async () => {
       if (!selectedProductId || !semiFinished) {
@@ -190,14 +183,12 @@ const PackagingPlanning = () => {
         throw new Error('لم يتم العثور على المنتج المحدد');
       }
       
-      // تنسيق البيانات للخدمة
       const packagingMaterialsData = packagingMaterials.map(material => ({
         code: material.code,
         name: material.name,
         quantity: material.requiredQuantity
       }));
       
-      // إنشاء أمر التعبئة باستخدام خدمة الإنتاج
       return await productionService.createPackagingOrder(
         product.code,
         product.name,
@@ -209,7 +200,7 @@ const PackagingPlanning = () => {
           quantity: semiFinishedQuantityNeeded
         },
         packagingMaterialsData,
-        totalCost // إرسال التكلفة الإجمالية المحسوبة
+        totalCost
       );
     },
     onSuccess: () => {
@@ -228,7 +219,9 @@ const PackagingPlanning = () => {
       return;
     }
     
-    if (productionQuantity <= 0) {
+    const quantity = Number(productionQuantity);
+    
+    if (quantity <= 0) {
       toast.error('يجب أن تكون الكمية أكبر من 0');
       return;
     }
