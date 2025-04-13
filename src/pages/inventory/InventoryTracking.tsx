@@ -1,4 +1,3 @@
-
 import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MovementCard from '@/components/inventory/MovementCard';
-import { InventoryMovementService, InventoryMovement } from '@/services/InventoryMovementService';
+import { InventoryMovementService, InventoryMovement, InventoryMovementQuery } from '@/services/InventoryMovementService';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -63,8 +62,9 @@ const InventoryTracking = () => {
   // Fetch real inventory movements from our service
   const { data: movementsData, isLoading, error, refetch } = useQuery({
     queryKey: ['inventoryMovements'],
-    queryFn: () => {
-      return InventoryMovementService.fetchInventoryMovements({
+    queryFn: async () => {
+      const service = InventoryMovementService.getInstance();
+      return service.fetchInventoryMovements({
         dateRange: {
           from: dateRange.from,
           to: dateRange.to
@@ -91,10 +91,10 @@ const InventoryTracking = () => {
       }
       
       // Filter by date range
-      if (dateRange.from && !isAfter(movement.date, dateRange.from)) {
+      if (dateRange.from && movement.date && !isAfter(movement.date, dateRange.from)) {
         return false;
       }
-      if (dateRange.to && isAfter(movement.date, dateRange.to)) {
+      if (dateRange.to && movement.date && isAfter(movement.date, dateRange.to)) {
         return false;
       }
       
@@ -144,7 +144,8 @@ const InventoryTracking = () => {
   
   const getCategoryMovementCount = (category: string) => {
     if (!movementsData) return 0;
-    return InventoryMovementService.filterMovementsByCategory(movementsData, category).length;
+    const service = InventoryMovementService.getInstance();
+    return service.filterMovementsByCategory(movementsData, category).length;
   };
   
   const handleManualMovementSuccess = () => {

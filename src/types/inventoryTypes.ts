@@ -14,10 +14,22 @@ export interface InventoryMovement {
   user_id?: string;
   user_name?: string;
   
-  // Adding missing properties for chart components
+  // Adding properties for UI components
   type?: 'in' | 'out' | 'adjustment';
   date?: Date;
   item_name?: string;
   category?: string;
   note?: string;
+}
+
+// Interface for manual movement input
+export interface ManualMovementInput {
+  type: 'in' | 'out';
+  category: string;
+  item_id: number;
+  item_name: string;
+  quantity: number;
+  unit: string;
+  note?: string;
+  date: Date;
 }

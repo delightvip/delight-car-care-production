@@ -1,7 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { InventoryMovement, ItemType } from '@/types/inventoryTypes';
+import { InventoryMovement, ItemType, ManualMovementInput } from '@/types/inventoryTypes';
 import { format, parseISO, subDays } from 'date-fns';
 
 // Types for the inventory movement queries
@@ -13,17 +13,6 @@ export interface InventoryMovementQuery {
   category?: string;
   type?: 'in' | 'out' | 'adjustment' | 'all';
   search?: string;
-}
-
-interface ManualMovementInput {
-  type: 'in' | 'out';
-  category: string;
-  item_id: number;
-  item_name: string;
-  quantity: number;
-  unit: string;
-  note: string;
-  date: Date;
 }
 
 class InventoryMovementService {
@@ -110,6 +99,7 @@ class InventoryMovementService {
   // الحصول على الكمية الحالية لعنصر
   private async getCurrentQuantity(itemId: string, itemType: ItemType): Promise<number | null> {
     try {
+      // Using direct queries instead of RPC
       let tableName = '';
       
       switch (itemType) {
@@ -130,17 +120,17 @@ class InventoryMovementService {
       }
 
       const { data, error } = await supabase
-        .rpc('get_item_quantity', {
-          p_item_id: itemId,
-          p_item_type: itemType
-        });
+        .from(tableName)
+        .select('quantity')
+        .eq('id', parseInt(itemId, 10))
+        .single();
 
       if (error) {
         console.error('Error getting current quantity:', error);
         return null;
       }
 
-      return data || 0;
+      return data?.quantity || 0;
     } catch (error) {
       console.error('Error in getCurrentQuantity:', error);
       return null;
@@ -150,6 +140,7 @@ class InventoryMovementService {
   // تحديث كمية العنصر في الجدول المناسب
   private async updateItemQuantity(itemId: string, itemType: ItemType, newQuantity: number): Promise<boolean> {
     try {
+      // Using direct queries instead of RPC
       let tableName = '';
       
       switch (itemType) {
@@ -170,11 +161,9 @@ class InventoryMovementService {
       }
 
       const { error } = await supabase
-        .rpc('update_item_quantity', {
-          p_item_id: itemId,
-          p_item_type: itemType,
-          p_new_quantity: newQuantity
-        });
+        .from(tableName)
+        .update({ quantity: newQuantity })
+        .eq('id', parseInt(itemId, 10));
 
       if (error) {
         console.error('Error updating item quantity:', error);
@@ -192,10 +181,20 @@ class InventoryMovementService {
   public async getMovementsForItem(itemId: string, itemType: string): Promise<InventoryMovement[]> {
     try {
       const { data, error } = await supabase
-        .rpc('get_inventory_movements_by_item', {
-          p_item_id: String(itemId),
-          p_item_type: itemType
-        })
+        .from('inventory_movements')
+        .select(`
+          id,
+          item_id,
+          item_type,
+          movement_type,
+          quantity,
+          balance_after,
+          reason,
+          created_at,
+          users:user_id (name)
+        `)
+        .eq('item_id', String(itemId))
+        .eq('item_type', itemType)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -212,7 +211,8 @@ class InventoryMovementService {
         balance_after: item.balance_after,
         reason: item.reason,
         created_at: item.created_at,
-        user_name: item.user_name,
+        user_name: item.users?.name,
+        // Add alias for compatibility
         type: item.movement_type as 'in' | 'out' | 'adjustment'
       }));
     } catch (error) {
@@ -245,9 +245,19 @@ class InventoryMovementService {
   private async getAllMovementsByType(type: ItemType, categoryName: string): Promise<InventoryMovement[]> {
     try {
       const { data, error } = await supabase
-        .rpc('get_movements_by_type', {
-          p_item_type: type
-        });
+        .from('inventory_movements')
+        .select(`
+          id,
+          item_id,
+          item_type,
+          movement_type,
+          quantity,
+          balance_after,
+          reason,
+          created_at,
+          users:user_id (name)
+        `)
+        .eq('item_type', type);
 
       if (error) {
         console.error(`Error fetching ${type} movements:`, error);
@@ -263,7 +273,7 @@ class InventoryMovementService {
         balance_after: item.balance_after,
         reason: item.reason,
         created_at: item.created_at,
-        user_name: item.user_name || null,
+        user_name: item.users?.name || null,
         category: categoryName,
         type: item.movement_type as 'in' | 'out' | 'adjustment'
       }));
@@ -356,10 +366,23 @@ class InventoryMovementService {
   }
 
   // Fetch inventory movements based on query parameters
-  public static async fetchInventoryMovements(query: InventoryMovementQuery = {}): Promise<InventoryMovement[]> {
+  public async fetchInventoryMovements(query: InventoryMovementQuery = {}): Promise<InventoryMovement[]> {
     try {
-      // Call RPC function to get all movements
-      const { data, error } = await supabase.rpc('get_all_inventory_movements');
+      // Call direct query instead of RPC function
+      const { data, error } = await supabase
+        .from('inventory_movements')
+        .select(`
+          id,
+          item_id,
+          item_type,
+          movement_type,
+          quantity,
+          balance_after,
+          reason,
+          created_at,
+          users:user_id (name)
+        `)
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching inventory movements:', error);
@@ -367,27 +390,30 @@ class InventoryMovementService {
       }
 
       if (!data || !Array.isArray(data)) {
-        console.error('Invalid data returned from get_all_inventory_movements:', data);
+        console.error('Invalid data returned when fetching inventory movements:', data);
         return [];
       }
 
       // Convert server data to client format
-      let movements = data.map((item: any) => ({
-        id: item.id,
-        item_id: item.item_id,
-        item_type: item.item_type,
-        movement_type: item.movement_type as 'in' | 'out' | 'adjustment',
-        type: item.movement_type as 'in' | 'out' | 'adjustment', // Add type alias for compatibility
-        quantity: Number(item.quantity),
-        balance_after: Number(item.balance_after),
-        reason: item.reason,
-        note: item.reason, // Add note alias for compatibility
-        created_at: item.created_at,
-        user_name: item.user_name,
-        category: getItemTypeCategory(item.item_type),
-        item_name: item.item_name || item.item_id,
-        date: parseISO(item.created_at) // Convert string to Date
-      }));
+      let movements = data.map((item: any) => {
+        const movement: InventoryMovement = {
+          id: item.id,
+          item_id: item.item_id,
+          item_type: item.item_type,
+          movement_type: item.movement_type as 'in' | 'out' | 'adjustment',
+          type: item.movement_type as 'in' | 'out' | 'adjustment', // Add type alias for compatibility
+          quantity: Number(item.quantity),
+          balance_after: Number(item.balance_after),
+          reason: item.reason,
+          note: item.reason, // Add note alias for compatibility
+          created_at: item.created_at,
+          user_name: item.users?.name,
+          category: this.getItemTypeCategory(item.item_type),
+          item_name: item.item_name || item.item_id,
+          date: parseISO(item.created_at) // Convert string to Date
+        };
+        return movement;
+      });
 
       // Apply date range filter
       if (query.dateRange) {
@@ -431,16 +457,14 @@ class InventoryMovementService {
   }
 
   // Filter movements by category
-  public static filterMovementsByCategory(movements: InventoryMovement[], category: string): InventoryMovement[] {
+  public filterMovementsByCategory(movements: InventoryMovement[], category: string): InventoryMovement[] {
     if (category === 'all') return movements;
     return movements.filter(m => m.category === category);
   }
 
   // Create a manual inventory movement
-  public static async createManualInventoryMovement(data: ManualMovementInput): Promise<boolean> {
+  public async createManualInventoryMovement(data: ManualMovementInput): Promise<boolean> {
     try {
-      const movementService = InventoryMovementService.getInstance();
-      
       // Map category to item_type format
       let itemType: ItemType;
       
@@ -462,7 +486,7 @@ class InventoryMovementService {
       }
       
       // Record the movement
-      const success = await movementService.recordMovement(
+      const success = await this.recordMovement(
         data.item_id.toString(),
         itemType,
         data.type,
@@ -481,24 +505,24 @@ class InventoryMovementService {
       return false;
     }
   }
-}
 
-// Helper function outside the class
-function getItemTypeCategory(itemType: string): string {
-  switch (itemType) {
-    case 'raw':
-      return 'raw_materials';
-    case 'packaging':
-      return 'packaging';
-    case 'semi':
-      return 'semi_finished';
-    case 'finished':
-      return 'finished_products';
-    default:
-      return itemType;
+  // Helper function for getItemTypeCategory
+  private getItemTypeCategory(itemType: string): string {
+    switch (itemType) {
+      case 'raw':
+        return 'raw_materials';
+      case 'packaging':
+        return 'packaging';
+      case 'semi':
+        return 'semi_finished';
+      case 'finished':
+        return 'finished_products';
+      default:
+        return itemType;
+    }
   }
 }
 
 export { InventoryMovementService };
-export type { InventoryMovement };
+export type { InventoryMovement, InventoryMovementQuery };
 export default InventoryMovementService;

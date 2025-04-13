@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { InventoryMovementService } from '@/services/InventoryMovementService';
+import { ManualMovementInput } from '@/types/inventoryTypes';
 
 interface ManualMovementFormProps {
   onSuccess: () => void;
@@ -27,8 +28,10 @@ const formSchema = z.object({
   date: z.date()
 });
 
+type FormValues = z.infer<typeof formSchema>;
+
 const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCancel }) => {
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       type: 'in',
@@ -42,9 +45,21 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     }
   });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: FormValues) => {
     try {
-      const result = await InventoryMovementService.createManualInventoryMovement(values);
+      // Make sure all required fields are present in the values
+      const movementData: ManualMovementInput = {
+        type: values.type,
+        category: values.category,
+        item_id: values.item_id,
+        item_name: values.item_name,
+        quantity: values.quantity,
+        unit: values.unit,
+        note: values.note,
+        date: values.date
+      };
+      
+      const result = await InventoryMovementService.getInstance().createManualInventoryMovement(movementData);
       
       if (result) {
         toast.success('تم تسجيل حركة المخزون بنجاح');
