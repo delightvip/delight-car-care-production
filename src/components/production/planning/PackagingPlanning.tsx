@@ -149,7 +149,7 @@ const PackagingPlanning = () => {
       let totalPackagingCost = 0;
       
       productPackagingMaterials.forEach(item => {
-        const requiredQty = item.quantity * quantity;
+        const requiredQty = Number(item.quantity) * quantity;
         const material = item.packaging_material;
         const unitCost = material?.unit_cost || 0;
         const materialCost = unitCost * requiredQty;
