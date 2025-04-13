@@ -11,8 +11,8 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-import { createManualInventoryMovement } from '@/services/InventoryMovementService';
-import InventoryService from '@/services/InventoryService'; // تصحيح الاستيراد هنا
+import InventoryMovementService, { ManualMovementData } from '@/services/InventoryMovementService';
+import InventoryService from '@/services/InventoryService';
 
 interface ManualMovementFormProps {
   onSuccess?: () => void;
@@ -42,7 +42,8 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     date: new Date()
   });
 
-  const inventoryService = InventoryService.getInstance(); // استخدام getInstance للحصول على نسخة من خدمة المخزون
+  const inventoryService = InventoryService.getInstance();
+  const inventoryMovementService = InventoryMovementService.getInstance();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -165,7 +166,7 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
     setIsSubmitting(true);
     
     try {
-      const success = await createManualInventoryMovement({
+      const movementData: ManualMovementData = {
         type: formState.type,
         category: formState.category,
         item_name: formState.itemName,
@@ -174,9 +175,12 @@ const ManualMovementForm: React.FC<ManualMovementFormProps> = ({ onSuccess, onCa
         unit: formState.unit,
         note: formState.note,
         date: formState.date
-      });
+      };
+    
+      const success = await inventoryMovementService.createManualInventoryMovement(movementData);
       
       if (success) {
+        toast.success('تم تسجيل حركة المخزون بنجاح');
         if (onSuccess) onSuccess();
       }
     } catch (error) {

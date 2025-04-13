@@ -1,4 +1,3 @@
-
 // تحقق إذا كان هذا الملف موجود ونضيف الدالة الخاصة بحساب تكلفة المنتج النهائي أو نعدلها إذا كانت موجودة
 
 export const calculateFinishedProductCost = (
@@ -28,7 +27,7 @@ export const calculateFinishedProductCost = (
   return totalCost;
 };
 
-// Updated to support an optional field name parameter
+// Updated to support a single value parameter only
 export const ensureNumericValue = (value: any): number => {
   if (value === null || value === undefined) {
     return 0;

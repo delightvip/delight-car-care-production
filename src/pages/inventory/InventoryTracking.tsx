@@ -6,11 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MovementCard from '@/components/inventory/MovementCard';
-import { 
-  fetchInventoryMovements, 
-  filterMovementsByCategory, 
-  InventoryMovementQuery 
-} from '@/services/InventoryMovementService';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -39,6 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import InventoryMovementService, { InventoryMovement, InventoryMovementQuery } from '@/services/InventoryMovementService';
 
 const InventoryTracking = () => {
   const [activeTab, setActiveTab] = React.useState('all');
@@ -51,6 +47,8 @@ const InventoryTracking = () => {
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<'list' | 'chart'>('list');
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  
+  const inventoryMovementService = InventoryMovementService.getInstance();
   
   // Definir getCategoryName al principio del componente para evitar
   // el error "Cannot access 'getCategoryName' before initialization"
@@ -74,7 +72,7 @@ const InventoryTracking = () => {
           to: dateRange.to
         }
       };
-      return fetchInventoryMovements(query);
+      return inventoryMovementService.fetchInventoryMovements(query);
     },
     refetchInterval: 60000, // Refresh every minute
     refetchOnWindowFocus: true
@@ -96,19 +94,26 @@ const InventoryTracking = () => {
       }
       
       // Filter by date range
-      if (dateRange.from && !isAfter(movement.date, dateRange.from)) {
-        return false;
+      if (dateRange.from && movement.date) {
+        const moveDate = typeof movement.date === 'string' ? new Date(movement.date) : movement.date;
+        if (!isAfter(moveDate, dateRange.from)) {
+          return false;
+        }
       }
-      if (dateRange.to && isAfter(movement.date, dateRange.to)) {
-        return false;
+      
+      if (dateRange.to && movement.date) {
+        const moveDate = typeof movement.date === 'string' ? new Date(movement.date) : movement.date;
+        if (isAfter(moveDate, dateRange.to)) {
+          return false;
+        }
       }
       
       // Filter by search term
       if (searchTerm.trim() !== '') {
         const lowercaseSearch = searchTerm.toLowerCase();
         return (
-          movement.item_name.toLowerCase().includes(lowercaseSearch) ||
-          movement.note.toLowerCase().includes(lowercaseSearch)
+          (movement.item_name && movement.item_name.toLowerCase().includes(lowercaseSearch)) ||
+          (movement.note && movement.note.toLowerCase().includes(lowercaseSearch))
         );
       }
       
@@ -122,11 +127,11 @@ const InventoryTracking = () => {
     const headers = ['نوع الحركة', 'التصنيف', 'الصنف', 'الكمية', 'التاريخ', 'ملاحظات'];
     const csvData = filteredMovements.map(movement => [
       movement.type === 'in' ? 'وارد' : 'صادر',
-      getCategoryName(movement.category),
-      movement.item_name,
+      movement.category ? getCategoryName(movement.category) : '',
+      movement.item_name || '',
       movement.quantity,
-      format(movement.date, 'yyyy/MM/dd'),
-      movement.note
+      movement.date ? format(new Date(movement.date), 'yyyy/MM/dd') : '',
+      movement.note || ''
     ]);
     
     // Create CSV content

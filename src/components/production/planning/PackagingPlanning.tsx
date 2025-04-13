@@ -108,7 +108,7 @@ const PackagingPlanning = () => {
           quantity,
           packaging_material:packaging_material_id(id, code, name, quantity, unit_cost)
         `)
-        .eq('finished_product_id', selectedProductId);
+        .eq('finished_product_id', parseInt(selectedProductId));
       
       if (error) throw error;
       return data;
@@ -128,7 +128,7 @@ const PackagingPlanning = () => {
           semi_finished_quantity,
           semi_finished:semi_finished_id(id, code, name, quantity, unit, unit_cost)
         `)
-        .eq('id', selectedProductId)
+        .eq('id', parseInt(selectedProductId))
         .single();
       
       if (error) throw error;

@@ -2,10 +2,25 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { InventoryMovement } from '@/services/InventoryMovementService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, subDays, subMonths, parseISO, isAfter, isBefore } from 'date-fns';
 import { ar } from 'date-fns/locale';
+
+// Define the interface for movements
+interface InventoryMovement {
+  id?: string;
+  item_id: string;
+  item_type: string;
+  quantity: number;
+  movement_type: string;
+  reason?: string;
+  balance_after?: number;
+  date: Date | string;
+  category?: string;
+  type?: 'in' | 'out';
+  note?: string;
+  item_name?: string;
+}
 
 interface InventoryMovementChartProps {
   movements: InventoryMovement[];
@@ -47,26 +62,37 @@ const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movemen
   };
   
   const chartData = useMemo(() => {
-    // فلترة الحركات على أساس التصنيف المحدد
+    // Filter movements based on selected category
     const categoryFiltered = selectedCategory === 'all' 
       ? movements 
       : movements.filter(m => m.category === selectedCategory);
     
     const startDate = getTimeRangeDate();
     
-    // فلترة الحركات على أساس الفترة الزمنية
+    // Filter movements based on time range
     const timeFiltered = categoryFiltered.filter(m => {
-      // Make sure date is a Date object
-      const moveDate = m.date instanceof Date ? m.date : new Date(m.date as string);
+      // Convert date string to Date object if needed
+      let moveDate: Date;
+      if (typeof m.date === 'string') {
+        moveDate = new Date(m.date);
+      } else {
+        moveDate = m.date;
+      }
       return isAfter(moveDate, startDate);
     });
     
-    // تجميع الحركات على أساس اليوم/الشهر
+    // Aggregate movements by day/month
     const aggregated: Record<string, { in: number; out: number; date: Date }> = {};
     
     timeFiltered.forEach(m => {
-      // Make sure date is a Date object
-      const moveDate = m.date instanceof Date ? m.date : new Date(m.date as string);
+      // Convert date string to Date object if needed
+      let moveDate: Date;
+      if (typeof m.date === 'string') {
+        moveDate = new Date(m.date);
+      } else {
+        moveDate = m.date;
+      }
+      
       const key = getAggregationKey(moveDate);
       
       if (!aggregated[key]) {
@@ -84,7 +110,7 @@ const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({ movemen
       }
     });
     
-    // تحويل البيانات إلى مصفوفة مرتبة
+    // Convert data to array and sort it
     return Object.entries(aggregated)
       .map(([key, value]) => ({
         date: key,

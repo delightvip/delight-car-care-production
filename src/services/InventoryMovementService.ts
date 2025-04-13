@@ -16,7 +16,7 @@ export interface InventoryMovement {
   userId?: string;
   balance_after?: number;
   created_at?: string;
-  date?: string;
+  date?: Date | string;
   user_name?: string;
   category?: string;
   note?: string;
@@ -33,6 +33,18 @@ export interface InventoryMovementQuery {
   type?: string;
 }
 
+// Interface for manual movement creation
+export interface ManualMovementData {
+  type: 'in' | 'out';
+  category: string;
+  item_name: string;
+  item_id: number;
+  quantity: number;
+  unit: string;
+  note: string;
+  date: Date;
+}
+
 // Interface for database types
 export interface RawMaterial {
   id: number;
@@ -41,6 +53,8 @@ export interface RawMaterial {
   quantity: number;
   unit: string;
   unit_cost: number;
+  category?: string;
+  supplier?: string;
 }
 
 export interface SemiFinishedProduct {
@@ -117,21 +131,16 @@ class InventoryMovementService {
   }
 
   // Create a manual inventory movement - used by the UI
-  async createManualInventoryMovement(movement: {
-    itemId: string;
-    itemType: string;
-    quantity: number;
-    movementType: string;
-    reason: string;
-  }): Promise<boolean> {
+  async createManualInventoryMovement(movement: ManualMovementData): Promise<boolean> {
     try {
       // Format the movement to match our interface
+      const movementType = movement.type === 'in' ? 'addition' : 'consumption';
       const formattedMovement: InventoryMovement = {
-        item_id: movement.itemId,
-        item_type: movement.itemType as any,
-        quantity: movement.movementType === 'addition' ? Math.abs(movement.quantity) : -Math.abs(movement.quantity),
-        movement_type: movement.movementType as any,
-        reason: movement.reason
+        item_id: movement.item_id.toString(),
+        item_type: this.mapCategoryToItemType(movement.category),
+        quantity: movement.type === 'in' ? Math.abs(movement.quantity) : -Math.abs(movement.quantity),
+        movement_type: movementType as 'addition' | 'consumption',
+        reason: movement.note
       };
       
       // Log the movement
@@ -141,8 +150,8 @@ class InventoryMovementService {
       if (success) {
         // Use update methods from InventoryService
         const update = await this.updateItemQuantity(
-          movement.itemId,
-          movement.itemType,
+          movement.item_id.toString(),
+          this.mapCategoryToItemType(movement.category),
           formattedMovement.quantity
         );
         
@@ -160,17 +169,35 @@ class InventoryMovementService {
     }
   }
 
+  // Map category to item_type
+  private mapCategoryToItemType(category: string): 'raw_material' | 'semi_finished' | 'finished' | 'packaging' {
+    switch (category) {
+      case 'raw_materials':
+        return 'raw_material';
+      case 'semi_finished':
+        return 'semi_finished';
+      case 'finished_products':
+        return 'finished';
+      case 'packaging':
+        return 'packaging';
+      default:
+        return 'raw_material'; // Default fallback
+    }
+  }
+
   // Helper method to update quantities based on item type
   private async updateItemQuantity(itemId: string, itemType: string, quantity: number): Promise<boolean> {
+    const numericItemId = parseInt(itemId);
+    
     switch (itemType) {
       case 'raw_material':
-        return await this.inventoryService.updateRawMaterial(parseInt(itemId), { quantity: quantity });
+        return await this.inventoryService.updateRawMaterial(numericItemId, { quantity });
       case 'semi_finished':
-        return await this.inventoryService.updateSemiFinishedProduct(parseInt(itemId), { quantity: quantity });
+        return await this.inventoryService.updateSemiFinishedProduct(numericItemId, { quantity });
       case 'finished':
-        return await this.inventoryService.updateFinishedProduct(parseInt(itemId), { quantity: quantity });
+        return await this.inventoryService.updateFinishedProduct(numericItemId, { quantity });
       case 'packaging':
-        return await this.inventoryService.updatePackagingMaterial(parseInt(itemId), { quantity: quantity });
+        return await this.inventoryService.updatePackagingMaterial(numericItemId, { quantity });
       default:
         return false;
     }
@@ -216,20 +243,25 @@ class InventoryMovementService {
       }
 
       // Transform to match expected format by components
-      return (data || []).map(item => ({
-        id: item.id,
-        item_id: item.item_id,
-        item_type: item.item_type,
-        item_name: item.item_name || 'Unknown item',
-        quantity: item.quantity,
-        movement_type: item.movement_type,
-        reason: item.reason,
-        balance_after: item.balance_after,
-        date: new Date(item.created_at),
-        category: item.item_type,
-        type: item.quantity > 0 ? 'in' : 'out',
-        note: item.reason || ''
-      }));
+      const movements = data.map(item => {
+        const movement: InventoryMovement = {
+          id: item.id,
+          item_id: item.item_id,
+          item_type: item.item_type as 'raw_material' | 'semi_finished' | 'finished' | 'packaging',
+          quantity: item.quantity,
+          movement_type: item.movement_type as 'addition' | 'consumption' | 'transfer' | 'adjustment',
+          reason: item.reason,
+          balance_after: item.balance_after,
+          date: new Date(item.created_at),
+          category: item.item_type,
+          type: item.quantity > 0 ? 'in' : 'out',
+          note: item.reason || '',
+          item_name: 'Unknown item' // Default value as item_name isn't in the database
+        };
+        return movement;
+      });
+
+      return movements;
     } catch (error) {
       console.error('Error fetching movements:', error);
       toast.error('فشل في تحميل حركات المخزون');

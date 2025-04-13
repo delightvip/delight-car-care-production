@@ -2,7 +2,22 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowDownIcon, ArrowUpIcon, ListRestart, BarChart3 } from 'lucide-react';
-import { InventoryMovement } from '@/services/InventoryMovementService';
+
+// Define the interface for movements
+interface InventoryMovement {
+  id?: string;
+  item_id: string;
+  item_type: string;
+  quantity: number;
+  movement_type: string;
+  reason?: string;
+  balance_after?: number;
+  date: Date | string;
+  category?: string;
+  type?: 'in' | 'out';
+  note?: string;
+  item_name?: string;
+}
 
 interface StatCardProps {
   title: string;
