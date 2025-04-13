@@ -2,7 +2,6 @@
 "use client"
 
 import * as React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
 import { type ThemeProviderProps } from "next-themes/dist/types"
 import { useLocalStorage } from "@/hooks/use-local-storage"
@@ -14,14 +13,14 @@ interface ThemeProviderContextProps {
   setTheme: (theme: Theme) => void
 }
 
-const ThemeProviderContext = createContext<ThemeProviderContextProps | undefined>(undefined)
+const ThemeProviderContext = React.createContext<ThemeProviderContextProps | undefined>(undefined)
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const [storedTheme, setStoredTheme] = useLocalStorage<Theme>("app-theme", "light")
-  const [theme, setThemeState] = useState<Theme>(storedTheme)
+  const [theme, setThemeState] = React.useState<Theme>(storedTheme)
   
   // Apply theme to document when component mounts or theme changes
-  useEffect(() => {
+  React.useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
     
@@ -51,7 +50,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 }
 
 export const useTheme = () => {
-  const context = useContext(ThemeProviderContext)
+  const context = React.useContext(ThemeProviderContext)
   
   if (!context) {
     throw new Error("useTheme must be used within a ThemeProvider")
