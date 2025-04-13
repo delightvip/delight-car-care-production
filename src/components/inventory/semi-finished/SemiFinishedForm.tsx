@@ -51,6 +51,7 @@ interface Ingredient {
   code: string;
   name: string;
   percentage: number;
+  unit_cost: number;
 }
 
 interface SemiFinishedFormProps {
@@ -73,6 +74,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
   const [selectedRawMaterial, setSelectedRawMaterial] = useState<string>('');
   const [percentage, setPercentage] = useState<number>(0);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [calculatedCost, setCalculatedCost] = useState<number>(0);
   
   // Fetch raw materials
   const { data: rawMaterials = [], isLoading: isRawMaterialsLoading } = useQuery({
@@ -80,7 +82,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('raw_materials')
-        .select('id, name, code')
+        .select('id, name, code, unit_cost')
         .order('name', { ascending: true });
       
       if (error) throw error;
@@ -110,7 +112,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           .select(`
             id,
             percentage,
-            raw_material:raw_material_id(id, code, name)
+            raw_material:raw_material_id(id, code, name, unit_cost)
           `)
           .eq('semi_finished_id', initialData.id);
           
@@ -124,15 +126,31 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
           id: ing.raw_material?.id,
           code: ing.raw_material?.code,
           name: ing.raw_material?.name,
-          percentage: ing.percentage
+          percentage: ing.percentage,
+          unit_cost: ing.raw_material?.unit_cost || 0
         })) || [];
         
         setIngredients(formattedIngredients);
+        calculateTotalCost(formattedIngredients);
       };
       
       fetchIngredients();
     }
   }, [isEditing, initialData]);
+  
+  // حساب التكلفة الإجمالية للمنتج النصف مصنع بناءً على المكونات ونسبها
+  const calculateTotalCost = (ingredientsList: Ingredient[]) => {
+    let totalCost = 0;
+    
+    ingredientsList.forEach(ingredient => {
+      // حساب تكلفة كل مكون بناءً على نسبته المئوية
+      const ingredientCost = ingredient.unit_cost * (ingredient.percentage / 100);
+      totalCost += ingredientCost;
+    });
+    
+    setCalculatedCost(totalCost);
+    form.setValue('unit_cost', totalCost);
+  };
   
   const handleAddIngredient = () => {
     if (!selectedRawMaterial) {
@@ -154,22 +172,28 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
     const rawMaterial = rawMaterials.find(m => m.id === parseInt(selectedRawMaterial));
     if (!rawMaterial) return;
     
-    setIngredients([
+    const newIngredients = [
       ...ingredients,
       {
         id: rawMaterial.id,
         code: rawMaterial.code,
         name: rawMaterial.name,
-        percentage: percentage
+        percentage: percentage,
+        unit_cost: rawMaterial.unit_cost
       }
-    ]);
+    ];
+    
+    setIngredients(newIngredients);
+    calculateTotalCost(newIngredients);
     
     setSelectedRawMaterial('');
     setPercentage(0);
   };
   
   const handleRemoveIngredient = (id: number) => {
-    setIngredients(ingredients.filter(ing => ing.id !== id));
+    const updatedIngredients = ingredients.filter(ing => ing.id !== id);
+    setIngredients(updatedIngredients);
+    calculateTotalCost(updatedIngredients);
   };
   
   const validateTotalPercentage = (): boolean => {
@@ -192,7 +216,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             unit: values.unit,
             quantity: values.quantity,
             min_stock: values.min_stock,
-            unit_cost: values.unit_cost,
+            unit_cost: calculatedCost, // استخدام التكلفة المحسوبة
             sales_price: values.sales_price
           })
           .eq('id', initialData.id)
@@ -246,7 +270,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             unit: values.unit,
             quantity: values.quantity,
             min_stock: values.min_stock,
-            unit_cost: values.unit_cost,
+            unit_cost: calculatedCost, // استخدام التكلفة المحسوبة
             sales_price: values.sales_price
           })
           .select();
@@ -366,10 +390,21 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                 name="unit_cost"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>تكلفة الوحدة</FormLabel>
+                    <FormLabel>تكلفة الوحدة (محسوبة)</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" step="0.01" {...field} />
+                      <Input 
+                        type="number" 
+                        min="0" 
+                        step="0.01" 
+                        {...field} 
+                        value={calculatedCost}
+                        disabled
+                        className="bg-muted"
+                      />
                     </FormControl>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      * يتم حساب هذه القيمة تلقائياً بناءً على المكونات ونسبها
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -407,7 +442,12 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
             <Separator className="my-4" />
             
             <div className="space-y-4">
-              <h3 className="text-md font-medium">مكونات المنتج (المواد الأولية)</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-md font-medium">مكونات المنتج (المواد الأولية)</h3>
+                <div className="text-sm text-muted-foreground">
+                  مجموع النسب: {ingredients.reduce((sum, ing) => sum + ing.percentage, 0)}%
+                </div>
+              </div>
               
               <div className="flex space-x-4 rtl:space-x-reverse">
                 <div className="flex-1">
@@ -422,7 +462,7 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                     <SelectContent>
                       {rawMaterials.map(material => (
                         <SelectItem key={material.id} value={String(material.id)}>
-                          {material.name}
+                          {material.name} - تكلفة: {material.unit_cost}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -450,15 +490,17 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
               
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                 {ingredients.length > 0 ? (
-                  <>
-                    <div className="text-sm font-medium rtl:text-right ltr:text-left">
-                      إجمالي النسب: {ingredients.reduce((sum, ing) => sum + ing.percentage, 0)}%
-                    </div>
-                    {ingredients.map(ing => (
+                  ingredients.map(ing => {
+                    const contributionCost = ing.unit_cost * (ing.percentage / 100);
+                    
+                    return (
                       <div key={ing.id} className="flex justify-between items-center p-2 border rounded-md">
                         <div>
                           <div className="font-medium">{ing.name}</div>
-                          <div className="text-sm text-muted-foreground">النسبة: {ing.percentage}%</div>
+                          <div className="text-sm text-muted-foreground">
+                            النسبة: {ing.percentage}% | 
+                            التكلفة: {ing.unit_cost} × {ing.percentage}% = {contributionCost.toFixed(2)}
+                          </div>
                         </div>
                         <Button
                           variant="ghost"
@@ -468,13 +510,20 @@ const SemiFinishedForm: React.FC<SemiFinishedFormProps> = ({
                           <X size={16} />
                         </Button>
                       </div>
-                    ))}
-                  </>
+                    );
+                  })
                 ) : (
                   <div className="text-muted-foreground text-center py-2">
                     لم يتم إضافة مكونات بعد
                   </div>
                 )}
+              </div>
+            </div>
+            
+            <div className="bg-muted p-4 rounded-md mt-4">
+              <div className="flex justify-between items-center">
+                <div className="font-medium">التكلفة الإجمالية للوحدة:</div>
+                <div className="font-bold text-lg">{calculatedCost.toFixed(2)}</div>
               </div>
             </div>
             

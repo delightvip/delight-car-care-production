@@ -76,6 +76,9 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
   const [selectedPackaging, setSelectedPackaging] = useState<string>('');
   const [packagingQuantity, setPackagingQuantity] = useState<number>(1);
   const [packaging, setPackaging] = useState<PackagingItem[]>([]);
+  const [semiFinishedUnitCost, setSemiFinishedUnitCost] = useState<number>(0);
+  const [packagingCost, setPackagingCost] = useState<number>(0);
+  const [totalCost, setTotalCost] = useState<number>(0);
   
   // Fetch semi-finished products
   const { data: semiFinishedProducts = [], isLoading: isSemiFinishedLoading } = useQuery({
@@ -83,7 +86,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('semi_finished_products')
-        .select('id, name, code')
+        .select('id, name, code, unit_cost')
         .order('name', { ascending: true });
       
       if (error) throw error;
@@ -97,7 +100,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('packaging_materials')
-        .select('id, name, code')
+        .select('id, name, code, unit_cost')
         .order('name', { ascending: true });
       
       if (error) throw error;
@@ -129,7 +132,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
           .select(`
             id,
             quantity,
-            packaging_material:packaging_material_id(id, name, code)
+            packaging_material:packaging_material_id(id, name, code, unit_cost)
           `)
           .eq('finished_product_id', initialData.id);
           
@@ -147,11 +150,61 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
         })) || [];
         
         setPackaging(formattedPackaging);
+        
+        // احتساب تكلفة مواد التعبئة
+        calculatePackagingCost(formattedPackaging);
       };
       
       fetchPackaging();
+      
+      // جلب تكلفة المنتج النصف مصنع
+      const semiFinished = semiFinishedProducts.find(p => p.id === initialData.semi_finished_id);
+      if (semiFinished) {
+        setSemiFinishedUnitCost(semiFinished.unit_cost);
+        calculateTotalCost(semiFinished.unit_cost, initialData.semi_finished_quantity, packagingCost);
+      }
     }
-  }, [isEditing, initialData]);
+  }, [isEditing, initialData, semiFinishedProducts]);
+  
+  // تحديث التكلفة عند تغيير المنتج النصف مصنع
+  useEffect(() => {
+    const semiFinishedId = form.watch('semi_finished_id');
+    const semiFinishedQty = form.watch('semi_finished_quantity');
+    
+    if (semiFinishedId) {
+      const semiFinished = semiFinishedProducts.find(p => p.id === semiFinishedId);
+      if (semiFinished) {
+        setSemiFinishedUnitCost(semiFinished.unit_cost);
+        calculateTotalCost(semiFinished.unit_cost, semiFinishedQty, packagingCost);
+      }
+    }
+  }, [form.watch('semi_finished_id'), form.watch('semi_finished_quantity'), semiFinishedProducts, packagingCost]);
+  
+  // تحديث التكلفة الإجمالية
+  const calculateTotalCost = (unitCost: number, quantity: number, packagingTotal: number) => {
+    const semiFinishedTotal = unitCost * quantity;
+    const newTotalCost = semiFinishedTotal + packagingTotal;
+    setTotalCost(newTotalCost);
+    form.setValue('unit_cost', newTotalCost);
+  };
+  
+  // حساب تكلفة مواد التعبئة
+  const calculatePackagingCost = (packagingItems: PackagingItem[]) => {
+    let total = 0;
+    
+    packagingItems.forEach((item) => {
+      const material = packagingMaterials.find(m => m.id === item.id);
+      if (material) {
+        total += material.unit_cost * item.quantity;
+      }
+    });
+    
+    setPackagingCost(total);
+    
+    // تحديث التكلفة الإجمالية بعد تحديث تكلفة مواد التعبئة
+    const semiFinishedQty = form.watch('semi_finished_quantity');
+    calculateTotalCost(semiFinishedUnitCost, semiFinishedQty, total);
+  };
   
   const handleAddPackaging = () => {
     if (!selectedPackaging) {
@@ -173,7 +226,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
     const packageMaterial = packagingMaterials.find(m => m.id === parseInt(selectedPackaging));
     if (!packageMaterial) return;
     
-    setPackaging([
+    const newPackaging = [
       ...packaging,
       {
         id: packageMaterial.id,
@@ -181,14 +234,19 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
         name: packageMaterial.name,
         quantity: packagingQuantity
       }
-    ]);
+    ];
+    
+    setPackaging(newPackaging);
+    calculatePackagingCost(newPackaging);
     
     setSelectedPackaging('');
     setPackagingQuantity(1);
   };
   
   const handleRemovePackaging = (id: number) => {
-    setPackaging(packaging.filter(pkg => pkg.id !== id));
+    const updatedPackaging = packaging.filter(pkg => pkg.id !== id);
+    setPackaging(updatedPackaging);
+    calculatePackagingCost(updatedPackaging);
   };
   
   const mutation = useMutation({
@@ -202,7 +260,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
             unit: values.unit,
             quantity: values.quantity,
             min_stock: values.min_stock,
-            unit_cost: values.unit_cost,
+            unit_cost: totalCost, // استخدام التكلفة المحسوبة
             sales_price: values.sales_price,
             semi_finished_id: values.semi_finished_id,
             semi_finished_quantity: values.semi_finished_quantity
@@ -258,7 +316,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
             unit: values.unit,
             quantity: values.quantity,
             min_stock: values.min_stock,
-            unit_cost: values.unit_cost,
+            unit_cost: totalCost, // استخدام التكلفة المحسوبة
             sales_price: values.sales_price,
             semi_finished_id: values.semi_finished_id,
             semi_finished_quantity: values.semi_finished_quantity
@@ -375,10 +433,21 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
                 name="unit_cost"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>تكلفة الوحدة</FormLabel>
+                    <FormLabel>تكلفة الوحدة (محسوبة)</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" step="0.01" {...field} />
+                      <Input 
+                        type="number" 
+                        min="0" 
+                        step="0.01" 
+                        {...field} 
+                        value={totalCost}
+                        disabled
+                        className="bg-muted"
+                      />
                     </FormControl>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      * يتم حساب هذه القيمة تلقائياً بناءً على المكونات
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -437,7 +506,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
                         <SelectContent>
                           {semiFinishedProducts.map(product => (
                             <SelectItem key={product.id} value={String(product.id)}>
-                              {product.name}
+                              {product.name} - تكلفة: {product.unit_cost}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -456,6 +525,9 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
                       <FormControl>
                         <Input type="number" min="0.1" step="0.01" {...field} />
                       </FormControl>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        التكلفة: {(semiFinishedUnitCost * field.value).toFixed(2)}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -466,7 +538,10 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
             <Separator className="my-4" />
             
             <div className="space-y-4">
-              <h3 className="text-md font-medium">مواد التعبئة</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-md font-medium">مواد التعبئة</h3>
+                <div className="text-sm text-muted-foreground">إجمالي تكلفة التعبئة: {packagingCost.toFixed(2)}</div>
+              </div>
               
               <div className="flex space-x-4 rtl:space-x-reverse">
                 <div className="flex-1">
@@ -481,7 +556,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
                     <SelectContent>
                       {packagingMaterials.map(material => (
                         <SelectItem key={material.id} value={String(material.id)}>
-                          {material.name}
+                          {material.name} - تكلفة: {material.unit_cost}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -508,26 +583,44 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
               
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                 {packaging.length > 0 ? (
-                  packaging.map(pkg => (
-                    <div key={pkg.id} className="flex justify-between items-center p-2 border rounded-md">
-                      <div>
-                        <div className="font-medium">{pkg.name}</div>
-                        <div className="text-sm text-muted-foreground">الكمية: {pkg.quantity}</div>
+                  packaging.map(pkg => {
+                    const material = packagingMaterials.find(m => m.id === pkg.id);
+                    const cost = material ? material.unit_cost * pkg.quantity : 0;
+                    
+                    return (
+                      <div key={pkg.id} className="flex justify-between items-center p-2 border rounded-md">
+                        <div>
+                          <div className="font-medium">{pkg.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            الكمية: {pkg.quantity} | 
+                            التكلفة: {cost.toFixed(2)}
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleRemovePackaging(pkg.id)}
+                        >
+                          <X size={16} />
+                        </Button>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => handleRemovePackaging(pkg.id)}
-                      >
-                        <X size={16} />
-                      </Button>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-muted-foreground text-center py-2">
                     لم يتم إضافة مواد تعبئة بعد
                   </div>
                 )}
+              </div>
+            </div>
+            
+            <div className="bg-muted p-4 rounded-md mt-4">
+              <div className="flex justify-between items-center">
+                <div className="font-medium">التكلفة الإجمالية:</div>
+                <div className="font-bold text-lg">{totalCost.toFixed(2)}</div>
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                تكلفة المنتج النصف مصنع: {(semiFinishedUnitCost * form.watch('semi_finished_quantity')).toFixed(2)} + تكلفة مواد التعبئة: {packagingCost.toFixed(2)}
               </div>
             </div>
             
