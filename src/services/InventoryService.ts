@@ -981,3 +981,63 @@ class InventoryService {
         console.error('Error fetching semi-finished product:', semiFinishedError);
         toast.error('حدث خطأ أثناء جلب بيانات المنتج النصف مصنع');
         return false;
+      }
+      
+      // التحقق من توفر المنتج النصف مصنع
+      if (semiFinishedData.quantity < semiFinishedQuantity) {
+        toast.error('كمية المنتج النصف مصنع غير كافية');
+        return false;
+      }
+      
+      // التحقق من توفر مواد التعبئة
+      const packagingAvailability = await this.checkPackagingAvailability(packagingMaterials);
+      if (!packagingAvailability) {
+        toast.error('بعض مواد التعبئة غير متوفرة بالكمية المطلوبة');
+        return false;
+      }
+      
+      // استهلاك المنتج النصف مصنع
+      const removeSemiFinishedResult = await this.removeSemiFinishedFromInventory(
+        semiFinishedCode, 
+        semiFinishedQuantity
+      );
+      
+      if (!removeSemiFinishedResult) {
+        toast.error('فشل استهلاك المنتج النصف مصنع');
+        return false;
+      }
+      
+      // استهلاك مواد التعبئة
+      const consumePackagingResult = await this.consumePackagingMaterials(packagingMaterials);
+      
+      if (!consumePackagingResult) {
+        // إعادة المنتج النصف مصنع في حالة الفشل
+        await this.addSemiFinishedToInventory(semiFinishedCode, semiFinishedQuantity);
+        toast.error('فشل استهلاك مواد التعبئة');
+        return false;
+      }
+      
+      // إضافة المنتج النهائي للمخزون
+      const addFinishedResult = await this.addFinishedToInventory(
+        finishedProductCode, 
+        quantity, 
+        semiFinishedData.unit_cost * semiFinishedQuantity
+      );
+      
+      if (!addFinishedResult) {
+        // التراجع عن الخطوات السابقة
+        await this.addSemiFinishedToInventory(semiFinishedCode, semiFinishedQuantity);
+        await this.returnPackagingMaterials(packagingMaterials);
+        toast.error('فشل إضافة المنتج النهائي للمخزون');
+        return false;
+      }
+      
+      toast.success('تم إنتاج المنتج النهائي بنجاح');
+      return true;
+    } catch (error) {
+      console.error('Error in producing finished product:', error);
+      toast.error('حدث خطأ أثناء إنتاج المنتج النهائي');
+      return false;
+    }
+  }
+}  // Closing the InventoryService class
