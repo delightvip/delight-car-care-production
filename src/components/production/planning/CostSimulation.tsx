@@ -364,7 +364,7 @@ const CostSimulation = () => {
       
       highImpactFactors.forEach(factor => {
         const impact = change * (factor.impactLevel === 'high' ? 1 : factor.impactLevel === 'medium' ? 0.6 : 0.3);
-        const totalImpact = impact * (factor.category === 'raw-materials' ? 0.5 : factor.category === 'packaging' ? 0.2 : 0.3);
+        const totalImpact = impact * (factor.category === 'raw-materials' ? 0.5 : factor.category === 'packaging' ? 0.2 : factor.category === 'operations' ? 0.3);
         entry[factor.name] = totalImpact;
       });
       
@@ -378,8 +378,24 @@ const CostSimulation = () => {
     return value > 0 ? "#ef4444" : "#10b981";
   };
 
-  const formatTooltipValue = (value: number | string) => {
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  const getFactorCategory = (categoryId: string) => {
+    const category = factorCategories.find(cat => cat.id === categoryId);
+    if (category) {
+      return (
+        <div className="flex items-center">
+          {category.icon}
+          <span className="ml-1">{category.name}</span>
+        </div>
+      );
+    }
+    return categoryId;
+  };
+
+  const formatTooltipValue = (value: any) => {
+    const numValue = Array.isArray(value) 
+      ? (typeof value[0] === 'string' ? parseFloat(value[0]) : value[0])
+      : (typeof value === 'string' ? parseFloat(value) : value);
+    
     if (isNaN(numValue)) return value;
     return `${numValue > 0 ? '+' : ''}${numValue.toFixed(1)}%`;
   };
@@ -830,19 +846,4 @@ const CostSimulation = () => {
                         key={factor.id}
                         type="monotone"
                         dataKey={factor.name}
-                        stroke={['#6366F1', '#F59E0B', '#10B981'][index % 3]}
-                        activeDot={{ r: 8 }}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-export default CostSimulation;
+                        stroke={['
