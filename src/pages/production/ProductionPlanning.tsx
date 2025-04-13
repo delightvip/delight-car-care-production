@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import PageTransition from '@/components/ui/PageTransition';
-import { AlertTriangle, Calculator, ChartBar, DatabaseIcon, Factory, InfoIcon, LineChart, Package2, Truck } from 'lucide-react';
+import { AlertTriangle, Calculator, ChartBar, Factory, LineChart, Package2, Truck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import ProductionSimulation from '@/components/production/planning/ProductionSimulation';
 import PackagingSimulation from '@/components/production/planning/PackagingSimulation';

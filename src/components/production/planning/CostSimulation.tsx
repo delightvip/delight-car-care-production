@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import LoadingIndicator from '@/components/ui/LoadingIndicator';
-import { CartesianGrid, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, BarChart, Bar } from 'recharts';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, BarChart, Bar } from 'recharts';
 import {
   Select,
   SelectContent,
@@ -55,8 +54,13 @@ interface CostScenario {
   };
 }
 
+interface FactorCategory {
+  id: string;
+  name: string;
+  icon: React.ReactNode;
+}
+
 const CostSimulation = () => {
-  // البيانات المبدئية لعوامل التكلفة
   const [costFactors, setCostFactors] = useState<CostFactor[]>([
     {
       id: 'raw-material-1',
@@ -119,8 +123,7 @@ const CostSimulation = () => {
       maxValue: 700
     }
   ]);
-  
-  // بيانات سيناريوهات التكلفة
+
   const [costScenarios, setCostScenarios] = useState<CostScenario[]>([
     {
       id: 'scenario-1',
@@ -153,7 +156,7 @@ const CostSimulation = () => {
       }
     }
   ]);
-  
+
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [selectedFactors, setSelectedFactors] = useState<{ [id: string]: boolean }>({});
   const [factorChanges, setFactorChanges] = useState<{ [id: string]: number }>({});
@@ -161,15 +164,13 @@ const CostSimulation = () => {
   const [newScenarioName, setNewScenarioName] = useState<string>('');
   const [newScenarioDescription, setNewScenarioDescription] = useState<string>('');
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
-  
-  // أنواع عوامل التكلفة
-  const factorCategories = [
+
+  const factorCategories: FactorCategory[] = [
     { id: 'raw-materials', name: 'المواد الخام', icon: <Tag className="h-4 w-4 mr-2" /> },
     { id: 'packaging', name: 'التعبئة', icon: <PlusCircle className="h-4 w-4 mr-2" /> },
     { id: 'operations', name: 'العمليات', icon: <Landmark className="h-4 w-4 mr-2" /> }
   ];
 
-  // للحصول على البيانات من API
   const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
     queryKey: ['raw-materials-for-costs'],
     queryFn: async () => {
@@ -182,8 +183,7 @@ const CostSimulation = () => {
       return data || [];
     }
   });
-  
-  // إضافة المواد الخام الفعلية للمحاكاة
+
   useEffect(() => {
     if (rawMaterials && rawMaterials.length > 0) {
       const rawMaterialFactors: CostFactor[] = rawMaterials.slice(0, 5).map((material, index) => ({
@@ -197,16 +197,13 @@ const CostSimulation = () => {
         maxValue: material.unit_cost * 1.3
       }));
       
-      // دمج العوامل الموجودة مع المواد الخام الجديدة
       setCostFactors(prev => {
-        // احتفظ بالعوامل التي ليست مواد خام
         const nonRawFactors = prev.filter(factor => factor.category !== 'raw-materials' || factor.id.startsWith('raw-material-'));
         return [...nonRawFactors, ...rawMaterialFactors];
       });
     }
   }, [rawMaterials]);
-  
-  // إعداد عوامل محددة ونسب التغيير عند اختيار سيناريو
+
   useEffect(() => {
     if (selectedScenario) {
       const scenario = costScenarios.find(s => s.id === selectedScenario);
@@ -226,8 +223,7 @@ const CostSimulation = () => {
       resetScenarioForm();
     }
   }, [selectedScenario]);
-  
-  // إعادة تعيين نموذج السيناريو
+
   const resetScenarioForm = () => {
     setSelectedFactors({});
     setFactorChanges({});
@@ -235,42 +231,35 @@ const CostSimulation = () => {
     setNewScenarioDescription('');
     setIsEditMode(false);
   };
-  
-  // تبديل تحديد عامل
+
   const toggleFactor = (factorId: string) => {
     setSelectedFactors(prev => {
       const newSelectedFactors = { ...prev };
       newSelectedFactors[factorId] = !prev[factorId];
       
-      // إذا تم إلغاء تحديد العامل، احذف نسبة التغيير المرتبطة به
       if (!newSelectedFactors[factorId]) {
         const newFactorChanges = { ...factorChanges };
         delete newFactorChanges[factorId];
         setFactorChanges(newFactorChanges);
       } else {
-        // إذا تم تحديد العامل، ضع قيمة تغيير افتراضية
         setFactorChanges(prev => ({ ...prev, [factorId]: 0 }));
       }
       
       return newSelectedFactors;
     });
   };
-  
-  // تحديث نسبة التغيير لعامل
+
   const updateFactorChange = (factorId: string, value: number) => {
     setFactorChanges(prev => ({ ...prev, [factorId]: value }));
   };
-  
-  // حساب تأثير تغيير عوامل التكلفة
+
   const calculateImpact = () => {
-    // العوامل المحددة مع نسب التغيير
     const selectedFactorsWithChanges = costFactors.filter(factor => selectedFactors[factor.id])
       .map(factor => ({
         ...factor,
         changePercent: factorChanges[factor.id] || 0
       }));
     
-    // حساب التأثير على كل فئة
     let productionImpact = 0;
     let packagingImpact = 0;
     let operationsImpact = 0;
@@ -287,7 +276,6 @@ const CostSimulation = () => {
       }
     });
     
-    // حساب التأثير الإجمالي (متوسط مرجح)
     const totalImpact = (productionImpact * 0.5 + packagingImpact * 0.2 + operationsImpact * 0.3);
     
     return {
@@ -297,8 +285,7 @@ const CostSimulation = () => {
       total: totalImpact
     };
   };
-  
-  // حفظ السيناريو
+
   const saveScenario = () => {
     if (!newScenarioName) {
       toast.error('يرجى إدخال اسم للسيناريو');
@@ -313,7 +300,6 @@ const CostSimulation = () => {
     const impact = calculateImpact();
     
     if (isEditMode && selectedScenario) {
-      // تحديث سيناريو موجود
       setCostScenarios(prev => prev.map(scenario => {
         if (scenario.id === selectedScenario) {
           return {
@@ -329,7 +315,6 @@ const CostSimulation = () => {
       
       toast.success('تم تحديث السيناريو بنجاح');
     } else {
-      // إنشاء سيناريو جديد
       const newScenario: CostScenario = {
         id: `scenario-${Date.now()}`,
         name: newScenarioName,
@@ -342,12 +327,10 @@ const CostSimulation = () => {
       toast.success('تم حفظ السيناريو الجديد بنجاح');
     }
     
-    // إعادة تعيين النموذج
     resetScenarioForm();
     setSelectedScenario(null);
   };
-  
-  // حذف سيناريو
+
   const deleteScenario = (scenarioId: string) => {
     setCostScenarios(prev => prev.filter(scenario => scenario.id !== scenarioId));
     
@@ -358,8 +341,7 @@ const CostSimulation = () => {
     
     toast.success('تم حذف السيناريو بنجاح');
   };
-  
-  // بيانات المخطط البياني لمقارنة السيناريوهات
+
   const getComparisonChartData = () => {
     return costScenarios.map(scenario => ({
       name: scenario.name,
@@ -369,10 +351,8 @@ const CostSimulation = () => {
       إجمالي: scenario.resultingChanges.total
     }));
   };
-  
-  // بيانات المخطط البياني لتحليل حساسية العوامل
+
   const getSensitivityChartData = () => {
-    // عرض التغييرات في العامل الذي لديه أكبر تأثير على التكلفة الإجمالية
     const highImpactFactors = costFactors.filter(factor => factor.impactLevel === 'high').slice(0, 3);
     
     if (highImpactFactors.length === 0) return [];
@@ -383,7 +363,6 @@ const CostSimulation = () => {
       let entry: any = { change: `${change}%` };
       
       highImpactFactors.forEach(factor => {
-        // حساب تأثير التغيير على هذا العامل فقط
         const impact = change * (factor.impactLevel === 'high' ? 1 : factor.impactLevel === 'medium' ? 0.6 : 0.3);
         const totalImpact = impact * (factor.category === 'raw-materials' ? 0.5 : factor.category === 'packaging' ? 0.2 : 0.3);
         entry[factor.name] = totalImpact;
@@ -394,16 +373,20 @@ const CostSimulation = () => {
     
     return data;
   };
-  
-  // تحديد لون الأعمدة في المخطط البياني
-  const getBarColor = (entry: any) => {
-    return entry > 0 ? "#ef4444" : "#10b981";
+
+  const getBarColor = (value: number) => {
+    return value > 0 ? "#ef4444" : "#10b981";
   };
-  
+
+  const formatTooltipValue = (value: number | string) => {
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return value;
+    return `${numValue > 0 ? '+' : ''}${numValue.toFixed(1)}%`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* محاكاة عوامل التكلفة */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -483,7 +466,7 @@ const CostSimulation = () => {
                               <div className="font-medium">{factor.name}</div>
                             </TableCell>
                             <TableCell>
-                              {factorCategories.find(c => c.category === factor.category)?.name || factor.category}
+                              {getFactorCategory(factor.category)}
                             </TableCell>
                             <TableCell>
                               {factor.currentValue} {factor.unit}
@@ -727,7 +710,6 @@ const CostSimulation = () => {
           </CardContent>
         </Card>
         
-        {/* السيناريوهات المحفوظة */}
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -786,40 +768,36 @@ const CostSimulation = () => {
         </Card>
       </div>
       
-      {/* تحليلات التكلفة */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">مقارنة السيناريوهات</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
-              {costScenarios.length < 2 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  قم بإنشاء سيناريوهين على الأقل للمقارنة
-                </div>
-              ) : (
+            {costScenarios.length < 2 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                يرجى إنشاء سيناريوهين على الأقل للمقارنة
+              </div>
+            ) : (
+              <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={getComparisonChartData()}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip formatter={(value) => [`${value}%`, 'نسبة التغيير']} />
+                    <Tooltip formatter={(value) => formatTooltipValue(value)} />
                     <Legend />
-                    <Bar 
-                      dataKey="إجمالي"
-                      fill={(entry) => entry > 0 ? "#ef4444" : "#10b981"}
-                    />
                     <Bar dataKey="إنتاج" fill="#6366F1" />
                     <Bar dataKey="تعبئة" fill="#F59E0B" />
-                    <Bar dataKey="عمليات" fill="#8B5CF6" />
+                    <Bar dataKey="عمليات" fill="#10B981" />
+                    <Bar dataKey="إجمالي" fill="#8B5CF6" />
                   </BarChart>
                 </ResponsiveContainer>
-              )}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
         
@@ -828,29 +806,38 @@ const CostSimulation = () => {
             <CardTitle className="text-lg">تحليل حساسية العوامل</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={getSensitivityChartData()}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="change" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`${value.toFixed(1)}%`, 'تأثير التكلفة']} />
-                  <Legend />
-                  {costFactors.filter(factor => factor.impactLevel === 'high').slice(0, 3).map((factor, index) => (
-                    <Line
-                      key={factor.id}
-                      type="monotone"
-                      dataKey={factor.name}
-                      stroke={['#6366F1', '#8B5CF6', '#EC4899'][index % 3]}
-                      activeDot={{ r: 8 }}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {costFactors.filter(f => f.impactLevel === 'high').length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                لا توجد عوامل ذات تأثير مرتفع للتحليل
+              </div>
+            ) : (
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={getSensitivityChartData()}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="change" />
+                    <YAxis />
+                    <Tooltip formatter={(value: any) => [
+                      formatTooltipValue(value), 
+                      'تأثير على التكلفة الإجمالية'
+                    ]} />
+                    <Legend />
+                    {costFactors.filter(factor => factor.impactLevel === 'high').slice(0, 3).map((factor, index) => (
+                      <Line
+                        key={factor.id}
+                        type="monotone"
+                        dataKey={factor.name}
+                        stroke={['#6366F1', '#F59E0B', '#10B981'][index % 3]}
+                        activeDot={{ r: 8 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

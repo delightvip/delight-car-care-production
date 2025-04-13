@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -79,59 +78,66 @@ const MaterialsForecasting = () => {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'materialName', direction: 'asc' });
   const [autoApprovedMaterials, setAutoApprovedMaterials] = useState<string[]>([]);
   
-  // للحصول على بيانات المواد الخام
   const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
     queryKey: ['raw-materials-for-forecast'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('raw_materials')
-        .select('id, code, name, quantity, unit_cost, unit, reorder_point')
-        .order('name');
-      
-      if (error) throw error;
-      
-      return (data || []).map(material => ({
-        id: material.id.toString(),
-        code: material.code,
-        name: material.name,
-        unit: material.unit,
-        quantity: material.quantity || 0,
-        unitCost: material.unit_cost || 0,
-        category: 'raw-material',
-        isLowStock: (material.quantity || 0) <= (material.reorder_point || 0),
-        reorderLevel: material.reorder_point || 0,
-        optimalOrderQuantity: Math.ceil((material.reorder_point || 0) * 1.5)
-      }));
+      try {
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('id, code, name, quantity, unit_cost, unit, min_stock')
+          .order('name');
+        
+        if (error) throw error;
+        
+        return (data || []).map(material => ({
+          id: material.id.toString(),
+          code: material.code,
+          name: material.name,
+          unit: material.unit,
+          quantity: material.quantity || 0,
+          unitCost: material.unit_cost || 0,
+          category: 'raw-material',
+          isLowStock: (material.quantity || 0) <= (material.min_stock || 0),
+          reorderLevel: material.min_stock || 0,
+          optimalOrderQuantity: Math.ceil((material.min_stock || 0) * 1.5)
+        }));
+      } catch (err) {
+        console.error("Error fetching raw materials:", err);
+        return [];
+      }
     }
   });
   
-  // للحصول على بيانات مواد التعبئة
   const { data: packagingMaterials, isLoading: isLoadingPackaging } = useQuery({
     queryKey: ['packaging-materials-for-forecast'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('packaging_materials')
-        .select('id, code, name, quantity, unit_cost, unit, reorder_point')
-        .order('name');
-      
-      if (error) throw error;
-      
-      return (data || []).map(material => ({
-        id: material.id.toString(),
-        code: material.code,
-        name: material.name,
-        unit: material.unit,
-        quantity: material.quantity || 0,
-        unitCost: material.unit_cost || 0,
-        category: 'packaging',
-        isLowStock: (material.quantity || 0) <= (material.reorder_point || 0),
-        reorderLevel: material.reorder_point || 0,
-        optimalOrderQuantity: Math.ceil((material.reorder_point || 0) * 1.5)
-      }));
+      try {
+        const { data, error } = await supabase
+          .from('packaging_materials')
+          .select('id, code, name, quantity, unit_cost, unit, min_stock')
+          .order('name');
+        
+        if (error) throw error;
+        
+        return (data || []).map(material => ({
+          id: material.id.toString(),
+          code: material.code,
+          name: material.name,
+          unit: material.unit,
+          quantity: material.quantity || 0,
+          unitCost: material.unit_cost || 0,
+          category: 'packaging',
+          isLowStock: (material.quantity || 0) <= (material.min_stock || 0),
+          reorderLevel: material.min_stock || 0,
+          optimalOrderQuantity: Math.ceil((material.min_stock || 0) * 1.5)
+        }));
+      } catch (err) {
+        console.error("Error fetching packaging materials:", err);
+        return [];
+      }
     }
   });
   
-  // توليد بيانات استهلاك تاريخية افتراضية للمحاكاة
   const generateHistoricalConsumption = (): HistoricalConsumption[] => {
     const allMaterials = [...(rawMaterials || []), ...(packagingMaterials || [])];
     if (allMaterials.length === 0) return [];
@@ -145,18 +151,14 @@ const MaterialsForecasting = () => {
     
     allMaterials.forEach(material => {
       monthsRange.forEach(month => {
-        // توليد بيانات استهلاك عشوائية ولكن قريبة من الواقع
         const baseConsumption = material.category === 'raw-material' 
           ? material.reorderLevel * (0.7 + Math.random() * 0.6) 
           : material.reorderLevel * (0.5 + Math.random() * 0.5);
         
-        // تغييرات موسمية: أعلى في الشهور الأخيرة
         const recencyFactor = 1 + (monthsRange.indexOf(month) / monthsRange.length) * 0.2;
         
-        // توليد اتجاه متزايد بشكل عام
         const trendFactor = 1 + (monthsRange.indexOf(month) / monthsRange.length) * 0.3;
         
-        // إضافة بعض العشوائية للتموج الطبيعي
         const randomNoise = 0.9 + Math.random() * 0.2;
         
         const consumptionQty = Math.round(baseConsumption * recencyFactor * trendFactor * randomNoise);
@@ -165,7 +167,7 @@ const MaterialsForecasting = () => {
           materialId: material.id,
           month: format(month, 'yyyy-MM'),
           consumptionQty,
-          consumptionRate: consumptionQty / 30 // معدل الاستهلاك اليومي
+          consumptionRate: consumptionQty / 30
         });
       });
     });
@@ -173,7 +175,6 @@ const MaterialsForecasting = () => {
     return historicalData;
   };
   
-  // التنبؤ بالاستهلاك المتوقع للشهر القادم
   const generateForecast = () => {
     const allMaterials = [...(rawMaterials || []), ...(packagingMaterials || [])];
     if (allMaterials.length === 0) {
@@ -187,14 +188,11 @@ const MaterialsForecasting = () => {
     const forecastResults: ForecastItem[] = [];
     
     allMaterials.forEach(material => {
-      // احسب متوسط معدل الاستهلاك من البيانات التاريخية
       const materialHistoryData = historicalData.filter(h => h.materialId === material.id);
       
-      // إذا كانت البيانات التاريخية غير كافية، استخدم تقديراً متحفظاً
       let forecastedConsumption = 0;
       
       if (materialHistoryData.length > 0) {
-        // أعطي وزناً أكبر للبيانات الأحدث
         const totalWeightedConsumption = materialHistoryData.reduce((sum, item, index) => {
           const weight = (index + 1) / materialHistoryData.length;
           return sum + (item.consumptionQty * weight);
@@ -202,14 +200,11 @@ const MaterialsForecasting = () => {
         
         forecastedConsumption = Math.round(totalWeightedConsumption / materialHistoryData.length * 1.1);
       } else {
-        // إذا لم تكن هناك بيانات تاريخية، استخدم نقطة إعادة الطلب كتقدير
         forecastedConsumption = Math.ceil(material.reorderLevel * 1.2);
       }
       
-      // حساب الكمية المتوقعة في نهاية الشهر
       const expectedEndQuantity = Math.max(0, material.quantity - forecastedConsumption);
       
-      // تحديد حالة المخزون المتوقعة
       let status: 'ok' | 'warning' | 'critical' = 'ok';
       
       if (expectedEndQuantity <= 0) {
@@ -218,7 +213,6 @@ const MaterialsForecasting = () => {
         status = 'warning';
       }
       
-      // تحديد الكمية المقترحة للطلب
       const suggestedOrder = status !== 'ok' 
         ? Math.max(material.optimalOrderQuantity, forecastedConsumption - expectedEndQuantity)
         : 0;
@@ -242,14 +236,12 @@ const MaterialsForecasting = () => {
     toast.success('تم إنشاء التوقعات بنجاح لشهر ' + format(forecastDate, 'MMMM yyyy'));
   };
   
-  // تحميل التوقعات عند تغيير البيانات
   useEffect(() => {
     if (!isLoadingRawMaterials && !isLoadingPackaging) {
       generateForecast();
     }
   }, [isLoadingRawMaterials, isLoadingPackaging, forecastDate]);
   
-  // تصفية العناصر حسب الفئة والحالة والبحث
   const getFilteredItems = () => {
     return forecastItems.filter(item => {
       const matchesCategory = categoryFilter === 'all' || 
@@ -266,7 +258,6 @@ const MaterialsForecasting = () => {
     });
   };
   
-  // ترتيب العناصر
   const getSortedItems = () => {
     const filteredItems = getFilteredItems();
     
@@ -302,7 +293,6 @@ const MaterialsForecasting = () => {
     });
   };
   
-  // تبديل اتجاه الترتيب
   const toggleSort = (key: string) => {
     if (sortConfig.key === key) {
       setSortConfig({
@@ -314,36 +304,30 @@ const MaterialsForecasting = () => {
     }
   };
   
-  // تحديث تاريخ التوقع
   const handleDateChange = (date: Date | undefined) => {
     if (date) {
       setForecastDate(date);
     }
   };
   
-  // الموافقة على توصية طلب شراء
   const approveOrderSuggestion = (materialId: string) => {
     setAutoApprovedMaterials(prev => [...prev, materialId]);
     toast.success('تمت الموافقة على توصية الطلب');
   };
   
-  // إعادة تعيين التوقعات
   const resetForecast = () => {
     setAutoApprovedMaterials([]);
     generateForecast();
     toast.info('تم إعادة تعيين التوقعات');
   };
   
-  // حفظ التوقعات
   const saveForecast = () => {
     toast.success('تم حفظ التوقعات لشهر ' + format(forecastDate, 'MMMM yyyy'));
   };
   
-  // بيانات الرسم البياني للاستهلاك التاريخي
   const getHistoricalConsumptionChartData = () => {
     const historicalData = generateHistoricalConsumption();
     
-    // تجميع البيانات حسب الشهر
     const months = Array.from(new Set(historicalData.map(item => item.month))).sort();
     
     return months.map(month => {
@@ -366,7 +350,6 @@ const MaterialsForecasting = () => {
     });
   };
   
-  // بيانات الرسم البياني للاستهلاك المتوقع
   const getForecastChartData = () => {
     const materialsByCategory = {
       raw: forecastItems.filter(item => item.materialId.toString().includes('raw')),
@@ -401,7 +384,6 @@ const MaterialsForecasting = () => {
     ];
   };
   
-  // بيانات الرسم البياني للتكاليف المتوقعة
   const getForecastCostData = () => {
     const materialsByCategory = {
       raw: forecastItems.filter(item => item.materialId.toString().includes('raw')),
@@ -422,7 +404,6 @@ const MaterialsForecasting = () => {
   
   return (
     <div className="space-y-6">
-      {/* لوحة التحكم */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -508,7 +489,6 @@ const MaterialsForecasting = () => {
         </Card>
       </div>
       
-      {/* ملخص التوقعات */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="col-span-1">
           <CardHeader>
@@ -694,7 +674,6 @@ const MaterialsForecasting = () => {
         </Card>
       </div>
       
-      {/* تحليلات الاستهلاك */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
