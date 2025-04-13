@@ -105,28 +105,89 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
             <h4 className="text-sm font-medium text-muted-foreground">إجمالي القيمة</h4>
             <p className="font-medium">{formatCurrency(totalValue)}</p>
           </div>
-          
-          <Separator />
-          
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-2">المنتج النصف مصنع</h4>
-            <p className="font-medium">{product.semi_finished?.name || '-'}</p>
-          </div>
+            <Separator />
           
           <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-2">مواد التعبئة</h4>
-            {product.packaging && product.packaging.length > 0 ? (
-              <div className="space-y-2">
-                {product.packaging.map((pkg: any, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-2 border rounded-md">
-                    <span>{pkg.name}</span>
-                    <span className="text-muted-foreground">الكمية: {ensureNumericValue(pkg.quantity)}</span>
+            <h4 className="text-sm font-medium text-muted-foreground mb-2">تفاصيل تكلفة المنتج</h4>
+            
+            {/* تكلفة المنتج النصف مصنع */}
+            <div className="mb-4">
+              <div className="font-medium mb-1">المنتج النصف مصنع:</div>
+              {product.semi_finished ? (
+                <div className="p-2 border rounded-md space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">{product.semi_finished.name}</span>
+                    <span className="text-muted-foreground">الكمية: {ensureNumericValue(product.semi_finished_quantity)} لكل وحدة</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">لا توجد مواد تعبئة</p>
-            )}
+                  
+                  {(() => {
+                    const semiFinishedCost = ensureNumericValue(product.semi_finished.unit_cost);
+                    const semiFinishedQty = ensureNumericValue(product.semi_finished_quantity);
+                    const semiFinishedTotalCost = semiFinishedCost * semiFinishedQty;
+                    const contributionPercent = (semiFinishedTotalCost / unitCost) * 100;
+                    
+                    return (
+                      <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t text-sm">
+                        <div>
+                          <span className="text-muted-foreground">تكلفة الوحدة: </span>
+                          <span>{formatCurrency(semiFinishedCost)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">إجمالي التكلفة: </span>
+                          <span>{formatCurrency(semiFinishedTotalCost)}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground">نسبة المساهمة: </span>
+                          <span className="font-medium">{contributionPercent.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">لا يوجد منتج نصف مصنع</p>
+              )}
+            </div>
+            
+            {/* تكلفة مواد التعبئة */}
+            <div>
+              <div className="font-medium mb-1">مواد التعبئة:</div>
+              {product.packaging && product.packaging.length > 0 ? (
+                <div className="space-y-2">
+                  {product.packaging.map((pkg: any, index: number) => {
+                    const materialCost = ensureNumericValue(pkg.packaging_material?.unit_cost || pkg.unit_cost);
+                    const materialQty = ensureNumericValue(pkg.quantity);
+                    const materialTotalCost = materialCost * materialQty;
+                    const contributionPercent = (materialTotalCost / unitCost) * 100;
+                    
+                    return (
+                      <div key={index} className="p-2 border rounded-md">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">{pkg.name}</span>
+                          <span className="text-muted-foreground">الكمية: {materialQty}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t text-sm">
+                          <div>
+                            <span className="text-muted-foreground">تكلفة الوحدة: </span>
+                            <span>{formatCurrency(materialCost)}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">إجمالي التكلفة: </span>
+                            <span>{formatCurrency(materialTotalCost)}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">نسبة المساهمة: </span>
+                            <span className="font-medium">{contributionPercent.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">لا توجد مواد تعبئة</p>
+              )}
+            </div>
           </div>
         </div>
         
