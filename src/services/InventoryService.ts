@@ -8,10 +8,11 @@ export interface RawMaterial {
   quantity: number;
   unit: string;
   unit_cost: number;
-  category: string;
-  supplier: string;
+  category?: string;
+  supplier?: string;
   min_stock: number;
   importance: number;
+  sales_price?: number;
 }
 
 export interface SemiFinishedProduct {
@@ -94,18 +95,7 @@ class InventoryService {
       return [];
     }
     
-    return (data || []).map(item => ({
-      id: item.id,
-      code: item.code,
-      name: item.name,
-      quantity: Number(item.quantity) || 0,
-      unit: item.unit,
-      unit_cost: Number(item.unit_cost) || 0,
-      category: item.category || '',
-      supplier: item.supplier || '',
-      min_stock: Number(item.min_stock) || 0,
-      importance: Number(item.importance) || 0
-    }));
+    return (data || []).map(item => mapRawMaterialData(item));
   }
   
   public async getRawMaterialByCode(code: string) {
@@ -153,19 +143,9 @@ class InventoryService {
         return null;
       }
       
+      const result = mapRawMaterialData(data);
       toast.success(`تم إنشاء المادة الخام ${material.name} بنجاح`);
-      return data ? {
-        id: data.id,
-        code: data.code,
-        name: data.name,
-        quantity: Number(data.quantity) || 0,
-        unit: data.unit,
-        unit_cost: Number(data.unit_cost) || 0,
-        category: data.category || '',
-        supplier: data.supplier || '',
-        min_stock: Number(data.min_stock) || 0,
-        importance: Number(data.importance) || 0
-      } : null;
+      return result;
     } catch (error) {
       console.error('Error creating raw material:', error);
       toast.error('حدث خطأ أثناء إنشاء المادة الخام');
@@ -188,19 +168,9 @@ class InventoryService {
         return null;
       }
       
+      const result = mapRawMaterialData(data);
       toast.success(`تم تحديث المادة الخام ${data.name} بنجاح`);
-      return data ? {
-        id: data.id,
-        code: data.code,
-        name: data.name,
-        quantity: Number(data.quantity) || 0,
-        unit: data.unit,
-        unit_cost: Number(data.unit_cost) || 0,
-        category: data.category || '',
-        supplier: data.supplier || '',
-        min_stock: Number(data.min_stock) || 0,
-        importance: Number(data.importance) || 0
-      } : null;
+      return result;
     } catch (error) {
       console.error('Error updating raw material:', error);
       toast.error('حدث خطأ أثناء تحديث المادة الخام');
@@ -1159,3 +1129,19 @@ class InventoryService {
 }
 
 export default InventoryService;
+
+const mapRawMaterialData = (data: any): RawMaterial => {
+  return {
+    id: data.id,
+    code: data.code,
+    name: data.name,
+    quantity: data.quantity || 0,
+    unit: data.unit,
+    unit_cost: data.unit_cost || 0,
+    category: data.category || '',
+    supplier: data.supplier || '',
+    min_stock: data.min_stock || 0,
+    importance: data.importance || 0,
+    sales_price: data.sales_price || 0
+  };
+};

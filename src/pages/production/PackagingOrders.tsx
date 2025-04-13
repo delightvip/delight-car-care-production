@@ -124,7 +124,6 @@ const PackagingOrders = () => {
     toast.info("جاري تحديث البيانات...");
   }, [refetchOrders, refetchProducts]);
   
-  // دالة لفحص توافر المكونات في الوقت الفعلي
   const checkRealTimeAvailability = useCallback(async (productCode: string, quantity: number) => {
     if (!productCode || quantity <= 0) {
       setComponentsAvailability([]);
@@ -137,12 +136,10 @@ const PackagingOrders = () => {
       return;
     }
     
-    // التحقق من توفر المنتج النصف مصنع
     const semiFinishedCode = product.semiFinished.code;
     const semiFinishedQuantity = product.semiFinished.quantity * quantity;
     const semiAvailable = await inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
     
-    // التحقق من توفر مواد التعبئة
     const packagingRequirements = product.packaging.map(pkg => ({
       code: pkg.code,
       requiredQuantity: pkg.quantity * quantity
@@ -167,7 +164,6 @@ const PackagingOrders = () => {
       })
     );
     
-    // تجميع نتائج التوافر
     const availabilityResults = [
       {
         code: product.semiFinished.code,
@@ -183,14 +179,12 @@ const PackagingOrders = () => {
     setComponentsAvailability(availabilityResults);
   }, [finishedProducts, inventoryService]);
   
-  // مراقبة التغييرات في المنتج المحدد أو الكمية لتحديث توفر المكونات
   useEffect(() => {
     if (newOrder.productCode && newOrder.quantity > 0) {
       checkRealTimeAvailability(newOrder.productCode, newOrder.quantity);
     }
   }, [newOrder.productCode, newOrder.quantity, checkRealTimeAvailability]);
   
-  // نفس الشيء للنموذج التعديل
   useEffect(() => {
     if (editOrder.productCode && editOrder.quantity > 0) {
       checkRealTimeAvailability(editOrder.productCode, editOrder.quantity);
@@ -230,7 +224,6 @@ const PackagingOrders = () => {
     }
     
     try {
-      // التحقق من توفر جميع المكونات
       const allAvailable = componentsAvailability.every(item => item.available);
       if (!allAvailable) {
         const confirmation = window.confirm("بعض المكونات غير متوفرة. هل ترغب في المتابعة على أي حال؟");
@@ -239,14 +232,11 @@ const PackagingOrders = () => {
         }
       }
       
-      // حساب التكلفة الإجمالية للأمر الجديد
       const calculatedTotalCost = calculateTotalCost(newOrder.productCode, newOrder.quantity);
       console.log(`إنشاء أمر تعبئة: الكمية=${newOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
       
-      // إظهار مؤشر تحميل
       toast.loading("جاري إنشاء أمر التعبئة...");
       
-      // إضافة جلسة محاولة لضمان نجاح العملية
       let attempts = 0;
       const maxAttempts = 3;
       let success = false;
@@ -257,12 +247,11 @@ const PackagingOrders = () => {
           const createdOrder = await productionService.createPackagingOrder(
             newOrder.productCode, 
             newOrder.quantity,
-            calculatedTotalCost // إضافة التكلفة المحسوبة
+            calculatedTotalCost
           );
           
           if (createdOrder) {
             success = true;
-            // تجنب استدعاء مباشر لـ refetchOrders قبل إغلاق نافذة الحوار
             toast.dismiss();
             setTimeout(() => {
               refetchOrders();
@@ -280,7 +269,6 @@ const PackagingOrders = () => {
           errorMsg = innerError?.message || "حدث خطأ أثناء إنشاء أمر التعبئة";
           if (attempts < maxAttempts) {
             console.log(`محاولة إنشاء أمر التعبئة: ${attempts}/${maxAttempts}`);
-            // انتظر قليلاً قبل المحاولة مرة أخرى
             await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
@@ -332,12 +320,11 @@ const PackagingOrders = () => {
   
   const handleEditOrder = async () => {
     if (!editOrder.id || !editOrder.productCode || editOrder.quantity <= 0) {
-      toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
+      toast.error("يجب اختيار منتج وت��ديد كمية صحيحة");
       return;
     }
     
     try {
-      // التحقق من توفر جميع المكونات
       const allAvailable = componentsAvailability.every(item => item.available);
       if (!allAvailable) {
         const confirmation = window.confirm("بعض المكونات غير متوفرة. هل ترغب في المتابعة على أي حال؟");
@@ -366,11 +353,9 @@ const PackagingOrders = () => {
           quantity: material.requiredQuantity
         }));
 
-      // حساب التكلفة الإجمالية الجديدة
       const calculatedTotalCost = calculateTotalCost(editOrder.productCode, editOrder.quantity);
       console.log(`تحديث أمر تعبئة: الكمية=${editOrder.quantity}, التكلفة المحسوبة=${calculatedTotalCost}`);
       
-      // عرض مؤشر تحميل
       toast.loading("جاري تحديث أمر التعبئة...");
       
       const success = await productionService.updatePackagingOrder(
@@ -382,21 +367,19 @@ const PackagingOrders = () => {
           unit: editOrder.unit,
           semiFinished,
           packagingMaterials,
-          totalCost: calculatedTotalCost // إضافة قيمة التكلفة المحسوبة
+          totalCost: calculatedTotalCost
         }
       );
       
       if (success) {
-        // إغلاق نافذة التعديل وإلغاء مؤشر التحميل
         setIsEditDialogOpen(false);
         setComponentsAvailability([]);
         toast.dismiss();
         
-        // انتظار قليلاً ثم تحديث البيانات للتأكد من جلبها مجدداً من قاعدة البيانات
         setTimeout(() => {
           refetchOrders();
           toast.success("تم تحديث أمر التعبئة بنجاح");
-        }, 300); // تأخير لضمان اكتمال عملية التحديث في قاعدة البيانات
+        }, 300);
       } else {
         toast.dismiss();
         toast.error("فشل تحديث أمر التعبئة");
@@ -449,7 +432,6 @@ const PackagingOrders = () => {
             quantity: record.quantity,
             unit: record.unit
           });
-          // تحديث توافر المكونات
           checkRealTimeAvailability(record.productCode, record.quantity);
           setIsEditDialogOpen(true);
         }}

@@ -28,7 +28,8 @@ export const calculateFinishedProductCost = (
   return totalCost;
 };
 
-export const ensureNumericValue = (value: any): number => {
+// Updated to support an optional field name parameter
+export const ensureNumericValue = (value: any, fieldName?: string): number => {
   if (value === null || value === undefined) {
     return 0;
   }
@@ -57,7 +58,6 @@ export const formatInventoryData = (data: any[], columns: any[]) => {
   });
 };
 
-// Add the missing formatDisplayValue function
 export const formatDisplayValue = (value: any): string => {
   if (value === null || value === undefined) {
     return '-';
