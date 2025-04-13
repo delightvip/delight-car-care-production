@@ -67,6 +67,44 @@ const Payments = () => {
     queryFn: () => invoiceService.getInvoices(),
   });
   
+  // تجهيز الفواتير لعرضها في نموذج المدفوعات مع حساب المبالغ المتبقية وحالة الدفع
+  const preparedInvoices = React.useMemo(() => {
+    if (!invoices) return [];
+    
+    return invoices.map(invoice => {
+      // حساب المبلغ المتبقي للفاتورة (مثال بسيط، يمكن تطويره حسب منطق التطبيق)
+      // في التطبيق الحقيقي، يفضل حساب هذه القيم في الخلفية وتخزينها في قاعدة البيانات
+      let remainingAmount = invoice.total_amount;
+      
+      // يمكن استخدام البيانات من جدول المدفوعات لحساب المبلغ المدفوع بالفعل
+      if (payments) {
+        const relatedPayments = payments.filter(
+          payment => payment.related_invoice_id === invoice.id && payment.payment_status === 'confirmed'
+        );
+        
+        const totalPaid = relatedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+        remainingAmount = invoice.total_amount - totalPaid;
+        
+        // لضمان عدم وجود قيم سالبة (في حالة المدفوعات الزائدة)
+        remainingAmount = Math.max(0, remainingAmount);
+      }
+      
+      // تحديد حالة الدفع بناءً على المبلغ المتبقي
+      let status: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      if (remainingAmount === 0) {
+        status = 'paid';
+      } else if (remainingAmount < invoice.total_amount) {
+        status = 'partial';
+      }
+      
+      return {
+        ...invoice,
+        remaining_amount: remainingAmount,
+        status
+      };
+    });
+  }, [invoices, payments]);
+  
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['payments'] });
   }, [queryClient]);
@@ -317,19 +355,11 @@ const Payments = () => {
             <DialogDescription>
               قم بإدخال بيانات المعاملة المالية.
             </DialogDescription>
-          </DialogHeader>
-          {parties && (
+          </DialogHeader>          {parties && (
             <PaymentForm 
               onSubmit={handleCreatePayment} 
               parties={parties}
-              invoices={invoices ? invoices.map(invoice => ({
-                id: invoice.id,
-                invoice_type: invoice.invoice_type,
-                party_id: invoice.party_id,
-                party_name: invoice.party_name || '',
-                total_amount: invoice.total_amount,
-                date: invoice.date
-              })) : []}
+              invoices={preparedInvoices}
             />
           )}
         </DialogContent>
@@ -342,21 +372,13 @@ const Payments = () => {
             <DialogDescription>
               قم بتعديل بيانات المعاملة المالية.
             </DialogDescription>
-          </DialogHeader>
-          {selectedPayment && parties && (
+          </DialogHeader>          {selectedPayment && parties && (
             <PaymentForm 
               onSubmit={handleUpdatePayment} 
               parties={parties} 
               initialData={selectedPayment}
               isEditing={true}
-              invoices={invoices ? invoices.map(invoice => ({
-                id: invoice.id,
-                invoice_type: invoice.invoice_type,
-                party_id: invoice.party_id,
-                party_name: invoice.party_name || '',
-                total_amount: invoice.total_amount,
-                date: invoice.date
-              })) : []}
+              invoices={preparedInvoices}
             />
           )}
         </DialogContent>
