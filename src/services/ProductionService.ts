@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
 import ProductionDatabaseService from "./database/ProductionDatabaseService";
+import { supabase } from "../integrations/supabase/client";
 
 // أنواع البيانات لأوامر الإنتاج
 export interface ProductionOrder {
@@ -318,8 +319,7 @@ class ProductionService {
       const semiFinishedCode = product.semiFinished.code;
       const semiFinishedQuantity = product.semiFinished.quantity * quantity;
       const semiAvailable = await this.inventoryService.checkSemiFinishedAvailability(semiFinishedCode, semiFinishedQuantity);
-      
-      // التحقق من توفر مواد التعبئة
+        // التحقق من توفر مواد التعبئة
       const packagingMaterials = await Promise.all(product.packaging.map(async pkg => {
         const pkgQuantity = pkg.quantity * quantity;
         const available = await this.inventoryService.checkPackagingAvailability([{
@@ -340,16 +340,34 @@ class ProductionService {
       
       // إذا لم يتم تمرير التكلفة، قم بحسابها
       if (finalTotalCost === undefined) {
-        // حساب التكلفة الإجمالية بطريقة آمنة مع التحقق من وجود خاصية unit_cost
-        let unitCost = 0;
-        if (typeof product.unit_cost === 'number') {
-          unitCost = product.unit_cost;
-        } else if (typeof (product as any).unitCost === 'number') {
-          // محاولة استخدام unitCost إذا كانت unit_cost غير موجودة
-          unitCost = (product as any).unitCost;
+        // الحصول على تكلفة المنتج النصف مصنع
+        const { data: semiFinishedProduct } = await supabase
+          .from("semi_finished_products")
+          .select("unit_cost")
+          .eq("code", semiFinishedCode)
+          .single();
+          
+        const semiFinishedUnitCost = Number(semiFinishedProduct?.unit_cost || 0);
+        const semiFinishedTotalCost = semiFinishedUnitCost * semiFinishedQuantity;
+        
+        // حساب تكلفة مواد التعبئة
+        let packagingTotalCost = 0;
+        for (const pkg of product.packaging) {
+          const pkgQuantity = pkg.quantity * quantity;
+          const { data: packagingMaterial } = await supabase
+            .from("packaging_materials")
+            .select("unit_cost")
+            .eq("code", pkg.code)
+            .single();
+            
+          const pkgUnitCost = Number(packagingMaterial?.unit_cost || 0);
+          packagingTotalCost += pkgUnitCost * pkgQuantity;
         }
         
-        finalTotalCost = unitCost * quantity;
+        // التكلفة الإجمالية = تكلفة المنتج النصف مصنع + تكلفة مواد التعبئة
+        finalTotalCost = semiFinishedTotalCost + packagingTotalCost;
+        
+        console.log(`تكلفة المنتج النصف مصنع: ${semiFinishedTotalCost}, تكلفة مواد التعبئة: ${packagingTotalCost}`);
       }
       
       console.log(`إنشاء أمر تعبئة: الكمية=${quantity}, التكلفة المستخدمة=${finalTotalCost}`);
