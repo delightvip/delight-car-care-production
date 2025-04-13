@@ -47,7 +47,8 @@ const InventoryMovementTable: React.FC<InventoryMovementTableProps> = ({ movemen
       key: 'item_id',
       title: 'الصنف',
       render: (value: string, record: InventoryMovement) => {
-        return record.item_name || value;
+        // Since item_name doesn't exist on the InventoryMovement type, we need to display the item_id instead
+        return value;
       },
       minWidth: '200px',
     },
@@ -123,7 +124,7 @@ const InventoryMovementTable: React.FC<InventoryMovementTableProps> = ({ movemen
         columns={columns}
         data={movements}
         searchable={true}
-        searchKeys={['item_name', 'reason', 'reference']}
+        searchKeys={['item_id', 'reason', 'reference']}
         searchPlaceholder="بحث في الأصناف والسبب..."
         pagination={true}
         itemsPerPage={15}
