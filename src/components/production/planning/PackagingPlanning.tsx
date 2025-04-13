@@ -150,7 +150,7 @@ const PackagingPlanning = () => {
       let totalPackagingCost = 0;
       
       productPackagingMaterials.forEach(item => {
-        const requiredQty = Number(item.quantity) * Number(quantity);
+        const requiredQty = Number(item.quantity) * quantity;
         const material = item.packaging_material;
         const unitCost = Number(material?.unit_cost || 0);
         const materialCost = unitCost * requiredQty;
@@ -201,7 +201,7 @@ const PackagingPlanning = () => {
           quantity: semiFinishedQuantityNeeded
         },
         packagingMaterialsData,
-        totalCost
+        totalCost // إرسال التكلفة الإجمالية المحسوبة
       );
     },
     onSuccess: () => {

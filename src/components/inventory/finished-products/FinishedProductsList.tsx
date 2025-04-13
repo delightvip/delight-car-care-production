@@ -62,19 +62,24 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
           id: pkg.packaging_material?.id,
           code: pkg.packaging_material?.code,
           name: pkg.packaging_material?.name,
-          quantity: pkg.quantity,
-          unit_cost: pkg.packaging_material?.unit_cost
+          quantity: Number(pkg.quantity), // تأكد من تحويل الكمية إلى رقم
+          unit_cost: Number(pkg.packaging_material?.unit_cost) // تأكد من تحويل التكلفة إلى رقم
         })) || [];
         
         // Calculate the unit cost based on the semi-finished product and packaging materials
+        const semiFinishedQty = Number(product.semi_finished_quantity || 1);
         const calculatedUnitCost = calculateFinishedProductCost(
-          product.semi_finished, 
-          formattedPackaging, 
-          1 // Calculate for a single unit
+          {
+            ...product.semi_finished,
+            unit_cost: Number(product.semi_finished?.unit_cost || 0)
+          },
+          formattedPackaging,
+          semiFinishedQty
         );
 
         // Use the calculated cost if it's greater than 0, otherwise use the stored cost
-        const unitCost = calculatedUnitCost > 0 ? calculatedUnitCost : ensureNumericValue(product.unit_cost);
+        const storedUnitCost = ensureNumericValue(product.unit_cost);
+        const unitCost = calculatedUnitCost > 0 ? calculatedUnitCost : storedUnitCost;
         
         // Ensure numeric values
         const quantity = ensureNumericValue(product.quantity);
@@ -87,7 +92,8 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
           unit_cost: unitCost,
           sales_price: salesPrice,
           totalValue,
-          packaging: formattedPackaging
+          packaging: formattedPackaging,
+          semi_finished_quantity: semiFinishedQty // تأكد من تحويل كمية المنتج النصف مصنع إلى رقم
         };
       }));
       

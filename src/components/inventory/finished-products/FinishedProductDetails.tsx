@@ -33,10 +33,19 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
   const unitCost = useMemo(() => {
     // Check if we have the necessary data to calculate cost
     if (product.semi_finished && product.packaging) {
+      const semiFinishedQty = ensureNumericValue(product.semi_finished_quantity || 1);
+      
       return calculateFinishedProductCost(
-        product.semi_finished,
-        product.packaging,
-        1 // Calculate for a single unit
+        {
+          ...product.semi_finished,
+          unit_cost: ensureNumericValue(product.semi_finished.unit_cost)
+        },
+        product.packaging.map((pkg: any) => ({
+          ...pkg,
+          quantity: ensureNumericValue(pkg.quantity),
+          unit_cost: ensureNumericValue(pkg.unit_cost)
+        })),
+        semiFinishedQty
       );
     }
     
@@ -108,7 +117,14 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
           
           <div>
             <h4 className="text-sm font-medium text-muted-foreground mb-2">المنتج النصف مصنع</h4>
-            <p className="font-medium">{product.semi_finished?.name || '-'}</p>
+            <div className="p-2 border rounded-md">
+              <p className="font-medium">{product.semi_finished?.name || '-'}</p>
+              {product.semi_finished && product.semi_finished_quantity && (
+                <p className="text-sm text-muted-foreground">
+                  الكمية المستخدمة: {ensureNumericValue(product.semi_finished_quantity)} {product.semi_finished?.unit || ''}
+                </p>
+              )}
+            </div>
           </div>
           
           <div>
