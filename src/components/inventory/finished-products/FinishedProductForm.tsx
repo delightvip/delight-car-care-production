@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -160,8 +159,8 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
       // جلب تكلفة المنتج النصف مصنع
       const semiFinished = semiFinishedProducts.find(p => p.id === initialData.semi_finished_id);
       if (semiFinished) {
-        setSemiFinishedUnitCost(semiFinished.unit_cost);
-        calculateTotalCost(semiFinished.unit_cost, initialData.semi_finished_quantity, packagingCost);
+        setSemiFinishedUnitCost(Number(semiFinished.unit_cost));
+        calculateTotalCost(Number(semiFinished.unit_cost), Number(initialData.semi_finished_quantity), packagingCost);
       }
     }
   }, [isEditing, initialData, semiFinishedProducts]);
@@ -174,8 +173,8 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
     if (semiFinishedId) {
       const semiFinished = semiFinishedProducts.find(p => p.id === semiFinishedId);
       if (semiFinished) {
-        setSemiFinishedUnitCost(semiFinished.unit_cost);
-        calculateTotalCost(semiFinished.unit_cost, semiFinishedQty, packagingCost);
+        setSemiFinishedUnitCost(Number(semiFinished.unit_cost));
+        calculateTotalCost(Number(semiFinished.unit_cost), Number(semiFinishedQty), packagingCost);
       }
     }
   }, [form.watch('semi_finished_id'), form.watch('semi_finished_quantity'), semiFinishedProducts, packagingCost]);
@@ -195,7 +194,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
     packagingItems.forEach((item) => {
       const material = packagingMaterials.find(m => m.id === item.id);
       if (material) {
-        total += material.unit_cost * item.quantity;
+        total += Number(material.unit_cost) * Number(item.quantity);
       }
     });
     
@@ -203,7 +202,7 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
     
     // تحديث التكلفة الإجمالية بعد تحديث تكلفة مواد التعبئة
     const semiFinishedQty = form.watch('semi_finished_quantity');
-    calculateTotalCost(semiFinishedUnitCost, semiFinishedQty, total);
+    calculateTotalCost(semiFinishedUnitCost, Number(semiFinishedQty), total);
   };
   
   const handleAddPackaging = () => {
@@ -359,7 +358,14 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
       toast.error('يجب إضافة مادة تعبئة واحدة على الأقل');
       return;
     }
-    mutation.mutate(values);
+    
+    // Ensure unit_cost is the calculated totalCost value
+    const submissionValues = {
+      ...values,
+      unit_cost: totalCost
+    };
+    
+    mutation.mutate(submissionValues);
   };
   
   return (

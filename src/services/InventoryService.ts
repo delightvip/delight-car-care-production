@@ -57,7 +57,6 @@ export interface FinishedProduct {
   semi_finished_quantity: number;
   created_at: string | null;
   updated_at: string | null;
-  // Add these properties to match expected usage
   semiFinished: {
     code: string;
     name: string;
@@ -823,7 +822,7 @@ class InventoryService {
         .eq("code", semiFinishedCode)
         .single();
 
-      let semiFinishedCost = semiFinishedProduct?.unit_cost || 0;
+      let semiFinishedCost = Number(semiFinishedProduct?.unit_cost || 0);
       let packagingTotalCost = 0;
 
       // Consume packaging materials
@@ -847,7 +846,7 @@ class InventoryService {
         }
 
         // Calculate packaging cost
-        packagingTotalCost += packagingMaterial.unit_cost * material.requiredQuantity;
+        packagingTotalCost += Number(packagingMaterial.unit_cost) * Number(material.requiredQuantity);
 
         await this.updatePackagingMaterial(packagingMaterial.id, {
           quantity: packagingMaterial.quantity - material.requiredQuantity,
@@ -857,7 +856,7 @@ class InventoryService {
       // Add finished product
       const { data: finishedProduct } = await supabase
         .from("finished_products")
-        .select("*")
+        .select("*, semi_finished_id, semi_finished_quantity")
         .eq("code", productCode)
         .single();
 
@@ -878,9 +877,9 @@ class InventoryService {
       const newUnitCost = totalBatchCost / quantity;
 
       // Calculate weighted average cost between existing stock and new batch
-      const totalExistingValue = finishedProduct.quantity * finishedProduct.unit_cost;
+      const totalExistingValue = Number(finishedProduct.quantity) * Number(finishedProduct.unit_cost);
       const totalNewValue = quantity * newUnitCost;
-      const totalNewQuantity = finishedProduct.quantity + quantity;
+      const totalNewQuantity = Number(finishedProduct.quantity) + Number(quantity);
       const weightedAverageCost =
         (totalExistingValue + totalNewValue) / totalNewQuantity;
 

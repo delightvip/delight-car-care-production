@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -192,7 +193,7 @@ const PackagingPlanning = () => {
       return await productionService.createPackagingOrder(
         product.code,
         product.name,
-        productionQuantity,
+        Number(productionQuantity),
         product.unit,
         {
           code: semiFinished.code,
