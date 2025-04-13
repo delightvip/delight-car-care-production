@@ -28,15 +28,17 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
   onClose,
   product,
   onEdit
-}) => {
-  // Calculate the unit cost automatically based on components
+}) => {  // Calculate the unit cost automatically based on components
   const unitCost = useMemo(() => {
     // Check if we have the necessary data to calculate cost
     if (product.semi_finished && product.packaging) {
+      // استخدام كمية المنتج النصف مصنع المطلوبة لكل وحدة
+      const semiFinishedQty = ensureNumericValue(product.semi_finished_quantity || 1);
+      
       return calculateFinishedProductCost(
         product.semi_finished,
         product.packaging,
-        1 // Calculate for a single unit
+        semiFinishedQty // استخدام الكمية الفعلية من المنتج النصف مصنع
       );
     }
     
