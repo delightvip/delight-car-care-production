@@ -12,7 +12,8 @@ import { Separator } from '@/components/ui/separator';
 import { Edit } from 'lucide-react';
 import { 
   ensureNumericValue, 
-  formatCurrency 
+  formatCurrency, 
+  calculateFinishedProductCost 
 } from '../common/InventoryDataFormatter';
 
 interface FinishedProductDetailsProps {
@@ -28,24 +29,15 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
   product,
   onEdit
 }) => {
-  // Calculate the unit cost based on components
+  // Calculate the unit cost automatically based on components
   const unitCost = useMemo(() => {
     // Check if we have the necessary data to calculate cost
     if (product.semi_finished && product.packaging) {
-      // الحساب الصحيح للتكلفة: تكلفة الوحدة من المنتج النصف مصنع × الكمية المستخدمة
-      const semiFinishedUnitCost = ensureNumericValue(product.semi_finished.unit_cost);
-      const semiFinishedQuantity = ensureNumericValue(product.semi_finished_quantity);
-      const semiFinishedTotalCost = semiFinishedUnitCost * semiFinishedQuantity;
-      
-      // إجمالي تكلفة مواد التعبئة
-      const packagingTotalCost = product.packaging.reduce((total: number, pkg: any) => {
-        const pkgUnitCost = ensureNumericValue(pkg.unit_cost);
-        const pkgQuantity = ensureNumericValue(pkg.quantity);
-        return total + (pkgUnitCost * pkgQuantity);
-      }, 0);
-      
-      // إجمالي التكلفة للوحدة الواحدة من المنتج النهائي
-      return semiFinishedTotalCost + packagingTotalCost;
+      return calculateFinishedProductCost(
+        product.semi_finished,
+        product.packaging,
+        1 // Calculate for a single unit
+      );
     }
     
     // Fall back to the stored unit cost if we can't calculate
@@ -57,7 +49,6 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
   const totalValue = quantity * unitCost;
   const salesPrice = ensureNumericValue(product.sales_price);
   const minStock = ensureNumericValue(product.min_stock);
-  const semiFinishedQuantity = ensureNumericValue(product.semi_finished_quantity);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -117,12 +108,7 @@ const FinishedProductDetails: React.FC<FinishedProductDetailsProps> = ({
           
           <div>
             <h4 className="text-sm font-medium text-muted-foreground mb-2">المنتج النصف مصنع</h4>
-            <div className="space-y-1">
-              <p className="font-medium">{product.semi_finished?.name || '-'}</p>
-              <p className="text-sm text-muted-foreground">
-                الكمية لكل وحدة: {semiFinishedQuantity} {product.semi_finished?.unit || ''}
-              </p>
-            </div>
+            <p className="font-medium">{product.semi_finished?.name || '-'}</p>
           </div>
           
           <div>

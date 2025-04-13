@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -374,10 +375,7 @@ const ProductDetailsView: React.FC<ProductDetailsViewProps> = ({
                     <CardDescription>جميع العمليات التي تمت على هذا العنصر</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ProductMovementHistory 
-                      itemId={product.id.toString()} 
-                      itemType={tableName} 
-                    />
+                    <ProductMovementHistory itemId={product.id.toString()} itemType={tableName} />
                   </CardContent>
                 </Card>
               </TabsContent>
