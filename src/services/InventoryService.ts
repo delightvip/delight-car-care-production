@@ -980,3 +980,4 @@ class InventoryService {
       if (semiFinishedError) {
         console.error('Error fetching semi-finished product:', semiFinishedError);
         toast.error('حدث خطأ أثناء جلب بيانات المنتج النصف مصنع');
+        return false;
