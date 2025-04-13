@@ -1,4 +1,6 @@
 
+export type ItemType = 'raw' | 'packaging' | 'semi' | 'finished';
+
 export interface InventoryMovement {
   id: string;
   item_id: string;
