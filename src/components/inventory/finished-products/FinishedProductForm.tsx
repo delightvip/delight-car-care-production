@@ -39,11 +39,10 @@ const finishedProductSchema = z.object({
   name: z.string().min(2, { message: "يجب أن يحتوي الاسم على حرفين على الأقل" }),
   unit: z.string().min(1, { message: "يرجى اختيار وحدة القياس" }),
   quantity: z.coerce.number().min(0, { message: "الكمية يجب أن تكون 0 أو أكثر" }),
-  min_stock: z.coerce.number().min(0, { message: "الحد الأدنى يجب أن يكون 0 أو أكثر" }),
-  unit_cost: z.coerce.number().min(0, { message: "التكلفة يجب أن تكون 0 أو أكثر" }),
+  min_stock: z.coerce.number().min(0, { message: "الحد الأدنى يجب أن يكون 0 أو أكثر" }),  unit_cost: z.coerce.number().min(0, { message: "التكلفة يجب أن تكون 0 أو أكثر" }),
   sales_price: z.coerce.number().min(0, { message: "سعر البيع يجب أن يكون 0 أو أكثر" }),
   semi_finished_id: z.coerce.number().min(1, { message: "يجب اختيار منتج نصف مصنع" }),
-  semi_finished_quantity: z.coerce.number().min(0.1, { message: "كمية المنتج النصف مصنع يجب أن تكون أكبر من 0" })
+  semi_finished_quantity: z.coerce.number().min(0.001, { message: "كمية المنتج النصف مصنع يجب أن تكون أكبر من 0" })
 });
 
 const units = ['كجم', 'لتر', 'مللى', 'جم', 'علبة', 'قطعة', 'كرتونة'];
@@ -596,10 +595,9 @@ const FinishedProductForm: React.FC<FinishedProductFormProps> = ({
                     name="semi_finished_quantity"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="font-medium">كمية المنتج النصف مصنع</FormLabel>
-                        <div className="relative">
+                        <FormLabel className="font-medium">كمية المنتج النصف مصنع</FormLabel>                        <div className="relative">
                           <FormControl>
-                            <Input type="number" min="0.1" step="0.01" {...field} className="pr-20" />
+                            <Input type="number" min="0.001" step="0.001" {...field} className="pr-20" />
                           </FormControl>
                           <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium px-2 py-1 bg-secondary/30 rounded">
                             لكل وحدة
