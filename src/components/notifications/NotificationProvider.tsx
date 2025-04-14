@@ -66,12 +66,20 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     refetchInterval: 30000, // كل 30 ثانية
     staleTime: 20000, // تعتبر البيانات قديمة بعد 20 ثانية
   });
-
+  // دالة مساعدة لإنشاء معرف فريد متوافق مع جميع المتصفحات
+  const generateUniqueId = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+  
   // إضافة إشعار جديد
   const addNotification = useCallback((notification: Omit<NotificationType, 'id' | 'date' | 'read'>) => {
     const newNotification = {
       ...notification,
-      id: crypto.randomUUID(),
+      id: generateUniqueId(),
       date: new Date(),
       read: false,
     };
