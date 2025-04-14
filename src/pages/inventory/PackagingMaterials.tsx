@@ -21,11 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle, FileDown } from 'lucide-react';
+import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle, FileDown, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import InventoryService from '@/services/InventoryService';
+import CostUpdateService from '@/services/CostUpdateService';
 import { exportToExcel, prepareDataForExport } from '@/utils/exportData';
 
 const units = ['قطعة', 'علبة', 'كرتونة', 'رول', 'متر'];
@@ -52,8 +53,35 @@ const PackagingMaterials = () => {
   
   // إضافة حالة للتحكم في عملية التصدير
   const [exporting, setExporting] = useState(false);
+  const [updatingCosts, setUpdatingCosts] = useState(false);
   
   const queryClient = useQueryClient();
+  
+  // تحديث تكاليف المنتجات النهائية المرتبطة بمواد التغليف
+  const handleUpdateFinishedProductCosts = async () => {
+    if (updatingCosts) return;
+    
+    setUpdatingCosts(true);
+    toast.info('جاري تحديث تكاليف المنتجات النهائية...', { id: 'update-costs' });
+    
+    try {
+      const costUpdateService = CostUpdateService.getInstance();
+      const updatedCount = await costUpdateService.updateAllFinishedProductsCosts();
+      
+      if (updatedCount > 0) {
+        toast.success(`تم تحديث تكاليف ${updatedCount} منتج نهائي بنجاح`, { id: 'update-costs' });
+        // تحديث بيانات المنتجات النهائية
+        queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+      } else {
+        toast.info('لم يتم تحديث أي منتجات', { id: 'update-costs' });
+      }
+    } catch (error) {
+      console.error('خطأ في تحديث تكاليف المنتجات النهائية:', error);
+      toast.error('حدث خطأ أثناء تحديث تكاليف المنتجات النهائية', { id: 'update-costs' });
+    } finally {
+      setUpdatingCosts(false);
+    }
+  };
   
   // تصدير بيانات مستلزمات التعبئة إلى ملف Excel
   const handleExportData = async () => {
@@ -213,9 +241,9 @@ const PackagingMaterials = () => {
       toast.error(`حدث خطأ: ${error.message}`);
     }
   });
-  
-  const updateMutation = useMutation({
+    const updateMutation = useMutation({
     mutationFn: async (material: any) => {
+      // تحديث مادة التغليف
       const { data, error } = await supabase
         .from('packaging_materials')
         .update({
@@ -229,11 +257,18 @@ const PackagingMaterials = () => {
         .select();
         
       if (error) throw new Error(error.message);
+      
+      // تحديث تكاليف المنتجات النهائية المرتبطة باستخدام CostUpdateService
+      const costUpdateService = CostUpdateService.getInstance();
+      await costUpdateService.updateFinishedProductsForPackagingMaterial(material.id);
+      
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] });
-      toast.success('تم تعديل مستلزم التعبئة بنجاح');
+      // تحديث بيانات المنتجات النهائية أيضاً
+      queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+      toast.success('تم تعديل مستلزم التعبئة بنجاح وتحديث تكاليف المنتجات النهائية المرتبطة');
       setIsEditDialogOpen(false);
     },
     onError: (error: any) => {

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import { Button } from '@/components/ui/button';
-import { FileUp, Plus, FileDown } from 'lucide-react';
+import { FileUp, Plus, FileDown, RefreshCw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import FinishedProductsList from '@/components/inventory/finished-products/FinishedProductsList';
@@ -11,6 +11,7 @@ import DeleteConfirmDialog from '@/components/inventory/common/DeleteConfirmDial
 import FinishedProductDetails from '@/components/inventory/finished-products/FinishedProductDetails';
 import ImportDialog from '@/components/inventory/common/ImportDialog';
 import InventoryService from '@/services/InventoryService';
+import CostUpdateService from '@/services/CostUpdateService';
 import { exportToExcel, prepareDataForExport } from '@/utils/exportData';
 import { toast } from 'sonner';
 
@@ -18,11 +19,11 @@ const FinishedProducts = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
-  const [currentProduct, setCurrentProduct] = useState<any>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);  const [currentProduct, setCurrentProduct] = useState<any>(null);
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [updatingCosts, setUpdatingCosts] = useState(false);
   
   const queryClient = useQueryClient();
   
@@ -84,6 +85,32 @@ const FinishedProducts = () => {
     }
   };
   
+  // تحديث تكاليف جميع المنتجات النهائية بناءً على مكوناتها
+  const handleUpdateAllCosts = async () => {
+    if (updatingCosts) return;
+    
+    setUpdatingCosts(true);
+    toast.info('جاري تحديث تكاليف المنتجات النهائية...', { id: 'update-costs' });
+    
+    try {
+      const costUpdateService = CostUpdateService.getInstance();
+      const updatedCount = await costUpdateService.updateAllFinishedProductsCosts();
+      
+      if (updatedCount > 0) {
+        toast.success(`تم تحديث تكاليف ${updatedCount} منتج نهائي بنجاح`, { id: 'update-costs' });
+        // تحديث بيانات القائمة
+        queryClient.invalidateQueries({ queryKey: ['finishedProducts'] });
+      } else {
+        toast.info('لم يتم تحديث أي منتجات', { id: 'update-costs' });
+      }
+    } catch (error) {
+      console.error('خطأ في تحديث تكاليف المنتجات النهائية:', error);
+      toast.error('حدث خطأ أثناء تحديث تكاليف المنتجات النهائية', { id: 'update-costs' });
+    } finally {
+      setUpdatingCosts(false);
+    }
+  };
+  
   return (
     <PageTransition>
       <div className="space-y-6">
@@ -91,8 +118,7 @@ const FinishedProducts = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المنتجات النهائية</h1>
             <p className="text-muted-foreground mt-1">إدارة المنتجات النهائية الجاهزة للبيع</p>          </div>
-          <div className="flex gap-2">
-            <Button 
+          <div className="flex gap-2">            <Button 
               variant="outline" 
               onClick={handleExportData}
               disabled={exporting}
@@ -101,6 +127,16 @@ const FinishedProducts = () => {
             >
               <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
               تصدير البيانات
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleUpdateAllCosts}
+              disabled={updatingCosts}
+              title="تحديث تكاليف جميع المنتجات النهائية بناءً على المكونات"
+              className="gap-2"
+            >
+              <RefreshCw size={18} className={updatingCosts ? 'animate-spin' : ''} />
+              تحديث التكاليف
             </Button>
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <FileUp size={18} className="mr-2" />

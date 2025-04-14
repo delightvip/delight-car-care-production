@@ -1,9 +1,9 @@
-
 import React, { useMemo } from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { calculateFinishedProductCost, ensureNumericValue } from '@/components/inventory/common/InventoryDataFormatter';
 
 interface InventoryStatsProps {
   data?: {
@@ -29,7 +29,7 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ data: propData }) => {
         // جلب بيانات المنتجات النصف مصنعة
         const { data: semiFinishedData, error: semiFinishedError } = await supabase
           .from('semi_finished_products')
-          .select('quantity, unit_cost');
+          .select('id, code, name, quantity, unit_cost');
         
         if (semiFinishedError) throw new Error(semiFinishedError.message);
         
@@ -40,10 +40,29 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ data: propData }) => {
         
         if (packagingError) throw new Error(packagingError.message);
         
-        // جلب بيانات المنتجات النهائية
+        // جلب بيانات المنتجات النهائية مع العلاقات المرتبطة
         const { data: finishedData, error: finishedError } = await supabase
           .from('finished_products')
-          .select('quantity, unit_cost');
+          .select(`
+            id, 
+            code, 
+            name, 
+            quantity, 
+            unit_cost, 
+            semi_finished_id,
+            semi_finished_quantity,
+            packaging:finished_product_packaging(
+              id,
+              quantity,
+              packaging_material_id,
+              packaging_material:packaging_materials(
+                id,
+                code,
+                name,
+                unit_cost
+              )
+            )
+          `);
         
         if (finishedError) throw new Error(finishedError.message);
         
@@ -51,7 +70,23 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ data: propData }) => {
         const rawMaterialsValue = rawMaterialsData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
         const semiFinishedValue = semiFinishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
         const packagingValue = packagingData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
-        const finishedValue = finishedData.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+        
+        // حساب قيمة المنتجات النهائية بالطريقة الصحيحة
+        let finishedValue = 0;
+        
+        for (const product of finishedData || []) {
+          const semiFinishedProduct = semiFinishedData?.find(item => item.id === product.semi_finished_id);
+          
+          // حساب تكلفة الوحدة باستخدام الدالة الصحيحة
+          const unitCost = calculateFinishedProductCost(
+            semiFinishedProduct,
+            product.packaging,
+            product.semi_finished_quantity
+          );
+          
+          // إضافة القيمة الإجمالية (الكمية × تكلفة الوحدة)
+          finishedValue += product.quantity * unitCost;
+        }
         
         console.log("Inventory Stats Data:", {
           rawMaterialsValue,

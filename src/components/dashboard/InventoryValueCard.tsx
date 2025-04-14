@@ -1,33 +1,56 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Package, Beaker, Box, ShoppingBag } from 'lucide-react';
+import { calculateFinishedProductCost, ensureNumericValue } from '@/components/inventory/common/InventoryDataFormatter';
 
 const InventoryValueCard: React.FC = () => {
   // Fetch inventory values
   const { data, isLoading } = useQuery({
     queryKey: ['inventoryValues'],
     queryFn: async () => {
+      // جلب بيانات المواد الأولية
       const rawMaterials = await supabase
         .from('raw_materials')
         .select('quantity, unit_cost');
       
+      // جلب بيانات المنتجات النصف مصنعة
       const semiFinished = await supabase
         .from('semi_finished_products')
-        .select('quantity, unit_cost');
+        .select('id, code, name, quantity, unit_cost');
       
+      // جلب بيانات مستلزمات التعبئة
       const packaging = await supabase
         .from('packaging_materials')
         .select('quantity, unit_cost');
       
+      // جلب بيانات المنتجات النهائية مع العلاقات المرتبطة
       const finished = await supabase
         .from('finished_products')
-        .select('quantity, unit_cost');
+        .select(`
+          id, 
+          code, 
+          name, 
+          quantity, 
+          unit_cost, 
+          semi_finished_id,
+          semi_finished_quantity,
+          packaging:finished_product_packaging(
+            id,
+            quantity,
+            packaging_material_id,
+            packaging_material:packaging_materials(
+              id,
+              code,
+              name,
+              unit_cost
+            )
+          )
+        `);
       
-      // Calculate total values
+      // حساب القيم الإجمالية
       const rawValue = (rawMaterials.data || []).reduce((sum, item) => 
         sum + (item.quantity * item.unit_cost), 0);
       
@@ -37,8 +60,22 @@ const InventoryValueCard: React.FC = () => {
       const packagingValue = (packaging.data || []).reduce((sum, item) => 
         sum + (item.quantity * item.unit_cost), 0);
       
-      const finishedValue = (finished.data || []).reduce((sum, item) => 
-        sum + (item.quantity * item.unit_cost), 0);
+      // حساب قيمة المنتجات النهائية بالطريقة الصحيحة
+      let finishedValue = 0;
+      
+      for (const product of finished.data || []) {
+        const semiFinishedProduct = semiFinished.data?.find(item => item.id === product.semi_finished_id);
+        
+        // حساب تكلفة الوحدة باستخدام الدالة الصحيحة
+        const unitCost = calculateFinishedProductCost(
+          semiFinishedProduct,
+          product.packaging,
+          product.semi_finished_quantity
+        );
+        
+        // إضافة القيمة الإجمالية (الكمية × تكلفة الوحدة)
+        finishedValue += product.quantity * unitCost;
+      }
       
       const totalValue = rawValue + semiValue + packagingValue + finishedValue;
       
@@ -50,7 +87,7 @@ const InventoryValueCard: React.FC = () => {
         totalValue
       };
     },
-    refetchInterval: 60000 // Refresh every minute
+    refetchInterval: 60000 // تحديث كل دقيقة
   });
   
   if (isLoading) {
