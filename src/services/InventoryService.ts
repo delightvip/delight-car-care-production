@@ -119,12 +119,19 @@ class InventoryService {
       return null;
     }
   }
-
   public async updateRawMaterial(
     id: number,
     updates: Partial<Omit<RawMaterial, "id" | "created_at" | "updated_at">>
   ): Promise<RawMaterial | null> {
     try {
+      // احصل على البيانات الحالية للمادة الخام لمعرفة ما إذا تغيرت التكلفة
+      const { data: currentData } = await supabase
+        .from("raw_materials")
+        .select("unit_cost")
+        .eq("id", id)
+        .single();
+      
+      // تحديث المادة الخام
       const { data, error } = await supabase
         .from("raw_materials")
         .update(updates)
@@ -133,6 +140,19 @@ class InventoryService {
         .single();
 
       if (error) throw error;
+
+      // إذا تغيرت تكلفة المادة الخام، قم بتحديث تكاليف المنتجات النصف مصنعة المرتبطة
+      if (updates.unit_cost !== undefined && currentData && updates.unit_cost !== currentData.unit_cost) {
+        // استدعاء خدمة تحديث التكاليف
+        const CostUpdateService = (await import('./CostUpdateService')).default;
+        const costUpdateService = CostUpdateService.getInstance();
+        
+        const updatedCount = await costUpdateService.updateSemiFinishedCostsForRawMaterial(id);
+        
+        if (updatedCount > 0) {
+          toast.success(`تم تحديث تكاليف ${updatedCount} منتج نصف مصنع مرتبط بهذه المادة`);
+        }
+      }
 
       toast.success(`تم تحديث ${data.name} بنجاح`);
       return data;
