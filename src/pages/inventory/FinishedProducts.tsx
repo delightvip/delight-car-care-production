@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import { Button } from '@/components/ui/button';
-import { FileUp, Plus } from 'lucide-react';
+import { FileUp, Plus, FileDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import FinishedProductsList from '@/components/inventory/finished-products/FinishedProductsList';
@@ -11,17 +11,18 @@ import DeleteConfirmDialog from '@/components/inventory/common/DeleteConfirmDial
 import FinishedProductDetails from '@/components/inventory/finished-products/FinishedProductDetails';
 import ImportDialog from '@/components/inventory/common/ImportDialog';
 import InventoryService from '@/services/InventoryService';
+import { exportToExcel, prepareDataForExport } from '@/utils/exportData';
 import { toast } from 'sonner';
 
 const FinishedProducts = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<any>(null);
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
   
   const queryClient = useQueryClient();
   
@@ -30,8 +31,7 @@ const FinishedProducts = () => {
     setCurrentProduct(product);
     setIsEditDialogOpen(true);
   };
-  
-  // Handle opening delete confirmation dialog
+    // Handle opening delete confirmation dialog
   const handleDelete = (product: any) => {
     setCurrentProduct(product);
     setIsDeleteDialogOpen(true);
@@ -43,15 +43,65 @@ const FinishedProducts = () => {
     setIsDetailsDialogOpen(true);
   };
   
+  // تصدير بيانات المنتجات النهائية إلى ملف Excel
+  const handleExportData = async () => {
+    setExporting(true);
+    toast.info('جاري تحضير بيانات التصدير...', { id: 'export-data' });
+    
+    try {
+      // استدعاء خدمة المخزون للحصول على البيانات الكاملة
+      const inventoryService = InventoryService.getInstance();
+      const products = await inventoryService.getFinishedProducts();
+      
+      if (!products || products.length === 0) {
+        toast.error('لا توجد بيانات للتصدير', { id: 'export-data' });
+        return;
+      }
+      
+      // تحضير الأعمدة للتصدير (نفس الأعمدة المعروضة في الجدول)
+      const columns = [
+        { key: 'code', title: 'الكود' },
+        { key: 'name', title: 'الاسم' },
+        { key: 'quantity', title: 'الكمية المتاحة' },
+        { key: 'unit', title: 'وحدة القياس' },
+        { key: 'unit_cost', title: 'تكلفة الوحدة' },
+        { key: 'sales_price', title: 'سعر البيع' },
+        { key: 'min_stock', title: 'الحد الأدنى للمخزون' }
+      ];
+      
+      // تحضير البيانات للتصدير
+      const exportData = prepareDataForExport(products, columns);
+      
+      // تصدير البيانات
+      exportToExcel(exportData, 'المنتجات-النهائية', 'المنتجات النهائية');
+      
+      toast.success('تم تصدير البيانات بنجاح', { id: 'export-data' });
+    } catch (error) {
+      console.error('خطأ في تصدير البيانات:', error);
+      toast.error('حدث خطأ أثناء تصدير البيانات', { id: 'export-data' });
+    } finally {
+      setExporting(false);
+    }
+  };
+  
   return (
     <PageTransition>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المنتجات النهائية</h1>
-            <p className="text-muted-foreground mt-1">إدارة المنتجات النهائية الجاهزة للبيع</p>
-          </div>
+            <p className="text-muted-foreground mt-1">إدارة المنتجات النهائية الجاهزة للبيع</p>          </div>
           <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleExportData}
+              disabled={exporting}
+              title="تصدير بيانات المنتجات النهائية إلى ملف Excel"
+              className="gap-2"
+            >
+              <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
+              تصدير البيانات
+            </Button>
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <FileUp size={18} className="mr-2" />
               استيراد من ملف

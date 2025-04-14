@@ -33,11 +33,10 @@ interface DataTableProps {
 
 const DataTable: React.FC<DataTableProps> = ({
   columns,
-  data,
-  searchable = true,
+  data,  searchable = true,
   searchKeys = [],
   pagination = true,
-  itemsPerPage = 10,
+  itemsPerPage = 150,
   actions,
   searchPlaceholder = "بحث...",
   noDataMessage = "لا توجد بيانات للعرض",

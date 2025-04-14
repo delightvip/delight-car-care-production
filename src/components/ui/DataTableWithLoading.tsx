@@ -80,9 +80,7 @@ export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
           </div>
         </div>
       </div>
-    );
-  }
-
+    );  }
   // Handle pagination options to be compatible with DataTable
   const paginationOption = typeof pagination === 'boolean' 
     ? pagination 
@@ -91,7 +89,7 @@ export const DataTableWithLoading: React.FC<DataTableWithLoadingProps> = ({
   // Handle itemsPerPage
   const finalItemsPerPage = typeof pagination === 'object' && pagination.pageSize
     ? pagination.pageSize
-    : itemsPerPage || 10;
+    : itemsPerPage || 150; // زيادة عدد العناصر من 25 إلى 150 عنصر
 
   // Make sure all needed props are properly passed to DataTable
   return (

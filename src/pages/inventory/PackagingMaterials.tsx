@@ -21,11 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle } from 'lucide-react';
+import { Edit, Plus, Trash, FileUp, Eye, PlusCircle, MinusCircle, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import InventoryService from '@/services/InventoryService';
+import { exportToExcel, prepareDataForExport } from '@/utils/exportData';
 
 const units = ['قطعة', 'علبة', 'كرتونة', 'رول', 'متر'];
 
@@ -41,9 +42,7 @@ const PackagingMaterials = () => {
     unit: '',
     price: 0,
     quantity: 0,
-    minStock: 0
-  });
-  const [importFile, setImportFile] = useState<File | null>(null);
+    minStock: 0  });  const [importFile, setImportFile] = useState<File | null>(null);
   
   // إضافة حالة للتصفية حسب حالة المخزون
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value' | 'high-importance'>('all');
@@ -51,7 +50,50 @@ const PackagingMaterials = () => {
   // إضافة حالة للفرز
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   
+  // إضافة حالة للتحكم في عملية التصدير
+  const [exporting, setExporting] = useState(false);
+  
   const queryClient = useQueryClient();
+  
+  // تصدير بيانات مستلزمات التعبئة إلى ملف Excel
+  const handleExportData = async () => {
+    setExporting(true);
+    toast.info('جاري تحضير بيانات التصدير...', { id: 'export-data' });
+    
+    try {
+      // استدعاء خدمة المخزون للحصول على البيانات الكاملة
+      const inventoryService = InventoryService.getInstance();
+      const materials = await inventoryService.getPackagingMaterials();
+      
+      if (!materials || materials.length === 0) {
+        toast.error('لا توجد بيانات للتصدير', { id: 'export-data' });
+        return;
+      }
+      
+      // تحضير الأعمدة للتصدير
+      const columns = [
+        { key: 'code', title: 'الكود' },
+        { key: 'name', title: 'الاسم' },
+        { key: 'quantity', title: 'الكمية المتاحة' },
+        { key: 'unit', title: 'وحدة القياس' },
+        { key: 'unit_cost', title: 'تكلفة الوحدة' },
+        { key: 'min_stock', title: 'الحد الأدنى للمخزون' }
+      ];
+      
+      // تحضير البيانات للتصدير
+      const exportData = prepareDataForExport(materials, columns);
+      
+      // تصدير البيانات
+      exportToExcel(exportData, 'مستلزمات-التعبئة', 'مستلزمات التعبئة');
+      
+      toast.success('تم تصدير البيانات بنجاح', { id: 'export-data' });
+    } catch (error) {
+      console.error('خطأ في تصدير البيانات:', error);
+      toast.error('حدث خطأ أثناء تصدير البيانات', { id: 'export-data' });
+    } finally {
+      setExporting(false);
+    }
+  };
   
   const { data: packagingMaterials, isLoading, error } = useQuery({
     queryKey: ['packagingMaterials'],
@@ -448,9 +490,19 @@ const PackagingMaterials = () => {
                 <SelectItem value="all">كل المستلزمات</SelectItem>
                 <SelectItem value="low-stock">المخزون المنخفض</SelectItem>
                 <SelectItem value="high-value">الأعلى قيمة</SelectItem>
-                <SelectItem value="high-importance">الأكثر أهمية</SelectItem>
-              </SelectContent>
+                <SelectItem value="high-importance">الأكثر أهمية</SelectItem>              </SelectContent>
             </Select>
+            
+            <Button 
+              variant="outline" 
+              onClick={handleExportData}
+              disabled={exporting}
+              title="تصدير بيانات مستلزمات التعبئة إلى ملف Excel"
+              className="gap-2"
+            >
+              <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
+              تصدير البيانات
+            </Button>
             
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <FileUp size={18} className="mr-2" />

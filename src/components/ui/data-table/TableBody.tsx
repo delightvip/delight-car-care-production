@@ -40,12 +40,13 @@ const TableBodyComponent: React.FC<TableBodyProps> = ({
     } else {
       return renderFn(record);
     }
-  };
-
-  return (
+  };  return (
     <TableBody>
       {data.map((record, index) => (
-        <TableRow key={index} className="hover:bg-muted/50">
+        <TableRow 
+          key={index} 
+          className={`hover:bg-muted/70 ${index % 2 === 0 ? '' : 'bg-muted/30'}`}
+        >
           {columns.map((column) => (
             <TableCell 
               key={`${index}-${column.key}`}
