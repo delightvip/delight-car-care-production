@@ -515,10 +515,9 @@ const PackagingMaterials = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">مستلزمات التعبئة</h1>
             <p className="text-muted-foreground mt-1">إدارة مستلزمات التعبئة والتغليف</p>
-          </div>
-          <div className="flex gap-2">
+          </div>          <div className="flex gap-2">
             <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100">
                 <SelectValue placeholder="تصفية المستلزمات" />
               </SelectTrigger>
               <SelectContent>
@@ -532,7 +531,7 @@ const PackagingMaterials = () => {
               onClick={handleExportData}
               disabled={exporting}
               title="تصدير بيانات مستلزمات التعبئة إلى ملف Excel"
-              className="gap-2"
+              className="gap-2 bg-sky-100 hover:bg-sky-200 text-sky-700 border-sky-200"
             >
               <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
               تصدير البيانات
@@ -543,7 +542,7 @@ const PackagingMaterials = () => {
               onClick={handleUpdateFinishedProductCosts}
               disabled={updatingCosts}
               title="تحديث تكاليف المنتجات النهائية المرتبطة بمستلزمات التعبئة"
-              className="gap-2"
+              className="gap-2 bg-amber-100 hover:bg-amber-200 text-amber-700 border-amber-200"
             >
               <RefreshCw size={18} className={updatingCosts ? 'animate-spin' : ''} />
               تحديث تكاليف المنتجات

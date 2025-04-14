@@ -90,24 +90,26 @@ const RawMaterials = () => {  const [isAddDialogOpen, setIsAddDialogOpen] = useS
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المواد الخام</h1>
-            <p className="text-muted-foreground mt-1">إدارة المواد الخام المستخدمة في عمليات الإنتاج</p>          </div>
-          <div className="flex gap-2">
+            <p className="text-muted-foreground mt-1">إدارة المواد الخام المستخدمة في عمليات الإنتاج</p>          </div>          <div className="flex gap-2">
             <Button 
               variant="outline" 
               onClick={handleExportData}
               disabled={exporting}
               title="تصدير بيانات المواد الخام إلى ملف Excel"
-              className="gap-2"
+              className="gap-2 bg-sky-100 hover:bg-sky-200 text-sky-700 border-sky-200"
             >
               <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
               تصدير البيانات
             </Button>
-            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsImportDialogOpen(true)}
+              className="bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
+            >
               <FileUp size={18} className="mr-2" />
               استيراد من ملف
-            </Button>
-            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-              <SelectTrigger className="w-[180px]">
+            </Button>            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+              <SelectTrigger className="w-[180px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100">
                 <SelectValue placeholder="تصفية المواد" />
               </SelectTrigger>
               <SelectContent>
@@ -117,12 +119,15 @@ const RawMaterials = () => {  const [isAddDialogOpen, setIsAddDialogOpen] = useS
               </SelectContent>
             </Select>
             <Input
-              className="w-[220px]"
+              className="w-[220px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100 dark:placeholder:text-gray-400"
               placeholder="بحث..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Button 
+              onClick={() => setIsAddDialogOpen(true)}
+              className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+            >
               <Plus size={18} className="mr-2" />
               إضافة مادة
             </Button>

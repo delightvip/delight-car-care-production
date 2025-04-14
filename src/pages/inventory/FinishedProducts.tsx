@@ -117,13 +117,13 @@ const FinishedProducts = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المنتجات النهائية</h1>
-            <p className="text-muted-foreground mt-1">إدارة المنتجات النهائية الجاهزة للبيع</p>          </div>
-          <div className="flex gap-2">            <Button 
+            <p className="text-muted-foreground mt-1">إدارة المنتجات النهائية الجاهزة للبيع</p>          </div>          <div className="flex gap-2">            
+            <Button 
               variant="outline" 
               onClick={handleExportData}
               disabled={exporting}
               title="تصدير بيانات المنتجات النهائية إلى ملف Excel"
-              className="gap-2"
+              className="gap-2 bg-sky-100 hover:bg-sky-200 text-sky-700 border-sky-200"
             >
               <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
               تصدير البيانات
@@ -133,17 +133,20 @@ const FinishedProducts = () => {
               onClick={handleUpdateAllCosts}
               disabled={updatingCosts}
               title="تحديث تكاليف جميع المنتجات النهائية بناءً على المكونات"
-              className="gap-2"
+              className="gap-2 bg-amber-100 hover:bg-amber-200 text-amber-700 border-amber-200"
             >
               <RefreshCw size={18} className={updatingCosts ? 'animate-spin' : ''} />
               تحديث التكاليف
             </Button>
-            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsImportDialogOpen(true)}
+              className="bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
+            >
               <FileUp size={18} className="mr-2" />
               استيراد من ملف
-            </Button>
-            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-              <SelectTrigger className="w-[180px]">
+            </Button>            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+              <SelectTrigger className="w-[180px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100">
                 <SelectValue placeholder="تصفية المنتجات" />
               </SelectTrigger>
               <SelectContent>
@@ -153,7 +156,7 @@ const FinishedProducts = () => {
               </SelectContent>
             </Select>
             <Input
-              className="w-[220px]"
+              className="w-[220px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100 dark:placeholder:text-gray-400"
               placeholder="بحث..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
