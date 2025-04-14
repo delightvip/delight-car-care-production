@@ -527,8 +527,7 @@ const PackagingMaterials = () => {
                 <SelectItem value="high-value">الأعلى قيمة</SelectItem>
                 <SelectItem value="high-importance">الأكثر أهمية</SelectItem>              </SelectContent>
             </Select>
-            
-            <Button 
+              <Button 
               variant="outline" 
               onClick={handleExportData}
               disabled={exporting}
@@ -537,6 +536,17 @@ const PackagingMaterials = () => {
             >
               <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
               تصدير البيانات
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              onClick={handleUpdateFinishedProductCosts}
+              disabled={updatingCosts}
+              title="تحديث تكاليف المنتجات النهائية المرتبطة بمستلزمات التعبئة"
+              className="gap-2"
+            >
+              <RefreshCw size={18} className={updatingCosts ? 'animate-spin' : ''} />
+              تحديث تكاليف المنتجات
             </Button>
             
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
