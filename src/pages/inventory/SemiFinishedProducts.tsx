@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
 import { Button } from '@/components/ui/button';
-import { FileUp, Plus } from 'lucide-react';
+import { FileUp, Plus, RefreshCw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import SemiFinishedList from '@/components/inventory/semi-finished/SemiFinishedList';
@@ -11,6 +11,7 @@ import DeleteConfirmDialog from '@/components/inventory/common/DeleteConfirmDial
 import SemiFinishedDetails from '@/components/inventory/semi-finished/SemiFinishedDetails';
 import ImportDialog from '@/components/inventory/common/ImportDialog';
 import InventoryService from '@/services/InventoryService';
+import CostUpdateService from '@/services/CostUpdateService';
 import { toast } from 'sonner';
 
 const SemiFinishedProducts = () => {
@@ -22,6 +23,7 @@ const SemiFinishedProducts = () => {
   const [currentProduct, setCurrentProduct] = useState<any>(null);
   const [filterType, setFilterType] = useState<'all' | 'low-stock' | 'high-value'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [updatingCosts, setUpdatingCosts] = useState(false);
   
   const queryClient = useQueryClient();
   
@@ -43,6 +45,32 @@ const SemiFinishedProducts = () => {
     setIsDetailsDialogOpen(true);
   };
   
+  // تحديث تكاليف المنتجات النصف مصنعة بناءً على آخر أسعار المواد الخام
+  const handleUpdateCosts = async () => {
+    if (updatingCosts) return; // منع التنفيذ المتكرر أثناء التحديث
+    
+    setUpdatingCosts(true);
+    toast.info('جاري تحديث تكاليف المنتجات النصف مصنعة...', { id: 'cost-update' });
+    
+    try {
+      const costUpdateService = CostUpdateService.getInstance();
+      const updatedCount = await costUpdateService.updateAllSemiFinishedCosts();
+      
+      if (updatedCount > 0) {
+        toast.success(`تم تحديث تكاليف ${updatedCount} منتج نصف مصنع`, { id: 'cost-update' });
+        // تحديث البيانات المعروضة
+        queryClient.invalidateQueries({ queryKey: ['semiFinishedProducts'] });
+      } else {
+        toast.info('لم يتم العثور على منتجات تحتاج للتحديث', { id: 'cost-update' });
+      }
+    } catch (error) {
+      console.error('خطأ في تحديث تكاليف المنتجات النصف مصنعة:', error);
+      toast.error('حدث خطأ أثناء تحديث تكاليف المنتجات', { id: 'cost-update' });
+    } finally {
+      setUpdatingCosts(false);
+    }
+  };
+  
   return (
     <PageTransition>
       <div className="space-y-6">
@@ -50,8 +78,17 @@ const SemiFinishedProducts = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">المنتجات النصف مصنعة</h1>
             <p className="text-muted-foreground mt-1">إدارة المنتجات النصف مصنعة المستخدمة في عمليات الإنتاج</p>
-          </div>
-          <div className="flex gap-2">
+          </div>          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleUpdateCosts} 
+              disabled={updatingCosts}
+              title="تحديث تكاليف المنتجات بناءً على آخر أسعار المواد الخام"
+              className="gap-2"
+            >
+              <RefreshCw size={18} className={updatingCosts ? 'animate-spin' : ''} />
+              تحديث التكاليف
+            </Button>
             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <FileUp size={18} className="mr-2" />
               استيراد من ملف
