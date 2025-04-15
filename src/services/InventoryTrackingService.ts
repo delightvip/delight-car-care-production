@@ -191,7 +191,8 @@ class InventoryTrackingService {
         reason: item.reason,
         created_at: item.created_at,
         updated_at: item.updated_at,
-        user_id: item.user_id
+        user_id: item.user_id,
+        user_name: undefined // This will be populated when needed
       }));
     } catch (error) {
       console.error("Error fetching inventory movements:", error);
@@ -207,7 +208,7 @@ class InventoryTrackingService {
     try {
       const { data, error } = await supabase
         .from('inventory_movements')
-        .select('*')
+        .select('*, users:user_id(name)')
         .eq('item_id', itemId)
         .eq('item_type', itemType)
         .order('created_at', { ascending: false });
@@ -227,7 +228,8 @@ class InventoryTrackingService {
         reason: item.reason,
         created_at: item.created_at,
         updated_at: item.updated_at,
-        user_id: item.user_id
+        user_id: item.user_id,
+        user_name: item.users?.name
       }));
     } catch (error) {
       console.error("Error in getItemMovements:", error);
