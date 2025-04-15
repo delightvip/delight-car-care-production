@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -232,7 +231,7 @@ const PackagingPlanning = () => {
       return;
     }
     
-    if (semiFinished.quantity < semiFinishedQuantityNeeded) {
+    if (Number(semiFinished.quantity) < semiFinishedQuantityNeeded) {
       if (!window.confirm(`تحذير: كمية المنتج النصف المصنع (${semiFinished.quantity}) أقل من الكمية المطلوبة (${semiFinishedQuantityNeeded}). هل تريد المتابعة على أي حال؟`)) {
         return;
       }

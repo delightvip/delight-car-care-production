@@ -185,7 +185,7 @@ class InventoryTrackingService {
         id: item.id,
         item_id: item.item_id,
         item_type: item.item_type,
-        movement_type: item.movement_type,
+        movement_type: item.movement_type as 'in' | 'out' | 'adjustment',
         quantity: item.quantity,
         balance_after: item.balance_after,
         reason: item.reason,
@@ -217,7 +217,18 @@ class InventoryTrackingService {
         throw error;
       }
 
-      return data || [];
+      return (data || []).map(item => ({
+        id: item.id,
+        item_id: item.item_id,
+        item_type: item.item_type,
+        movement_type: item.movement_type as 'in' | 'out' | 'adjustment',
+        quantity: item.quantity,
+        balance_after: item.balance_after,
+        reason: item.reason,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        user_id: item.user_id
+      }));
     } catch (error) {
       console.error("Error in getItemMovements:", error);
       return [];

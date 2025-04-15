@@ -13,7 +13,7 @@ import InventoryTrackingService from '@/services/InventoryTrackingService';
 import MovementHistoryTable from '@/components/inventory/movement/MovementHistoryTable';
 import MovementStatistics from '@/components/inventory/movement/MovementStatistics';
 import MovementFilters from '@/components/inventory/movement/MovementFilters';
-import { ArrowPathIcon, FileDownIcon } from 'lucide-react';
+import { ArrowUpDown, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const InventoryTracking = () => {
@@ -165,7 +165,7 @@ const InventoryTracking = () => {
               onClick={() => refetch()}
               className="flex gap-2 items-center"
             >
-              <ArrowPathIcon className="h-4 w-4" />
+              <ArrowUpDown className="h-4 w-4" />
               <span>تحديث</span>
             </Button>
             
@@ -176,7 +176,7 @@ const InventoryTracking = () => {
               disabled={filteredMovements.length === 0}
               className="flex gap-2 items-center"
             >
-              <FileDownIcon className="h-4 w-4" />
+              <Download className="h-4 w-4" />
               <span>تصدير</span>
             </Button>
           </div>

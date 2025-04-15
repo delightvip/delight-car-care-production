@@ -38,13 +38,15 @@ const MovementFilters: React.FC<MovementFiltersProps> = ({
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row gap-2 flex-wrap md:flex-nowrap">
-        <Input
-          placeholder="بحث في السبب أو الملاحظات..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full flex-1"
-          icon={<Search className="h-4 w-4 opacity-50" />}
-        />
+        <div className="relative w-full flex-1">
+          <Input
+            placeholder="بحث في السبب أو الملاحظات..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pr-9"
+          />
+          <Search className="absolute top-1/2 right-3 transform -translate-y-1/2 h-4 w-4 opacity-50" />
+        </div>
         
         <Select value={itemType} onValueChange={setItemType}>
           <SelectTrigger className="w-full md:w-44">
