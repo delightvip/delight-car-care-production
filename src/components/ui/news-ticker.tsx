@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play, TrendingDown, TrendingUp, CircleDot, AlertCircle, Star } from "lucide-react";
 
 export interface NewsItem {
   id: string | number;
@@ -8,6 +9,12 @@ export interface NewsItem {
   category?: string;
   importance?: "normal" | "high" | "urgent";
   link?: string;
+  trend?: "up" | "down" | "neutral";
+  value?: number | string;
+  previousValue?: number | string;
+  valueChange?: number;
+  valueChangePercentage?: number;
+  highlight?: boolean;
 }
 
 interface NewsTickerProps {
@@ -19,6 +26,7 @@ interface NewsTickerProps {
   controls?: boolean;
   autoplay?: boolean;
   height?: number;
+  theme?: "default" | "dark" | "finance";
 }
 
 export const NewsTicker = ({
@@ -29,7 +37,8 @@ export const NewsTicker = ({
   direction = "rtl",
   controls = true,
   autoplay = true,
-  height = 40
+  height = 40,
+  theme = "default"
 }: NewsTickerProps) => {
   const [isPaused, setIsPaused] = useState(!autoplay);
   const tickerRef = useRef<HTMLDivElement>(null);
@@ -103,9 +112,23 @@ export const NewsTicker = ({
     return aVal - bVal;
   });
 
+  // تحديد فئة الخلفية بناءً على السمة
+  const getTickerBackground = () => {
+    switch (theme) {
+      case "dark":
+        return "bg-gray-900 border-gray-700";
+      case "finance":
+        return "bg-slate-800/90 border-slate-700 backdrop-blur-sm";
+      default:
+        return "bg-muted/30 border-border";
+    }
+  };
+
   return (
-    <div className={cn("relative bg-muted/30 border-y border-border overflow-hidden", className)}
-         style={{ height: `${height}px` }}>
+    <div 
+      className={cn("relative overflow-hidden border-y", getTickerBackground(), className)}
+      style={{ height: `${height}px` }}
+    >
       <div 
         ref={tickerRef}
         className="h-full overflow-hidden"
@@ -122,16 +145,28 @@ export const NewsTicker = ({
               key={item.id || idx}
               className={cn(
                 "inline-flex items-center px-4 h-full",
-                item.importance === "urgent" && "font-bold text-destructive",
-                item.importance === "high" && "font-semibold text-warning-foreground",
+                item.importance === "urgent" && "font-bold",
+                item.importance === "high" && "font-semibold",
+                item.highlight && "bg-amber-500/10",
                 item.category && "after:content-['●'] after:mx-3 after:text-muted-foreground"
               )}
             >
+              {/* أيقونة الأهمية أو الاتجاه */}
+              {item.importance === "urgent" && (
+                <AlertCircle size={16} className="text-destructive mr-1.5" />
+              )}
+              {item.importance === "high" && (
+                <Star size={16} className="text-amber-500 mr-1.5" />
+              )}
+              
+              {/* عرض الفئة إذا كانت موجودة */}
               {item.category && (
                 <span className="ml-2 text-sm font-medium text-muted-foreground">
                   {item.category}:
                 </span>
               )}
+              
+              {/* المحتوى الرئيسي */}
               <span className="text-sm">
                 {item.link ? (
                   <a href={item.link} className="hover:underline">
@@ -141,6 +176,45 @@ export const NewsTicker = ({
                   item.content
                 )}
               </span>
+              
+              {/* عرض معلومات التغيير إذا كانت موجودة */}
+              {item.value !== undefined && (
+                <span 
+                  className={cn(
+                    "mx-1.5 font-mono text-sm",
+                    item.trend === "up" && "text-emerald-500",
+                    item.trend === "down" && "text-destructive",
+                    item.trend === "neutral" && "text-amber-500"
+                  )}
+                >
+                  {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
+                </span>
+              )}
+              
+              {/* مؤشر الاتجاه */}
+              {item.trend === "up" && (
+                <TrendingUp size={16} className="text-emerald-500 mx-0.5" />
+              )}
+              {item.trend === "down" && (
+                <TrendingDown size={16} className="text-destructive mx-0.5" />
+              )}
+              {item.trend === "neutral" && (
+                <CircleDot size={16} className="text-amber-500 mx-0.5" />
+              )}
+              
+              {/* نسبة التغيير */}
+              {item.valueChangePercentage !== undefined && (
+                <span 
+                  className={cn(
+                    "mx-1 text-xs",
+                    item.valueChangePercentage > 0 ? "text-emerald-500" : 
+                    item.valueChangePercentage < 0 ? "text-destructive" : "text-amber-500"
+                  )}
+                >
+                  {item.valueChangePercentage > 0 ? '+' : ''}
+                  {item.valueChangePercentage.toFixed(1)}%
+                </span>
+              )}
             </div>
           ))}
         </div>

@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useSidebar } from './SidebarContext';
@@ -43,7 +44,8 @@ export const Layout = () => {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <ModernSidebar />      <motion.div 
+      <ModernSidebar />      
+      <motion.div 
         className="flex-1 flex flex-col min-h-screen w-full relative"
         initial={false}
         animate={{
@@ -55,7 +57,8 @@ export const Layout = () => {
           damping: 30 
         }}
       >
-        <Navbar />        <main className="flex-1 w-full h-full py-4 md:py-6 overflow-hidden">
+        <Navbar />        
+        <main className="flex-1 w-full h-full py-4 md:py-6 overflow-hidden">
           <div className="container mx-auto px-3 md:px-4 pt-14 md:pt-14 h-full overflow-x-auto overflow-y-auto"
            style={{ maxWidth: isMobile ? '100%' : '1400px' }}>
             <div className="min-w-fit pb-6"> 
