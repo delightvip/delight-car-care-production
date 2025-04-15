@@ -6,6 +6,7 @@ import Navbar from './Navbar';
 import { useTheme } from '@/components/theme-provider';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { motion } from 'framer-motion';
+import { AppNewsTicker } from '@/components/AppNewsTicker';
 
 export const Layout = () => {
   // Wrap in try/catch to debug sidebar context issues
@@ -54,8 +55,7 @@ export const Layout = () => {
           damping: 30 
         }}
       >
-        <Navbar />
-        <main className="flex-1 w-full h-full py-4 md:py-6 overflow-hidden">
+        <Navbar />        <main className="flex-1 w-full h-full py-4 md:py-6 overflow-hidden">
           <div className="container mx-auto px-3 md:px-4 pt-14 md:pt-14 h-full overflow-x-auto overflow-y-auto"
            style={{ maxWidth: isMobile ? '100%' : '1400px' }}>
             <div className="min-w-fit pb-6"> 
@@ -63,6 +63,9 @@ export const Layout = () => {
             </div>
           </div>
         </main>
+        <div className="fixed bottom-0 left-0 right-0 z-40">
+          <AppNewsTicker />
+        </div>
       </motion.div>
     </div>
   );
