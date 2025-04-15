@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { BrowserRouter as Router } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './App.css';
 import Layout from './components/layout/Layout';
@@ -23,12 +22,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="juzoor-factory-theme">
-        <Router>
-          <Toaster />
-          <SonnerToaster position="top-center" richColors closeButton />
-          <Layout />
-          <InventoryTrackingInitializer />
-        </Router>
+        <Toaster />
+        <SonnerToaster position="top-center" richColors closeButton />
+        <Layout />
+        <InventoryTrackingInitializer />
       </ThemeProvider>
     </QueryClientProvider>
   );
