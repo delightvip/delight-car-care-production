@@ -42,12 +42,11 @@ export const Layout = () => {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <ModernSidebar />
-      <motion.div 
+      <ModernSidebar />      <motion.div 
         className="flex-1 flex flex-col min-h-screen w-full relative"
         initial={false}
         animate={{
-          marginRight: !isMobile && isExpanded ? '16rem' : isMobile ? '0' : '4rem'
+          [rtl ? 'marginRight' : 'marginLeft']: !isMobile && isExpanded ? '16rem' : isMobile ? '0' : '4rem'
         }}
         transition={{ 
           type: "spring", 

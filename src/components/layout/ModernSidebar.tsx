@@ -402,6 +402,7 @@ const SidebarGroup: React.FC<SidebarGroupProps> = ({
 
 const ModernSidebar: React.FC = () => {
   const { isExpanded, toggleSidebar, isMobile } = useSidebar();
+  const [rtl] = useLocalStorage('rtl-mode', true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{to: string, title: string}[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -497,9 +498,9 @@ const ModernSidebar: React.FC = () => {
           stiffness: 300, 
           damping: 30,
           duration: 0.3
-        }}
-        className={cn(
-          'bg-background border-l border-border h-screen flex flex-col fixed top-0 right-0 z-30',
+        }}        className={cn(
+          'bg-background h-screen flex flex-col fixed top-0 z-30',
+          rtl ? 'right-0 border-l border-border' : 'left-0 border-r border-border', 
           'will-change-transform',
           'shadow-sm',
           'overflow-hidden'

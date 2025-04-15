@@ -11,6 +11,7 @@ import NavbarLowStockAlert from './navbar/NavbarLowStockAlert';
 import NavbarBranding from './navbar/NavbarBranding';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 import { cn } from '@/lib/utils';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 const Navbar = () => {
   // Wrap in try/catch to debug sidebar context issues
@@ -25,6 +26,8 @@ const Navbar = () => {
   
   // Add more detailed logging to debug context issues
   console.log("Navbar - Current sidebar state:", { isExpanded, isMobile });
+    // Get RTL setting to apply correct direction
+  const [rtl] = useLocalStorage('rtl-mode', true);
   
   return (
     <motion.header 
@@ -36,7 +39,10 @@ const Navbar = () => {
         "w-full"
       )}
       initial={false}
-      animate={{
+      animate={rtl ? {
+        left: !isMobile && isExpanded ? '16rem' : isMobile ? '0' : '4rem',
+        right: 0
+      } : {
         right: !isMobile && isExpanded ? '16rem' : isMobile ? '0' : '4rem',
         left: 0
       }}
