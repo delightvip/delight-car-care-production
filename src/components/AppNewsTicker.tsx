@@ -4,6 +4,8 @@ import { NewsTicker, NewsItem } from './ui/news-ticker';
 import NewsTickerService from '@/services/NewsTickerService';
 import { Spinner } from './ui/spinner';
 import { useTheme } from '@/components/theme-provider';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 export const AppNewsTicker = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
@@ -19,6 +21,7 @@ export const AppNewsTicker = () => {
         setNews(newsItems);
       } catch (error) {
         console.error('Error fetching news for ticker:', error);
+        toast.error('حدث خطأ أثناء تحميل بيانات الشريط الإخباري');
       } finally {
         setIsLoading(false);
       }
@@ -27,8 +30,8 @@ export const AppNewsTicker = () => {
     // جلب الأخبار عند تحميل المكون
     fetchNews();
     
-    // تحديث الأخبار كل 3 دقائق
-    const intervalId = setInterval(fetchNews, 3 * 60 * 1000);
+    // تحديث الأخبار كل 2 دقيقة
+    const intervalId = setInterval(fetchNews, 2 * 60 * 1000);
     
     return () => clearInterval(intervalId);
   }, []);

@@ -1,438 +1,470 @@
-
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { DateRange } from 'react-day-picker';
+import { ar } from 'date-fns/locale';
+
+import { useToast } from '@/components/ui/use-toast';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { CalendarIcon, CheckCheck, Package2Icon } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ChevronRight, Loader2, PackageCheck, Trash2 } from "lucide-react";
-import ProductionDatabaseService from "@/services/database/ProductionDatabaseService";
+} from "@/components/ui/select"
+import { useTranslation } from 'react-i18next';
+import { useDebounce } from '@/hooks/use-debounce';
+import { useSearchParams } from 'react-router-dom';
+import { packagingPlanningSchema } from '@/lib/validations/packaging';
+import { PackagingPlanningData } from '@/types/packaging';
+import ProductionService from '@/services/ProductionService';
+import { useDrawer } from '@/components/ui/drawer';
+import { PackagingOrder } from '@/types/production';
+import { InventoryItem } from '@/types/inventory';
+import InventoryService from '@/services/InventoryService';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { calculatePackagingMaterialsNeeded } from '@/lib/utils';
 
-interface FinishedProduct {
-  id: number;
-  code: string;
-  name: string;
-  unit: string;
-  quantity: number;
-  semi_finished_id: number;
-  semi_finished_quantity: number;
-  unit_cost: number;
+interface PackagingPlanningFormProps {
+  onSubmit: (data: PackagingPlanningData) => Promise<void>;
+  onCancel: () => void;
+  initialValues?: PackagingPlanningData;
+  items?: InventoryItem[];
 }
 
-interface SemiFinishedProduct {
-  id: number;
-  code: string;
-  name: string;
-  unit: string;
-  quantity: number;
-  unit_cost: number;
-}
+const PackagingPlanningForm: React.FC<PackagingPlanningFormProps> = ({ onSubmit, onCancel, initialValues, items }) => {
+  const { toast } = useToast();
+  const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [materialsNeeded, setMaterialsNeeded] = useState<{ id: string; name: string; quantity: number; }[]>([]);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [orderNumber, setOrderNumber] = useState<string>('');
+  const [orderQuantity, setOrderQuantity] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(initialValues?.date ? new Date(initialValues.date) : undefined);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [isItemValid, setIsItemValid] = useState(true);
+  const [isQuantityValid, setIsQuantityValid] = useState(true);
+  const [isDateValid, setIsDateValid] = useState(true);
+  const [isMaterialsValid, setIsMaterialsValid] = useState(true);
+  const [isOrderNumberValid, setIsOrderNumberValid] = useState(true);
+  const [isFormValid, setIsFormValid] = useState(false);
+  const [isFormSubmitted, setIsFormSubmitted] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isFormDisabled, setIsFormDisabled] = useState(false);
+  const [isFormDirty, setIsFormDirty] = useState(false);
+  const [isFormTouched, setIsFormTouched] = useState(false);
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
+  const [isFormResetting, setIsFormResetting] = useState(false);
+  const [isFormSubmittedSuccessfully, setIsFormSubmittedSuccessfully] = useState(false);
+  const [isFormSubmittedWithError, setIsFormSubmittedWithError] = useState(false);
+  const [isFormSubmissionLoading, setIsFormSubmissionLoading] = useState(false);
 
-interface PackagingMaterial {
-  id: number;
-  code: string;
-  name: string;
-  quantity: number;
-  unit_cost: number;
-}
-
-interface PackagingPlanningItem {
-  packageMaterialId: number;
-  code: string;
-  name: string;
-  requiredQuantity: number;
-  unitCost: number;
-  available: boolean;
-}
-
-const PackagingPlanning = () => {
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [productionQuantity, setProductionQuantity] = useState<number>(1);
-  const [packagingMaterials, setPackagingMaterials] = useState<PackagingPlanningItem[]>([]);
-  const [semiFinished, setSemiFinished] = useState<SemiFinishedProduct | null>(null);
-  const [semiFinishedQuantityNeeded, setSemiFinishedQuantityNeeded] = useState<number>(0);
-  const [totalCost, setTotalCost] = useState<number>(0);
-  const [isCreatingOrder, setIsCreatingOrder] = useState<boolean>(false);
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  
-  const productionService = ProductionDatabaseService.getInstance();
-  
-  const { data: finishedProducts = [], isLoading: isLoadingProducts } = useQuery({
-    queryKey: ['finishedProducts'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('finished_products')
-        .select('*')
-        .order('name', { ascending: true });
-      
-      if (error) throw error;
-      return data as FinishedProduct[];
-    }
-  });
-  
-  const { data: productPackagingMaterials = [], isLoading: isLoadingPackaging } = useQuery({
-    queryKey: ['productPackaging', selectedProductId],
-    queryFn: async () => {
-      if (!selectedProductId) return [];
-      
-      const { data, error } = await supabase
-        .from('finished_product_packaging')
-        .select(`
-          packaging_material_id,
-          quantity,
-          packaging_material:packaging_material_id(id, code, name, quantity, unit_cost)
-        `)
-        .eq('finished_product_id', selectedProductId);
-      
-      if (error) throw error;
-      return data;
+  const form = useForm<PackagingPlanningData>({
+    resolver: initialValues ? undefined : zodResolver(packagingPlanningSchema),
+    defaultValues: {
+      productName: initialValues?.productName || '',
+      quantity: initialValues?.quantity || 0,
+      date: initialValues?.date || new Date(),
+      notes: initialValues?.notes || '',
+      itemIds: initialValues?.itemIds || [],
+      orderNumber: initialValues?.orderNumber || '',
     },
-    enabled: !!selectedProductId
+    mode: "onChange",
   });
-  
-  const { data: productDetails } = useQuery({
-    queryKey: ['productDetails', selectedProductId],
-    queryFn: async () => {
-      if (!selectedProductId) return null;
-      
-      const { data, error } = await supabase
-        .from('finished_products')
-        .select(`
-          semi_finished_id,
-          semi_finished_quantity,
-          semi_finished:semi_finished_id(id, code, name, quantity, unit, unit_cost)
-        `)
-        .eq('id', selectedProductId)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!selectedProductId
-  });
-  
+
   useEffect(() => {
-    if (productDetails && productDetails.semi_finished) {
-      setSemiFinished(productDetails.semi_finished as SemiFinishedProduct);
-      
-      const quantity = Number(productionQuantity);
-      const requiredSemiFinishedQty = quantity * Number(productDetails.semi_finished_quantity || 0);
-      setSemiFinishedQuantityNeeded(requiredSemiFinishedQty);
-      
-      const materials: PackagingPlanningItem[] = [];
-      let totalPackagingCost = 0;
-      
-      productPackagingMaterials.forEach(item => {
-        const requiredQty = Number(item.quantity) * Number(quantity);
-        const material = item.packaging_material;
-        const unitCost = Number(material?.unit_cost || 0);
-        const materialCost = unitCost * requiredQty;
-        totalPackagingCost += materialCost;
-        
-        materials.push({
-          packageMaterialId: material?.id || 0,
-          code: material?.code || '',
-          name: material?.name || '',
-          requiredQuantity: requiredQty,
-          unitCost: unitCost,
-          available: Number(material?.quantity || 0) >= requiredQty
-        });
-      });
-      
-      setPackagingMaterials(materials);
-      
-      const semiFinishedCost = Number(productDetails.semi_finished?.unit_cost || 0) * requiredSemiFinishedQty;
-      setTotalCost(semiFinishedCost + totalPackagingCost);
+    if (initialValues) {
+      setOrderNumber(initialValues.orderNumber.toString());
+      setOrderQuantity(initialValues.quantity.toString());
+      setSelectedDate(initialValues.date ? new Date(initialValues.date) : undefined);
+      setSelectedItems(initialValues.itemIds || []);
+      setSelectedItem(items?.find(item => item.id === initialValues.itemId) || null);
+      setMaterialsNeeded(calculatePackagingMaterialsNeeded(items, initialValues.itemIds, initialValues.quantity));
     }
-  }, [selectedProductId, productionQuantity, productDetails, productPackagingMaterials]);
-  
-  const createOrderMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedProductId || !semiFinished) {
-        throw new Error('يرجى اختيار منتج وكمية صحيحة');
+  }, [initialValues, items]);
+
+  useEffect(() => {
+    const isValid =
+      isItemValid &&
+      isQuantityValid &&
+      isDateValid &&
+      isMaterialsValid &&
+      isOrderNumberValid;
+    setIsFormValid(isValid);
+  }, [isItemValid, isQuantityValid, isDateValid, isMaterialsValid, isOrderNumberValid]);
+
+  const handleItemChange = useCallback((item: InventoryItem | null) => {
+    setSelectedItem(item);
+    setIsItemValid(!!item);
+  }, []);
+
+  const handleQuantityChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setOrderQuantity(value);
+    const isValid = !isNaN(Number(value)) && Number(value) > 0;
+    setIsQuantityValid(isValid);
+  }, []);
+
+  const handleDateChange = useCallback((date: Date | undefined) => {
+    setSelectedDate(date);
+    setIsDateValid(!!date);
+  }, []);
+
+  const handleMaterialsChange = useCallback((values: string[]) => {
+    setSelectedItems(values);
+    const isValid = values.length > 0;
+    setIsMaterialsValid(isValid);
+  }, []);
+
+  const handleOrderNumberChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setOrderNumber(value);
+    const isValid = value.trim() !== '';
+    setIsOrderNumberValid(isValid);
+  }, []);
+
+  const calculateMaterialsNeededHandler = useCallback(() => {
+    if (!selectedItem) {
+      toast({
+        title: t('production.packaging.form.error.no_item_selected'),
+        description: t('production.packaging.form.error.select_item'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!orderQuantity) {
+      toast({
+        title: t('production.packaging.form.error.no_quantity'),
+        description: t('production.packaging.form.error.enter_quantity'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!selectedItems) {
+      toast({
+        title: t('production.packaging.form.error.no_materials'),
+        description: t('production.packaging.form.error.select_materials'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCalculating(true);
+    try {
+      const quantity = Number(orderQuantity);
+      if (isNaN(quantity) || quantity <= 0) {
+        toast({
+          title: t('production.packaging.form.error.invalid_quantity'),
+          description: t('production.packaging.form.error.enter_valid_quantity'),
+          variant: 'destructive',
+        });
+        return;
       }
-      
-      const product = finishedProducts.find(p => p.id.toString() === selectedProductId);
-      if (!product) {
-        throw new Error('لم يتم العثور على المنتج المحدد');
+      const materials = calculatePackagingMaterialsNeeded(items, selectedItems, Number(orderQuantity));
+      setMaterialsNeeded(materials);
+      toast({
+        title: t('production.packaging.form.success.materials_calculated'),
+        description: t('production.packaging.form.success.materials_calculated_desc'),
+      });
+    } catch (error) {
+      console.error('Error calculating materials needed:', error);
+      toast({
+        title: t('production.packaging.form.error.calculation_failed'),
+        description: t('production.packaging.form.error.calculation_failed_desc'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  }, [selectedItem, orderQuantity, selectedItems, items, t, toast]);
+
+  const onSubmitHandler = form.handleSubmit(async (data) => {
+    setIsFormSubmitting(true);
+    try {
+      const quantity = Number(orderQuantity);
+      if (isNaN(quantity) || quantity <= 0) {
+        toast({
+          title: t('production.packaging.form.error.invalid_quantity'),
+          description: t('production.packaging.form.error.enter_valid_quantity'),
+          variant: 'destructive',
+        });
+        return;
       }
-      
-      const packagingMaterialsData = packagingMaterials.map(material => ({
-        code: material.code,
-        name: material.name,
-        quantity: material.requiredQuantity
-      }));
-      
-      return await productionService.createPackagingOrder(
-        product.code,
-        product.name,
-        Number(productionQuantity),
-        product.unit,
-        {
-          code: semiFinished.code,
-          name: semiFinished.name,
-          quantity: semiFinishedQuantityNeeded
-        },
-        packagingMaterialsData,
-        totalCost
-      );
-    },
-    onSuccess: () => {
-      toast.success('تم إنشاء أمر التعبئة بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['packagingOrders'] });
-      navigate('/production/packaging-orders');
-    },
-    onError: (error: any) => {
-      toast.error(`حدث خطأ أثناء إنشاء أمر التعبئة: ${error.message}`);
+
+      if (!selectedDate) {
+        toast({
+          title: t('production.packaging.form.error.no_date'),
+          description: t('production.packaging.form.error.select_date'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!selectedItems || selectedItems.length === 0) {
+        toast({
+          title: t('production.packaging.form.error.no_materials'),
+          description: t('production.packaging.form.error.select_materials'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const orderNumberValue = orderNumber;
+      if (!orderNumberValue || orderNumberValue.trim() === '') {
+        toast({
+          title: t('production.packaging.form.error.no_order_number'),
+          description: t('production.packaging.form.error.enter_order_number'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const packagingData: PackagingPlanningData = {
+        productName: selectedItem?.name || '',
+        quantity: Number(orderQuantity),
+        date: selectedDate,
+        notes: data.notes,
+        itemId: selectedItem?.id || '',
+        itemType: selectedItem?.item_type || '',
+        itemIds: selectedItems,
+        orderNumber: orderNumberValue,
+      };
+
+      await onSubmit(packagingData);
+      toast({
+        title: t('production.packaging.form.success.packaging_planned'),
+        description: t('production.packaging.form.success.packaging_planned_desc'),
+      });
+    } catch (error) {
+      console.error('Error submitting packaging planning form:', error);
+      toast({
+        title: t('production.packaging.form.error.submission_failed'),
+        description: t('production.packaging.form.error.submission_failed_desc'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFormSubmitting(false);
     }
   });
-  
-  const handleCreateOrder = () => {
-    if (!selectedProductId) {
-      toast.error('يرجى اختيار منتج');
-      return;
-    }
-    
-    const quantity = Number(productionQuantity);
-    
-    if (quantity <= 0) {
-      toast.error('يجب أن تكون الكمية أكبر من 0');
-      return;
-    }
-    
-    if (!semiFinished) {
-      toast.error('لم يتم تحديد المنتج النصف مصنع بشكل صحيح');
-      return;
-    }
-    
-    if (semiFinished.quantity < semiFinishedQuantityNeeded) {
-      if (!window.confirm(`تحذير: كمية المنتج النصف المصنع (${semiFinished.quantity}) أقل من الكمية المطلوبة (${semiFinishedQuantityNeeded}). هل تريد المتابعة على أي حال؟`)) {
-        return;
-      }
-    }
-    
-    const unavailablePackaging = packagingMaterials.filter(m => !m.available);
-    if (unavailablePackaging.length > 0) {
-      if (!window.confirm(`تحذير: بعض مواد التعبئة غير متوفرة بالكمية المطلوبة. هل تريد المتابعة على أي حال؟`)) {
-        return;
-      }
-    }
-    
-    setIsCreatingOrder(true);
-    createOrderMutation.mutate();
-  };
-  
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PackageCheck className="h-6 w-6" />
-            تخطيط أمر تعبئة جديد
-          </CardTitle>
-          <CardDescription>
-            قم باختيار المنتج النهائي وإدخال الكمية المطلوب إنتاجها
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <Form {...form}>
+      <form onSubmit={onSubmitHandler} className="space-y-4">
+        <div className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="product">المنتج النهائي</Label>
-              <Select 
-                value={selectedProductId} 
-                onValueChange={setSelectedProductId}
-                disabled={isLoadingProducts || isCreatingOrder}
-              >
-                <SelectTrigger id="product">
-                  <SelectValue placeholder="اختر المنتج النهائي" />
-                </SelectTrigger>
-                <SelectContent>
-                  {finishedProducts.map(product => (
-                    <SelectItem key={product.id} value={product.id.toString()}>
-                      {product.name} ({product.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div>
+              <FormItem>
+                <FormLabel>{t('production.packaging.form.product_name')}</FormLabel>
+                <Select onValueChange={(value) => {
+                  const item = items?.find(item => item.id === value);
+                  handleItemChange(item || null);
+                }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t('production.packaging.form.select_product')} defaultValue={initialValues?.itemId} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {items?.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!isItemValid && (
+                  <p className="text-sm text-red-500">{t('production.packaging.form.error.select_item')}</p>
+                )}
+              </FormItem>
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="quantity">الكمية المطلوبة</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                value={productionQuantity}
-                onChange={(e) => setProductionQuantity(Number(e.target.value))}
-                disabled={isCreatingOrder}
-              />
+            <div>
+              <FormItem>
+                <FormLabel>{t('production.packaging.form.quantity')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    value={orderQuantity}
+                    onChange={handleQuantityChange}
+                    placeholder={t('production.packaging.form.enter_quantity')}
+                  />
+                </FormControl>
+                {!isQuantityValid && (
+                  <p className="text-sm text-red-500">{t('production.packaging.form.error.enter_valid_quantity')}</p>
+                )}
+              </FormItem>
             </div>
           </div>
-          
-          {selectedProductId && (
-            <>
-              <Separator className="my-4" />
-              
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">تفاصيل المنتج النصف مصنع المطلوب</h3>
-                
-                {semiFinished ? (
-                  <div className="border rounded-md p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground">المنتج</div>
-                        <div>{semiFinished.name} ({semiFinished.code})</div>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground">الكمية المطلوبة</div>
-                        <div className="flex items-center gap-1">
-                          <span>{semiFinishedQuantityNeeded}</span>
-                          <span className="text-xs text-muted-foreground">{semiFinished.unit}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground">الكمية المتوفرة</div>
-                        <div className={`flex items-center gap-1 ${semiFinished.quantity < semiFinishedQuantityNeeded ? 'text-destructive' : 'text-success'}`}>
-                          <span>{semiFinished.quantity}</span>
-                          <span className="text-xs text-muted-foreground">{semiFinished.unit}</span>
-                        </div>
-                      </div>
-                      <div className="col-span-3">
-                        <div className="text-sm font-medium text-muted-foreground">التكلفة</div>
-                        <div>
-                          {semiFinished.unit_cost} × {semiFinishedQuantityNeeded} = {(semiFinished.unit_cost * semiFinishedQuantityNeeded).toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {semiFinished.quantity < semiFinishedQuantityNeeded && (
-                      <Alert variant="destructive" className="mt-4">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>تحذير نقص الكمية</AlertTitle>
-                        <AlertDescription>
-                          الكمية المتوفرة من المنتج النصف مصنع غير كافية. يرجى التحقق من المخزون أو تقليل الكمية المطلوبة.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-muted-foreground">
-                    لم يتم تحديد منتج نصف مصنع بعد
-                  </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <FormItem>
+                <FormLabel>{t('production.packaging.form.date')}</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={
+                        "w-full justify-start text-left font-normal" +
+                        (selectedDate ? " text-black dark:text-white" : " text-muted-foreground")
+                      }
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? (
+                        format(selectedDate, "PPP", { locale: ar })
+                      ) : (
+                        <span>{t('production.packaging.form.pick_date')}</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="center">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateChange}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                {!isDateValid && (
+                  <p className="text-sm text-red-500">{t('production.packaging.form.error.select_date')}</p>
                 )}
-              </div>
-              
-              <Separator className="my-4" />
-              
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">مواد التعبئة المطلوبة</h3>
-                
-                {packagingMaterials.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الكود</TableHead>
-                        <TableHead>اسم المادة</TableHead>
-                        <TableHead>الكمية المطلوبة</TableHead>
-                        <TableHead>التكلفة</TableHead>
-                        <TableHead>الحالة</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {packagingMaterials.map((material, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{material.code}</TableCell>
-                          <TableCell>{material.name}</TableCell>
-                          <TableCell>{material.requiredQuantity}</TableCell>
-                          <TableCell>
-                            {material.unitCost} × {material.requiredQuantity} = {(material.unitCost * material.requiredQuantity).toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-xs ${material.available ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
-                              {material.available ? 'متوفر' : 'غير متوفر'}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-4 text-muted-foreground">
-                    لم يتم تحديد مواد تعبئة بعد
-                  </div>
+              </FormItem>
+            </div>
+            <div>
+              <FormItem>
+                <FormLabel>{t('production.packaging.form.order_number')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="text"
+                    value={orderNumber}
+                    onChange={handleOrderNumberChange}
+                    placeholder={t('production.packaging.form.enter_order_number')}
+                  />
+                </FormControl>
+                {!isOrderNumberValid && (
+                  <p className="text-sm text-red-500">{t('production.packaging.form.error.enter_order_number')}</p>
                 )}
+              </FormItem>
+            </div>
+          </div>
+
+          <div>
+            <FormItem>
+              <FormLabel>{t('production.packaging.form.packaging_materials')}</FormLabel>
+              <MultiSelect
+                options={items?.map(item => ({ label: item.name, value: item.id })) || []}
+                value={selectedItems}
+                onChange={handleMaterialsChange}
+                placeholder={t('production.packaging.form.select_materials')}
+              />
+              {!isMaterialsValid && (
+                <p className="text-sm text-red-500">{t('production.packaging.form.error.select_materials')}</p>
+              )}
+            </FormItem>
+          </div>
+
+          <div>
+            <Button type="button" variant="secondary" onClick={calculateMaterialsNeededHandler} disabled={isCalculating}>
+              {isCalculating ? (
+                <>
+                  <Package2Icon className="mr-2 h-4 w-4 animate-spin" />
+                  {t('production.packaging.form.calculating')}
+                </>
+              ) : (
+                <>
+                  <Package2Icon className="mr-2 h-4 w-4" />
+                  {t('production.packaging.form.calculate_materials')}
+                </>
+              )}
+            </Button>
+          </div>
+
+          {materialsNeeded.length > 0 && (
+            <div>
+              <Label>{t('production.packaging.form.materials_needed')}</Label>
+              <Separator className="my-2" />
+              <div className="flex flex-col gap-2">
+                {materialsNeeded.map((material) => (
+                  <Badge key={material.id} variant="outline">
+                    {material.name} - {material.quantity}
+                  </Badge>
+                ))}
               </div>
-              
-              <div className="bg-muted p-4 rounded-md mt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="font-medium">التكلفة الإجمالية:</div>
-                  <div className="text-xl font-bold">{totalCost.toFixed(2)}</div>
-                </div>
-                
-                <div className="text-sm text-muted-foreground">
-                  تكلفة المنتج النصف مصنع: {semiFinished ? (semiFinished.unit_cost * semiFinishedQuantityNeeded).toFixed(2) : '0.00'} + 
-                  تكلفة مواد التعبئة: {(totalCost - (semiFinished ? semiFinished.unit_cost * semiFinishedQuantityNeeded : 0)).toFixed(2)}
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-4 mt-6">
-                <Button 
-                  variant="outline"
-                  onClick={() => navigate('/production/packaging-orders')}
-                  disabled={isCreatingOrder}
-                >
-                  إلغاء
-                </Button>
-                <Button 
-                  onClick={handleCreateOrder}
-                  disabled={!selectedProductId || productionQuantity <= 0 || isCreatingOrder}
-                >
-                  {isCreatingOrder ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      جاري إنشاء الأمر...
-                    </>
-                  ) : (
-                    <>
-                      إنشاء أمر التعبئة
-                      <ChevronRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </div>
-            </>
+            </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+
+          <div>
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('production.packaging.form.notes')}</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder={t('production.packaging.form.enter_notes')}
+                      className="resize-none"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('production.packaging.form.notes_desc')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            {t('cancel')}
+          </Button>
+          <Button type="submit" disabled={!isFormValid || isFormSubmitting}>
+            {isFormSubmitting ? (
+              <>
+                <CheckCheck className="mr-2 h-4 w-4 animate-spin" />
+                {t('submitting')}
+              </>
+            ) : (
+              <>
+                <CheckCheck className="mr-2 h-4 w-4" />
+                {t('submit')}
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 };
 
-export default PackagingPlanning;
+export default PackagingPlanningForm;
