@@ -317,6 +317,543 @@ class InventoryTrackingService {
       };
     }
   }
+
+  /**
+   * تسجيل حركات المخزون المرتبطة بأمر إنتاج
+   * @param productionOrderId معرف أمر الإنتاج
+   * @param isExecution إذا كانت العملية تنفيذ (true) أو إلغاء (false)
+   */
+  public async recordProductionOrderMovements(productionOrderId: number, isExecution: boolean = true): Promise<boolean> {
+    try {
+      // 1. استرجاع تفاصيل أمر الإنتاج
+      const { data: productionOrder, error: orderError } = await supabase
+        .from('production_orders')
+        .select('*')
+        .eq('id', productionOrderId)
+        .single();
+
+      if (orderError || !productionOrder) {
+        console.error("Error fetching production order:", orderError);
+        return false;
+      }
+
+      // 2. استرجاع مكونات أمر الإنتاج (المواد الخام)
+      const { data: ingredients, error: ingredientsError } = await supabase
+        .from('production_order_ingredients')
+        .select('*')
+        .eq('production_order_id', productionOrderId);
+
+      if (ingredientsError) {
+        console.error("Error fetching production order ingredients:", ingredientsError);
+        return false;
+      }
+
+      // 3. البحث عن المنتج النصف مصنع
+      const { data: semiFinishedProduct, error: semiFinishedError } = await supabase
+        .from('semi_finished_products')
+        .select('*')
+        .eq('code', productionOrder.product_code)
+        .single();
+
+      if (semiFinishedError || !semiFinishedProduct) {
+        console.error("Error fetching semi-finished product:", semiFinishedError);
+        return false;
+      }
+
+      // 4. تسجيل حركات استهلاك المواد الخام
+      for (const ingredient of ingredients || []) {
+        // البحث عن المادة الخام للحصول على رصيدها الحالي
+        const { data: rawMaterial, error: rawMaterialError } = await supabase
+          .from('raw_materials')
+          .select('*')
+          .eq('code', ingredient.raw_material_code)
+          .single();
+
+        if (rawMaterialError || !rawMaterial) {
+          console.error(`Error fetching raw material with code ${ingredient.raw_material_code}:`, rawMaterialError);
+          continue; // استمر مع المكون التالي
+        }
+
+        // تسجيل حركة استهلاك المادة الخام أو إعادتها حسب نوع العملية
+        if (isExecution) {
+          await this.recordOutgoingMovement(
+            rawMaterial.id.toString(),
+            'raw',
+            ingredient.required_quantity,
+            rawMaterial.quantity,
+            `استهلاك في أمر إنتاج رقم ${productionOrder.code}`
+          );
+        } else {
+          await this.recordIncomingMovement(
+            rawMaterial.id.toString(),
+            'raw',
+            ingredient.required_quantity,
+            rawMaterial.quantity,
+            `إعادة بسبب إلغاء أمر إنتاج رقم ${productionOrder.code}`
+          );
+        }
+      }
+
+      // 5. تسجيل حركة إنتاج المنتج النصف مصنع أو إلغائها
+      if (isExecution) {
+        await this.recordIncomingMovement(
+          semiFinishedProduct.id.toString(),
+          'semi',
+          productionOrder.quantity,
+          semiFinishedProduct.quantity,
+          `إنتاج من أمر إنتاج رقم ${productionOrder.code}`
+        );
+      } else {
+        await this.recordOutgoingMovement(
+          semiFinishedProduct.id.toString(),
+          'semi',
+          productionOrder.quantity,
+          semiFinishedProduct.quantity,
+          `إلغاء بسبب إلغاء أمر إنتاج رقم ${productionOrder.code}`
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error recording production order movements:", error);
+      return false;
+    }
+  }
+
+  /**
+   * تسجيل حركات المخزون المرتبطة بأمر تعبئة
+   * @param packagingOrderId معرف أمر التعبئة
+   * @param isExecution إذا كانت العملية تنفيذ (true) أو إلغاء (false)
+   */
+  public async recordPackagingOrderMovements(packagingOrderId: number, isExecution: boolean = true): Promise<boolean> {
+    try {
+      // 1. استرجاع تفاصيل أمر التعبئة
+      const { data: packagingOrder, error: orderError } = await supabase
+        .from('packaging_orders')
+        .select('*')
+        .eq('id', packagingOrderId)
+        .single();
+
+      if (orderError || !packagingOrder) {
+        console.error("Error fetching packaging order:", orderError);
+        return false;
+      }
+
+      // 2. استرجاع مواد التعبئة المستخدمة
+      const { data: packagingMaterials, error: materialsError } = await supabase
+        .from('packaging_order_materials')
+        .select('*')
+        .eq('packaging_order_id', packagingOrderId);
+
+      if (materialsError) {
+        console.error("Error fetching packaging materials:", materialsError);
+        return false;
+      }
+
+      // 3. البحث عن المنتج النصف مصنع
+      const { data: semiFinishedProduct, error: semiFinishedError } = await supabase
+        .from('semi_finished_products')
+        .select('*')
+        .eq('code', packagingOrder.semi_finished_code)
+        .single();
+
+      if (semiFinishedError || !semiFinishedProduct) {
+        console.error("Error fetching semi-finished product:", semiFinishedError);
+        return false;
+      }
+
+      // 4. البحث عن المنتج النهائي
+      const { data: finishedProduct, error: finishedError } = await supabase
+        .from('finished_products')
+        .select('*')
+        .eq('code', packagingOrder.product_code)
+        .single();
+
+      if (finishedError || !finishedProduct) {
+        console.error("Error fetching finished product:", finishedError);
+        return false;
+      }
+
+      // 5. تسجيل حركة استهلاك المنتج النصف مصنع أو إعادته
+      if (isExecution) {
+        await this.recordOutgoingMovement(
+          semiFinishedProduct.id.toString(),
+          'semi',
+          packagingOrder.semi_finished_quantity,
+          semiFinishedProduct.quantity,
+          `استهلاك في أمر تعبئة رقم ${packagingOrder.code}`
+        );
+      } else {
+        await this.recordIncomingMovement(
+          semiFinishedProduct.id.toString(),
+          'semi',
+          packagingOrder.semi_finished_quantity,
+          semiFinishedProduct.quantity,
+          `إعادة بسبب إلغاء أمر تعبئة رقم ${packagingOrder.code}`
+        );
+      }
+
+      // 6. تسجيل حركات استهلاك مواد التعبئة أو إعادتها
+      for (const material of packagingMaterials || []) {
+        // البحث عن مادة التعبئة للحصول على رصيدها الحالي
+        const { data: packagingMaterial, error: materialError } = await supabase
+          .from('packaging_materials')
+          .select('*')
+          .eq('code', material.packaging_material_code)
+          .single();
+
+        if (materialError || !packagingMaterial) {
+          console.error(`Error fetching packaging material with code ${material.packaging_material_code}:`, materialError);
+          continue; // استمر مع المادة التالية
+        }
+
+        // تسجيل حركة استهلاك مادة التعبئة أو إعادتها
+        if (isExecution) {
+          await this.recordOutgoingMovement(
+            packagingMaterial.id.toString(),
+            'packaging',
+            material.required_quantity,
+            packagingMaterial.quantity,
+            `استهلاك في أمر تعبئة رقم ${packagingOrder.code}`
+          );
+        } else {
+          await this.recordIncomingMovement(
+            packagingMaterial.id.toString(),
+            'packaging',
+            material.required_quantity,
+            packagingMaterial.quantity,
+            `إعادة بسبب إلغاء أمر تعبئة رقم ${packagingOrder.code}`
+          );
+        }
+      }
+
+      // 7. تسجيل حركة إنتاج المنتج النهائي أو إلغائها
+      if (isExecution) {
+        await this.recordIncomingMovement(
+          finishedProduct.id.toString(),
+          'finished',
+          packagingOrder.quantity,
+          finishedProduct.quantity,
+          `إنتاج من أمر تعبئة رقم ${packagingOrder.code}`
+        );
+      } else {
+        await this.recordOutgoingMovement(
+          finishedProduct.id.toString(),
+          'finished',
+          packagingOrder.quantity,
+          finishedProduct.quantity,
+          `إلغاء بسبب إلغاء أمر تعبئة رقم ${packagingOrder.code}`
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error recording packaging order movements:", error);
+      return false;
+    }
+  }
+
+  /**
+   * تسجيل حركات المخزون المرتبطة بفاتورة مبيعات
+   * @param invoiceId معرف الفاتورة
+   * @param isExecution إذا كانت العملية تنفيذ (true) أو إلغاء (false)
+   */
+  public async recordSalesInvoiceMovements(invoiceId: string, isExecution: boolean = true): Promise<boolean> {
+    try {
+      // 1. استرجاع تفاصيل الفاتورة
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', invoiceId)
+        .single();
+
+      if (invoiceError || !invoice || invoice.invoice_type !== 'sale') {
+        console.error("Error fetching sales invoice:", invoiceError);
+        return false;
+      }
+
+      // 2. استرجاع عناصر الفاتورة
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId);
+
+      if (itemsError) {
+        console.error("Error fetching invoice items:", itemsError);
+        return false;
+      }
+
+      // 3. معالجة كل عنصر في الفاتورة
+      for (const item of invoiceItems || []) {
+        let itemTable = '';
+        
+        // تحديد جدول العنصر بناءً على نوعه
+        switch (item.item_type) {
+          case 'raw':
+            itemTable = 'raw_materials';
+            break;
+          case 'semi':
+            itemTable = 'semi_finished_products';
+            break;
+          case 'packaging':
+            itemTable = 'packaging_materials';
+            break;
+          case 'finished':
+            itemTable = 'finished_products';
+            break;
+          default:
+            console.warn(`Unknown item type: ${item.item_type}`);
+            continue; // تخطي هذا العنصر
+        }
+
+        // البحث عن العنصر في الجدول المناسب
+        const { data: inventoryItem, error: itemError } = await supabase
+          .from(itemTable)
+          .select('*')
+          .eq('id', item.item_id)
+          .single();
+
+        if (itemError || !inventoryItem) {
+          console.error(`Error fetching item with id ${item.item_id} from ${itemTable}:`, itemError);
+          continue; // استمر مع العنصر التالي
+        }
+
+        // تسجيل حركة بيع العنصر أو إعادته
+        if (isExecution) {
+          await this.recordOutgoingMovement(
+            item.item_id.toString(),
+            item.item_type,
+            item.quantity,
+            inventoryItem.quantity,
+            `بيع في فاتورة رقم ${invoice.id}`
+          );
+        } else {
+          await this.recordIncomingMovement(
+            item.item_id.toString(),
+            item.item_type,
+            item.quantity,
+            inventoryItem.quantity,
+            `إعادة بسبب إلغاء فاتورة مبيعات رقم ${invoice.id}`
+          );
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error recording sales invoice movements:", error);
+      return false;
+    }
+  }
+
+  /**
+   * تسجيل حركات المخزون المرتبطة بفاتورة مشتريات
+   * @param invoiceId معرف الفاتورة
+   * @param isExecution إذا كانت العملية تنفيذ (true) أو إلغاء (false)
+   */
+  public async recordPurchaseInvoiceMovements(invoiceId: string, isExecution: boolean = true): Promise<boolean> {
+    try {
+      // 1. استرجاع تفاصيل الفاتورة
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', invoiceId)
+        .single();
+
+      if (invoiceError || !invoice || invoice.invoice_type !== 'purchase') {
+        console.error("Error fetching purchase invoice:", invoiceError);
+        return false;
+      }
+
+      // 2. استرجاع عناصر الفاتورة
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId);
+
+      if (itemsError) {
+        console.error("Error fetching invoice items:", itemsError);
+        return false;
+      }
+
+      // 3. معالجة كل عنصر في الفاتورة
+      for (const item of invoiceItems || []) {
+        let itemTable = '';
+        
+        // تحديد جدول العنصر بناءً على نوعه
+        switch (item.item_type) {
+          case 'raw':
+            itemTable = 'raw_materials';
+            break;
+          case 'semi':
+            itemTable = 'semi_finished_products';
+            break;
+          case 'packaging':
+            itemTable = 'packaging_materials';
+            break;
+          case 'finished':
+            itemTable = 'finished_products';
+            break;
+          default:
+            console.warn(`Unknown item type: ${item.item_type}`);
+            continue; // تخطي هذا العنصر
+        }
+
+        // البحث عن العنصر في الجدول المناسب
+        const { data: inventoryItem, error: itemError } = await supabase
+          .from(itemTable)
+          .select('*')
+          .eq('id', item.item_id)
+          .single();
+
+        if (itemError || !inventoryItem) {
+          console.error(`Error fetching item with id ${item.item_id} from ${itemTable}:`, itemError);
+          continue; // استمر مع العنصر التالي
+        }
+
+        // تسجيل حركة شراء العنصر أو إلغائها
+        if (isExecution) {
+          await this.recordIncomingMovement(
+            item.item_id.toString(),
+            item.item_type,
+            item.quantity,
+            inventoryItem.quantity,
+            `شراء في فاتورة رقم ${invoice.id}`
+          );
+        } else {
+          await this.recordOutgoingMovement(
+            item.item_id.toString(),
+            item.item_type,
+            item.quantity,
+            inventoryItem.quantity,
+            `إلغاء بسبب إلغاء فاتورة مشتريات رقم ${invoice.id}`
+          );
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error recording purchase invoice movements:", error);
+      return false;
+    }
+  }
+
+  /**
+   * تسجيل حركات المخزون المرتبطة بأمر مرتجع
+   * @param returnId معرف المرتجع
+   * @param isExecution إذا كانت العملية تنفيذ (true) أو إلغاء (false)
+   */
+  public async recordReturnMovements(returnId: string, isExecution: boolean = true): Promise<boolean> {
+    try {
+      // 1. استرجاع تفاصيل المرتجع
+      const { data: returnOrder, error: returnError } = await supabase
+        .from('returns')
+        .select('*')
+        .eq('id', returnId)
+        .single();
+
+      if (returnError || !returnOrder) {
+        console.error("Error fetching return order:", returnError);
+        return false;
+      }
+
+      // 2. استرجاع عناصر المرتجع
+      const { data: returnItems, error: itemsError } = await supabase
+        .from('return_items')
+        .select('*')
+        .eq('return_id', returnId);
+
+      if (itemsError) {
+        console.error("Error fetching return items:", itemsError);
+        return false;
+      }
+
+      // 3. معالجة كل عنصر في المرتجع
+      for (const item of returnItems || []) {
+        let itemTable = '';
+        
+        // تحديد جدول العنصر بناءً على نوعه
+        switch (item.item_type) {
+          case 'raw':
+            itemTable = 'raw_materials';
+            break;
+          case 'semi':
+            itemTable = 'semi_finished_products';
+            break;
+          case 'packaging':
+            itemTable = 'packaging_materials';
+            break;
+          case 'finished':
+            itemTable = 'finished_products';
+            break;
+          default:
+            console.warn(`Unknown item type: ${item.item_type}`);
+            continue; // تخطي هذا العنصر
+        }
+
+        // البحث عن العنصر في الجدول المناسب
+        const { data: inventoryItem, error: itemError } = await supabase
+          .from(itemTable)
+          .select('*')
+          .eq('id', item.item_id)
+          .single();
+
+        if (itemError || !inventoryItem) {
+          console.error(`Error fetching item with id ${item.item_id} from ${itemTable}:`, itemError);
+          continue; // استمر مع العنصر التالي
+        }
+
+        // تحديد نوع الحركة بناءً على نوع المرتجع
+        const isSalesReturn = returnOrder.return_type === 'sales';
+        
+        // تسجيل حركة المرتجع أو إلغائها
+        if (isExecution) {
+          if (isSalesReturn) {
+            // مرتجع مبيعات: إعادة المنتجات إلى المخزون
+            await this.recordIncomingMovement(
+              item.item_id.toString(),
+              item.item_type,
+              item.quantity,
+              inventoryItem.quantity,
+              `مرتجع مبيعات رقم ${returnOrder.id}`
+            );
+          } else {
+            // مرتجع مشتريات: إخراج المنتجات من المخزون
+            await this.recordOutgoingMovement(
+              item.item_id.toString(),
+              item.item_type,
+              item.quantity,
+              inventoryItem.quantity,
+              `مرتجع مشتريات رقم ${returnOrder.id}`
+            );
+          }
+        } else {
+          // إلغاء المرتجع (عكس العملية)
+          if (isSalesReturn) {
+            await this.recordOutgoingMovement(
+              item.item_id.toString(),
+              item.item_type,
+              item.quantity,
+              inventoryItem.quantity,
+              `إلغاء مرتجع مبيعات رقم ${returnOrder.id}`
+            );
+          } else {
+            await this.recordIncomingMovement(
+              item.item_id.toString(),
+              item.item_type,
+              item.quantity,
+              inventoryItem.quantity,
+              `إلغاء مرتجع مشتريات رقم ${returnOrder.id}`
+            );
+          }
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error recording return movements:", error);
+      return false;
+    }
+  }
 }
 
 export default InventoryTrackingService;
