@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { subDays } from 'date-fns';
 import { DateRange } from 'react-day-picker';
@@ -12,7 +13,7 @@ import InventoryTrackingService from '@/services/InventoryTrackingService';
 import MovementHistoryTable from '@/components/inventory/movement/MovementHistoryTable';
 import MovementStatistics from '@/components/inventory/movement/MovementStatistics';
 import MovementFilters from '@/components/inventory/movement/MovementFilters';
-import { ArrowUpDown, Download } from 'lucide-react';
+import { ArrowPathIcon, FileDownIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const InventoryTracking = () => {
@@ -164,7 +165,7 @@ const InventoryTracking = () => {
               onClick={() => refetch()}
               className="flex gap-2 items-center"
             >
-              <ArrowUpDown className="h-4 w-4" />
+              <ArrowPathIcon className="h-4 w-4" />
               <span>تحديث</span>
             </Button>
             
@@ -175,7 +176,7 @@ const InventoryTracking = () => {
               disabled={filteredMovements.length === 0}
               className="flex gap-2 items-center"
             >
-              <Download className="h-4 w-4" />
+              <FileDownIcon className="h-4 w-4" />
               <span>تصدير</span>
             </Button>
           </div>
