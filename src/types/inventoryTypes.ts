@@ -3,12 +3,12 @@ export interface InventoryMovement {
   id: string;
   item_id: string;
   item_type: string;
-  movement_type: "in" | "out" | "adjustment";
+  movement_type: "in" | "out" | "adjustment" | string; // Adding string to support any values from database
   quantity: number;
   balance_after: number;
   reason?: string;
   created_at: string;
   updated_at?: string;
   user_id?: string;
-  user_name?: string; // Added user_name property to fix the TypeScript error
+  user_name?: string;
 }

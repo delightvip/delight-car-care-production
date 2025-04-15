@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { InventoryMovement } from '@/types/inventoryTypes';
@@ -206,7 +205,6 @@ class InventoryTrackingService {
    */
   public async getItemMovements(itemId: string, itemType: string): Promise<InventoryMovement[]> {
     try {
-      // Fix for error: Property 'name' does not exist on type 'SelectQueryError<"could not find the relation between inventory_movements and user_id">'
       // Using the RPC function instead of direct join
       const { data, error } = await supabase.rpc('get_inventory_movements_by_item', {
         p_item_id: itemId,
@@ -369,7 +367,7 @@ class InventoryTrackingService {
           await this.recordOutgoingMovement(
             rawMaterial.id.toString(),
             'raw',
-            ingredient.required_quantity, // Using required_quantity instead of quantity
+            ingredient.required_quantity, // Use required_quantity here
             rawMaterial.quantity,
             `استهلاك في أمر إنتاج رقم ${productionOrder.code}`
           );
@@ -377,7 +375,7 @@ class InventoryTrackingService {
           await this.recordIncomingMovement(
             rawMaterial.id.toString(),
             'raw',
-            ingredient.required_quantity, // Using required_quantity instead of quantity
+            ingredient.required_quantity, // Use required_quantity here
             rawMaterial.quantity,
             `إعادة بسبب إلغاء أمر إنتاج رقم ${productionOrder.code}`
           );
@@ -502,7 +500,7 @@ class InventoryTrackingService {
           await this.recordOutgoingMovement(
             packagingMaterial.id.toString(),
             'packaging',
-            material.required_quantity, // Using required_quantity instead of quantity
+            material.required_quantity, // Use required_quantity here
             packagingMaterial.quantity,
             `استهلاك في أمر تعبئة رقم ${packagingOrder.code}`
           );
@@ -510,7 +508,7 @@ class InventoryTrackingService {
           await this.recordIncomingMovement(
             packagingMaterial.id.toString(),
             'packaging',
-            material.required_quantity, // Using required_quantity instead of quantity
+            material.required_quantity, // Use required_quantity here
             packagingMaterial.quantity,
             `إعادة بسبب إلغاء أمر تعبئة رقم ${packagingOrder.code}`
           );
@@ -597,13 +595,12 @@ class InventoryTrackingService {
         }
 
         // البحث عن العنصر في الجدول المناسب
-        // Fix: Use the TableName literal type for Supabase .from() method
-        // @ts-ignore - Using string for table name dynamically (suppressing TS errors for now)
-        const { data: inventoryItem, error: itemError } = await supabase
-          .from(itemTableName)
+        // Use type assertion to suppress TypeScript errors for dynamic table name
+        const { data: inventoryItem, error: itemError } = await (supabase
+          .from(itemTableName as any)
           .select('*')
           .eq('id', item.item_id)
-          .single();
+          .single());
 
         if (itemError || !inventoryItem) {
           console.error(`Error fetching item with id ${item.item_id} from ${itemTableName}:`, itemError);
@@ -616,7 +613,7 @@ class InventoryTrackingService {
             item.item_id.toString(),
             item.item_type,
             item.quantity, // Using direct quantity from invoice_items
-            inventoryItem.quantity,
+            (inventoryItem as any).quantity,
             `بيع في فاتورة رقم ${invoice.id}`
           );
         } else {
@@ -624,7 +621,7 @@ class InventoryTrackingService {
             item.item_id.toString(),
             item.item_type,
             item.quantity, // Using direct quantity from invoice_items
-            inventoryItem.quantity,
+            (inventoryItem as any).quantity,
             `إعادة بسبب إلغاء فاتورة مبيعات رقم ${invoice.id}`
           );
         }
@@ -691,13 +688,12 @@ class InventoryTrackingService {
         }
 
         // البحث عن العنصر في الجدول المناسب
-        // Fix: Use the TableName literal type for Supabase .from() method
-        // @ts-ignore - Using string for table name dynamically (suppressing TS errors for now)
-        const { data: inventoryItem, error: itemError } = await supabase
-          .from(itemTableName)
+        // Use type assertion to suppress TypeScript errors for dynamic table name
+        const { data: inventoryItem, error: itemError } = await (supabase
+          .from(itemTableName as any)
           .select('*')
           .eq('id', item.item_id)
-          .single();
+          .single());
 
         if (itemError || !inventoryItem) {
           console.error(`Error fetching item with id ${item.item_id} from ${itemTableName}:`, itemError);
@@ -710,7 +706,7 @@ class InventoryTrackingService {
             item.item_id.toString(),
             item.item_type,
             item.quantity, // Using direct quantity from invoice_items
-            inventoryItem.quantity,
+            (inventoryItem as any).quantity,
             `شراء في فاتورة رقم ${invoice.id}`
           );
         } else {
@@ -718,7 +714,7 @@ class InventoryTrackingService {
             item.item_id.toString(),
             item.item_type,
             item.quantity, // Using direct quantity from invoice_items
-            inventoryItem.quantity,
+            (inventoryItem as any).quantity,
             `إلغاء بسبب إلغاء فاتورة مشتريات رقم ${invoice.id}`
           );
         }
@@ -785,13 +781,12 @@ class InventoryTrackingService {
         }
 
         // البحث عن العنصر في الجدول المناسب
-        // Fix: Use the TableName literal type for Supabase .from() method
-        // @ts-ignore - Using string for table name dynamically (suppressing TS errors for now)
-        const { data: inventoryItem, error: itemError } = await supabase
-          .from(itemTableName)
+        // Use type assertion to suppress TypeScript errors for dynamic table name
+        const { data: inventoryItem, error: itemError } = await (supabase
+          .from(itemTableName as any)
           .select('*')
           .eq('id', item.item_id)
-          .single();
+          .single());
 
         if (itemError || !inventoryItem) {
           console.error(`Error fetching item with id ${item.item_id} from ${itemTableName}:`, itemError);
@@ -809,7 +804,7 @@ class InventoryTrackingService {
               item.item_id.toString(),
               item.item_type,
               item.quantity, // Using direct quantity from return_items
-              inventoryItem.quantity,
+              (inventoryItem as any).quantity,
               `مرتجع مبيعات رقم ${returnOrder.id}`
             );
           } else {
@@ -818,7 +813,7 @@ class InventoryTrackingService {
               item.item_id.toString(),
               item.item_type,
               item.quantity, // Using direct quantity from return_items
-              inventoryItem.quantity,
+              (inventoryItem as any).quantity,
               `مرتجع مشتريات رقم ${returnOrder.id}`
             );
           }
@@ -829,7 +824,7 @@ class InventoryTrackingService {
               item.item_id.toString(),
               item.item_type,
               item.quantity, // Using direct quantity from return_items
-              inventoryItem.quantity,
+              (inventoryItem as any).quantity,
               `إلغاء مرتجع مبيعات رقم ${returnOrder.id}`
             );
           } else {
@@ -837,7 +832,7 @@ class InventoryTrackingService {
               item.item_id.toString(),
               item.item_type,
               item.quantity, // Using direct quantity from return_items
-              inventoryItem.quantity,
+              (inventoryItem as any).quantity,
               `إلغاء مرتجع مشتريات رقم ${returnOrder.id}`
             );
           }
