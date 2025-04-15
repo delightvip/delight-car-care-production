@@ -119,21 +119,20 @@ const TransactionList: React.FC<TransactionListProps> = ({
   const isLinkedToCommercial = (transaction: Transaction) => {
     return transaction.reference_id && transaction.reference_type;
   };
-  
-  return (
-    <div className="space-y-4">
+    return (
+    <div className="space-y-3 md:space-y-4">
       {/* مربع البحث */}
-      <div>
+      <div className="relative">
         <Input
           placeholder="البحث في المعاملات..."
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          className="w-full"
+          className="w-full py-1 md:py-2 text-sm"
         />
       </div>
       
       {/* جدول المعاملات */}
-      <div className="border rounded-md">
+      <div className="border rounded-md overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>

@@ -93,10 +93,10 @@ function App() {
               <Route path="parties/:id" element={<PartyDetails />} />
               <Route path="invoices" element={<Invoices />} />
               <Route path="invoices/:id" element={<InvoiceDetails />} />
-              <Route path="payments" element={<Payments />} />
-              <Route path="returns" element={<Returns />} />
+              <Route path="payments" element={<Payments />} />              <Route path="returns" element={<Returns />} />
               <Route path="profits" element={<Profits />} />
               <Route path="account-statements" element={<AccountStatements />} />
+              <Route path="statements" element={<Navigate to="/commercial/account-statements" replace />} />
               <Route path="ledger" element={<CommercialLedger />} />
             </Route>
             

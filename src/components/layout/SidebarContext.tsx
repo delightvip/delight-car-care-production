@@ -34,16 +34,22 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) =>
   const [isOpen, setIsOpen] = useLocalStorage('sidebar-open', true);
   const [openMobile, setOpenMobile] = useState(false);
   const [isExpanded, setIsExpanded] = useLocalStorage('sidebar-expanded', true);
-  const [isPinned, setPinned] = useLocalStorage('sidebar-pinned', false);
-
-  const toggleSidebar = useCallback(() => {
+  const [isPinned, setPinned] = useLocalStorage('sidebar-pinned', false);  const toggleSidebar = useCallback(() => {
     if (isMobile) {
-      setOpenMobile((open) => !open);
+      console.log("toggleSidebar called in mobile mode", { current: openMobile });
+      setOpenMobile((open) => {
+        const newState = !open;
+        console.log("Setting openMobile to:", newState);
+        // على الهاتف المحمول، نقوم بتزامن isExpanded مع openMobile
+        // لضمان عرض/إخفاء القائمة بشكل متناسق
+        setIsExpanded(newState);
+        return newState;
+      });
     } else {
       setIsOpen((prevOpen) => !prevOpen);
       setIsExpanded((prevExpanded) => !prevExpanded);
     }
-  }, [isMobile, setIsOpen, setIsExpanded]);
+  }, [isMobile, setIsOpen, setIsExpanded, openMobile]);
 
   const togglePin = useCallback(() => {
     setPinned((prevPinned) => !prevPinned);

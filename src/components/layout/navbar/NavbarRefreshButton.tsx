@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -51,9 +50,9 @@ const NavbarRefreshButton = () => {
       onClick={handleRefresh}
       disabled={syncing}
       title="تحديث البيانات"
-      className="hover:bg-muted/80 transition-colors"
+      className="hover:bg-muted/80 transition-colors h-8 w-8 p-1"
     >
-      <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+      <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
       <span className="sr-only">تحديث البيانات</span>
     </Button>
   );

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -30,14 +29,15 @@ const Navbar = () => {
   return (
     <motion.header 
       className={cn(
-        "fixed top-0 h-16 z-20 flex items-center justify-between",
+        "fixed top-0 h-14 md:h-16 z-20 flex items-center justify-between",
         "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
-        "border-b border-border px-4",
-        "transition-all duration-300"
+        "border-b border-border px-2 md:px-4",
+        "transition-all duration-300",
+        "w-full"
       )}
       initial={false}
       animate={{
-        right: !isMobile && isExpanded ? '16rem' : '4rem',
+        right: !isMobile && isExpanded ? '16rem' : isMobile ? '0' : '4rem',
         left: 0
       }}
       transition={{ 
@@ -46,12 +46,12 @@ const Navbar = () => {
         damping: 30
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 md:gap-3">
         <SidebarTrigger className="md:hidden" />
         <NavbarBranding />
       </div>
       
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 md:gap-3">
         <NavbarLowStockAlert />
         <NavbarRefreshButton />
         <NotificationPanel />
@@ -59,7 +59,7 @@ const Navbar = () => {
         <Button 
           variant="ghost" 
           size="icon"
-          className="hover:bg-muted/80 transition-colors"
+          className="hidden md:flex hover:bg-muted/80 transition-colors"
           asChild
         >
           <Link to="/settings">

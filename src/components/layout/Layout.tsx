@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useSidebar } from './SidebarContext';
@@ -48,7 +47,7 @@ export const Layout = () => {
         className="flex-1 flex flex-col min-h-screen w-full relative"
         initial={false}
         animate={{
-          marginRight: !isMobile && isExpanded ? '16rem' : '4rem'
+          marginRight: !isMobile && isExpanded ? '16rem' : isMobile ? '0' : '4rem'
         }}
         transition={{ 
           type: "spring", 
@@ -57,8 +56,9 @@ export const Layout = () => {
         }}
       >
         <Navbar />
-        <main className="flex-1 w-full h-full py-6 overflow-hidden">
-          <div className="container mx-auto px-4 pt-14 h-full overflow-x-auto overflow-y-auto">
+        <main className="flex-1 w-full h-full py-4 md:py-6 overflow-hidden">
+          <div className="container mx-auto px-3 md:px-4 pt-14 md:pt-14 h-full overflow-x-auto overflow-y-auto"
+           style={{ maxWidth: isMobile ? '100%' : '1400px' }}>
             <div className="min-w-fit pb-6"> 
               <Outlet />
             </div>

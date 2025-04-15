@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
@@ -26,11 +25,16 @@ const NavbarLowStockAlert = () => {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.3 }}
       >
-        <Button variant="outline" size="sm" className="mr-2 text-destructive hover:bg-destructive/10" asChild>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="text-destructive hover:bg-destructive/10 p-1 md:p-2 h-8" 
+          asChild
+        >
           <Link to="/inventory/low-stock" className="flex items-center gap-1">
             <AlertTriangle className="h-4 w-4" />
-            <span>المخزون المنخفض</span>
-            <Badge variant="destructive" className="ml-1">{totalLowStock}</Badge>
+            <span className="hidden md:inline">المخزون المنخفض</span>
+            <Badge variant="destructive" className="ml-0 md:ml-1 text-xs">{totalLowStock}</Badge>
           </Link>
         </Button>
       </motion.div>

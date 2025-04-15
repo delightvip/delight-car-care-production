@@ -30,30 +30,29 @@ const Breadcrumbs = () => {
   // Get parent route if it exists
   const parentRoute = currentRoute.parent ? routeMap[currentRoute.parent] : null;
   
-  // If we're on the home page, don't show breadcrumbs
-  if (currentPath === '/') return null;
+  // If we're on the home page, don't show breadcrumbs  if (currentPath === '/') return null;
   
   return (
-    <div className="mb-6 flex items-center justify-between">
-      <div className="flex items-center space-x-2 space-x-reverse rtl:space-x-reverse">
-        <Button variant="ghost" size="sm" asChild>
+    <div className="mb-4 md:mb-6 flex flex-col xs:flex-row gap-2 xs:items-center xs:justify-between">
+      <div className="flex flex-wrap items-center gap-1 md:gap-2 space-x-1 space-x-reverse rtl:space-x-reverse">
+        <Button variant="ghost" size="sm" className="h-7 md:h-9 px-2 text-xs md:text-sm" asChild>
           <Link to="/">
-            <Home className="h-4 w-4 ml-1" />
+            <Home className="h-3.5 w-3.5 md:h-4 md:w-4 ml-1" />
             <span>الرئيسية</span>
           </Link>
         </Button>
         
         {parentRoute && currentRoute.parent !== '/' && (
           <>
-            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-            <Button variant="ghost" size="sm" asChild>
+            <ChevronLeft className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground" />
+            <Button variant="ghost" size="sm" className="h-7 md:h-9 px-2 text-xs md:text-sm" asChild>
               <Link to={currentRoute.parent}>{parentRoute.label}</Link>
             </Button>
           </>
         )}
         
-        <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">{currentRoute.label}</span>
+        <ChevronLeft className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground" />
+        <span className="text-xs md:text-sm font-medium">{currentRoute.label}</span>
       </div>
       
       {/* Context-aware navigation buttons */}

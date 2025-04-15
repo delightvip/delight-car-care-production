@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -41,48 +40,50 @@ const NotificationPanel = () => {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="relative">
-            <BellRing className="h-5 w-5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative h-8 w-8 p-1"
+            title="الإشعارات"
+          >
+            <BellRing className="h-4 w-4" />
             {unreadCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
+              <Badge
+                variant="destructive"
+                className="absolute -top-1 -right-1 px-1 min-w-[1.1rem] h-[1.1rem] text-[0.65rem]"
+              >
                 {unreadCount}
               </Badge>
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80">
-          <div className="flex items-center justify-between p-2">
-            <DropdownMenuLabel className="text-base">الإشعارات</DropdownMenuLabel>
+        <DropdownMenuContent className="w-[280px] md:w-[350px]" align="end">
+          <DropdownMenuLabel className="flex justify-between items-center">
+            <span>الإشعارات</span>
             <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7" 
                 onClick={handleRefresh}
-                title="تحديث"
+                title="تحديث الإشعارات"
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-3.5 w-3.5" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={markAllAsRead}
-                title="تعليم الكل كمقروء"
-              >
-                <CheckCircle className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={clearAllNotifications}
-                title="حذف الكل"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {notifications?.length > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7 text-destructive" 
+                  onClick={clearAllNotifications}
+                  title="مسح الإشعارات"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
-          </div>
+          </DropdownMenuLabel>
+          
           <DropdownMenuSeparator />
           
           <div className="max-h-[400px] overflow-y-auto p-1">

@@ -474,24 +474,22 @@ const ModernSidebar: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isExpanded, showSearchResults]);
 
-  return (
-    <>
-      <AnimatePresence>
-        {isMobile && isExpanded && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.5 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-            onClick={toggleSidebar}
-          />
-        )}
-      </AnimatePresence>
+  return (    <>
+      {isMobile && isExpanded && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          style={{ touchAction: 'auto' }}
+          onClick={() => {
+            toggleSidebar();
+            console.log("Backdrop clicked - closing sidebar using direct div");
+          }}
+        />
+      )}
 
       <motion.aside
         initial={false}
         animate={{
-          width: isExpanded ? '16rem' : '4rem',
+          width: isExpanded ? (isMobile ? '85vw' : '16rem') : '4rem',
           x: isMobile && !isExpanded ? '100%' : 0,
         }}
         transition={{ 

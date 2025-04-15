@@ -54,19 +54,20 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
     negative: 'text-red-700 dark:text-red-400 flex items-center font-medium',
     neutral: 'text-gray-700 dark:text-gray-400 flex items-center font-medium',
   };
-  
-  const cardContent = (
+    const cardContent = (
     <div 
       className={cn(
-        'rounded-lg border p-5 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer h-full',
+        'rounded-lg border p-3 sm:p-4 md:p-5 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer h-full',
         alert ? 'border-amber-300' : '', 
         className
       )}
       onClick={onClick}
     >
-      <div className="flex justify-between items-start mb-3">
-        <div className={cn('p-3 rounded-lg', iconColorClasses[color])}>
-          {icon}
+      <div className="flex justify-between items-start mb-2 md:mb-3">
+        <div className={cn('p-2 md:p-3 rounded-lg', iconColorClasses[color])}>
+          {React.cloneElement(icon as React.ReactElement, { 
+            className: 'h-4 w-4 md:h-5 md:w-5'
+          })}
         </div>
         
         {trend && (
@@ -78,35 +79,18 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
                 ? trendColorClasses.negative
                 : trendColorClasses.neutral
             }
-          >
-            <span className="font-semibold">
-              {trend.value > 0 ? '+' : ''}{trend.value}%
-            </span>
-            {trend.value > 0 ? (
-              <ChevronUp className="ml-1 h-4 w-4" />
-            ) : trend.value < 0 ? (
-              <ChevronDown className="ml-1 h-4 w-4" />
-            ) : null}
+          >            {trend.value > 0 ? <ChevronUp className="h-3 w-3 md:h-4 md:w-4 mr-1" /> : <ChevronDown className="h-3 w-3 md:h-4 md:w-4 mr-1" />}
+            <span className="text-xs md:text-sm">{Math.abs(trend.value)}% {trend.label}</span>
           </div>
         )}
       </div>
       
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-50 mb-1">{title}</h3>
-        <div className="text-3xl font-bold text-gray-900 dark:text-white">{value}</div>
-        
-        {description && (
-          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            {description}
-          </div>
-        )}
-        
-        {trend && !description && (
-          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            {trend.label}
-          </div>
-        )}
-      </div>
+      <h3 className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{title}</h3>
+      <div className="text-base md:text-xl font-bold">{value}</div>
+      
+      {description && (
+        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1 md:mt-2">{description}</p>
+      )}
     </div>
   );
   
