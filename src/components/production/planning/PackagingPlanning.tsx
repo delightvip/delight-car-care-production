@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +10,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +37,7 @@ type SemiFinishedProduct = {
   code: string;
   unit: string;
   quantity: number;
+  unit_cost?: number;  // أضفنا الخاصية المفقودة
 };
 
 type PackagingMaterial = {
@@ -43,6 +46,8 @@ type PackagingMaterial = {
   code: string;
   unit: string;
   quantity: number;
+  unit_cost?: number;   // أضفنا الخاصية المفقودة
+  requiredQuantity?: number;  // أضفنا الخاصية المفقودة
 };
 
 export default function PackagingPlanning() {
