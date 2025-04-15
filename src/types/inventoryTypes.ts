@@ -3,7 +3,7 @@ export interface InventoryMovement {
   id: string;
   item_id: string;
   item_type: string;
-  movement_type: "in" | "out" | "adjustment" | string; // Adding string to support any values from database
+  movement_type: "in" | "out" | "adjustment" | string; // إضافة string لدعم أي قيم من قاعدة البيانات
   quantity: number;
   balance_after: number;
   reason?: string;

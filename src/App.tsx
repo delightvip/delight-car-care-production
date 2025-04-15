@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import Layout from './components/layout/Layout';
 import { Toaster } from './components/ui/toaster';
@@ -24,7 +25,9 @@ function App() {
       <ThemeProvider defaultTheme="light" storageKey="juzoor-factory-theme">
         <Toaster />
         <SonnerToaster position="top-center" richColors closeButton />
-        <Layout />
+        <Routes>
+          <Route path="/*" element={<Layout />} />
+        </Routes>
         <InventoryTrackingInitializer />
       </ThemeProvider>
     </QueryClientProvider>
