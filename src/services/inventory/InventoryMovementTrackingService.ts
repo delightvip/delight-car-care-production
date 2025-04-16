@@ -99,35 +99,41 @@ class InventoryMovementTrackingService {
    */
   private async getCurrentItemBalance(itemId: string, itemType: string): Promise<number> {
     try {
-      let table: string;
+      let tableName = '';
       
       // تحديد الجدول المناسب حسب نوع العنصر
       switch (itemType) {
         case 'raw':
-          table = 'raw_materials';
+          tableName = 'raw_materials';
           break;
         case 'semi':
-          table = 'semi_finished_products';
+          tableName = 'semi_finished_products';
           break;
         case 'packaging':
-          table = 'packaging_materials';
+          tableName = 'packaging_materials';
           break;
         case 'finished':
-          table = 'finished_products';
+          tableName = 'finished_products';
           break;
         default:
           return 0;
       }
       
       // استعلام عن الرصيد الحالي
-      if (!['raw_materials', 'semi_finished_products', 'packaging_materials', 'finished_products'].includes(table)) {
+      if (!tableName) {
+        return 0;
+      }
+      
+      // محاولة تحويل itemId إلى رقم (معظم الجداول تستخدم معرفات رقمية)
+      const numericId = parseInt(itemId);
+      if (isNaN(numericId)) {
         return 0;
       }
       
       const { data, error } = await supabase
-        .from(table as any)
+        .from(tableName)
         .select('quantity')
-        .eq('id', itemId)
+        .eq('id', numericId)
         .single();
       
       if (error) {
@@ -201,7 +207,7 @@ class InventoryMovementTrackingService {
    */
   public async getRecentMovements(limit: number = 10): Promise<any[]> {
     try {
-      // استرجاع الحركات الأخيرة يدوياً بدلاً من وظيفة SQL غير موجودة
+      // استرجاع الحركات الأخيرة مباشرة من جدول الحركات
       const { data, error } = await supabase
         .from('inventory_movements')
         .select(`
@@ -219,52 +225,63 @@ class InventoryMovementTrackingService {
       
       if (error) throw error;
       
-      // إضافة اسم العنصر (هذا بديل مؤقت للوظيفة المفقودة)
+      // إضافة اسم العنصر بشكل منفصل
       const enrichedData = await Promise.all((data || []).map(async (item) => {
         let itemName = '';
+        let userName = '';
         
-        // تحديد الجدول المناسب حسب نوع العنصر
-        let table: string;
-        switch (item.item_type) {
-          case 'raw':
-            table = 'raw_materials';
-            break;
-          case 'semi':
-            table = 'semi_finished_products';
-            break;
-          case 'packaging':
-            table = 'packaging_materials';
-            break;
-          case 'finished':
-            table = 'finished_products';
-            break;
-          default:
-            table = '';
-        }
-        
-        if (table) {
-          const { data: itemDetails } = await supabase
-            .from(table as any)
-            .select('name')
-            .eq('id', item.item_id)
-            .single();
+        // الحصول على اسم العنصر من الجدول المناسب
+        if (item.item_type && item.item_id) {
+          let tableName = '';
+          switch (item.item_type) {
+            case 'raw':
+              tableName = 'raw_materials';
+              break;
+            case 'semi':
+              tableName = 'semi_finished_products';
+              break;
+            case 'packaging':
+              tableName = 'packaging_materials';
+              break;
+            case 'finished':
+              tableName = 'finished_products';
+              break;
+          }
           
-          if (itemDetails) {
-            itemName = itemDetails.name;
+          if (tableName) {
+            try {
+              const numericId = parseInt(item.item_id);
+              if (!isNaN(numericId)) {
+                const { data: itemDetails } = await supabase
+                  .from(tableName)
+                  .select('name')
+                  .eq('id', numericId)
+                  .single();
+                
+                if (itemDetails) {
+                  itemName = itemDetails.name || '';
+                }
+              }
+            } catch (e) {
+              console.warn(`Failed to get name for ${item.item_type} ${item.item_id}`);
+            }
           }
         }
         
-        // إضافة اسم المستخدم إذا كان موجوداً
-        let userName = '';
+        // الحصول على اسم المستخدم إذا كان موجوداً
         if (item.user_id) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('name')
-            .eq('id', item.user_id)
-            .single();
-          
-          if (userData) {
-            userName = userData.name;
+          try {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('name')
+              .eq('id', item.user_id)
+              .single();
+            
+            if (userData) {
+              userName = userData.name || '';
+            }
+          } catch (e) {
+            console.warn(`Failed to get user name for ${item.user_id}`);
           }
         }
         
