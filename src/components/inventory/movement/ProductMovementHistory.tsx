@@ -1,102 +1,178 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase, rpcFunctions } from '@/integrations/supabase/client';
-import { 
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { InventoryMovement } from '@/types/inventoryTypes';
-import { MovementTypeBadge } from './MovementTypeBadge';
+import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
+import { Badge } from '@/components/ui/badge';
+import InventoryMovementTrackingService from '@/services/inventory/InventoryMovementTrackingService';
+import InventoryMovementChart from './InventoryMovementChart';
 
 interface ProductMovementHistoryProps {
   itemId: string;
   itemType: string;
+  itemName: string;
 }
 
-const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({ itemId, itemType }) => {
-  const { data: movements, isLoading, error, refetch } = useQuery({
-    queryKey: ['movements', itemType, itemId],
-    queryFn: async () => {
-      // استخدام وظيفة قاعدة البيانات الجديدة للحصول على حركات المخزون
-      const { data, error } = await rpcFunctions.getInventoryMovementsByItem(itemId, itemType);
-      
-      if (error) throw error;
-      // تحويل البيانات صراحةً إلى نوع InventoryMovement المطلوب
-      return data as InventoryMovement[];
-    }
+const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({
+  itemId,
+  itemType,
+  itemName,
+}) => {
+  const [activeTab, setActiveTab] = React.useState('movements');
+  const trackingService = InventoryMovementTrackingService.getInstance();
+
+  const { data: movements, isLoading } = useQuery({
+    queryKey: ['product-movements', itemId, itemType],
+    queryFn: () => trackingService.getItemMovements(itemId, itemType),
   });
-  
+
   if (isLoading) {
     return (
-      <div className="space-y-3">
-        {Array(5).fill(0).map((_, index) => (
-          <div key={index} className="flex items-center space-x-4 space-x-reverse rtl:space-x-reverse">
-            <Skeleton className="h-12 w-12 rounded-full" />
-            <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-          </div>
-        ))}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>تحميل حركات المخزون</CardTitle>
+          <CardDescription>جاري استرجاع البيانات...</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[300px] w-full" />
+        </CardContent>
+      </Card>
     );
   }
-  
-  if (error) {
-    return (
-      <div className="text-center py-10">
-        <p className="text-destructive mb-2">حدث خطأ أثناء تحميل البيانات</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          إعادة المحاولة
-        </Button>
-      </div>
-    );
-  }
-  
+
   if (!movements || movements.length === 0) {
     return (
-      <div className="text-center py-10 border rounded-lg bg-muted/10">
-        <p className="text-muted-foreground">لا توجد حركات مخزون لهذا العنصر</p>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>سجل حركات المخزون</CardTitle>
+          <CardDescription>لا توجد حركات مسجلة لهذا الصنف</CardDescription>
+        </CardHeader>
+        <CardContent className="text-center py-8">
+          <p className="text-muted-foreground">لم يتم العثور على أي حركات مخزون مسجلة لهذا الصنف</p>
+        </CardContent>
+      </Card>
     );
   }
-  
+
+  // حساب الإحصائيات
+  const totalIn = movements
+    .filter(m => m.movement_type === 'in')
+    .reduce((sum, m) => sum + (m.quantity || 0), 0);
+
+  const totalOut = movements
+    .filter(m => m.movement_type === 'out')
+    .reduce((sum, m) => sum + (m.quantity || 0), 0);
+
+  const netChange = totalIn - totalOut;
+
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-right">النوع</TableHead>
-            <TableHead className="text-right">الكمية</TableHead>
-            <TableHead className="text-right">الرصيد بعد</TableHead>
-            <TableHead className="text-right">التاريخ</TableHead>
-            <TableHead className="text-right">السبب</TableHead>
-            <TableHead className="text-right">بواسطة</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {movements.map((movement) => (
-            <TableRow key={movement.id}>
-              <TableCell>
-                <MovementTypeBadge type={movement.movement_type} />
-              </TableCell>
-              <TableCell>{movement.quantity}</TableCell>
-              <TableCell>{movement.balance_after}</TableCell>
-              <TableCell>{new Date(movement.created_at).toLocaleString('ar-EG')}</TableCell>
-              <TableCell>{movement.reason || '-'}</TableCell>
-              <TableCell>{movement.user_name || 'النظام'}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>سجل حركات المخزون - {itemName}</CardTitle>
+        <CardDescription>
+          عرض جميع حركات المخزون المسجلة للصنف
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-4 flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">إجمالي الوارد</p>
+                <p className="text-2xl font-bold">{totalIn.toFixed(2)}</p>
+              </div>
+              <ArrowUpIcon className="h-8 w-8 text-emerald-500" />
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4 flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">إجمالي الصادر</p>
+                <p className="text-2xl font-bold">{totalOut.toFixed(2)}</p>
+              </div>
+              <ArrowDownIcon className="h-8 w-8 text-red-500" />
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4 flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">صافي التغيير</p>
+                <p className="text-2xl font-bold">{netChange.toFixed(2)}</p>
+              </div>
+              {netChange >= 0 ? (
+                <ArrowUpIcon className="h-8 w-8 text-emerald-500" />
+              ) : (
+                <ArrowDownIcon className="h-8 w-8 text-red-500" />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full">
+            <TabsTrigger value="movements">قائمة الحركات</TabsTrigger>
+            <TabsTrigger value="chart">الرسم البياني</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="movements">
+            <ScrollArea className="h-[400px] pr-4 mt-4">
+              <div className="space-y-4">
+                {movements.map(movement => (
+                  <Card key={movement.id} className="overflow-hidden">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={movement.movement_type === 'in' ? 'default' : 'destructive'}>
+                              {movement.movement_type === 'in' ? 'وارد' : 'صادر'}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {format(new Date(movement.created_at), 'PPP', { locale: ar })}
+                            </span>
+                          </div>
+                          <p className="mt-2">{movement.reason || (movement.movement_type === 'in' ? 'إضافة للمخزون' : 'صرف من المخزون')}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold">{movement.quantity}</p>
+                          <p className="text-xs text-muted-foreground">
+                            الرصيد بعد: {movement.balance_after}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+          
+          <TabsContent value="chart">
+            <div className="mt-4">
+              <InventoryMovementChart itemId={itemId} itemType={itemType} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 };
 

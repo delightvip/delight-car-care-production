@@ -2,7 +2,7 @@
 import { NewsItem } from "@/components/ui/news-ticker";
 import { NewsTickerServiceInterface } from "./NewsTickerTypes";
 import InventoryService from "../InventoryService";
-import { fetchInventoryMovements } from "../InventoryMovementService";
+import InventoryMovementTrackingService from "../inventory/InventoryMovementTrackingService";
 
 /**
  * خدمة أخبار المخزون
@@ -10,9 +10,11 @@ import { fetchInventoryMovements } from "../InventoryMovementService";
 class InventoryNewsService implements NewsTickerServiceInterface {
   private static instance: InventoryNewsService;
   private inventoryService: InventoryService;
+  private movementTrackingService: InventoryMovementTrackingService;
   
   private constructor() {
     this.inventoryService = InventoryService.getInstance();
+    this.movementTrackingService = InventoryMovementTrackingService.getInstance();
   }
   
   public static getInstance(): InventoryNewsService {
@@ -28,7 +30,7 @@ class InventoryNewsService implements NewsTickerServiceInterface {
   public async getNews(): Promise<NewsItem[]> {
     try {
       // الحصول على حركات المخزون الأخيرة
-      const movements = await fetchInventoryMovements({ limit: 10 });
+      const movements = await this.movementTrackingService.getRecentMovements(10);
       
       // الحصول على المواد ذات الكمية القليلة
       const rawMaterials = await this.inventoryService.getRawMaterials();
@@ -77,7 +79,8 @@ class InventoryNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `fin-${product.id}`,
           content: `المنتج "${product.name}" بكمية منخفضة`,
-          category: "المخزون",          importance: product.quantity <= 5 ? "urgent" : "high",
+          category: "المخزون",
+          importance: product.quantity <= 5 ? "urgent" : "high",
           value: product.quantity,
           trend: "down",
           valueChangePercentage: -((product.min_stock - product.quantity) / product.min_stock * 100),
@@ -87,8 +90,8 @@ class InventoryNewsService implements NewsTickerServiceInterface {
       
       // إضافة أخبار حركات المخزون الأخيرة
       movements.slice(0, 5).forEach(movement => {
-        const directionText = movement.type === 'in' ? 'إضافة' : 'صرف';
-        const trend = movement.type === 'in' ? 'up' : 'down';
+        const directionText = movement.movement_type === 'in' ? 'إضافة' : 'صرف';
+        const trend = movement.movement_type === 'in' ? 'up' : 'down';
         newsItems.push({
           id: `mov-${movement.id}`,
           content: `${directionText} ${movement.item_name}`,

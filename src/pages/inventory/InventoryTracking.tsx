@@ -1,44 +1,30 @@
+
 import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import MovementCard from '@/components/inventory/MovementCard';
 import { 
-  fetchInventoryMovements, 
-  filterMovementsByCategory, 
-  InventoryMovementQuery 
-} from '@/services/InventoryMovementService';
+  ChartBarIcon, 
+  FileDownIcon, 
+  FilterIcon, 
+  RefreshCw 
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  CalendarIcon, 
-  ChartBarIcon, 
-  FileDownIcon, 
-  FilterIcon, 
-  PlusIcon, 
-  RefreshCw 
-} from 'lucide-react';
-import { format, subDays, isAfter, parseISO } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import InventoryMovementStats from '@/components/inventory/InventoryMovementStats';
-import InventoryMovementChart from '@/components/inventory/InventoryMovementChart';
-import ManualMovementForm from '@/components/inventory/ManualMovementForm';
 import { DateRange } from 'react-day-picker';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { useQuery } from '@tanstack/react-query';
+import InventoryMovementTrackingService from '@/services/inventory/InventoryMovementTrackingService';
+import InventoryMovementList from '@/components/inventory/movement/InventoryMovementList';
+import InventoryMovementStats from '@/components/inventory/movement/InventoryMovementStats';
+import InventoryMovementChart from '@/components/inventory/movement/InventoryMovementChart';
 
 const InventoryTracking = () => {
   const [activeTab, setActiveTab] = React.useState('all');
@@ -50,92 +36,106 @@ const InventoryTracking = () => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<'list' | 'chart'>('list');
-  const [dialogOpen, setDialogOpen] = React.useState(false);
   
-  // Definir getCategoryName al principio del componente para evitar
-  // el error "Cannot access 'getCategoryName' before initialization"
-  const getCategoryName = (category: string) => {
-    switch(category) {
-      case 'raw_materials': return 'المواد الأولية';
-      case 'semi_finished': return 'المنتجات النصف مصنعة';
-      case 'packaging': return 'مستلزمات التعبئة';
-      case 'finished_products': return 'المنتجات النهائية';
-      default: return category;
-    }
-  };
+  const trackingService = InventoryMovementTrackingService.getInstance();
   
-  // Fetch real inventory movements from our service
-  const { data: movementsData, isLoading, error, refetch } = useQuery({
-    queryKey: ['inventoryMovements'],
-    queryFn: () => {
-      const query: InventoryMovementQuery = {
-        dateRange: {
-          from: dateRange.from,
-          to: dateRange.to
-        }
-      };
-      return fetchInventoryMovements(query);
+  // الحصول على الحركات من خدمة تتبع المخزون
+  const { data: movements = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['inventory-movements', activeTab, movementType, dateRange, searchTerm],
+    queryFn: async () => {
+      // الحصول على أحدث الحركات
+      const recentMovements = await trackingService.getRecentMovements(100);
+      
+      // تطبيق التصفية
+      return filterMovements(recentMovements, {
+        category: activeTab !== 'all' ? activeTab : undefined,
+        type: movementType !== 'all' ? movementType : undefined,
+        dateRange,
+        searchTerm
+      });
     },
-    refetchInterval: 60000, // Refresh every minute
-    refetchOnWindowFocus: true
+    refetchInterval: 60000, // تحديث كل دقيقة
   });
   
-  // Filter movements based on active filters
-  const filteredMovements = React.useMemo(() => {
-    if (!movementsData) return [];
-    
-    return movementsData.filter(movement => {
-      // Filter by category
-      if (activeTab !== 'all' && movement.category !== activeTab) {
+  // تصفية الحركات بناءً على المعايير
+  const filterMovements = (data: any[], filters: any) => {
+    return data.filter(movement => {
+      // التصفية حسب الفئة
+      if (filters.category && movement.item_type !== filters.category) {
         return false;
       }
       
-      // Filter by movement type
-      if (movementType !== 'all' && movement.type !== movementType) {
+      // التصفية حسب نوع الحركة
+      if (filters.type && movement.movement_type !== filters.type) {
         return false;
       }
       
-      // Filter by date range
-      if (dateRange.from && !isAfter(movement.date, dateRange.from)) {
-        return false;
-      }
-      if (dateRange.to && isAfter(movement.date, dateRange.to)) {
-        return false;
+      // التصفية حسب نطاق التاريخ
+      if (filters.dateRange) {
+        const movementDate = new Date(movement.created_at);
+        if (filters.dateRange.from && movementDate < filters.dateRange.from) {
+          return false;
+        }
+        if (filters.dateRange.to) {
+          const endOfDay = new Date(filters.dateRange.to);
+          endOfDay.setHours(23, 59, 59, 999);
+          if (movementDate > endOfDay) {
+            return false;
+          }
+        }
       }
       
-      // Filter by search term
-      if (searchTerm.trim() !== '') {
-        const lowercaseSearch = searchTerm.toLowerCase();
-        return (
-          movement.item_name.toLowerCase().includes(lowercaseSearch) ||
-          movement.note.toLowerCase().includes(lowercaseSearch)
-        );
+      // التصفية حسب مصطلح البحث
+      if (filters.searchTerm) {
+        const term = filters.searchTerm.toLowerCase();
+        const itemName = (movement.item_name || '').toLowerCase();
+        const reason = (movement.reason || '').toLowerCase();
+        if (!itemName.includes(term) && !reason.includes(term)) {
+          return false;
+        }
       }
       
       return true;
     });
-  }, [movementsData, activeTab, movementType, dateRange, searchTerm]);
-
-  // Bulk actions for export
+  };
+  
+  // الحصول على اسم الفئة
+  const getCategoryName = (category: string) => {
+    switch(category) {
+      case 'raw': return 'المواد الأولية';
+      case 'semi': return 'المنتجات النصف مصنعة';
+      case 'packaging': return 'مواد التعبئة';
+      case 'finished': return 'المنتجات النهائية';
+      default: return category;
+    }
+  };
+  
+  // الحصول على عدد الحركات لكل فئة
+  const getCategoryMovementCount = (category: string) => {
+    if (!movements) return 0;
+    return movements.filter(m => category === 'all' || m.item_type === category).length;
+  };
+  
+  // تصدير البيانات
   const handleExportData = () => {
-    // Convert filtered movements to CSV
-    const headers = ['نوع الحركة', 'التصنيف', 'الصنف', 'الكمية', 'التاريخ', 'ملاحظات'];
-    const csvData = filteredMovements.map(movement => [
-      movement.type === 'in' ? 'وارد' : 'صادر',
-      getCategoryName(movement.category),
+    // تحويل الحركات المصفاة إلى CSV
+    const headers = ['نوع الحركة', 'التصنيف', 'الصنف', 'الكمية', 'التاريخ', 'السبب'];
+    const csvData = movements.map(movement => [
+      movement.movement_type === 'in' ? 'وارد' : 'صادر',
+      getCategoryName(movement.item_type),
       movement.item_name,
       movement.quantity,
-      format(movement.date, 'yyyy/MM/dd'),
-      movement.note
+      format(new Date(movement.created_at), 'yyyy/MM/dd'),
+      movement.reason
     ]);
     
-    // Create CSV content
+    // إنشاء محتوى CSV
     const csv = [
       headers.join(','),
       ...csvData.map(row => row.join(','))
     ].join('\n');
     
-    // Create download link
+    // إنشاء رابط التنزيل
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -145,16 +145,6 @@ const InventoryTracking = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-  
-  const getCategoryMovementCount = (category: string) => {
-    if (!movementsData) return 0;
-    return movementsData.filter(m => category === 'all' || m.category === category).length;
-  };
-  
-  const handleManualMovementSuccess = () => {
-    setDialogOpen(false);
-    refetch();
   };
   
   if (isLoading) {
@@ -215,34 +205,10 @@ const InventoryTracking = () => {
         <div className="flex justify-between items-center pb-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">تتبع المخزون</h1>
-            <p className="text-muted-foreground">متابعة حركة المخزون والتعديلات</p>
+            <p className="text-muted-foreground">متابعة حركة المخزون وتحليل البيانات</p>
           </div>
           
           <div className="flex gap-2">
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  size="sm"
-                  className="flex gap-2 items-center"
-                >
-                  <PlusIcon className="h-4 w-4" />
-                  <span>إضافة حركة</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[550px]">
-                <DialogHeader>
-                  <DialogTitle>إضافة حركة مخزون جديدة</DialogTitle>
-                  <DialogDescription>
-                    أدخل بيانات حركة المخزون الجديدة (وارد أو صادر)
-                  </DialogDescription>
-                </DialogHeader>
-                <ManualMovementForm 
-                  onSuccess={handleManualMovementSuccess}
-                  onCancel={() => setDialogOpen(false)}
-                />
-              </DialogContent>
-            </Dialog>
-            
             <Button 
               variant={viewMode === 'list' ? 'default' : 'outline'} 
               size="sm"
@@ -285,7 +251,7 @@ const InventoryTracking = () => {
         </div>
 
         {/* عرض إحصائيات حركة المخزون */}
-        {movementsData && <InventoryMovementStats movements={movementsData} selectedCategory={activeTab} />}
+        <InventoryMovementStats selectedCategory={activeTab} />
         
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
@@ -295,35 +261,35 @@ const InventoryTracking = () => {
                 {getCategoryMovementCount('all')}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="raw_materials" className="relative">
+            <TabsTrigger value="raw" className="relative">
               المواد الأولية
               <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('raw_materials')}
+                {getCategoryMovementCount('raw')}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="semi_finished" className="relative">
+            <TabsTrigger value="semi" className="relative">
               النصف مصنعة
               <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('semi_finished')}
+                {getCategoryMovementCount('semi')}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="packaging" className="relative">
-              مستلزمات التعبئة
+              مواد التعبئة
               <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
                 {getCategoryMovementCount('packaging')}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="finished_products" className="relative">
+            <TabsTrigger value="finished" className="relative">
               المنتجات النهائية
               <Badge variant="secondary" className="mr-2 bg-secondary/30 hover:bg-secondary/30">
-                {getCategoryMovementCount('finished_products')}
+                {getCategoryMovementCount('finished')}
               </Badge>
             </TabsTrigger>
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
-            {viewMode === 'chart' && movementsData ? (
-              <InventoryMovementChart movements={filteredMovements} selectedCategory={activeTab} />
+            {viewMode === 'chart' ? (
+              <InventoryMovementChart selectedCategory={activeTab} />
             ) : (
               <Card>
                 <CardHeader className="pb-0">
@@ -358,7 +324,6 @@ const InventoryTracking = () => {
                               variant="outline"
                               className="w-full md:w-auto justify-start text-left font-normal"
                             >
-                              <CalendarIcon className="ml-2 h-4 w-4" />
                               {dateRange.from ? (
                                 dateRange.to ? (
                                   <>
@@ -411,10 +376,10 @@ const InventoryTracking = () => {
                     </div>
                   </div>
                   
-                  {filteredMovements.length > 0 && (
+                  {movements.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-4">
                       <Badge variant="outline" className="bg-muted">
-                        {filteredMovements.length} عنصر
+                        {movements.length} عنصر
                       </Badge>
                       
                       {activeTab !== 'all' && (
@@ -452,10 +417,8 @@ const InventoryTracking = () => {
                 <CardContent>
                   <ScrollArea className="h-[500px] pr-4">
                     <div className="space-y-6">
-                      {filteredMovements.length > 0 ? (
-                        filteredMovements.map((movement) => (
-                          <MovementCard key={movement.id} movement={movement} />
-                        ))
+                      {movements.length > 0 ? (
+                        <InventoryMovementList />
                       ) : (
                         <div className="text-center py-16 text-muted-foreground">
                           <FilterIcon className="h-16 w-16 mx-auto mb-4 opacity-20" />
