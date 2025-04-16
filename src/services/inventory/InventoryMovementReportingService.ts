@@ -68,14 +68,21 @@ class InventoryMovementReportingService {
 
       const totalOutQuantity = outQuantities.reduce((sum, item) => sum + (item.quantity || 0), 0);
 
-      // الحصول على عدد الحركات لكل نوع عنصر
-      const { data: byItemType, error: typeError } = await supabase
-        .from('inventory_movements')
-        .select('item_type, count')
-        .select('item_type, count(*)')
-        .group('item_type');
-
-      if (typeError) throw typeError;
+      // الحصول على أعداد بنوع العنصر باستخدام استعلام مباشر لكل نوع
+      const typeData = [];
+      const itemTypes = ['raw', 'semi', 'packaging', 'finished'];
+      
+      for (const itemType of itemTypes) {
+        const { count } = await supabase
+          .from('inventory_movements')
+          .select('*', { count: 'exact', head: true })
+          .eq('item_type', itemType);
+          
+        typeData.push({
+          item_type: itemType,
+          count: count || 0
+        });
+      }
 
       // إعداد التقرير النهائي
       return {
@@ -85,7 +92,7 @@ class InventoryMovementReportingService {
         totalInQuantity,
         totalOutQuantity,
         netQuantity: totalInQuantity - totalOutQuantity,
-        byItemType: byItemType || [],
+        byItemType: typeData,
         lastUpdated: new Date()
       };
     } catch (error) {
@@ -127,9 +134,9 @@ class InventoryMovementReportingService {
           break;
       }
       
-      if (table) {
+      if (table && ['raw_materials', 'semi_finished_products', 'packaging_materials', 'finished_products'].includes(table)) {
         const { data, error } = await supabase
-          .from(table)
+          .from(table as any)
           .select('quantity')
           .eq('id', itemId)
           .single();
@@ -173,30 +180,48 @@ class InventoryMovementReportingService {
    */
   public async getMostActiveItems(limit: number = 10): Promise<any[]> {
     try {
-      // الحصول على حركات المخزون مجمعة حسب نوع العنصر ومعرف العنصر
+      // استخدام استعلام SQL مباشر لاستخراج البيانات المجمعة
       const { data, error } = await supabase
         .from('inventory_movements')
         .select('item_type, item_id, count(*)')
-        .group('item_type, item_id')
-        .order('count', { ascending: false })
+        .or('id.neq.0') // This is a workaround to avoid the group() error
         .limit(limit);
       
       if (error) throw error;
       
+      // تجميع البيانات يدوياً
+      const itemCounts: Record<string, { type: string, id: string, count: number }> = {};
+      (data || []).forEach(item => {
+        const key = `${item.item_type}-${item.item_id}`;
+        if (!itemCounts[key]) {
+          itemCounts[key] = {
+            type: item.item_type,
+            id: item.item_id,
+            count: 0
+          };
+        }
+        itemCounts[key].count++;
+      });
+      
+      // تحويل البيانات إلى مصفوفة وترتيبها
+      const itemsArray = Object.values(itemCounts)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit);
+      
       // الحصول على تفاصيل الأصناف
-      const itemsWithDetails = await Promise.all((data || []).map(async (item) => {
+      const itemsWithDetails = await Promise.all(itemsArray.map(async (item) => {
         let details: any = {
-          id: item.item_id,
-          type: item.item_type,
+          id: item.id,
+          type: item.type,
           count: item.count,
           name: '',
           unit: '',
           quantity: 0
         };
         
-        // الحصول على تفاصيل الصنف من الجدول المناسب
+        // تحديد الجدول المناسب
         let table = '';
-        switch (item.item_type) {
+        switch (item.type) {
           case 'raw':
             table = 'raw_materials';
             break;
@@ -211,14 +236,14 @@ class InventoryMovementReportingService {
             break;
         }
         
-        if (table) {
-          const { data: itemDetails, error: itemError } = await supabase
-            .from(table)
+        if (table && ['raw_materials', 'semi_finished_products', 'packaging_materials', 'finished_products'].includes(table)) {
+          const { data: itemDetails } = await supabase
+            .from(table as any)
             .select('name, unit, quantity')
-            .eq('id', item.item_id)
+            .eq('id', item.id)
             .single();
           
-          if (!itemError && itemDetails) {
+          if (itemDetails) {
             details.name = itemDetails.name;
             details.unit = itemDetails.unit;
             details.quantity = itemDetails.quantity;

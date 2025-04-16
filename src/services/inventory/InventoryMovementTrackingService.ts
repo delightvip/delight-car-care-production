@@ -120,8 +120,12 @@ class InventoryMovementTrackingService {
       }
       
       // استعلام عن الرصيد الحالي
+      if (!['raw_materials', 'semi_finished_products', 'packaging_materials', 'finished_products'].includes(table)) {
+        return 0;
+      }
+      
       const { data, error } = await supabase
-        .from(table)
+        .from(table as any)
         .select('quantity')
         .eq('id', itemId)
         .single();
@@ -197,15 +201,81 @@ class InventoryMovementTrackingService {
    */
   public async getRecentMovements(limit: number = 10): Promise<any[]> {
     try {
-      // استدعاء وظيفة SQL جديدة للحصول على أهم الحركات
-      const { data, error } = await supabase.rpc('get_important_inventory_movements', {
-        p_limit: limit,
-        p_days: 30
-      });
+      // استرجاع الحركات الأخيرة يدوياً بدلاً من وظيفة SQL غير موجودة
+      const { data, error } = await supabase
+        .from('inventory_movements')
+        .select(`
+          id,
+          item_id,
+          item_type,
+          movement_type,
+          quantity,
+          reason,
+          created_at,
+          user_id
+        `)
+        .order('created_at', { ascending: false })
+        .limit(limit);
       
       if (error) throw error;
       
-      return data || [];
+      // إضافة اسم العنصر (هذا بديل مؤقت للوظيفة المفقودة)
+      const enrichedData = await Promise.all((data || []).map(async (item) => {
+        let itemName = '';
+        
+        // تحديد الجدول المناسب حسب نوع العنصر
+        let table: string;
+        switch (item.item_type) {
+          case 'raw':
+            table = 'raw_materials';
+            break;
+          case 'semi':
+            table = 'semi_finished_products';
+            break;
+          case 'packaging':
+            table = 'packaging_materials';
+            break;
+          case 'finished':
+            table = 'finished_products';
+            break;
+          default:
+            table = '';
+        }
+        
+        if (table) {
+          const { data: itemDetails } = await supabase
+            .from(table as any)
+            .select('name')
+            .eq('id', item.item_id)
+            .single();
+          
+          if (itemDetails) {
+            itemName = itemDetails.name;
+          }
+        }
+        
+        // إضافة اسم المستخدم إذا كان موجوداً
+        let userName = '';
+        if (item.user_id) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', item.user_id)
+            .single();
+          
+          if (userData) {
+            userName = userData.name;
+          }
+        }
+        
+        return {
+          ...item,
+          item_name: itemName,
+          user_name: userName
+        };
+      }));
+      
+      return enrichedData;
     } catch (error) {
       console.error("خطأ في الحصول على الحركات الأخيرة:", error);
       return [];

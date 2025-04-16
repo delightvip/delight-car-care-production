@@ -69,18 +69,18 @@ BEGIN
 END;
 $$;
 
--- وظيفة جديدة لاسترجاع أهم الحركات في المخزون
-CREATE OR REPLACE FUNCTION get_important_inventory_movements(
-  p_limit INTEGER DEFAULT 10,
-  p_days INTEGER DEFAULT 30
+-- وظيفة للحصول على حركات عنصر محدد
+CREATE OR REPLACE FUNCTION get_inventory_movements_by_item(
+  p_item_id TEXT,
+  p_item_type TEXT
 )
 RETURNS TABLE (
   id UUID,
   item_id TEXT,
   item_type TEXT,
-  item_name TEXT,
   movement_type TEXT,
   quantity NUMERIC,
+  balance_after NUMERIC,
   reason TEXT,
   created_at TIMESTAMPTZ,
   user_name TEXT
@@ -93,29 +93,19 @@ BEGIN
     im.id,
     im.item_id,
     im.item_type,
-    COALESCE(
-      (CASE 
-        WHEN im.item_type = 'raw' THEN (SELECT name FROM raw_materials WHERE id::TEXT = im.item_id)
-        WHEN im.item_type = 'semi' THEN (SELECT name FROM semi_finished_products WHERE id::TEXT = im.item_id)
-        WHEN im.item_type = 'packaging' THEN (SELECT name FROM packaging_materials WHERE id::TEXT = im.item_id)
-        WHEN im.item_type = 'finished' THEN (SELECT name FROM finished_products WHERE id::TEXT = im.item_id)
-        ELSE NULL
-      END),
-      im.reason
-    ) AS item_name,
     im.movement_type,
     im.quantity,
+    im.balance_after,
     im.reason,
     im.created_at,
-    u.name AS user_name
+    u.name as user_name
   FROM
     inventory_movements im
   LEFT JOIN
     users u ON im.user_id = u.id
   WHERE
-    im.created_at >= CURRENT_TIMESTAMP - (p_days || ' days')::INTERVAL
+    im.item_id = p_item_id AND im.item_type = p_item_type
   ORDER BY
-    im.created_at DESC
-  LIMIT p_limit;
+    im.created_at DESC;
 END;
 $$;
