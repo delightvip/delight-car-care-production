@@ -60,10 +60,15 @@ class InventoryMovementTrackingService {
         });
 
       if (error) {
+        console.error("خطأ في تسجيل حركة المخزون:", error);
         throw error;
       }
 
       console.log(`تم تسجيل حركة مخزون: ${movement.movement_type} ${movement.quantity} من ${movement.item_type} رقم ${movement.item_id}`);
+      
+      // تحديث رصيد العنصر في الجدول المناسب
+      await this.updateItemBalance(movement.item_id, movement.item_type, movement.quantity, movement.movement_type);
+      
       return true;
     } catch (error) {
       console.error("خطأ في تسجيل حركة المخزون:", error);
@@ -117,24 +122,89 @@ class InventoryMovementTrackingService {
         return 0;
       }
       
-      // استخدام نهج أكثر أمانًا من حيث الأنواع
-      const query = supabase
+      // الاستعلام عن الرصيد الحالي باستخدام معرف المادة
+      const { data, error } = await supabase
         .from(tableName)
         .select('quantity')
         .eq('id', numericId)
         .single();
-      
-      const { data, error } = await query;
       
       if (error) {
         console.error(`خطأ في الحصول على رصيد العنصر: ${itemType} ${itemId}`, error);
         return 0;
       }
       
+      // إرجاع الرصيد الحالي أو 0 إذا كان البيانات غير متوفرة
       return data?.quantity || 0;
     } catch (error) {
       console.error("خطأ في الحصول على رصيد العنصر:", error);
       return 0;
+    }
+  }
+
+  /**
+   * تحديث رصيد عنصر في المخزون بعد تسجيل حركة
+   * @param itemId معرف العنصر
+   * @param itemType نوع العنصر
+   * @param quantity الكمية
+   * @param movementType نوع الحركة
+   */
+  private async updateItemBalance(
+    itemId: string, 
+    itemType: string, 
+    quantity: number, 
+    movementType: 'in' | 'out'
+  ): Promise<boolean> {
+    try {
+      // تحديد الجدول المناسب حسب نوع العنصر
+      const tableName = this.getTableNameForItemType(itemType);
+      
+      if (!tableName) {
+        console.warn(`نوع العنصر غير معروف: ${itemType}`);
+        return false;
+      }
+      
+      // محاولة تحويل itemId إلى رقم (معظم الجداول تستخدم معرفات رقمية)
+      const numericId = parseInt(itemId);
+      if (isNaN(numericId)) {
+        console.warn(`معرف العنصر ليس رقمًا صالحًا: ${itemId}`);
+        return false;
+      }
+      
+      // الحصول على الرصيد الحالي
+      const { data, error: fetchError } = await supabase
+        .from(tableName)
+        .select('quantity')
+        .eq('id', numericId)
+        .single();
+      
+      if (fetchError) {
+        console.error(`خطأ في الحصول على رصيد العنصر: ${itemType} ${itemId}`, fetchError);
+        return false;
+      }
+      
+      // حساب الرصيد الجديد بناءً على نوع الحركة
+      const currentBalance = data?.quantity || 0;
+      const newBalance = movementType === 'in' 
+        ? currentBalance + quantity 
+        : Math.max(0, currentBalance - quantity); // منع الأرصدة السالبة
+      
+      // تحديث الرصيد في الجدول
+      const { error: updateError } = await supabase
+        .from(tableName)
+        .update({ quantity: newBalance })
+        .eq('id', numericId);
+      
+      if (updateError) {
+        console.error(`خطأ في تحديث رصيد العنصر: ${itemType} ${itemId}`, updateError);
+        return false;
+      }
+      
+      console.log(`تم تحديث رصيد العنصر ${itemType} ${itemId} من ${currentBalance} إلى ${newBalance}`);
+      return true;
+    } catch (error) {
+      console.error("خطأ في تحديث رصيد العنصر:", error);
+      return false;
     }
   }
 
@@ -216,63 +286,100 @@ class InventoryMovementTrackingService {
       
       if (error) throw error;
       
+      if (!data || data.length === 0) {
+        return [];
+      }
+      
       // إضافة اسم العنصر بشكل منفصل
-      const enrichedData = await Promise.all((data || []).map(async (item) => {
-        let itemName = '';
-        let userName = '';
-        
-        // الحصول على اسم العنصر من الجدول المناسب
-        if (item.item_type && item.item_id) {
-          const tableName = this.getTableNameForItemType(item.item_type);
-          
-          if (tableName) {
-            try {
-              const numericId = parseInt(item.item_id);
-              if (!isNaN(numericId)) {
-                const { data: itemDetails } = await supabase
-                  .from(tableName)
-                  .select('name')
-                  .eq('id', numericId)
-                  .single();
-                
-                if (itemDetails?.name) {
-                  itemName = itemDetails.name;
-                }
-              }
-            } catch (e) {
-              console.warn(`Failed to get name for ${item.item_type} ${item.item_id}`);
-            }
-          }
-        }
-        
-        // الحصول على اسم المستخدم إذا كان موجوداً
-        if (item.user_id) {
-          try {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('name')
-              .eq('id', item.user_id)
-              .single();
-            
-            if (userData?.name) {
-              userName = userData.name;
-            }
-          } catch (e) {
-            console.warn(`Failed to get user name for ${item.user_id}`);
-          }
-        }
-        
-        return {
-          ...item,
-          item_name: itemName,
-          user_name: userName
-        };
-      }));
+      const enrichedData = await this.enrichMovementsWithNames(data);
       
       return enrichedData;
     } catch (error) {
       console.error("خطأ في الحصول على الحركات الأخيرة:", error);
       return [];
+    }
+  }
+
+  /**
+   * إثراء بيانات حركات المخزون بأسماء العناصر
+   * @param movements حركات المخزون
+   */
+  private async enrichMovementsWithNames(movements: any[]): Promise<any[]> {
+    try {
+      const enrichedMovements = await Promise.all(movements.map(async (movement) => {
+        let itemName = '';
+        let userName = '';
+        let itemUnit = '';
+        
+        // الحصول على اسم العنصر من الجدول المناسب
+        if (movement.item_type && movement.item_id) {
+          const itemDetails = await this.getItemDetails(movement.item_type, movement.item_id);
+          itemName = itemDetails.name || '';
+          itemUnit = itemDetails.unit || '';
+        }
+        
+        // الحصول على اسم المستخدم إذا كان موجوداً
+        if (movement.user_id) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', movement.user_id)
+            .single();
+          
+          userName = userData?.name || '';
+        }
+        
+        return {
+          ...movement,
+          item_name: itemName,
+          user_name: userName,
+          unit: itemUnit
+        };
+      }));
+      
+      return enrichedMovements;
+    } catch (error) {
+      console.error("خطأ في إثراء بيانات حركات المخزون:", error);
+      return movements; // إرجاع البيانات الأصلية في حالة حدوث خطأ
+    }
+  }
+
+  /**
+   * الحصول على تفاصيل عنصر من الجدول المناسب
+   * @param itemType نوع العنصر
+   * @param itemId معرف العنصر
+   */
+  private async getItemDetails(itemType: string, itemId: string): Promise<{ name: string; unit: string }> {
+    try {
+      const tableName = this.getTableNameForItemType(itemType);
+      
+      if (!tableName) {
+        return { name: '', unit: '' };
+      }
+      
+      const numericId = parseInt(itemId);
+      if (isNaN(numericId)) {
+        return { name: '', unit: '' };
+      }
+      
+      // استخدام نوع آمن لاستدعاء الجدول
+      const safeTableQuery = (tableName: InventoryTableType) => 
+        supabase.from(tableName).select('name, unit').eq('id', numericId).single();
+      
+      const { data, error } = await safeTableQuery(tableName);
+      
+      if (error || !data) {
+        console.warn(`لم يتم العثور على البيانات للعنصر ${itemType} ${itemId}`, error);
+        return { name: '', unit: '' };
+      }
+      
+      return { 
+        name: data.name || '', 
+        unit: data.unit || '' 
+      };
+    } catch (error) {
+      console.error("خطأ في الحصول على تفاصيل العنصر:", error);
+      return { name: '', unit: '' };
     }
   }
 
@@ -293,6 +400,25 @@ class InventoryMovementTrackingService {
         return 'finished_products';
       default:
         return null;
+    }
+  }
+
+  /**
+   * الحصول على اسم نوع العنصر بالعربية
+   * @param itemType نوع العنصر
+   */
+  public static getItemTypeName(itemType: string): string {
+    switch (itemType) {
+      case 'raw':
+        return 'مواد خام';
+      case 'semi':
+        return 'نصف مصنعة';
+      case 'packaging':
+        return 'مواد تعبئة';
+      case 'finished':
+        return 'منتجات نهائية';
+      default:
+        return itemType;
     }
   }
 }

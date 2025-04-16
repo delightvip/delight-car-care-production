@@ -25,6 +25,7 @@ import InventoryMovementTrackingService from '@/services/inventory/InventoryMove
 import InventoryMovementList from '@/components/inventory/movement/InventoryMovementList';
 import InventoryMovementStats from '@/components/inventory/movement/InventoryMovementStats';
 import InventoryMovementChart from '@/components/inventory/movement/InventoryMovementChart';
+import InventoryMovementSync from '@/components/inventory/movement/InventoryMovementSync';
 
 const InventoryTracking = () => {
   const [activeTab, setActiveTab] = React.useState('all');
@@ -250,8 +251,15 @@ const InventoryTracking = () => {
           </div>
         </div>
 
-        {/* عرض إحصائيات حركة المخزون */}
-        <InventoryMovementStats selectedCategory={activeTab} />
+        {/* Add our new synchronization component */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="md:col-span-1">
+            <InventoryMovementSync />
+          </div>
+          <div className="md:col-span-3">
+            <InventoryMovementStats selectedCategory={activeTab} />
+          </div>
+        </div>
         
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start mb-6">
