@@ -336,29 +336,20 @@ class PartyService {
         });
       
       if (ledgerError) throw ledgerError;
-      
-      if (!isReturnRelatedTransaction && amount > 0) {
+        if (!isReturnRelatedTransaction && amount > 0) {
+        // تم تعطيل إنشاء المعاملات المالية في جدول financial_transactions
+        // للحفاظ على سجل الأحداث
         const type = isDebit ? 'expense' : 'income';
-        const category_id = type === 'income' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181';
         
-        console.log(`إنشاء معاملة مالية للمعاملة ${transactionType}، نوع: ${type}، القيمة: ${amount}`);
+        console.log(`[DISABLED] تم تعطيل إنشاء معاملة مالية للمعاملة ${transactionType}، نوع: ${type}، القيمة: ${amount}`);
         
-        const { error: financialError } = await this.supabase
-          .from('financial_transactions')
-          .insert({
-            type: type,
-            amount: amount,
-            category_id: category_id,
-            date: new Date().toISOString().split('T')[0],
-            payment_method: 'other',
-            notes: description,
-            reference_id: reference || partyId,
-            reference_type: transactionType
-          });
-          
-        if (financialError) {
-          console.warn('خطأ في إنشاء المعاملة المالية، ولكن تم تحديث رصيد العميل بنجاح:', financialError);
-        }
+        // سنكتفي بتسجيل المعاملات في جدول ledger فقط
+        // وعدم إنشاء معاملات في جدول financial_transactions
+        
+        // لم نعد نستخدم الكود التالي:
+        // const { error: financialError } = await this.supabase
+        //   .from('financial_transactions')
+        //   .insert({...});
       } else if (isReturnRelatedTransaction) {
         console.log(`تم تجاهل إنشاء معاملة مالية للمعاملة ${transactionType} لأنها متعلقة بالمرتجعات`);
       }

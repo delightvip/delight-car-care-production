@@ -19,129 +19,42 @@ class FinancialCommercialBridge {
     }
     return FinancialCommercialBridge.instance;
   }
-  
-  /**
+    /**
    * معالجة تأكيد فاتورة تجارية
-   * عند تأكيد فاتورة، يتم إنشاء معاملة مالية مقابلة (إيراد)
+   * تم تعديلها للتوقف عن إنشاء معاملة مالية في جدول الفئات المالية
    */
   public async handleInvoiceConfirmation(invoice: any): Promise<boolean> {
     try {
-      const formattedDate = typeof invoice.invoice_date === 'object' && invoice.invoice_date
-        ? format(invoice.invoice_date, 'yyyy-MM-dd')
-        : invoice.invoice_date;
-
-      // فحص ما إذا كانت هناك معاملة مالية مرتبطة بالفعل
-      const { data: existingTransactions, error: checkError } = await supabase
-        .from('financial_transactions')
-        .select('*')
-        .eq('reference_id', invoice.id)
-        .eq('reference_type', 'invoice');
+      // سجل تفاصيل العملية في السجلات للتتبع
+      console.log(`[DISABLED] تم تعطيل إنشاء معاملة مالية للفاتورة رقم ${invoice.invoice_number || invoice.id}`);
       
-      if (checkError) {
-        throw checkError;
-      }
-      
-      // إذا كانت هناك معاملة موجودة بالفعل، فلا نضيف معاملة جديدة
-      if (existingTransactions && existingTransactions.length > 0) {
-        console.log(`معاملة مالية موجودة بالفعل للفاتورة رقم ${invoice.invoice_number}`);
-        this.notifyFinancialDataChange('invoice_already_processed');
-        return true;
-      }
-
-      const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
-        type: 'income',
-        amount: invoice.total_amount,
-        category_id: 'c69949b5-2969-4984-9f99-93a377fca8ff', // فئة "إيرادات المبيعات"
-        date: formattedDate,
-        payment_method: invoice.payment_method,
-        notes: `فاتورة مبيعات رقم ${invoice.invoice_number} للعميل ${invoice.party_name}`,
-        reference_id: invoice.id,
-        reference_type: 'invoice'
-      };
-      
-      const { data: transaction, error: transactionError } = await supabase
-        .from('financial_transactions')
-        .insert(transactionData)
-        .select()
-        .single();
-      
-      if (transactionError) {
-        throw transactionError;
-      }
-      
-      // إرسال إشعار بتغيير البيانات المالية
+      // إرسال إشعار بتغيير البيانات المالية للحفاظ على تحديث واجهة المستخدم
       this.notifyFinancialDataChange('invoice_confirmation');
       
-      toast.success(`تم تسجيل إيراد فاتورة رقم ${invoice.invoice_number} تلقائيًا`);
+      // لا نعرض رسالة للمستخدم لتجنب الإرباك
       return true;
     } catch (error) {
-      console.error('Error handling invoice confirmation:', error);
-      toast.error('حدث خطأ أثناء تسجيل إيراد الفاتورة');
-      return false;
+      console.error('Error in disabled invoice confirmation handler:', error);
+      return true; // نعيد true حتى في حالة الخطأ لمنع توقف العمليات الأخرى
     }
   }
-  
-  /**
+    /**
    * معالجة تأكيد دفعة تجارية
-   * عند تأكيد دفعة، يتم إنشاء معاملة مالية مقابلة (إيراد أو مصروف حسب نوع الدفعة)
+   * تم تعديلها للتوقف عن إنشاء معاملة مالية في جدول الفئات المالية
    */
   public async handlePaymentConfirmation(payment: any): Promise<boolean> {
     try {
-      const transactionType = payment.type === 'receipt' ? 'income' : 'expense';
-      const categoryId = payment.type === 'receipt' ? 'c69949b5-2969-4984-9f99-93a377fca8ff' : 'd4439564-5a92-4e95-a889-19c449989181'; // فئة "إيرادات المبيعات" أو "مدفوعات الموردين"
+      // سجل تفاصيل العملية في السجلات للتتبع
+      console.log(`[DISABLED] تم تعطيل إنشاء معاملة مالية للدفعة رقم ${payment.payment_number || payment.id}`);
       
-      const formattedDate = typeof payment.payment_date === 'object' && payment.payment_date
-        ? format(payment.payment_date, 'yyyy-MM-dd')
-        : payment.payment_date;
-
-      // فحص ما إذا كانت هناك معاملة مالية مرتبطة بالفعل
-      const { data: existingTransactions, error: checkError } = await supabase
-        .from('financial_transactions')
-        .select('*')
-        .eq('reference_id', payment.id)
-        .eq('reference_type', 'payment');
-      
-      if (checkError) {
-        throw checkError;
-      }
-      
-      // إذا كانت هناك معاملة موجودة بالفعل، فلا نضيف معاملة جديدة
-      if (existingTransactions && existingTransactions.length > 0) {
-        console.log(`معاملة مالية موجودة بالفعل للدفعة رقم ${payment.payment_number}`);
-        this.notifyFinancialDataChange('payment_already_processed');
-        return true;
-      }
-
-      const transactionData: Omit<Transaction, 'id' | 'created_at' | 'category_name' | 'category_type'> = {
-        type: transactionType,
-        amount: payment.amount,
-        category_id: categoryId,
-        date: formattedDate,
-        payment_method: payment.payment_method,
-        notes: `دفعة ${payment.type === 'receipt' ? 'مستلمة' : 'مدفوعة'} رقم ${payment.payment_number} من/إلى ${payment.party_name}`,
-        reference_id: payment.id,
-        reference_type: 'payment'
-      };
-      
-      const { data: transaction, error: transactionError } = await supabase
-        .from('financial_transactions')
-        .insert(transactionData)
-        .select()
-        .single();
-      
-      if (transactionError) {
-        throw transactionError;
-      }
-      
-      // إرسال إشعار بتغيير البيانات المالية
+      // إرسال إشعار بتغيير البيانات المالية للحفاظ على تحديث واجهة المستخدم
       this.notifyFinancialDataChange('payment_confirmation');
       
-      toast.success(`تم تسجيل معاملة دفعة رقم ${payment.payment_number} تلقائيًا`);
+      // لا نعرض رسالة للمستخدم لتجنب الإرباك
       return true;
     } catch (error) {
-      console.error('Error handling payment confirmation:', error);
-      toast.error('حدث خطأ أثناء تسجيل معاملة الدفعة');
-      return false;
+      console.error('Error in disabled payment confirmation handler:', error);
+      return true; // نعيد true حتى في حالة الخطأ لمنع توقف العمليات الأخرى
     }
   }
   
