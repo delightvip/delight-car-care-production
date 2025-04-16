@@ -1,4 +1,3 @@
-
 import { NewsItem } from "@/components/ui/news-ticker";
 import { NewsTickerServiceInterface } from "./NewsTickerTypes";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,114 +75,112 @@ class AnalyticsNewsService implements NewsTickerServiceInterface {
       return [];
     }
   }
-  
   /**
-   * الحصول على المنتجات الأكثر مبيعًا
-   */
-  private async getTopSellingProducts(limit: number = 3): Promise<any[]> {
-    try {
-      // استعلام لحساب إجمالي المبيعات لكل منتج
-      const { data, error } = await supabase.rpc('get_top_selling_products', { limit_count: limit });
+ * الحصول على المنتجات الأكثر ربحية
+ */
+private async getMostProfitableProducts(limit: number = 3): Promise<any[]> {
+  try {
+    // طريقة 1: محاولة استخدام جدول الأرباح مباشرة دون ربط فوري
+    const { data, error } = await supabase
+      .from('profits')
+      .select(`
+        id,
+        profit_amount,
+        profit_percentage,
+        invoice_id
+      `)
+      .order('profit_amount', { ascending: false })
+      .limit(50); // نحصل على عدد أكبر للمعالجة لاحقًا
+    
+    if (error) {
+      console.error("استعلام الأرباح فشل:", error);
+      return [];
+    }
+    
+    if (!data || data.length === 0) {
+      return [];
+    }
+    
+    // جمع معرفات الفواتير لجلب عناصرها
+    const invoiceIds = data.map(profit => profit.invoice_id).filter(id => id);
+    
+    if (invoiceIds.length === 0) {
+      return [];
+    }
+    
+    // جلب عناصر الفواتير المرتبطة بسجلات الأرباح
+    const { data: invoiceItems, error: itemsError } = await supabase
+      .from('invoice_items')
+      .select(`
+        id,
+        invoice_id,
+        item_id,
+        item_name,
+        item_type,
+        quantity
+      `)
+      .in('invoice_id', invoiceIds)
+      .eq('item_type', 'finished_products');
+    
+    if (itemsError) {
+      console.error("استعلام عناصر الفواتير فشل:", itemsError);
+      return [];
+    }
+    
+    // تجميع البيانات حسب المنتج
+    const productProfits: Record<string, { id: number, name: string, profit: number, profit_percentage: number, count: number }> = {};
+    
+    // ربط سجلات الأرباح بعناصر الفواتير
+    data.forEach(profitRecord => {
+      // العثور على جميع العناصر المرتبطة بهذه الفاتورة
+      const itemsForInvoice = invoiceItems?.filter(item => 
+        item.invoice_id === profitRecord.invoice_id
+      ) || [];
       
-      if (error) {
-        console.error("Error fetching top selling products:", error);
-        
-        // استعلام بديل في حالة عدم وجود دالة rpc
-        const { data: alternativeData, error: alternativeError } = await supabase
-          .from('invoice_items')
-          .select(`
-            item_id,
-            item_name,
-            item_type,
-            invoices!inner(invoice_type)
-          `)
-          .eq('invoices.invoice_type', 'sale')
-          .eq('item_type', 'finished_products');
-          
-        if (alternativeError) throw alternativeError;
-        
-        if (!alternativeData) return [];
-        
-        // تجميع المبيعات حسب المنتج
-        const productSales: Record<string, { id: number, name: string, total_sold: number }> = {};
-        alternativeData.forEach(item => {
+      if (itemsForInvoice.length > 0) {
+        // توزيع الربح على جميع عناصر الفاتورة
+        itemsForInvoice.forEach(item => {
           const key = `${item.item_id}-${item.item_name}`;
-          if (!productSales[key]) {
-            productSales[key] = {
+          if (!productProfits[key]) {
+            productProfits[key] = {
               id: item.item_id,
               name: item.item_name,
-              total_sold: 0
+              profit: 0,
+              profit_percentage: 0,
+              count: 0
             };
           }
-          productSales[key].total_sold += 1;
+          
+          // تخصيص الربح للمنتج بناءً على كميته في الفاتورة
+          const totalItems = itemsForInvoice.reduce((sum, i) => sum + (i.quantity || 1), 0);
+          const itemRatio = (item.quantity || 1) / totalItems;
+          productProfits[key].profit += (profitRecord.profit_amount * itemRatio);
+          productProfits[key].count += 1;
+          
+          // تحديث نسبة الربح (متوسط)
+          if (profitRecord.profit_percentage) {
+            const oldTotal = productProfits[key].profit_percentage * (productProfits[key].count - 1);
+            productProfits[key].profit_percentage = (oldTotal + profitRecord.profit_percentage) / productProfits[key].count;
+          }
         });
-        
-        // تحويل البيانات إلى مصفوفة وترتيبها تنازليًا
-        return Object.values(productSales)
-          .sort((a, b) => b.total_sold - a.total_sold)
-          .slice(0, limit);
       }
-      
-      return data || [];
-    } catch (error) {
-      console.error("Error getting top selling products:", error);
-      return [];
-    }
+    });
+    
+    // تحويل البيانات إلى مصفوفة وترتيبها تنازليًا
+    return Object.values(productProfits)
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        profit: Math.round(item.profit * 100) / 100, // تقريب الأرقام
+        profit_percentage: Math.round(item.profit_percentage * 10) / 10
+      }))
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, limit);
+  } catch (error) {
+    console.error("خطأ في الحصول على المنتجات الأكثر ربحية:", error);
+    return [];
   }
-  
-  /**
-   * الحصول على المنتجات الأكثر ربحية
-   */
-  private async getMostProfitableProducts(limit: number = 3): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from('profits')
-        .select(`
-          id,
-          profit_amount,
-          profit_percentage,
-          invoice_items(item_id, item_name, item_type, quantity)
-        `)
-        .order('profit_amount', { ascending: false })
-        .limit(limit);
-      
-      if (error) throw error;
-      
-      // تحليل البيانات وتجميعها حسب المنتج
-      const productProfits: Record<string, { id: number, name: string, profit: number, profit_percentage: number }> = {};
-      
-      data?.forEach(profitRecord => {
-        // لكل سجل ربح، تحليل عناصر الفاتورة المرتبطة
-        if (Array.isArray(profitRecord.invoice_items)) {
-          profitRecord.invoice_items.forEach((item: any) => {
-            if (item.item_type === 'finished_products') {
-              const key = `${item.item_id}-${item.item_name}`;
-              if (!productProfits[key]) {
-                productProfits[key] = {
-                  id: item.item_id,
-                  name: item.item_name,
-                  profit: 0,
-                  profit_percentage: 0
-                };
-              }
-              // تخصيص الربح للمنتج بناءً على كميته في الفاتورة
-              productProfits[key].profit += (profitRecord.profit_amount / profitRecord.invoice_items.length);
-              productProfits[key].profit_percentage = profitRecord.profit_percentage;
-            }
-          });
-        }
-      });
-      
-      // تحويل البيانات إلى مصفوفة وترتيبها تنازليًا
-      return Object.values(productProfits)
-        .sort((a, b) => b.profit - a.profit)
-        .slice(0, limit);
-    } catch (error) {
-      console.error("Error getting most profitable products:", error);
-      return [];
-    }
-  }
-  
+}
   /**
    * الحصول على المواد الخام الأكثر استخدامًا في التصنيع
    */
@@ -230,6 +227,59 @@ class AnalyticsNewsService implements NewsTickerServiceInterface {
       return result;
     } catch (error) {
       console.error("Error getting most used raw materials:", error);
+      return [];
+    }
+  }
+  /**
+   * الحصول على المنتجات الأكثر مبيعًا
+   */
+  private async getTopSellingProducts(limit: number = 3): Promise<any[]> {
+    try {
+      // استعلام لحساب إجمالي المبيعات لكل منتج
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .select(`
+          item_id,
+          item_name,
+          item_type,
+          quantity,
+          invoices!inner(invoice_type)
+        `)
+        .eq('item_type', 'finished_products')
+        .eq('invoices.invoice_type', 'sale');
+        
+      if (error) {
+        console.error("خطأ في جلب بيانات المبيعات:", error);
+        return [];
+      }
+      
+      if (!data || data.length === 0) {
+        return [];
+      }
+      
+      // تجميع المبيعات حسب المنتج
+      const productSales: Record<string, { id: number, name: string, total_sold: number }> = {};
+      
+      data.forEach(item => {
+        const key = `${item.item_id}-${item.item_name}`;
+        
+        if (!productSales[key]) {
+          productSales[key] = {
+            id: item.item_id,
+            name: item.item_name,
+            total_sold: 0
+          };
+        }
+        
+        productSales[key].total_sold += (item.quantity || 1);
+      });
+      
+      // تحويل البيانات إلى مصفوفة وترتيبها تنازليًا
+      return Object.values(productSales)
+        .sort((a, b) => b.total_sold - a.total_sold)
+        .slice(0, limit);
+    } catch (error) {
+      console.error("خطأ في الحصول على المنتجات الأكثر مبيعًا:", error);
       return [];
     }
   }

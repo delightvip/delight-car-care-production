@@ -32,8 +32,7 @@ class BaseNewsTickerService {
   
   /**
    * الحصول على جميع الأخبار من كافة المصادر المسجلة
-   */
-  public async getAllNews(): Promise<NewsItem[]> {
+   */  public async getAllNews(): Promise<NewsItem[]> {
     try {
       const allNewsPromises = this.newsServices.map(service => 
         service.getNews().catch(error => {
@@ -44,17 +43,39 @@ class BaseNewsTickerService {
       
       const newsArrays = await Promise.all(allNewsPromises);
       
-      // دمج جميع مصادر الأخبار
-      let allNews: NewsItem[] = newsArrays.flat();
+      // دمج جميع مصادر الأخبار مع ضمان فرادة المعرفات
+      let allNews: NewsItem[] = [];
+      const usedIds = new Set<string | number>();
+      
+      // معالجة كل مصفوفة أخبار
+      newsArrays.forEach((newsArray, sourceIndex) => {
+        newsArray.forEach(item => {
+          // تحقق مما إذا كان المعرف مستخدماً بالفعل
+          const idStr = String(item.id);
+          if (usedIds.has(idStr)) {
+            // إنشاء معرف جديد فريد بإضافة رقم المصدر ورقم عشوائي
+            const newId = `${idStr}-src${sourceIndex}-${Math.floor(Math.random() * 1000)}`;
+            allNews.push({ ...item, id: newId });
+            usedIds.add(newId);
+          } else {
+            // إضافة العنصر كما هو إذا كان المعرف فريداً
+            allNews.push(item);
+            usedIds.add(idStr);
+          }
+        });
+      });
       
       // إضافة بعض الأخبار العامة
-      allNews.push({
-        id: "general-1",
-        content: `تاريخ اليوم: ${format(new Date(), 'dd MMMM yyyy', { locale: ar })}`,
-        category: "عام",
-        importance: "normal",
-        trend: "neutral"
-      });
+      const generalNewsId = "general-1";
+      if (!usedIds.has(generalNewsId)) {
+        allNews.push({
+          id: generalNewsId,
+          content: `تاريخ اليوم: ${format(new Date(), 'dd MMMM yyyy', { locale: ar })}`,
+          category: "عام",
+          importance: "normal",
+          trend: "neutral"
+        });
+      }
       
       return allNews;
     } catch (error) {

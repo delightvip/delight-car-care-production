@@ -77,11 +77,10 @@ class InventoryNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `fin-${product.id}`,
           content: `المنتج "${product.name}" بكمية منخفضة`,
-          category: "المخزون",
-          importance: product.quantity <= 5 ? "urgent" : "high",
+          category: "المخزون",          importance: product.quantity <= 5 ? "urgent" : "high",
           value: product.quantity,
           trend: "down",
-          valueChangePercentage: -((product.min_stock - material.quantity) / product.min_stock * 100),
+          valueChangePercentage: -((product.min_stock - product.quantity) / product.min_stock * 100),
           highlight: isVeryCritical
         });
       });
