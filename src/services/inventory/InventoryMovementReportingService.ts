@@ -2,6 +2,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import InventoryMovementTrackingService from "./InventoryMovementTrackingService";
 
+// نوع جدول المخزون المطابق
+type InventoryTableType = 'raw_materials' | 'semi_finished_products' | 'packaging_materials' | 'finished_products';
+
 /**
  * خدمة تقارير حركة المخزون
  */
@@ -56,7 +59,7 @@ class InventoryMovementReportingService {
 
       if (inQtyError) throw inQtyError;
 
-      const totalInQuantity = inQuantities.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      const totalInQuantity = (inQuantities || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
 
       // الحصول على إجمالي كميات الصادر
       const { data: outQuantities, error: outQtyError } = await supabase
@@ -66,7 +69,7 @@ class InventoryMovementReportingService {
 
       if (outQtyError) throw outQtyError;
 
-      const totalOutQuantity = outQuantities.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      const totalOutQuantity = (outQuantities || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
 
       // الحصول على أعداد بنوع العنصر باستخدام استعلام مباشر لكل نوع
       const typeData = [];
@@ -118,21 +121,7 @@ class InventoryMovementReportingService {
       let currentQuantity = 0;
       
       // تحديد الجدول المناسب حسب نوع العنصر
-      let tableName = '';
-      switch (itemType) {
-        case 'raw':
-          tableName = 'raw_materials';
-          break;
-        case 'semi':
-          tableName = 'semi_finished_products';
-          break;
-        case 'packaging':
-          tableName = 'packaging_materials';
-          break;
-        case 'finished':
-          tableName = 'finished_products';
-          break;
-      }
+      const tableName = this.getTableNameForItemType(itemType);
       
       if (tableName) {
         // تحويل معرف العنصر إلى رقم إذا كان الجدول يستخدم معرفات رقمية
@@ -152,12 +141,12 @@ class InventoryMovementReportingService {
       
       // حساب إحصائيات أخرى
       const totalIn = movements
-        .filter(m => m.movement_type === 'in')
-        .reduce((sum, m) => sum + (m.quantity || 0), 0);
+        .filter((m: any) => m.movement_type === 'in')
+        .reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
       
       const totalOut = movements
-        .filter(m => m.movement_type === 'out')
-        .reduce((sum, m) => sum + (m.quantity || 0), 0);
+        .filter((m: any) => m.movement_type === 'out')
+        .reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
       
       // إعداد التقرير النهائي
       return {
@@ -184,102 +173,110 @@ class InventoryMovementReportingService {
    */
   public async getMostActiveItems(limit: number = 10): Promise<any[]> {
     try {
-      // استخدام وظيفة SQL بدلاً من التجميع اليدوي
-      const { data: movementCounts, error } = await supabase
-        .rpc('get_inventory_movements_by_item', {
-          p_item_id: '',
-          p_item_type: ''
-        });
+      // استخدام وظيفة RPC للحصول على أكثر الأصناف حركة
+      const { data: movementCounts, error } = await supabase.rpc('get_inventory_movements_by_item', {
+        p_item_id: '',  // ترك فارغًا للحصول على جميع العناصر
+        p_item_type: ''  // ترك فارغًا للحصول على جميع الأنواع
+      });
       
       if (error) {
         console.error("خطأ في استدعاء وظيفة SQL:", error);
-        // استخدام طريقة بديلة بدون تجميع
-        const { data } = await supabase
-          .from('inventory_movements')
-          .select('item_type, item_id, count(*)')
-          .limit(100);
-        
-        // تجميع البيانات يدوياً
-        const itemCounts: Record<string, { type: string, id: string, count: number }> = {};
-        
-        if (data) {
-          data.forEach(item => {
-            const key = `${item.item_type}-${item.item_id}`;
-            if (!itemCounts[key]) {
-              itemCounts[key] = {
-                type: item.item_type,
-                id: item.item_id,
-                count: 0
-              };
-            }
-            itemCounts[key].count++;
-          });
-        }
-        
-        // تحويل البيانات إلى مصفوفة وترتيبها
-        const itemsArray = Object.values(itemCounts)
-          .sort((a, b) => b.count - a.count)
-          .slice(0, limit);
-          
-        // إضافة تفاصيل العناصر
-        const itemsWithDetails = await Promise.all(itemsArray.map(async (item) => {
-          let details: any = {
-            id: item.id,
-            type: item.type,
-            count: item.count,
-            name: '',
-            unit: '',
-            quantity: 0
-          };
-          
-          // تحديد الجدول المناسب
-          let tableName = '';
-          switch (item.type) {
-            case 'raw':
-              tableName = 'raw_materials';
-              break;
-            case 'semi':
-              tableName = 'semi_finished_products';
-              break;
-            case 'packaging':
-              tableName = 'packaging_materials';
-              break;
-            case 'finished':
-              tableName = 'finished_products';
-              break;
-          }
-          
-          if (tableName) {
-            try {
-              const numericId = parseInt(item.id);
-              if (!isNaN(numericId)) {
-                const { data: itemDetails } = await supabase
-                  .from(tableName)
-                  .select('name, unit, quantity')
-                  .eq('id', numericId)
-                  .single();
-                
-                if (itemDetails) {
-                  details.name = itemDetails.name || '';
-                  details.unit = itemDetails.unit || '';
-                  details.quantity = itemDetails.quantity || 0;
-                }
-              }
-            } catch (e) {
-              console.warn(`Failed to get details for ${item.type} ${item.id}:`, e);
-            }
-          }
-          
-          return details;
-        }));
-        
-        return itemsWithDetails;
+        return [];
       }
       
-      return [];
+      if (!Array.isArray(movementCounts)) {
+        console.error("البيانات المستلمة ليست مصفوفة:", movementCounts);
+        return [];
+      }
+      
+      // تجميع البيانات حسب العنصر ونوعه
+      const itemCountMap: Record<string, { 
+        type: string, 
+        id: string, 
+        count: number 
+      }> = {};
+      
+      for (const movement of movementCounts) {
+        if (typeof movement !== 'object' || !movement.item_type || !movement.item_id) continue;
+        
+        const key = `${movement.item_type}-${movement.item_id}`;
+        if (!itemCountMap[key]) {
+          itemCountMap[key] = {
+            type: movement.item_type,
+            id: movement.item_id,
+            count: 0
+          };
+        }
+        itemCountMap[key].count++;
+      }
+      
+      // تحويل البيانات إلى مصفوفة وترتيبها
+      const itemsArray = Object.values(itemCountMap)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit);
+        
+      // إضافة تفاصيل العناصر
+      const itemsWithDetails = await Promise.all(itemsArray.map(async (item) => {
+        let details: any = {
+          id: item.id,
+          type: item.type,
+          count: item.count,
+          name: '',
+          unit: '',
+          quantity: 0
+        };
+        
+        // تحديد الجدول المناسب
+        const tableName = this.getTableNameForItemType(item.type);
+        
+        if (tableName) {
+          try {
+            const numericId = parseInt(item.id);
+            if (!isNaN(numericId)) {
+              const { data: itemDetails } = await supabase
+                .from(tableName)
+                .select('name, unit, quantity')
+                .eq('id', numericId)
+                .single();
+              
+              if (itemDetails) {
+                details.name = itemDetails.name || '';
+                details.unit = itemDetails.unit || '';
+                details.quantity = itemDetails.quantity || 0;
+              }
+            }
+          } catch (e) {
+            console.warn(`Failed to get details for ${item.type} ${item.id}:`, e);
+          }
+        }
+        
+        return details;
+      }));
+      
+      return itemsWithDetails;
     } catch (error) {
       console.error("خطأ في الحصول على أكثر الأصناف حركة:", error);
       return [];
+    }
+  }
+
+  /**
+   * تحديد اسم الجدول بناءً على نوع العنصر
+   * @param itemType نوع العنصر
+   * @returns اسم الجدول أو null إذا كان نوع العنصر غير معروف
+   */
+  private getTableNameForItemType(itemType: string): InventoryTableType | null {
+    switch (itemType) {
+      case 'raw':
+        return 'raw_materials';
+      case 'semi':
+        return 'semi_finished_products';
+      case 'packaging':
+        return 'packaging_materials';
+      case 'finished':
+        return 'finished_products';
+      default:
+        return null;
     }
   }
 }

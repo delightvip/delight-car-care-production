@@ -1,178 +1,172 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription 
 } from '@/components/ui/card';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { Badge } from '@/components/ui/badge';
 import InventoryMovementTrackingService from '@/services/inventory/InventoryMovementTrackingService';
-import InventoryMovementChart from './InventoryMovementChart';
+import { Button } from '@/components/ui/button';
+import InventoryMovementChart from '@/components/inventory/reports/InventoryMovementChart';
+import InventorySummaryStats from '@/components/inventory/reports/InventorySummaryStats';
+import MovementTypeBadge from './MovementTypeBadge';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface ProductMovementHistoryProps {
+export interface ProductMovementHistoryProps {
   itemId: string;
   itemType: string;
   itemName: string;
+  itemUnit?: string;
 }
 
 const ProductMovementHistory: React.FC<ProductMovementHistoryProps> = ({
   itemId,
   itemType,
   itemName,
+  itemUnit = ''
 }) => {
-  const [activeTab, setActiveTab] = React.useState('movements');
+  const [activeTab, setActiveTab] = useState('list');
+  const [timeRange, setTimeRange] = useState('month');
+  
   const trackingService = InventoryMovementTrackingService.getInstance();
-
-  const { data: movements, isLoading } = useQuery({
-    queryKey: ['product-movements', itemId, itemType],
-    queryFn: () => trackingService.getItemMovements(itemId, itemType),
+  
+  // الحصول على حركات العنصر
+  const { data: movements = [], isLoading, error } = useQuery({
+    queryKey: ['item-movements', itemId, itemType],
+    queryFn: async () => {
+      const result = await trackingService.getItemMovements(itemId, itemType);
+      return result || [];
+    }
   });
-
+  
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>تحميل حركات المخزون</CardTitle>
-          <CardDescription>جاري استرجاع البيانات...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-[300px] w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!movements || movements.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>سجل حركات المخزون</CardTitle>
-          <CardDescription>لا توجد حركات مسجلة لهذا الصنف</CardDescription>
-        </CardHeader>
-        <CardContent className="text-center py-8">
-          <p className="text-muted-foreground">لم يتم العثور على أي حركات مخزون مسجلة لهذا الصنف</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // حساب الإحصائيات
-  const totalIn = movements
-    .filter(m => m.movement_type === 'in')
-    .reduce((sum, m) => sum + (m.quantity || 0), 0);
-
-  const totalOut = movements
-    .filter(m => m.movement_type === 'out')
-    .reduce((sum, m) => sum + (m.quantity || 0), 0);
-
-  const netChange = totalIn - totalOut;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>سجل حركات المخزون - {itemName}</CardTitle>
-        <CardDescription>
-          عرض جميع حركات المخزون المسجلة للصنف
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">إجمالي الوارد</p>
-                <p className="text-2xl font-bold">{totalIn.toFixed(2)}</p>
-              </div>
-              <ArrowUpIcon className="h-8 w-8 text-emerald-500" />
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">إجمالي الصادر</p>
-                <p className="text-2xl font-bold">{totalOut.toFixed(2)}</p>
-              </div>
-              <ArrowDownIcon className="h-8 w-8 text-red-500" />
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">صافي التغيير</p>
-                <p className="text-2xl font-bold">{netChange.toFixed(2)}</p>
-              </div>
-              {netChange >= 0 ? (
-                <ArrowUpIcon className="h-8 w-8 text-emerald-500" />
-              ) : (
-                <ArrowDownIcon className="h-8 w-8 text-red-500" />
-              )}
-            </CardContent>
-          </Card>
+      <div className="space-y-4">
+        <Skeleton className="h-56 w-full" />
+        <Skeleton className="h-10 w-40" />
+        <div className="grid gap-4">
+          {Array(3).fill(0).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
         </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <Card className="bg-destructive/10 border-destructive/30">
+        <CardContent className="pt-6">
+          <p className="text-center text-destructive">
+            حدث خطأ أثناء تحميل بيانات حركات العنصر
+          </p>
+          <div className="flex justify-center mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.reload()}
+              className="border-destructive/30 text-destructive hover:bg-destructive/10"
+            >
+              إعادة المحاولة
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  return (
+    <div className="space-y-6">
+      <InventorySummaryStats itemId={itemId} itemType={itemType} />
+      
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <div>
+              <CardTitle className="text-xl">سجل حركة {itemName}</CardTitle>
+              <CardDescription>سجل حركات الوارد والصادر للعنصر</CardDescription>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[200px]">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="list">القائمة</TabsTrigger>
+                  <TabsTrigger value="chart">رسم بياني</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              
+              {activeTab === 'chart' && (
+                <Select value={timeRange} onValueChange={setTimeRange}>
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="اختر الفترة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">يومي</SelectItem>
+                    <SelectItem value="week">أسبوعي</SelectItem>
+                    <SelectItem value="month">شهري</SelectItem>
+                    <SelectItem value="year">سنوي</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+        </CardHeader>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full">
-            <TabsTrigger value="movements">قائمة الحركات</TabsTrigger>
-            <TabsTrigger value="chart">الرسم البياني</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="movements">
-            <ScrollArea className="h-[400px] pr-4 mt-4">
-              <div className="space-y-4">
-                {movements.map(movement => (
-                  <Card key={movement.id} className="overflow-hidden">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant={movement.movement_type === 'in' ? 'default' : 'destructive'}>
-                              {movement.movement_type === 'in' ? 'وارد' : 'صادر'}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {format(new Date(movement.created_at), 'PPP', { locale: ar })}
-                            </span>
-                          </div>
-                          <p className="mt-2">{movement.reason || (movement.movement_type === 'in' ? 'إضافة للمخزون' : 'صرف من المخزون')}</p>
+        <CardContent>
+          {activeTab === 'list' ? (
+            <ScrollArea className="h-[350px] pr-4">
+              <div className="space-y-3">
+                {movements.length > 0 ? (
+                  movements.map((movement: any) => (
+                    <div 
+                      key={movement.id}
+                      className="flex items-center justify-between p-3 border rounded-md"
+                    >
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center space-x-2 space-x-reverse">
+                          <MovementTypeBadge type={movement.movement_type} />
+                          <span className="font-medium">{movement.reason || (movement.movement_type === 'in' ? 'إضافة للمخزون' : 'صرف من المخزون')}</span>
                         </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold">{movement.quantity}</p>
-                          <p className="text-xs text-muted-foreground">
-                            الرصيد بعد: {movement.balance_after}
-                          </p>
-                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          الكمية: {movement.quantity} {itemUnit} - الرصيد: {movement.balance_after} {itemUnit}
+                        </span>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <div className="flex flex-col items-end">
+                        <span className="text-sm">
+                          {format(new Date(movement.created_at), 'yyyy/MM/dd', { locale: ar })}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {movement.user_name || 'غير معروف'}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-16">
+                    <p className="text-muted-foreground">لا توجد حركات مسجلة لهذا العنصر</p>
+                  </div>
+                )}
               </div>
             </ScrollArea>
-          </TabsContent>
-          
-          <TabsContent value="chart">
-            <div className="mt-4">
-              <InventoryMovementChart itemId={itemId} itemType={itemType} />
-            </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+          ) : (
+            <InventoryMovementChart 
+              itemId={itemId}
+              itemType={itemType}
+              timeRange={timeRange}
+              itemName={itemName} 
+              itemUnit={itemUnit}
+            />
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

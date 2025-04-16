@@ -14,6 +14,9 @@ export interface InventoryMovementRecord {
   user_id?: string;
 }
 
+// نوع جدول المخزون المطابق
+type InventoryTableType = 'raw_materials' | 'semi_finished_products' | 'packaging_materials' | 'finished_products';
+
 /**
  * خدمة تتبع حركات المخزون - مسؤولة فقط عن تسجيل الحركات دون التأثير على المخزون
  */
@@ -99,42 +102,29 @@ class InventoryMovementTrackingService {
    */
   private async getCurrentItemBalance(itemId: string, itemType: string): Promise<number> {
     try {
-      let tableName = '';
-      
       // تحديد الجدول المناسب حسب نوع العنصر
-      switch (itemType) {
-        case 'raw':
-          tableName = 'raw_materials';
-          break;
-        case 'semi':
-          tableName = 'semi_finished_products';
-          break;
-        case 'packaging':
-          tableName = 'packaging_materials';
-          break;
-        case 'finished':
-          tableName = 'finished_products';
-          break;
-        default:
-          return 0;
-      }
+      const tableName = this.getTableNameForItemType(itemType);
       
-      // استعلام عن الرصيد الحالي
       if (!tableName) {
+        console.warn(`نوع العنصر غير معروف: ${itemType}`);
         return 0;
       }
       
       // محاولة تحويل itemId إلى رقم (معظم الجداول تستخدم معرفات رقمية)
       const numericId = parseInt(itemId);
       if (isNaN(numericId)) {
+        console.warn(`معرف العنصر ليس رقمًا صالحًا: ${itemId}`);
         return 0;
       }
       
-      const { data, error } = await supabase
+      // استخدام نهج أكثر أمانًا من حيث الأنواع
+      const query = supabase
         .from(tableName)
         .select('quantity')
         .eq('id', numericId)
         .single();
+      
+      const { data, error } = await query;
       
       if (error) {
         console.error(`خطأ في الحصول على رصيد العنصر: ${itemType} ${itemId}`, error);
@@ -155,6 +145,7 @@ class InventoryMovementTrackingService {
    */
   public async getItemMovements(itemId: string, itemType: string): Promise<any[]> {
     try {
+      // استخدام وظيفة RPC من قاعدة البيانات
       const { data, error } = await supabase.rpc('get_inventory_movements_by_item', {
         p_item_id: itemId,
         p_item_type: itemType
@@ -232,21 +223,7 @@ class InventoryMovementTrackingService {
         
         // الحصول على اسم العنصر من الجدول المناسب
         if (item.item_type && item.item_id) {
-          let tableName = '';
-          switch (item.item_type) {
-            case 'raw':
-              tableName = 'raw_materials';
-              break;
-            case 'semi':
-              tableName = 'semi_finished_products';
-              break;
-            case 'packaging':
-              tableName = 'packaging_materials';
-              break;
-            case 'finished':
-              tableName = 'finished_products';
-              break;
-          }
+          const tableName = this.getTableNameForItemType(item.item_type);
           
           if (tableName) {
             try {
@@ -258,8 +235,8 @@ class InventoryMovementTrackingService {
                   .eq('id', numericId)
                   .single();
                 
-                if (itemDetails) {
-                  itemName = itemDetails.name || '';
+                if (itemDetails?.name) {
+                  itemName = itemDetails.name;
                 }
               }
             } catch (e) {
@@ -277,8 +254,8 @@ class InventoryMovementTrackingService {
               .eq('id', item.user_id)
               .single();
             
-            if (userData) {
-              userName = userData.name || '';
+            if (userData?.name) {
+              userName = userData.name;
             }
           } catch (e) {
             console.warn(`Failed to get user name for ${item.user_id}`);
@@ -296,6 +273,26 @@ class InventoryMovementTrackingService {
     } catch (error) {
       console.error("خطأ في الحصول على الحركات الأخيرة:", error);
       return [];
+    }
+  }
+
+  /**
+   * تحديد اسم الجدول بناءً على نوع العنصر
+   * @param itemType نوع العنصر
+   * @returns اسم الجدول أو null إذا كان نوع العنصر غير معروف
+   */
+  private getTableNameForItemType(itemType: string): InventoryTableType | null {
+    switch (itemType) {
+      case 'raw':
+        return 'raw_materials';
+      case 'semi':
+        return 'semi_finished_products';
+      case 'packaging':
+        return 'packaging_materials';
+      case 'finished':
+        return 'finished_products';
+      default:
+        return null;
     }
   }
 }
