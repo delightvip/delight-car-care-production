@@ -520,8 +520,7 @@ class ProductionService {
       
       // التحقق من الحالة السابقة للأمر
       const prevStatus = order.status;
-      
-      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
+        // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
       if (prevStatus === 'completed' && newStatus !== 'completed') {
         // تحديث حالة الأمر في قاعدة البيانات أولاً
         const updateResult = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
@@ -545,6 +544,85 @@ class ProductionService {
         
         // إزالة المنتج النهائي من المخزون
         await this.inventoryService.removeFinishedFromInventory(order.productCode, order.quantity);
+        
+        // تسجيل حركات عكسية في المخزون (إلغاء الحركات السابقة)
+        try {
+          // 1. تسجيل حركة وارد للمنتج النصف مصنع (إرجاع المنتج النصف مصنع)
+          try {
+            const { data: semiFinished } = await supabase
+              .from('semi_finished_products')
+              .select('id')
+              .eq('code', order.semiFinished.code)
+              .single();
+              
+            if (semiFinished && semiFinished.id) {
+              // تسجيل حركة الوارد للمنتج النصف مصنع
+              await this.movementTrackingService.recordMovement({
+                item_id: semiFinished.id.toString(),
+                item_type: 'semi',
+                movement_type: 'in',
+                quantity: order.semiFinished.quantity,
+                reason: `إلغاء أمر تعبئة #${order.code}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمنتج النصف مصنع ${order.semiFinished.code} (إلغاء)`);
+            }
+          } catch (err) {
+            console.error(`[ERROR] خطأ في تسجيل حركة المخزون العكسية للمنتج النصف مصنع ${order.semiFinished.code}:`, err);
+          }
+          
+          // 2. تسجيل حركة وارد لمواد التعبئة (إرجاع مواد التعبئة)
+          for (const material of order.packagingMaterials) {
+            try {
+              const { data: packagingMaterial } = await supabase
+                .from('packaging_materials')
+                .select('id')
+                .eq('code', material.code)
+                .single();
+                
+              if (packagingMaterial && packagingMaterial.id) {
+                // تسجيل حركة الوارد لمادة التعبئة
+                await this.movementTrackingService.recordMovement({
+                  item_id: packagingMaterial.id.toString(),
+                  item_type: 'packaging',
+                  movement_type: 'in',
+                  quantity: material.quantity,
+                  reason: `إلغاء أمر تعبئة #${order.code}`,
+                  updateBalance: false // منع تحديث الرصيد مرة أخرى
+                });
+                console.log(`[DEBUG] تم تسجيل حركة مخزون وارد لمادة التعبئة ${material.code} (إلغاء)`);
+              }
+            } catch (err) {
+              console.error(`[ERROR] خطأ في تسجيل حركة المخزون العكسية لمادة التعبئة ${material.code}:`, err);
+            }
+          }
+          
+          // 3. تسجيل حركة صادر للمنتج النهائي (إزالة المنتج)
+          try {
+            const { data: finishedProduct } = await supabase
+              .from('finished_products')
+              .select('id')
+              .eq('code', order.productCode)
+              .single();
+              
+            if (finishedProduct && finishedProduct.id) {
+              // تسجيل حركة الصادر للمنتج النهائي
+              await this.movementTrackingService.recordMovement({
+                item_id: finishedProduct.id.toString(),
+                item_type: 'finished',
+                movement_type: 'out',
+                quantity: order.quantity,
+                reason: `إلغاء أمر تعبئة #${order.code}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمنتج النهائي ${order.productCode} (إلغاء)`);
+            }
+          } catch (err) {
+            console.error(`[ERROR] خطأ في تسجيل حركة المخزون العكسية للمنتج النهائي ${order.productCode}:`, err);
+          }
+        } catch (error) {
+          console.error("[ERROR] حدث خطأ أثناء تسجيل حركات المخزون العكسية:", error);
+        }
         
         toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
         return true;
@@ -589,11 +667,87 @@ class ProductionService {
           order.semiFinished.quantity,
           packagingReqs
         );
-        
-        if (!produceSuccess) {
+          if (!produceSuccess) {
           // إعادة الحالة السابقة إذا فشلت العملية
           await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
           return false;
+        }
+        
+        // تسجيل حركات المخزون للمنتج النصف مصنع المستخدم
+        try {
+          // التحقق من معرف المنتج النصف مصنع في قاعدة البيانات
+          const { data: semiFinished } = await supabase
+            .from('semi_finished_products')
+            .select('id')
+            .eq('code', order.semiFinished.code)
+            .single();
+            
+          if (semiFinished && semiFinished.id) {
+            // تسجيل حركة الصادر للمنتج النصف مصنع
+            await this.movementTrackingService.recordMovement({
+              item_id: semiFinished.id.toString(),
+              item_type: 'semi',
+              movement_type: 'out',
+              quantity: order.semiFinished.quantity,
+              reason: `أمر تعبئة #${order.code}`,
+              updateBalance: false // منع تحديث الرصيد مرة أخرى
+            });
+            console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمنتج النصف مصنع ${order.semiFinished.code}`);
+          }
+        } catch (err) {
+          console.error(`[ERROR] خطأ في تسجيل حركة المخزون للمنتج النصف مصنع ${order.semiFinished.code}:`, err);
+        }
+        
+        // تسجيل حركات المخزون لمواد التعبئة المستخدمة
+        for (const material of order.packagingMaterials) {
+          try {
+            // التحقق من معرف مادة التعبئة في قاعدة البيانات
+            const { data: packagingMaterial } = await supabase
+              .from('packaging_materials')
+              .select('id')
+              .eq('code', material.code)
+              .single();
+              
+            if (packagingMaterial && packagingMaterial.id) {
+              // تسجيل حركة الصادر لمادة التعبئة
+              await this.movementTrackingService.recordMovement({
+                item_id: packagingMaterial.id.toString(),
+                item_type: 'packaging',
+                movement_type: 'out',
+                quantity: material.quantity,
+                reason: `أمر تعبئة #${order.code}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر لمادة التعبئة ${material.code}`);
+            }
+          } catch (err) {
+            console.error(`[ERROR] خطأ في تسجيل حركة المخزون لمادة التعبئة ${material.code}:`, err);
+          }
+        }
+        
+        // تسجيل حركة المخزون للمنتج النهائي المنتج
+        try {
+          // التحقق من معرف المنتج النهائي في قاعدة البيانات
+          const { data: finishedProduct } = await supabase
+            .from('finished_products')
+            .select('id')
+            .eq('code', order.productCode)
+            .single();
+            
+          if (finishedProduct && finishedProduct.id) {
+            // تسجيل حركة الوارد للمنتج النهائي
+            await this.movementTrackingService.recordMovement({
+              item_id: finishedProduct.id.toString(),
+              item_type: 'finished',
+              movement_type: 'in',
+              quantity: order.quantity,
+              reason: `أمر تعبئة #${order.code}`,
+              updateBalance: false // منع تحديث الرصيد مرة أخرى
+            });
+            console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمنتج النهائي ${order.productCode}`);
+          }
+        } catch (err) {
+          console.error(`[ERROR] خطأ في تسجيل حركة المخزون للمنتج النهائي ${order.productCode}:`, err);
         }
         
         toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
