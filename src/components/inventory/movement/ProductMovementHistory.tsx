@@ -17,7 +17,7 @@ import InventoryMovementTrackingService from '@/services/inventory/InventoryMove
 import { Button } from '@/components/ui/button';
 import InventoryMovementChart from '@/components/inventory/reports/InventoryMovementChart';
 import InventorySummaryStats from '@/components/inventory/reports/InventorySummaryStats';
-import MovementTypeBadge from './MovementTypeBadge';
+import { MovementTypeBadge } from './MovementTypeBadge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export interface ProductMovementHistoryProps {
