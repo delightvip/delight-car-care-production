@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Return } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
+import InventoryMovementTrackingService from "@/services/inventory/InventoryMovementTrackingService";
 import { ReturnEntity } from "./ReturnEntity";
 import { toast } from "@/components/ui/use-toast";
 
@@ -18,10 +19,12 @@ interface InventoryItem {
 export class ReturnProcessor {
   private inventoryService: InventoryService;
   private partyService: PartyService;
+  private movementTrackingService: InventoryMovementTrackingService;
 
   constructor() {
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
+    this.movementTrackingService = InventoryMovementTrackingService.getInstance();
   }
 
   /**
@@ -181,16 +184,26 @@ export class ReturnProcessor {
               allUpdatesSuccessful = false;
               continue;
             }
+              // تسجيل حركة المخزون باستخدام خدمة تتبع حركات المخزون الموحدة
+            const movementSuccess = await this.movementTrackingService.recordMovement({
+              item_id: item.item_id.toString(),
+              item_type: this.mapItemType(item.item_type),
+              movement_type: 'in',
+              quantity: Number(item.quantity),
+              reason: `مرتجع مبيعات #${returnId}`,
+              updateBalance: false // منع تحديث الرصيد مرة أخرى لأنه تم تحديثه بالفعل
+            });
             
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              Number(item.quantity),
-              newQuantity,
-              'in',
-              `مرتجع مبيعات - رقم: ${returnId}`
-            );
+            if (!movementSuccess) {
+              console.error(`فشل في تسجيل حركة مخزون للعنصر ${item.item_name}`);
+              toast({
+                title: "تنبيه",
+                description: `تم تحديث المخزون ولكن فشل تسجيل حركة المخزون للعنصر ${item.item_name}`,
+                variant: "destructive"
+              });
+              // استمر في معالجة باقي العناصر ولكن ضع علامة على وجود خطأ
+              allUpdatesSuccessful = false;
+            }
           } catch (err) {
             console.error(`Error processing item ${item.item_name}:`, err);
             allUpdatesSuccessful = false;
@@ -267,16 +280,26 @@ export class ReturnProcessor {
               allUpdatesSuccessful = false;
               continue;
             }
+              // تسجيل حركة المخزون باستخدام خدمة تتبع حركات المخزون الموحدة
+            const movementSuccess = await this.movementTrackingService.recordMovement({
+              item_id: item.item_id.toString(),
+              item_type: this.mapItemType(item.item_type),
+              movement_type: 'out',
+              quantity: Number(item.quantity),
+              reason: `مرتجع مشتريات #${returnId}`,
+              updateBalance: false // منع تحديث الرصيد مرة أخرى لأنه تم تحديثه بالفعل
+            });
             
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              -Number(item.quantity),
-              newQuantity,
-              'out',
-              `مرتجع مشتريات - رقم: ${returnId}`
-            );
+            if (!movementSuccess) {
+              console.error(`فشل في تسجيل حركة مخزون للعنصر ${item.item_name}`);
+              toast({
+                title: "تنبيه",
+                description: `تم تحديث المخزون ولكن فشل تسجيل حركة المخزون للعنصر ${item.item_name}`,
+                variant: "destructive"
+              });
+              // استمر في معالجة باقي العناصر ولكن ضع علامة على وجود خطأ
+              allUpdatesSuccessful = false;
+            }
           } catch (err) {
             console.error(`Error processing item ${item.item_name}:`, err);
             allUpdatesSuccessful = false;
@@ -441,16 +464,26 @@ export class ReturnProcessor {
               allUpdatesSuccessful = false;
               continue;
             }
+              // تسجيل حركة المخزون باستخدام خدمة تتبع حركات المخزون الموحدة
+            const movementSuccess = await this.movementTrackingService.recordMovement({
+              item_id: item.item_id.toString(),
+              item_type: this.mapItemType(item.item_type),
+              movement_type: 'out',
+              quantity: Number(item.quantity),
+              reason: `إلغاء مرتجع مبيعات #${returnId}`,
+              updateBalance: false // منع تحديث الرصيد مرة أخرى لأنه تم تحديثه بالفعل
+            });
             
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              -Number(item.quantity),
-              newQuantity,
-              'out',
-              `إلغاء مرتجع مبيعات - رقم: ${returnId}`
-            );
+            if (!movementSuccess) {
+              console.error(`فشل في تسجيل حركة مخزون للعنصر ${item.item_name}`);
+              toast({
+                title: "تنبيه",
+                description: `تم تحديث المخزون ولكن فشل تسجيل حركة المخزون للعنصر ${item.item_name}`,
+                variant: "destructive"
+              });
+              // استمر في معالجة باقي العناصر ولكن ضع علامة على وجود خطأ
+              allUpdatesSuccessful = false;
+            }
           } catch (err) {
             console.error(`Error processing item ${item.item_name}:`, err);
             allUpdatesSuccessful = false;
@@ -515,16 +548,26 @@ export class ReturnProcessor {
               allUpdatesSuccessful = false;
               continue;
             }
+              // تسجيل حركة المخزون باستخدام خدمة تتبع حركات المخزون الموحدة
+            const movementSuccess = await this.movementTrackingService.recordMovement({
+              item_id: item.item_id.toString(),
+              item_type: this.mapItemType(item.item_type),
+              movement_type: 'in',
+              quantity: Number(item.quantity),
+              reason: `إلغاء مرتجع مشتريات #${returnId}`,
+              updateBalance: false // منع تحديث الرصيد مرة أخرى لأنه تم تحديثه بالفعل
+            });
             
-            // تسجيل حركة المخزون
-            await this.recordInventoryMovement(
-              item.item_id,
-              item.item_type,
-              Number(item.quantity),
-              newQuantity,
-              'in',
-              `إلغاء مرتجع مشتريات - رقم: ${returnId}`
-            );
+            if (!movementSuccess) {
+              console.error(`فشل في تسجيل حركة مخزون للعنصر ${item.item_name}`);
+              toast({
+                title: "تنبيه",
+                description: `تم تحديث المخزون ولكن فشل تسجيل حركة المخزون للعنصر ${item.item_name}`,
+                variant: "destructive"
+              });
+              // استمر في معالجة باقي العناصر ولكن ضع علامة على وجود خطأ
+              allUpdatesSuccessful = false;
+            }
           } catch (err) {
             console.error(`Error processing item ${item.item_name}:`, err);
             allUpdatesSuccessful = false;
@@ -654,41 +697,22 @@ export class ReturnProcessor {
       return { error };
     }
   }
-  
-  /**
-   * تسجيل حركة مخزون
+    /**
+   * تحويل نوع العنصر من نظام المرتجعات إلى النوع المستخدم في نظام تتبع حركات المخزون
+   * @private
    */
-  private async recordInventoryMovement(
-    itemId: string | number, 
-    itemType: string, 
-    quantity: number, 
-    balanceAfter: number, 
-    movementType: 'in' | 'out' | 'adjustment', 
-    reason: string
-  ) {
-    try {
-      console.log(`Recording inventory movement: ${itemType} ${itemId}, ${movementType}, ${quantity}, balance: ${balanceAfter}`);
-      
-      const { error } = await supabase
-        .from('inventory_movements')
-        .insert({
-          item_id: itemId.toString(),
-          item_type: itemType,
-          quantity: quantity,
-          balance_after: balanceAfter,
-          movement_type: movementType,
-          reason: reason
-        });
-      
-      if (error) {
-        console.error('Error recording inventory movement:', error);
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error recording inventory movement:', error);
-      return false;
+  private mapItemType(itemType: string): string {
+    switch (itemType) {
+      case 'raw_materials':
+        return 'raw';
+      case 'packaging_materials':
+        return 'packaging';
+      case 'semi_finished_products':
+        return 'semi';
+      case 'finished_products':
+        return 'finished';
+      default:
+        return itemType;
     }
   }
 }

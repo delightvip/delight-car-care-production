@@ -2,17 +2,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Invoice } from "@/services/CommercialTypes";
 import InventoryService from "@/services/InventoryService";
 import PartyService from "@/services/PartyService";
+import InventoryMovementTrackingService from "@/services/inventory/InventoryMovementTrackingService";
 import { InvoiceEntity } from "./InvoiceEntity";
 import { toast } from "sonner";
 
 export class InvoiceProcessor {
   private inventoryService: InventoryService;
   private partyService: PartyService;
+  private movementTrackingService: InventoryMovementTrackingService;
 
   constructor() {
     // استخدام getInstance للوصول إلى الخدمات
     this.inventoryService = InventoryService.getInstance();
     this.partyService = PartyService.getInstance();
+    this.movementTrackingService = InventoryMovementTrackingService.getInstance();
   }
 
   /**
@@ -59,6 +62,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateRawMaterial(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر للمادة الخام
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'raw',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمادة الخام ${item.item_name}`);
               break;
             case 'packaging_materials':
               const { data: packagingMaterial } = await supabase
@@ -76,6 +90,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updatePackagingMaterial(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر لمادة التعبئة
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'packaging',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر لمادة التعبئة ${item.item_name}`);
               break;
             case 'semi_finished_products':
               const { data: semiFinished } = await supabase
@@ -93,6 +118,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر للمنتج نصف المصنع
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'semi',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمنتج نصف المصنع ${item.item_name}`);
               break;
             case 'finished_products':
               const { data: finishedProduct } = await supabase
@@ -110,6 +146,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateFinishedProduct(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر للمنتج النهائي
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'finished',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمنتج النهائي ${item.item_name}`);
               break;
           }
         }
@@ -158,6 +205,17 @@ export class InvoiceProcessor {
                 quantity: newQuantity,
                 unit_cost: newUnitCost
               });
+              
+              // تسجيل حركة وارد للمادة الخام
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'raw',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمادة الخام ${item.item_name}`);
               break;
             case 'packaging_materials':
               const { data: packagingMaterial } = await supabase
@@ -181,6 +239,17 @@ export class InvoiceProcessor {
                 quantity: newQuantity,
                 unit_cost: newUnitCost
               });
+              
+              // تسجيل حركة وارد لمادة التعبئة
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'packaging',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد لمادة التعبئة ${item.item_name}`);
               break;
             case 'semi_finished_products':
               const { data: semiFinished } = await supabase
@@ -204,6 +273,17 @@ export class InvoiceProcessor {
                 quantity: newQuantity,
                 unit_cost: newUnitCost
               });
+              
+              // تسجيل حركة وارد للمنتج نصف المصنع
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'semi',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمنتج نصف المصنع ${item.item_name}`);
               break;
             case 'finished_products':
               const { data: finishedProduct } = await supabase
@@ -227,6 +307,17 @@ export class InvoiceProcessor {
                 quantity: newQuantity,
                 unit_cost: newUnitCost
               });
+              
+              // تسجيل حركة وارد للمنتج النهائي
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'finished',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمنتج النهائي ${item.item_name}`);
               break;
           }
         }
@@ -298,6 +389,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateRawMaterial(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
+              
+              // تسجيل حركة وارد للمادة الخام (إلغاء حركة الصادر السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'raw',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمادة الخام ${item.item_name} (عكسية)`);
               break;
             case 'packaging_materials':
               const { data: packagingMaterial } = await supabase
@@ -311,6 +413,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updatePackagingMaterial(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
+              
+              // تسجيل حركة وارد لمادة التعبئة (إلغاء حركة الصادر السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'packaging',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد لمادة التعبئة ${item.item_name} (عكسية)`);
               break;
             case 'semi_finished_products':
               const { data: semiFinished } = await supabase
@@ -324,6 +437,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
+              
+              // تسجيل حركة وارد للمنتج نصف المصنع (إلغاء حركة الصادر السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'semi',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمنتج نصف المصنع ${item.item_name} (عكسية)`);
               break;
             case 'finished_products':
               const { data: finishedProduct } = await supabase
@@ -337,6 +461,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateFinishedProduct(item.item_id, { 
                 quantity: currentQuantity + Number(item.quantity) 
               });
+              
+              // تسجيل حركة وارد للمنتج النهائي (إلغاء حركة الصادر السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'finished',
+                movement_type: 'in',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مبيعات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمنتج النهائي ${item.item_name} (عكسية)`);
               break;
           }
         }
@@ -377,6 +512,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateRawMaterial(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر للمادة الخام (إلغاء حركة الوارد السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'raw',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمادة الخام ${item.item_name} (عكسية)`);
               break;
             case 'packaging_materials':
               const { data: packagingMaterial } = await supabase
@@ -394,6 +540,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updatePackagingMaterial(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر لمادة التعبئة (إلغاء حركة الوارد السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'packaging',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر لمادة التعبئة ${item.item_name} (عكسية)`);
               break;
             case 'semi_finished_products':
               const { data: semiFinished } = await supabase
@@ -411,6 +568,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateSemiFinishedProduct(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر للمنتج نصف المصنع (إلغاء حركة الوارد السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'semi',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمنتج نصف المصنع ${item.item_name} (عكسية)`);
               break;
             case 'finished_products':
               const { data: finishedProduct } = await supabase
@@ -428,6 +596,17 @@ export class InvoiceProcessor {
               await this.inventoryService.updateFinishedProduct(item.item_id, { 
                 quantity: currentQuantity - Number(item.quantity) 
               });
+              
+              // تسجيل حركة صادر للمنتج النهائي (إلغاء حركة الوارد السابقة)
+              await this.movementTrackingService.recordMovement({
+                item_id: item.item_id.toString(),
+                item_type: 'finished',
+                movement_type: 'out',
+                quantity: Number(item.quantity),
+                reason: `إلغاء فاتورة مشتريات #${invoiceId}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمنتج النهائي ${item.item_name} (عكسية)`);
               break;
           }
         }
@@ -536,8 +715,13 @@ export class InvoiceProcessor {
     newQuantity: number,
     newUnitCost: number
   ): number {
+    if (currentQuantity === 0 && newQuantity === 0) {
+      return 0;
+    }
+    
     const totalCost = (currentQuantity * currentUnitCost) + (newQuantity * newUnitCost);
     const totalQuantity = currentQuantity + newQuantity;
+    
     return totalCost / totalQuantity;
   }
 }

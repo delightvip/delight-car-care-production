@@ -3,6 +3,7 @@ import { Return } from "@/types/returns";
 import FinancialCommercialBridge from "@/services/financial/FinancialCommercialBridge";
 import { supabase } from "@/integrations/supabase/client";
 import returnValidationService from "./ReturnValidationService";
+import InventoryMovementTrackingService from "@/services/inventory/InventoryMovementTrackingService";
 
 /**
  * خدمة معالجة المرتجعات
@@ -193,8 +194,7 @@ export class ReturnProcessingService {
   /**
    * تحديث المخزون بناءً على نوع المرتجع والعملية
    * @private
-   */
-  private async updateInventory(returnData: Return, action: 'confirm' | 'cancel' | 'reverse_confirm' | 'reverse_cancel'): Promise<void> {
+   */  private async updateInventory(returnData: Return, action: 'confirm' | 'cancel' | 'reverse_confirm' | 'reverse_cancel'): Promise<void> {
     if (!returnData.items || returnData.items.length === 0) {
       console.log("No items to update inventory");
       return;
@@ -236,11 +236,16 @@ export class ReturnProcessingService {
       console.log(`${shouldIncrease ? 'Increasing' : 'Decreasing'} inventory for item ${itemId} (${item.item_type}) by ${quantity}`);
       
       try {
+        // إنشاء نص السبب المناسب
+        const reasonText = returnData.return_type === 'sales_return' 
+          ? (action === 'confirm' ? `مرتجع مبيعات #${returnData.id} - ${item.item_name}` : `إلغاء مرتجع مبيعات #${returnData.id} - ${item.item_name}`)
+          : (action === 'confirm' ? `مرتجع مشتريات #${returnData.id} - ${item.item_name}` : `إلغاء مرتجع مشتريات #${returnData.id} - ${item.item_name}`);
+        
         // تنفيذ تحديث المخزون من خلال استدعاء الدالة المناسبة
         if (shouldIncrease) {
-          await this.increaseItemQuantity(item.item_type, itemId, quantity);
+          await this.increaseItemQuantity(item.item_type, itemId, quantity, reasonText);
         } else {
-          await this.decreaseItemQuantity(item.item_type, itemId, quantity);
+          await this.decreaseItemQuantity(item.item_type, itemId, quantity, reasonText);
         }
       } catch (error) {
         console.error(`Error updating inventory for item ${itemId}:`, error);
@@ -248,7 +253,6 @@ export class ReturnProcessingService {
       }
     }
   }
-
   /**
    * زيادة كمية الصنف في المخزون
    * @private
@@ -256,7 +260,8 @@ export class ReturnProcessingService {
   private async increaseItemQuantity(
     itemType: string,
     itemId: number,
-    quantity: number
+    quantity: number,
+    reason: string = 'return'
   ): Promise<boolean> {
     try {
       // Get current quantity based on item type
@@ -333,13 +338,11 @@ export class ReturnProcessingService {
           .eq('id', itemId);
           
         if (updateError) throw updateError;
-      }
-      else {
+      }      else {
         throw new Error(`نوع صنف غير معروف: ${itemType}`);
       }
-      
-      // 4. تسجيل حركة المخزون
-      await this.recordInventoryMovement(itemType, itemId, quantity, 'in', 'return');
+        // 4. تسجيل حركة المخزون
+      await this.recordInventoryMovement(itemType, itemId, quantity, 'in', reason);
       
       return true;
     } catch (error) {
@@ -347,7 +350,6 @@ export class ReturnProcessingService {
       throw error;
     }
   }
-
   /**
    * خفض كمية الصنف في المخزون
    * @private
@@ -355,7 +357,8 @@ export class ReturnProcessingService {
   private async decreaseItemQuantity(
     itemType: string,
     itemId: number,
-    quantity: number
+    quantity: number,
+    reason: string = 'return_cancel'
   ): Promise<boolean> {
     try {
       // Get current quantity based on item type
@@ -458,16 +461,14 @@ export class ReturnProcessingService {
       }
       
       // 5. تسجيل حركة المخزون
-      await this.recordInventoryMovement(itemType, itemId, quantity, 'out', 'return_cancel');
+      await this.recordInventoryMovement(itemType, itemId, quantity, 'out', reason);
       
       return true;
     } catch (error) {
       console.error(`Error decreasing quantity for ${itemType} item ${itemId}:`, error);
       throw error;
     }
-  }
-
-  /**
+  }  /**
    * تسجيل حركة في المخزون
    * @private
    */
@@ -479,19 +480,42 @@ export class ReturnProcessingService {
     source: string
   ): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('inventory_movements')
-        .insert({
-          item_id: itemId.toString(), // تحويل إلى نص كما هو متوقع من قبل API
-          item_type: itemType,
-          quantity: direction === 'in' ? quantity : -quantity,
-          movement_type: direction,
-          reason: source,
-          balance_after: 0, // سيتم تحديثه بواسطة trigger/function
-          date: new Date().toISOString().split('T')[0]
-        });
+      // تحويل نوع العنصر إلى التنسيق المتوقع من قبل خدمة تتبع حركات المخزون
+      let mappedItemType: string;
       
-      if (error) throw error;
+      switch (itemType) {
+        case 'raw_materials':
+          mappedItemType = 'raw';
+          break;
+        case 'packaging_materials':
+          mappedItemType = 'packaging';
+          break;
+        case 'semi_finished_products':
+          mappedItemType = 'semi';
+          break;
+        case 'finished_products':
+          mappedItemType = 'finished';
+          break;
+        default:
+          mappedItemType = itemType;
+      }
+
+      // استخدام خدمة تتبع حركات المخزون لتسجيل الحركة
+      const trackingService = InventoryMovementTrackingService.getInstance();
+      
+      // استخراج اسم المنتج من سبب الحركة إذا كان السبب يحتوي عليه
+      const itemName = source && source.includes(' - ') ? source.split(' - ')[1] : '';
+      
+      // تسجيل معلومات الحركة مع تعيين updateBalance إلى false
+      // لأننا قمنا بالفعل بتحديث الرصيد في دالة increaseItemQuantity/decreaseItemQuantity
+      await trackingService.recordMovement({
+        item_id: itemId.toString(),
+        item_type: mappedItemType,
+        movement_type: direction,
+        quantity: quantity,
+        reason: source, // نستخدم النص الكامل للسبب الذي يحتوي على اسم المنتج
+        updateBalance: false // منع تحديث الرصيد مرة أخرى
+      });
     } catch (error) {
       console.error('Error recording inventory movement:', error);
       // تجاهل الخطأ هنا لأنه ثانوي
