@@ -152,8 +152,7 @@ class ProductionService {
       return null;
     }
   }
-  
-  // تحديث حالة أمر إنتاج
+    // تحديث حالة أمر إنتاج
   public async updateProductionOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
     try {
       const orders = await this.getProductionOrders();
@@ -265,6 +264,11 @@ class ProductionService {
           toast.error('حدث خطأ أثناء معالجة أمر الإنتاج');
           return false;
         }
+      }
+      
+      // في حالة تغيير الحالة إلى "قيد التنفيذ" - لا نقوم بأي تأثير على المخزون
+      if (newStatus === 'inProgress') {
+        console.log(`[DEBUG] تغيير حالة الأمر ${orderId} إلى قيد التنفيذ بدون تأثير على المخزون`);
       }
       
       // في حالة تغيير الحالة إلى غير "مكتمل" (مثلاً: قيد الانتظار، قيد التنفيذ، ملغي)
@@ -398,8 +402,7 @@ class ProductionService {
       return null;
     }
   }
-  
-  // تحديث حالة أمر تعبئة
+    // تحديث حالة أمر تعبئة
   public async updatePackagingOrderStatus(orderId: number, newStatus: 'pending' | 'inProgress' | 'completed' | 'cancelled'): Promise<boolean> {
     try {
       const orders = await this.getPackagingOrders();
@@ -413,15 +416,14 @@ class ProductionService {
       // التحقق من الحالة السابقة للأمر
       const prevStatus = order.status;
       
-      // تحديث حالة الأمر في قاعدة البيانات
-      const result = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
-      
-      if (!result) {
-        return false;
-      }
-      
       // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
       if (prevStatus === 'completed' && newStatus !== 'completed') {
+        // تحديث حالة الأمر في قاعدة البيانات أولاً
+        const updateResult = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
+        if (!updateResult) {
+          return false;
+        }
+        
         // إعادة المنتج النصف مصنع للمخزون
         await this.inventoryService.addSemiFinishedToInventory(
           order.semiFinished.code,
@@ -453,7 +455,6 @@ class ProductionService {
         
         if (!semiFinishedAvailable) {
           toast.error('المنتج النصف مصنع غير متوفر بالكمية المطلوبة');
-          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
           return false;
         }
         
@@ -466,7 +467,12 @@ class ProductionService {
         const packagingAvailable = await this.inventoryService.checkPackagingAvailability(packagingReqs);
         if (!packagingAvailable) {
           toast.error('مواد التعبئة غير متوفرة بالكميات المطلوبة');
-          await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
+          return false;
+        }
+        
+        // تحديث حالة الأمر في قاعدة البيانات
+        const updateResult = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
+        if (!updateResult) {
           return false;
         }
         
@@ -480,10 +486,22 @@ class ProductionService {
         );
         
         if (!produceSuccess) {
+          // إعادة الحالة السابقة إذا فشلت العملية
           await this.databaseService.updatePackagingOrderStatus(orderId, prevStatus);
           return false;
         }
+        
+        toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
+        return true;
       }
+      
+      // في حالة تغيير الحالة إلى "قيد التنفيذ" - لا نقوم بأي تأثير على المخزون
+      if (newStatus === 'inProgress') {
+        console.log(`[DEBUG] تغيير حالة أمر التعبئة ${orderId} إلى قيد التنفيذ بدون تأثير على المخزون`);
+      }
+      
+      // تحديث حالة الأمر في قاعدة البيانات فقط (للحالات الأخرى مثل "قيد التنفيذ" أو "ملغي")
+      const result = await this.databaseService.updatePackagingOrderStatus(orderId, newStatus);
       
       if (result) {
         toast.success(`تم تحديث حالة أمر التعبئة إلى ${this.getStatusTranslation(newStatus)}`);
