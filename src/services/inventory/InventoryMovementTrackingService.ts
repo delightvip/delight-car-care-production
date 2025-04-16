@@ -12,6 +12,7 @@ export interface InventoryMovementRecord {
   quantity: number;
   reason?: string;
   user_id?: string;
+  updateBalance?: boolean; // معلمة اختيارية للتحكم في تحديث الرصيد
 }
 
 // نوع جدول المخزون المطابق
@@ -31,7 +32,6 @@ class InventoryMovementTrackingService {
     }
     return InventoryMovementTrackingService.instance;
   }
-
   /**
    * تسجيل حركة مخزون جديدة
    * @param movement بيانات الحركة
@@ -66,8 +66,10 @@ class InventoryMovementTrackingService {
 
       console.log(`تم تسجيل حركة مخزون: ${movement.movement_type} ${movement.quantity} من ${movement.item_type} رقم ${movement.item_id}`);
       
-      // تحديث رصيد العنصر في الجدول المناسب
-      await this.updateItemBalance(movement.item_id, movement.item_type, movement.quantity, movement.movement_type);
+      // تحديث رصيد العنصر في الجدول المناسب (فقط إذا كانت معلمة updateBalance محددة كـ true أو غير محددة)
+      if (movement.updateBalance !== false) {
+        await this.updateItemBalance(movement.item_id, movement.item_type, movement.quantity, movement.movement_type);
+      }
       
       return true;
     } catch (error) {

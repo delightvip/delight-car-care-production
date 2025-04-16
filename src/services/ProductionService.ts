@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import InventoryService from "./InventoryService";
 import ProductionDatabaseService from "./database/ProductionDatabaseService";
+import InventoryMovementTrackingService from "./inventory/InventoryMovementTrackingService";
 import { supabase } from "../integrations/supabase/client";
 
 // أنواع البيانات لأوامر الإنتاج
@@ -52,10 +53,12 @@ class ProductionService {
   private static instance: ProductionService;
   private inventoryService: InventoryService;
   private databaseService: ProductionDatabaseService;
+  private movementTrackingService: InventoryMovementTrackingService;
   
   private constructor() {
     this.inventoryService = InventoryService.getInstance();
     this.databaseService = ProductionDatabaseService.getInstance();
+    this.movementTrackingService = InventoryMovementTrackingService.getInstance();
   }
   
   // الحصول على كائن وحيد من الخدمة (نمط Singleton)
@@ -165,8 +168,7 @@ class ProductionService {
       
       // التحقق من الحالة السابقة للأمر
       const prevStatus = order.status;
-      
-      // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
+        // التعامل مع حالة التغيير من "مكتمل" إلى حالة أخرى (إلغاء تأثير الاكتمال)
       if (prevStatus === 'completed' && newStatus !== 'completed') {
         console.log(`[DEBUG] إلغاء تأثير اكتمال الأمر ${orderId}`);
         
@@ -181,6 +183,60 @@ class ProductionService {
         
         // إزالة المنتج النصف مصنع من المخزون
         await this.inventoryService.removeSemiFinishedFromInventory(order.productCode, order.quantity);
+        
+        // تسجيل حركات عكسية في المخزون (إلغاء الحركات السابقة)
+        try {
+          // 1. تسجيل حركة وارد للمواد الخام (إرجاع المواد المستهلكة)
+          for (const ingredient of order.ingredients) {
+            try {
+              // التحقق من معرف المادة الخام في قاعدة البيانات
+              const { data: rawMaterial } = await supabase
+                .from('raw_materials')
+                .select('id')
+                .eq('code', ingredient.code)
+                .single();
+                
+              if (rawMaterial && rawMaterial.id) {                // تسجيل حركة الوارد للمادة الخام
+                await this.movementTrackingService.recordMovement({
+                  item_id: rawMaterial.id.toString(),
+                  item_type: 'raw',
+                  movement_type: 'in',
+                  quantity: ingredient.requiredQuantity,
+                  reason: `إلغاء أمر إنتاج #${order.code}`,
+                  updateBalance: false // منع تحديث الرصيد مرة أخرى
+                });
+                console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمادة الخام ${ingredient.name} (إلغاء)`);
+              }
+            } catch (err) {
+              console.error(`[ERROR] خطأ في تسجيل حركة المخزون العكسية للمادة الخام ${ingredient.code}:`, err);
+            }
+          }
+          
+          // 2. تسجيل حركة صادر للمنتج النصف مصنع (إزالة المنتج)
+          try {
+            const { data: semiFinished } = await supabase
+              .from('semi_finished_products')
+              .select('id')
+              .eq('code', order.productCode)
+              .single();
+              
+            if (semiFinished && semiFinished.id) {              // تسجيل حركة الصادر للمنتج النصف مصنع
+              await this.movementTrackingService.recordMovement({
+                item_id: semiFinished.id.toString(),
+                item_type: 'semi',
+                movement_type: 'out',
+                quantity: order.quantity,
+                reason: `إلغاء أمر إنتاج #${order.code}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمنتج النصف مصنع ${order.productName} (إلغاء)`);
+            }
+          } catch (err) {
+            console.error(`[ERROR] خطأ في تسجيل حركة المخزون العكسية للمنتج النصف مصنع ${order.productCode}:`, err);
+          }
+        } catch (error) {
+          console.error("[ERROR] حدث خطأ أثناء تسجيل حركات المخزون العكسية:", error);
+        }
         
         // تحديث حالة الأمر في قاعدة البيانات بعد نجاح العمليات السابقة
         const result = await this.databaseService.updateProductionOrderStatus(orderId, newStatus);
@@ -212,8 +268,7 @@ class ProductionService {
         if (!consumeSuccess) {
           toast.error('حدث خطأ أثناء استهلاك المواد الأولية');
           return false;
-        }
-        console.log(`[DEBUG] تم استهلاك المواد الأولية بنجاح للأمر ${orderId}`);
+        }          console.log(`[DEBUG] تم استهلاك المواد الأولية بنجاح للأمر ${orderId}`);
         
         // حساب التكلفة الإجمالية بناءً على تكلفة المواد الأولية
         const totalCost = await this.calculateProductionCost(requirements);
@@ -235,6 +290,56 @@ class ProductionService {
           }
           
           console.log(`[DEBUG] تم إضافة المنتج النصف مصنع للمخزون بنجاح للأمر ${orderId}`);
+          
+          // تسجيل حركات المخزون للمواد الخام المستهلكة
+          for (const ingredient of order.ingredients) {
+            try {
+              // التحقق من معرف المادة الخام في قاعدة البيانات
+              const { data: rawMaterial } = await supabase
+                .from('raw_materials')
+                .select('id')
+                .eq('code', ingredient.code)
+                .single();
+                
+              if (rawMaterial && rawMaterial.id) {                // تسجيل حركة الصادر للمادة الخام
+                await this.movementTrackingService.recordMovement({
+                  item_id: rawMaterial.id.toString(),
+                  item_type: 'raw',
+                  movement_type: 'out',
+                  quantity: ingredient.requiredQuantity,
+                  reason: `أمر إنتاج #${order.code}`,
+                  updateBalance: false // منع تحديث الرصيد مرة أخرى
+                });
+                console.log(`[DEBUG] تم تسجيل حركة مخزون صادر للمادة الخام ${ingredient.name}`);
+              }
+            } catch (err) {
+              console.error(`[ERROR] خطأ في تسجيل حركة المخزون للمادة الخام ${ingredient.code}:`, err);
+            }
+          }
+          
+          // تسجيل حركة المخزون للمنتج النصف مصنع المنتج
+          try {
+            // التحقق من معرف المنتج النصف مصنع في قاعدة البيانات
+            const { data: semiFinished } = await supabase
+              .from('semi_finished_products')
+              .select('id')
+              .eq('code', order.productCode)
+              .single();
+              
+            if (semiFinished && semiFinished.id) {              // تسجيل حركة الوارد للمنتج النصف مصنع
+              await this.movementTrackingService.recordMovement({
+                item_id: semiFinished.id.toString(),
+                item_type: 'semi',
+                movement_type: 'in',
+                quantity: order.quantity,
+                reason: `أمر إنتاج #${order.code}`,
+                updateBalance: false // منع تحديث الرصيد مرة أخرى
+              });
+              console.log(`[DEBUG] تم تسجيل حركة مخزون وارد للمنتج النصف مصنع ${order.productName}`);
+            }
+          } catch (err) {
+            console.error(`[ERROR] خطأ في تسجيل حركة المخزون للمنتج النصف مصنع ${order.productCode}:`, err);
+          }
           
           // تحديث الأهمية للمواد الأولية المستخدمة
           await this.inventoryService.updateRawMaterialsImportance(
