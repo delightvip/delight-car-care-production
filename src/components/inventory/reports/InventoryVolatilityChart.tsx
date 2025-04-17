@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { rpcFunctions } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -16,7 +16,7 @@ import {
   ReferenceLine,
   Cell
 } from 'recharts';
-import { TrendingUp, TrendingDown, Percent } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface InventoryVolatilityChartProps {
   itemId: string;
@@ -26,7 +26,7 @@ interface InventoryVolatilityChartProps {
   itemUnit: string;
 }
 
-interface VolatilityData {
+export interface VolatilityData {
   period: string;
   start_balance: number;
   end_balance: number;
@@ -53,12 +53,12 @@ const InventoryVolatilityChart: React.FC<InventoryVolatilityChartProps> = ({
                              timeRange === 'quarter' ? 4 : 
                              timeRange === 'year' ? 3 : 6;
         
-        const { data, error } = await supabase.rpc('get_inventory_volatility', {
-          p_item_id: itemId,
-          p_item_type: itemType,
-          p_period: timeRange,
-          p_periods_count: periodsCount
-        });
+        const { data, error } = await rpcFunctions.getInventoryVolatility(
+          itemId, 
+          itemType, 
+          timeRange, 
+          periodsCount
+        );
 
         if (error) {
           console.error("Error fetching inventory volatility data:", error);

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { rpcFunctions } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -22,7 +22,7 @@ interface MostActiveItemsChartProps {
   limit?: number;
 }
 
-interface ActiveItemData {
+export interface ActiveItemData {
   item_id: string;
   item_type: string;
   item_name: string;
@@ -72,10 +72,7 @@ const MostActiveItemsChart: React.FC<MostActiveItemsChartProps> = ({
       try {
         console.log(`Fetching most active items for range: ${timeRange}, limit: ${limit}`);
         
-        const { data, error } = await supabase.rpc('get_most_active_inventory_items', {
-          p_limit: limit,
-          p_period: timeRange
-        });
+        const { data, error } = await rpcFunctions.getMostActiveInventoryItems(limit, timeRange);
 
         if (error) {
           console.error("Error fetching most active items:", error);

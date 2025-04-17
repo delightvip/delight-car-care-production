@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Info, Package, Boxes } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,7 +14,7 @@ import InventoryDashboardSummary from '@/components/inventory/reports/InventoryD
 import InventoryInsights from '@/components/inventory/reports/InventoryInsights';
 import MostActiveItemsChart from '@/components/inventory/reports/MostActiveItemsChart';
 
-// Define types for inventory items and categories
+// تعريف أنواع البيانات لعناصر المخزون والفئات
 export interface InventoryItem {
   id: string;
   name: string;
@@ -58,17 +57,22 @@ const InventoryReports: React.FC = () => {
           tableName = 'raw_materials';
       }
       
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('id, name, code, unit, quantity, min_stock')
-        .order('name');
+      try {
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('id, name, code, unit, quantity, min_stock')
+          .order('name');
+          
+        if (error) {
+          console.error("Error fetching items:", error);
+          throw error;
+        }
         
-      if (error) {
-        console.error("Error fetching items:", error);
-        throw error;
+        return data as InventoryItem[];
+      } catch (err) {
+        console.error("Error fetching items:", err);
+        return [] as InventoryItem[];
       }
-      
-      return data;
     }
   });
 
@@ -96,23 +100,28 @@ const InventoryReports: React.FC = () => {
           tableName = 'raw_materials';
       }
       
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('id', selectedItem)
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('*')
+          .eq('id', selectedItem)
+          .single();
+          
+        if (error) {
+          console.error("Error fetching item details:", error);
+          throw error;
+        }
         
-      if (error) {
-        console.error("Error fetching item details:", error);
-        throw error;
+        return data as InventoryItem;
+      } catch (err) {
+        console.error("Error fetching item details:", err);
+        return null;
       }
-      
-      return data;
     },
     enabled: !!selectedItem
   });
 
-  // Get the list of categories with item counts
+  // الحصول على قائمة الفئات مع عدد العناصر
   const { data: categories } = useQuery({
     queryKey: ['inventory-categories'],
     queryFn: async () => {
@@ -123,7 +132,7 @@ const InventoryReports: React.FC = () => {
         { id: 'finished', name: 'منتجات نهائية', itemCount: 0 }
       ];
       
-      // Get counts for each category
+      // الحصول على عدد العناصر لكل فئة
       for (const category of categoryData) {
         let tableName = '';
         switch (category.id) {
@@ -133,12 +142,16 @@ const InventoryReports: React.FC = () => {
           case 'finished': tableName = 'finished_products'; break;
         }
         
-        const { count, error } = await supabase
-          .from(tableName)
-          .select('*', { count: 'exact', head: true });
-          
-        if (!error && count !== null) {
-          category.itemCount = count;
+        try {
+          const { count, error } = await supabase
+            .from(tableName)
+            .select('*', { count: 'exact', head: true });
+            
+          if (!error && count !== null) {
+            category.itemCount = count;
+          }
+        } catch (err) {
+          console.error(`Error fetching count for ${category.name}:`, err);
         }
       }
       

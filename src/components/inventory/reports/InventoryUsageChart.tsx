@@ -3,7 +3,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
+import { rpcFunctions } from '@/integrations/supabase/client';
 import UsageChartContent from './ChartComponents/UsageChartContent';
 
 interface InventoryUsageChartProps {
@@ -13,7 +13,7 @@ interface InventoryUsageChartProps {
   itemName: string;
 }
 
-interface UsageData {
+export interface UsageData {
   reason: string;
   quantity: number;
   percentage: number;
@@ -31,11 +31,7 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
       try {
         console.log(`Fetching usage data for item: ${itemId}, type: ${itemType}, range: ${timeRange}`);
         
-        const { data, error } = await supabase.rpc('get_inventory_usage_distribution', {
-          p_item_id: itemId,
-          p_item_type: itemType,
-          p_period: timeRange
-        });
+        const { data, error } = await rpcFunctions.getInventoryUsageDistribution(itemId, itemType, timeRange);
 
         if (error) {
           console.error("Error fetching inventory usage stats:", error);

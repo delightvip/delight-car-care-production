@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { supabase } from '@/integrations/supabase/client';
+import { rpcFunctions } from '@/integrations/supabase/client';
 import MovementChartContent from './ChartComponents/MovementChartContent';
 import MovementChartLoading from './ChartComponents/MovementChartLoading';
 import MovementChartError from './ChartComponents/MovementChartError';
@@ -37,11 +37,7 @@ export const InventoryMovementChart: React.FC<InventoryMovementChartProps> = ({
       try {
         console.log(`Fetching movements for item: ${itemId}, type: ${itemType}, range: ${timeRange}`);
         
-        const { data, error } = await supabase.rpc('get_inventory_movements_by_time', {
-          p_item_id: itemId,
-          p_item_type: itemType,
-          p_period: timeRange
-        });
+        const { data, error } = await rpcFunctions.getInventoryMovementsByTime(itemId, itemType, timeRange);
 
         if (error) {
           console.error("Error fetching inventory movements:", error);
