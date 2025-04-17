@@ -1175,6 +1175,20 @@ export type Database = {
           current_quantity: number
         }[]
       }
+      get_inventory_usage_distribution: {
+        Args: {
+          p_item_id: string
+          p_item_type: string
+          p_period?: string
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: {
+          reason: string
+          quantity: number
+          percentage: number
+        }[]
+      }
       get_inventory_usage_stats: {
         Args: {
           p_item_id: string
@@ -1187,6 +1201,38 @@ export type Database = {
           usage_amount: number
         }[]
       }
+      get_inventory_volatility: {
+        Args: {
+          p_item_id: string
+          p_item_type: string
+          p_period?: string
+          p_periods_count?: number
+        }
+        Returns: {
+          period: string
+          start_balance: number
+          end_balance: number
+          change_amount: number
+          change_percentage: number
+        }[]
+      }
+      get_most_active_inventory_items: {
+        Args: {
+          p_limit?: number
+          p_period?: string
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: {
+          item_id: string
+          item_type: string
+          item_name: string
+          total_movements: number
+          total_in: number
+          total_out: number
+          current_quantity: number
+        }[]
+      }
       reset_sequence: {
         Args: { table_name: string; seq_value: number }
         Returns: undefined
@@ -1197,8 +1243,8 @@ export type Database = {
       }
       truncate_table: {
         Args:
-          | { table_name: string; cascade?: boolean }
           | { cascade: boolean; table_name: string }
+          | { table_name: string; cascade?: boolean }
         Returns: undefined
       }
     }
