@@ -30,6 +30,22 @@ export interface ItemCategory {
   itemCount: number;
 }
 
+// Helper function to get the correct table type
+const getTableName = (category: string): 'raw_materials' | 'semi_finished_products' | 'packaging_materials' | 'finished_products' => {
+  switch (category) {
+    case 'raw':
+      return 'raw_materials';
+    case 'semi':
+      return 'semi_finished_products';
+    case 'packaging':
+      return 'packaging_materials';
+    case 'finished':
+      return 'finished_products';
+    default:
+      return 'raw_materials';
+  }
+};
+
 const InventoryReports: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('raw');
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
@@ -38,24 +54,7 @@ const InventoryReports: React.FC = () => {
   const { data: itemsData, isLoading: isLoadingItems } = useQuery({
     queryKey: ['items', selectedCategory],
     queryFn: async () => {
-      let tableName = '';
-      
-      switch (selectedCategory) {
-        case 'raw':
-          tableName = 'raw_materials';
-          break;
-        case 'semi':
-          tableName = 'semi_finished_products';
-          break;
-        case 'packaging':
-          tableName = 'packaging_materials';
-          break;
-        case 'finished':
-          tableName = 'finished_products';
-          break;
-        default:
-          tableName = 'raw_materials';
-      }
+      const tableName = getTableName(selectedCategory);
       
       try {
         const { data, error } = await supabase
@@ -81,24 +80,7 @@ const InventoryReports: React.FC = () => {
     queryFn: async () => {
       if (!selectedItem) return null;
       
-      let tableName = '';
-      
-      switch (selectedCategory) {
-        case 'raw':
-          tableName = 'raw_materials';
-          break;
-        case 'semi':
-          tableName = 'semi_finished_products';
-          break;
-        case 'packaging':
-          tableName = 'packaging_materials';
-          break;
-        case 'finished':
-          tableName = 'finished_products';
-          break;
-        default:
-          tableName = 'raw_materials';
-      }
+      const tableName = getTableName(selectedCategory);
       
       try {
         const { data, error } = await supabase
@@ -134,13 +116,7 @@ const InventoryReports: React.FC = () => {
       
       // الحصول على عدد العناصر لكل فئة
       for (const category of categoryData) {
-        let tableName = '';
-        switch (category.id) {
-          case 'raw': tableName = 'raw_materials'; break;
-          case 'semi': tableName = 'semi_finished_products'; break;
-          case 'packaging': tableName = 'packaging_materials'; break;
-          case 'finished': tableName = 'finished_products'; break;
-        }
+        const tableName = getTableName(category.id);
         
         try {
           const { count, error } = await supabase
