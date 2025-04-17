@@ -109,45 +109,5 @@ export const rpcFunctions = {
     return await supabase.functions.invoke('restore-backup', {
       body: { backup: backupData }
     });
-  },
-
-  // وظائف تحليلات المخزون المخصصة
-  async getInventoryUsageDistribution(itemId: string, itemType: string, period: string) {
-    return await supabase.rpc('get_inventory_usage_distribution', {
-      p_item_id: itemId,
-      p_item_type: itemType,
-      p_period: period
-    });
-  },
-
-  async getInventoryVolatility(itemId: string, itemType: string, period: string, periodsCount: number = 6) {
-    return await supabase.rpc('get_inventory_volatility', {
-      p_item_id: itemId,
-      p_item_type: itemType,
-      p_period: period,
-      p_periods_count: periodsCount
-    });
-  },
-
-  async getMostActiveInventoryItems(limit: number = 10, period: string = 'month') {
-    return await supabase.rpc('get_most_active_inventory_items', {
-      p_limit: limit,
-      p_period: period
-    });
-  },
-
-  async getInventoryMovementsByTime(itemId: string, itemType: string, period: string) {
-    return await supabase.rpc('get_inventory_movements_by_time', {
-      p_item_id: itemId,
-      p_item_type: itemType,
-      p_period: period
-    });
-  },
-
-  async getInventorySummaryStats(itemId: string, itemType: string) {
-    return await supabase.rpc('get_inventory_summary_stats', {
-      p_item_id: itemId,
-      p_item_type: itemType
-    });
   }
 };
