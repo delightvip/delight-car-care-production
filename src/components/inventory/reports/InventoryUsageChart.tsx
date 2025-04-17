@@ -14,8 +14,9 @@ interface InventoryUsageChartProps {
 }
 
 interface UsageData {
-  category: string;
-  usage_amount: number;
+  reason: string;
+  quantity: number;
+  percentage: number;
 }
 
 export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
@@ -30,7 +31,7 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
       try {
         console.log(`Fetching usage data for item: ${itemId}, type: ${itemType}, range: ${timeRange}`);
         
-        const { data, error } = await supabase.rpc('get_inventory_usage_stats', {
+        const { data, error } = await supabase.rpc('get_inventory_usage_distribution', {
           p_item_id: itemId,
           p_item_type: itemType,
           p_period: timeRange
@@ -45,14 +46,7 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
         return data as UsageData[];
       } catch (err) {
         console.error("Failed to fetch inventory usage data:", err);
-        
-        // For development, return mock data
-        return [
-          { category: "إنتاج", usage_amount: 120 },
-          { category: "تعبئة", usage_amount: 80 },
-          { category: "بيع", usage_amount: 45 },
-          { category: "تالف", usage_amount: 15 }
-        ] as UsageData[];
+        throw err;
       }
     }
   });
@@ -89,7 +83,7 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
     );
   }
   
-  // If data array is empty, show empty state
+  // إذا كانت مصفوفة البيانات فارغة، نعرض حالة فارغة
   if (data.length === 0) {
     return (
       <Card>
@@ -108,12 +102,11 @@ export const InventoryUsageChart: React.FC<InventoryUsageChartProps> = ({
     );
   }
   
-  const total = data.reduce((acc, item) => acc + Number(item.usage_amount), 0);
-  
+  // تحويل البيانات إلى الشكل المطلوب لمكون الرسم البياني
   const chartData = data.map(item => ({
-    name: item.category,
-    value: Number(item.usage_amount),
-    percentage: ((Number(item.usage_amount) / total) * 100).toFixed(1)
+    name: item.reason,
+    value: Number(item.quantity),
+    percentage: `${item.percentage.toFixed(1)}%`
   }));
   
   return (
