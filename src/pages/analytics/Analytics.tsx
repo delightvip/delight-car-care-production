@@ -1,5 +1,4 @@
-
-import React, { useEffect } from 'react';
+import React from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,9 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ActivitySquare, ArrowRight, BarChart3, Building2, Coins, CreditCard, Database, DollarSign, ShoppingCart, TrendingUp, Wallet } from 'lucide-react';
-import NewsTickerSettings from '@/components/NewsTickerSettings';
-import FinancialStatusTab from '@/components/financial/FinancialStatusTab';
+import { ActivitySquare, ArrowRight, BarChart3, Database } from 'lucide-react';
 
 const Analytics = () => {
   const navigate = useNavigate();
@@ -119,10 +116,10 @@ const Analytics = () => {
     if (!inventoryStats) return [];
     
     return [
-      { name: 'المواد الأولية', value: inventoryStats?.values?.rawMaterials || 0 },
-      { name: 'المنتجات النصف مصنعة', value: inventoryStats?.values?.semiFinished || 0 },
-      { name: 'مواد التعبئة', value: inventoryStats?.values?.packaging || 0 },
-      { name: 'المنتجات النهائية', value: inventoryStats?.values?.finished || 0 }
+      { name: 'المواد الأولية', value: inventoryStats.values.rawMaterials },
+      { name: 'المنتجات النصف مصنعة', value: inventoryStats.values.semiFinished },
+      { name: 'مواد التعبئة', value: inventoryStats.values.packaging },
+      { name: 'المنتجات النهائية', value: inventoryStats.values.finished }
     ];
   }, [inventoryStats]);
   
@@ -134,13 +131,10 @@ const Analytics = () => {
           <p className="text-muted-foreground mt-1">تحليل أداء المصنع والمخزون</p>
         </div>
         
-        <NewsTickerSettings className="mb-4" />
-        
         <Tabs defaultValue="inventory" dir="rtl" className="w-full">
-          <TabsList className="w-full max-w-md mx-auto grid grid-cols-3">
+          <TabsList className="w-full max-w-md mx-auto grid grid-cols-2">
             <TabsTrigger value="inventory">تحليل المخزون</TabsTrigger>
             <TabsTrigger value="production">تحليل الإنتاج</TabsTrigger>
-            <TabsTrigger value="financial">الوضع المالي</TabsTrigger>
           </TabsList>
           
           <TabsContent value="inventory" className="mt-6">
@@ -292,128 +286,6 @@ const Analytics = () => {
                 <ProductionChart />
               </CardContent>
             </Card>
-          </TabsContent>
-          
-          <TabsContent value="financial" className="mt-6">
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-blue-50 dark:bg-blue-950/20">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xl flex items-center">
-                      <Building2 className="ml-2 h-5 w-5 text-blue-500" />
-                      الأصول
-                    </CardTitle>
-                    <CardDescription>إجمالي الأصول والممتلكات</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div id="assetsValue" className="text-2xl font-bold">جاري التحميل...</div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-red-50 dark:bg-red-950/20">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xl flex items-center">
-                      <CreditCard className="ml-2 h-5 w-5 text-red-500" />
-                      الخصوم
-                    </CardTitle>
-                    <CardDescription>إجمالي الالتزامات المالية</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div id="liabilitiesValue" className="text-2xl font-bold">جاري التحميل...</div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-green-50 dark:bg-green-950/20">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xl flex items-center">
-                      <TrendingUp className="ml-2 h-5 w-5 text-green-500" />
-                      صافي القيمة
-                    </CardTitle>
-                    <CardDescription>صافي القيمة المالية</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div id="netWorthValue" className="text-2xl font-bold">جاري التحميل...</div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>توزيع الأصول</CardTitle>
-                    <CardDescription>تقسيم إجمالي أصول المصنع حسب النوع</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-[300px]" id="assetsDistributionChart">
-                    <div className="flex items-center justify-center h-full">
-                      <Skeleton className="h-full w-full rounded-md" />
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle>تطور الوضع المالي</CardTitle>
-                    <CardDescription>متابعة نمو الأصول والخصوم على مدار الوقت</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-[300px]" id="financialTrendChart">
-                    <div className="flex items-center justify-center h-full">
-                      <Skeleton className="h-full w-full rounded-md" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center">
-                      <ShoppingCart className="ml-2 h-4 w-4 text-blue-500" />
-                      قيمة المخزون
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div id="inventoryValue" className="text-lg font-semibold">جاري التحميل...</div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center">
-                      <Coins className="ml-2 h-4 w-4 text-amber-500" />
-                      السيولة النقدية
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div id="liquidityValue" className="text-lg font-semibold">جاري التحميل...</div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center">
-                      <Wallet className="ml-2 h-4 w-4 text-green-500" />
-                      الحسابات المدينة
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div id="receivablesValue" className="text-lg font-semibold">جاري التحميل...</div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center">
-                      <DollarSign className="ml-2 h-4 w-4 text-red-500" />
-                      الحسابات الدائنة
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div id="payablesValue" className="text-lg font-semibold">جاري التحميل...</div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-            <FinancialStatusTab />
           </TabsContent>
         </Tabs>
       </div>
