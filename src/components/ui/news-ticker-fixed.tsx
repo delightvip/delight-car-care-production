@@ -3,7 +3,7 @@ import React from "react";
 import "../ui/financial-ticker.css";
 import "../ui/news-ticker-fonts.css";
 
-interface TickerItem {
+export interface TickerItem {
   label: string;
   value: string | number;
   isMonetary?: boolean;

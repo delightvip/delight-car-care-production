@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -161,6 +161,17 @@ const Analytics = () => {
   const [assetsDistribution, setAssetsDistribution] = useState<any[]>([]);
   const [financialTrend, setFinancialTrend] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const distributionData = React.useMemo(() => {
+    if (!inventoryStats) return [];
+    
+    return [
+      { name: 'المواد الأولية', value: inventoryStats.values.rawMaterials },
+      { name: 'المنتجات النصف مصنعة', value: inventoryStats.values.semiFinished },
+      { name: 'مواد التعبئة', value: inventoryStats.values.packaging },
+      { name: 'المنتجات النهائية', value: inventoryStats.values.finished }
+    ];
+  }, [inventoryStats]);
   
   useEffect(() => {
     async function loadFinancialData() {
