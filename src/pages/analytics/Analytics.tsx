@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ActivitySquare, ArrowRight, BarChart3, Database } from 'lucide-react';
+import { ActivitySquare, ArrowRight, BarChart3, Building2, Coins, CreditCard, Database, DollarSign, ShoppingCart, TrendingUp, Wallet } from 'lucide-react';
 import NewsTickerSettings from '@/components/NewsTickerSettings';
 import FinancialStatusTab from '@/components/financial/FinancialStatusTab';
 
