@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -35,7 +34,6 @@ const InventoryAnalyticsDashboard: React.FC<InventoryAnalyticsDashboardProps> = 
 
   const handleTimeRangeChange = (value: string) => {
     setTimeRange(value);
-    // تحديث نطاق التاريخ المخصص بناءً على الفترة الزمنية المحددة
     const now = new Date();
     let from = new Date();
     
@@ -65,7 +63,6 @@ const InventoryAnalyticsDashboard: React.FC<InventoryAnalyticsDashboardProps> = 
 
   const handleCustomDateRangeChange = (range: {from: Date; to: Date; preset?: string}) => {
     setCustomDateRange(range);
-    // إذا تم تحديد نطاق تاريخ مخصص، نستخدم الإعداد المسبق إذا كان متاحًا
     if (range.preset) {
       setTimeRange(range.preset);
     }
@@ -115,7 +112,7 @@ const InventoryAnalyticsDashboard: React.FC<InventoryAnalyticsDashboardProps> = 
         </Card>
       </div>
 
-      <Tabs defaultValue={reportType} value={reportType} onValueChange={setReportType}>
+      <Tabs defaultValue={reportType} value={reportType} onValueChange={setReportType} className="w-full">
         <TabsList className="grid grid-cols-3 w-full md:w-auto md:inline-grid md:grid-cols-3">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <Activity size={16} />
@@ -132,7 +129,7 @@ const InventoryAnalyticsDashboard: React.FC<InventoryAnalyticsDashboardProps> = 
         </TabsList>
 
         <div className="mt-6">
-          <TabsContent value="overview">
+          <TabsContent value="overview" className="mt-0">
             {!selectedItem ? (
               <div className="grid grid-cols-1 gap-6">
                 <MostActiveItemsChart timeRange={timeRange} limit={10} />
@@ -151,7 +148,7 @@ const InventoryAnalyticsDashboard: React.FC<InventoryAnalyticsDashboardProps> = 
             )}
           </TabsContent>
 
-          <TabsContent value="movement">
+          <TabsContent value="movement" className="mt-0">
             {!selectedItem ? (
               <div className="p-8 text-center text-muted-foreground">
                 يرجى اختيار صنف للعرض
@@ -170,7 +167,7 @@ const InventoryAnalyticsDashboard: React.FC<InventoryAnalyticsDashboardProps> = 
             )}
           </TabsContent>
 
-          <TabsContent value="advanced">
+          <TabsContent value="advanced" className="mt-0">
             {!selectedItem ? (
               <div className="p-8 text-center text-muted-foreground">
                 يرجى اختيار صنف للعرض
