@@ -236,9 +236,88 @@
   .product-info {
     @apply p-4 space-y-2;
   }
-  
-  .product-title {
+    .product-title {
     @apply text-lg font-medium line-clamp-1;
+  }
+  
+  /* تنسيقات مخصصة لمؤشرات التمرير (scrollbars) */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.3) transparent;
+  }
+  
+  .custom-scrollbar:hover {
+    scrollbar-color: hsl(var(--primary) / 0.5) transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background-color: transparent;
+    border-radius: 100px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--primary) / 0.3);
+    border-radius: 100px;
+    transition: background-color 0.3s ease;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--primary) / 0.5);
+  }
+  
+  .custom-scrollbar-rtl::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--primary) / 0.3);
+  }
+  
+  /* تحسين مؤشر التمرير في الوضع المظلم */
+  .dark .custom-scrollbar {
+    scrollbar-color: hsl(var(--primary) / 0.4) hsl(var(--muted) / 0.1);
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-track {
+    background-color: hsl(var(--muted) / 0.1);
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--primary) / 0.4);
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--primary) / 0.6);
+  }
+  
+  /* تنسيق عام لمؤشرات التمرير في التطبيق بالكامل */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background-color: transparent;
+    border-radius: 6px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.2);
+    border-radius: 6px;
+    transition: background-color 0.3s ease;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.4);
+  }
+  
+  /* تنسيق الوضع المظلم للمؤشرات العامة */
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+  }
+    .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
   }
   
   .product-desc {

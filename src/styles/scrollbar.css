@@ -1,0 +1,141 @@
+/* تنسيقات مخصصة لمؤشرات التمرير (scrollbars) مع تباين أفضل */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsla(217, 91%, 60%, 0.6) transparent;
+}
+
+.custom-scrollbar:hover {
+  scrollbar-color: hsla(217, 91%, 60%, 0.8) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background-color: hsla(0, 0%, 90%, 0.1);
+  border-radius: 100px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsla(217, 91%, 60%, 0.6);
+  border-radius: 100px;
+  transition: background-color 0.3s ease;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsla(217, 91%, 60%, 0.8);
+}
+
+.custom-scrollbar-rtl::-webkit-scrollbar-thumb {
+  background-color: hsla(217, 91%, 60%, 0.6);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* تحسين مؤشر التمرير في الوضع المظلم مع زيادة التباين */
+.dark .custom-scrollbar {
+  scrollbar-color: hsla(217, 91%, 60%, 0.7) hsla(217, 33%, 18%, 0.2);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background-color: hsla(217, 33%, 18%, 0.2);
+  border-radius: 100px;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsla(217, 91%, 60%, 0.7);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.15);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsla(217, 91%, 60%, 0.9);
+}
+
+/* تنسيق عام لمؤشرات التمرير في التطبيق بالكامل */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 120, 120, 0.2);
+  border-radius: 6px;
+  transition: background-color 0.3s ease;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(120, 120, 120, 0.4);
+}
+
+/* تنسيق الوضع المظلم للمؤشرات العامة */
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(180, 180, 180, 0.3);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(180, 180, 180, 0.5);
+}
+
+/* تنسيق محسن ومتطور لمؤشرات التمرير في القائمة الجانبية - متطابق مع الجانب اليمين */
+.sidebar-content::-webkit-scrollbar {
+  width: 3px; /* عرض أكبر قليلاً لتحسين الرؤية */
+  height: 8px; /* ارتفاع متناسب مع التطبيق */
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background-color: transparent;
+  margin: 20% 0; /* هوامش أكبر لتقصير مؤشر التمرير */
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 120, 120, 0.15); /* شفافية أعلى للاندماج مع الخلفية */
+  border-radius: 8px;
+  height: auto;
+  min-height: 25px;
+  background-clip: padding-box;
+  border: 1px solid transparent; /* حدود شفافة للحصول على مظهر أكثر نعومة */
+  opacity: 0.6; /* شفافية للمؤشر */
+  transition: all 0.2s ease; /* تأثير انتقالي سلس */
+}
+
+.sidebar-content:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 120, 120, 0.25); /* زيادة الوضوح عند التمرير */
+  opacity: 0.8;
+}
+
+/* الوضع المظلم */
+.dark .sidebar-content::-webkit-scrollbar-thumb {
+  background-color: rgba(180, 180, 180, 0.15); /* شفافية أعلى في الوضع المظلم */
+  border: 1px solid transparent;
+}
+
+.dark .sidebar-content:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(180, 180, 180, 0.25); /* زيادة الوضوح في الوضع المظلم عند التمرير */
+}
+
+/* إخفاء المؤشر عندما لا يتم استخدامه لتحسين المظهر العام */
+.sidebar-content::-webkit-scrollbar-thumb:window-inactive {
+  background-color: rgba(120, 120, 120, 0.05);
+  opacity: 0.3;
+}
+
+/* إصلاح مظهر المؤشرات على جانبي القائمة */
+.overflow-auto, .overflow-y-auto, .overflow-x-auto {
+  scrollbar-width: thin;
+}

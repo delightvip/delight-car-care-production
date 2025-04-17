@@ -1,0 +1,41 @@
+/* تنسيقات إخفاء مؤشر التمرير في القائمة الجانبية */
+/* مع الاحتفاظ بوظيفة التمرير */
+
+/* تنسيق لإخفاء مؤشر التمرير تماماً لكن مع إبقاء وظيفة التمرير */
+.sidebar-content {
+  /* تمكين التمرير */
+  overflow-y: auto !important;
+  
+  /* إخفاء مؤشر التمرير في Firefox */
+  scrollbar-width: none !important;
+  
+  /* تطبيق أسلوب التمرير السلس */
+  scroll-behavior: smooth !important;
+}
+
+/* إخفاء مؤشر التمرير في Chrome و Safari و Edge */
+.sidebar-content::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  display: none !important;
+}
+
+/* إخفاء بقية عناصر مؤشر التمرير */
+.sidebar-content::-webkit-scrollbar-track,
+.sidebar-content::-webkit-scrollbar-thumb,
+.sidebar-content::-webkit-scrollbar-thumb:hover,
+.sidebar-content::-webkit-scrollbar-thumb:active {
+  display: none !important;
+  background: transparent !important;
+}
+
+/* تطبيق نفس الإخفاء في الوضع المظلم */
+.dark .sidebar-content::-webkit-scrollbar,
+.dark .sidebar-content::-webkit-scrollbar-track,
+.dark .sidebar-content::-webkit-scrollbar-thumb,
+.dark .sidebar-content::-webkit-scrollbar-thumb:hover,
+.dark .sidebar-content::-webkit-scrollbar-thumb:active {
+  display: none !important;
+  background: transparent !important;
+}

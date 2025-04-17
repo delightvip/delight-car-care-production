@@ -5,6 +5,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
 import './index.css'
+import './styles/scrollbar.css'
+import './styles/sidebar-scrollbar.css' // إضافة ملف تنسيق مؤشر تمرير القائمة الجانبية
 import { ThemeProvider } from '@/components/theme-provider'
 import { SidebarProvider } from '@/components/layout/SidebarContext'
 import NotificationProvider from '@/components/notifications/NotificationProvider'
