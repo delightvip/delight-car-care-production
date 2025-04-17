@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
@@ -8,13 +9,29 @@ import { Separator } from '@/components/ui/separator';
 import { Info, Package, Boxes } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
-import ReportFilterCard from '../components/inventory/reports/ReportFilterCard';
-import InventoryAnalyticsDashboard from '../components/inventory/reports/InventoryAnalyticsDashboard';
-import InventoryDashboardSummary from '../components/inventory/reports/InventoryDashboardSummary';
-import InventoryInsights from '../components/inventory/reports/InventoryInsights';
-import MostActiveItemsChart from '../components/inventory/reports/MostActiveItemsChart';
+import ReportFilterCard from '@/components/inventory/reports/ReportFilterCard';
+import InventoryAnalyticsDashboard from '@/components/inventory/reports/InventoryAnalyticsDashboard';
+import InventoryDashboardSummary from '@/components/inventory/reports/InventoryDashboardSummary';
+import InventoryInsights from '@/components/inventory/reports/InventoryInsights';
+import MostActiveItemsChart from '@/components/inventory/reports/MostActiveItemsChart';
 
-const InventoryReports = () => {
+// Define types for inventory items and categories
+export interface InventoryItem {
+  id: string;
+  name: string;
+  code: string;
+  unit: string;
+  quantity: number;
+  min_stock: number;
+}
+
+export interface ItemCategory {
+  id: string;
+  name: string;
+  itemCount: number;
+}
+
+const InventoryReports: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('raw');
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('analytics');
@@ -95,6 +112,40 @@ const InventoryReports = () => {
     enabled: !!selectedItem
   });
 
+  // Get the list of categories with item counts
+  const { data: categories } = useQuery({
+    queryKey: ['inventory-categories'],
+    queryFn: async () => {
+      const categoryData: ItemCategory[] = [
+        { id: 'raw', name: 'مواد أولية', itemCount: 0 },
+        { id: 'semi', name: 'نصف مصنعة', itemCount: 0 },
+        { id: 'packaging', name: 'مواد تعبئة', itemCount: 0 },
+        { id: 'finished', name: 'منتجات نهائية', itemCount: 0 }
+      ];
+      
+      // Get counts for each category
+      for (const category of categoryData) {
+        let tableName = '';
+        switch (category.id) {
+          case 'raw': tableName = 'raw_materials'; break;
+          case 'semi': tableName = 'semi_finished_products'; break;
+          case 'packaging': tableName = 'packaging_materials'; break;
+          case 'finished': tableName = 'finished_products'; break;
+        }
+        
+        const { count, error } = await supabase
+          .from(tableName)
+          .select('*', { count: 'exact', head: true });
+          
+        if (!error && count !== null) {
+          category.itemCount = count;
+        }
+      }
+      
+      return categoryData;
+    }
+  });
+
   // تعيين العنصر الأول كقيمة افتراضية عند تغيير الفئة
   useEffect(() => {
     if (itemsData && itemsData.length > 0) {
@@ -130,8 +181,11 @@ const InventoryReports = () => {
             setSelectedCategory={setSelectedCategory}
             selectedItem={selectedItem}
             setSelectedItem={setSelectedItem}
-            itemsData={itemsData}
+            categories={categories}
+            items={itemsData}
+            isLoadingCategories={false}
             isLoadingItems={isLoadingItems}
+            isItemReport={false}
           />
           
           <Card className="border-border/40">

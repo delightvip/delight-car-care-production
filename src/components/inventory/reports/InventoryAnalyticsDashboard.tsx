@@ -10,6 +10,7 @@ import AdvancedTimeFilter from './AdvancedTimeFilter';
 import MostActiveItemsChart from './MostActiveItemsChart';
 import InventorySummaryStats from './InventorySummaryStats';
 import ReportContent from './ReportContent';
+import InventoryVolatilityChart from './InventoryVolatilityChart';
 
 interface InventoryAnalyticsDashboardProps {
   selectedItem: string | null;

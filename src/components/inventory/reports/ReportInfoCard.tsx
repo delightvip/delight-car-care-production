@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { InventoryItem } from '../../../pages/inventory/InventoryReports';
+import { InventoryItem } from '@/pages/inventory/InventoryReports';
 
 interface ReportInfoCardProps {
   selectedItemDetails: InventoryItem | null;

@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ItemCategory, InventoryItem } from '../../../pages/inventory/InventoryReports';
+import { ItemCategory, InventoryItem } from '@/pages/inventory/InventoryReports';
 
 interface ReportFilterCardProps {
   selectedCategory: string;
