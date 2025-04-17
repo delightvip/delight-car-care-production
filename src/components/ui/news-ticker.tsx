@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Pause, Play, TrendingDown, TrendingUp, CircleDot, AlertCircle, Star } from "lucide-react";
+import "./news-ticker-fonts.css"; // استيراد ملف الخطوط الجديدة
 
 export interface NewsItem {
   id: string | number;
@@ -110,17 +111,15 @@ export const NewsTicker = ({
     const aVal = importanceOrder[a.importance || "normal"] || 2;
     const bVal = importanceOrder[b.importance || "normal"] || 2;
     return aVal - bVal;
-  });
-
-  // تحديد فئة الخلفية بناءً على السمة
+  });  // تحديد فئة الخلفية بناءً على السمة
   const getTickerBackground = () => {
     switch (theme) {
       case "dark":
-        return "bg-gray-900 border-gray-700";
+        return "bg-gray-900/95 border-b-4 border-t border-blue-600 shadow-md";
       case "finance":
-        return "bg-slate-800/90 border-slate-700 backdrop-blur-sm";
+        return "bg-blue-950/95 border-b-4 border-t border-blue-600 backdrop-blur-sm shadow-md";
       default:
-        return "bg-muted/30 border-border";
+        return "bg-blue-950/95 border-b-4 border-t border-blue-500";
     }
   };
 
@@ -143,31 +142,31 @@ export const NewsTicker = ({
           {sortedItems.map((item, idx) => (
             <div 
               key={item.id || idx}
-              className={cn(
-                "inline-flex items-center px-4 h-full",
+              className={cn(                "inline-flex items-center px-4 h-full",
                 item.importance === "urgent" && "font-bold",
                 item.importance === "high" && "font-semibold",
-                item.highlight && "bg-amber-500/10",
-                item.category && "after:content-['●'] after:mx-3 after:text-muted-foreground"
+                item.highlight && "bg-amber-500/20 dark:bg-amber-500/30",
+                item.category && "after:content-['●'] after:mx-3 after:text-primary-foreground/60"
               )}
-            >
-              {/* أيقونة الأهمية أو الاتجاه */}
+            >              {/* أيقونة الأهمية أو الاتجاه */}
               {item.importance === "urgent" && (
-                <AlertCircle size={16} className="text-destructive mr-1.5" />
+                <AlertCircle size={18} className="text-red-500 dark:text-red-400 mr-1.5" />
               )}
               {item.importance === "high" && (
-                <Star size={16} className="text-amber-500 mr-1.5" />
+                <Star size={18} className="text-amber-500 dark:text-amber-400 mr-1.5" />
               )}
-              
-              {/* عرض الفئة إذا كانت موجودة */}
+                {/* عرض الفئة إذا كانت موجودة */}
               {item.category && (
-                <span className="ml-2 text-sm font-medium text-muted-foreground">
-                  {item.category}:
+                <span className="ml-1 px-2 py-0.5 bg-blue-600 dark:bg-blue-700 text-white text-xs font-bold rounded-sm mr-2 inline-flex items-center">
+                  {item.category}
                 </span>
-              )}
-              
-              {/* المحتوى الرئيسي */}
-              <span className="text-sm">
+              )}              {/* المحتوى الرئيسي */}
+              <span className={cn(
+                "text-sm font-bold text-white tracking-wide mx-1 financial-font",
+                item.category?.includes("مالي") && "news-financial",
+                item.category?.includes("المخزون") && "news-inventory",
+                item.category?.includes("التحليلات") && "news-analytics"
+              )}>
                 {item.link ? (
                   <a href={item.link} className="hover:underline">
                     {item.content}
@@ -175,40 +174,34 @@ export const NewsTicker = ({
                 ) : (
                   item.content
                 )}
-              </span>
-              
-              {/* عرض معلومات التغيير إذا كانت موجودة */}
+              </span>                {/* عرض معلومات التغيير إذا كانت موجودة */}
               {item.value !== undefined && (
                 <span 
                   className={cn(
-                    "mx-1.5 font-mono text-sm",
-                    item.trend === "up" && "text-emerald-500",
-                    item.trend === "down" && "text-destructive",
-                    item.trend === "neutral" && "text-amber-500"
+                    "mx-1.5 font-mono font-bold text-sm px-1.5 py-0.5 rounded",
+                    item.trend === "up" && "bg-emerald-600/40 text-emerald-400",
+                    item.trend === "down" && "bg-red-600/40 text-red-300",
+                    item.trend === "neutral" && "bg-amber-600/40 text-amber-300"
                   )}
                 >
                   {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
                 </span>
-              )}
-              
-              {/* مؤشر الاتجاه */}
+              )}                {/* مؤشر الاتجاه */}
               {item.trend === "up" && (
-                <TrendingUp size={16} className="text-emerald-500 mx-0.5" />
+                <TrendingUp size={16} className="text-emerald-300 bg-emerald-900/60 p-0.5 rounded mx-0.5" />
               )}
               {item.trend === "down" && (
-                <TrendingDown size={16} className="text-destructive mx-0.5" />
+                <TrendingDown size={16} className="text-red-300 bg-red-900/60 p-0.5 rounded mx-0.5" />
               )}
               {item.trend === "neutral" && (
-                <CircleDot size={16} className="text-amber-500 mx-0.5" />
-              )}
-              
-              {/* نسبة التغيير */}
+                <CircleDot size={16} className="text-amber-300 bg-amber-900/60 p-0.5 rounded mx-0.5" />
+              )}                {/* نسبة التغيير */}
               {item.valueChangePercentage !== undefined && (
                 <span 
                   className={cn(
-                    "mx-1 text-xs",
-                    item.valueChangePercentage > 0 ? "text-emerald-500" : 
-                    item.valueChangePercentage < 0 ? "text-destructive" : "text-amber-500"
+                    "mx-1 text-xs font-bold px-1.5 py-0.5 rounded",
+                    item.valueChangePercentage > 0 ? "bg-emerald-600/40 text-emerald-300" : 
+                    item.valueChangePercentage < 0 ? "bg-red-600/40 text-red-300" : "bg-amber-600/40 text-amber-300"
                   )}
                 >
                   {item.valueChangePercentage > 0 ? '+' : ''}
