@@ -84,7 +84,7 @@ const ReportFilterCard: React.FC<ReportFilterCardProps> = ({
                 </SelectItem>
               ) : (
                 items?.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
+                  <SelectItem key={item.id} value={item.id.toString()}>
                     {item.name} ({item.code})
                   </SelectItem>
                 ))

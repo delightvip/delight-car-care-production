@@ -16,7 +16,7 @@ import MostActiveItemsChart from '@/components/inventory/reports/MostActiveItems
 
 // تعريف أنواع البيانات لعناصر المخزون والفئات
 export interface InventoryItem {
-  id: string;
+  id: number; // Changed from string to number to match database data
   name: string;
   code: string;
   unit: string;
@@ -48,7 +48,7 @@ const getTableName = (category: string): 'raw_materials' | 'semi_finished_produc
 
 const InventoryReports: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('raw');
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<number | null>(null); // Changed from string to number
   const [activeTab, setActiveTab] = useState('analytics');
 
   const { data: itemsData, isLoading: isLoadingItems } = useQuery({
@@ -86,7 +86,7 @@ const InventoryReports: React.FC = () => {
         const { data, error } = await supabase
           .from(tableName)
           .select('*')
-          .eq('id', selectedItem)
+          .eq('id', selectedItem) // now selectedItem is a number
           .single();
           
         if (error) {
@@ -138,7 +138,7 @@ const InventoryReports: React.FC = () => {
   // تعيين العنصر الأول كقيمة افتراضية عند تغيير الفئة
   useEffect(() => {
     if (itemsData && itemsData.length > 0) {
-      setSelectedItem(itemsData[0].id.toString());
+      setSelectedItem(itemsData[0].id); // Now using number directly
     } else {
       setSelectedItem(null);
     }
@@ -168,8 +168,8 @@ const InventoryReports: React.FC = () => {
           <ReportFilterCard 
             selectedCategory={selectedCategory} 
             setSelectedCategory={setSelectedCategory}
-            selectedItem={selectedItem}
-            setSelectedItem={setSelectedItem}
+            selectedItem={selectedItem ? selectedItem.toString() : null} // Convert number to string for the filter card
+            setSelectedItem={(value) => setSelectedItem(value ? parseInt(value) : null)} // Convert string back to number
             categories={categories}
             items={itemsData}
             isLoadingCategories={false}
@@ -222,7 +222,7 @@ const InventoryReports: React.FC = () => {
             <CardContent className="pt-6">
               <TabsContent value="analytics" className="mt-0">
                 <InventoryAnalyticsDashboard 
-                  selectedItem={selectedItem}
+                  selectedItem={selectedItem ? selectedItem.toString() : null} // Convert number to string for analytics dashboard
                   selectedCategory={selectedCategory}
                   isLoadingItemDetails={isLoadingItemDetails}
                   selectedItemDetails={selectedItemDetails}

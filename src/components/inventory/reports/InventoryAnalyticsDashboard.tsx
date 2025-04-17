@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,7 +13,7 @@ import ReportContent from './ReportContent';
 import InventoryVolatilityChart from './InventoryVolatilityChart';
 
 interface InventoryAnalyticsDashboardProps {
-  selectedItem: string | null;
+  selectedItem: string | null; // Keep as string for compatibility
   selectedCategory: string;
   isLoadingItemDetails: boolean;
   selectedItemDetails: any;
