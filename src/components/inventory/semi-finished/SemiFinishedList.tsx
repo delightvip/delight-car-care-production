@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -161,12 +160,39 @@ const SemiFinishedList: React.FC<SemiFinishedListProps> = ({
   
   // Define table columns
   const columns = [
-    ...getCommonTableColumns(),
-    { 
-      key: 'ingredients', 
+    ...getCommonTableColumns().map((col) => {
+      // معالجة مشكلة التداخل: تقليل minWidth لبعض الأعمدة وتوحيد maxWidth
+      if (col.key === 'name') {
+        return {
+          ...col,
+          minWidth: '110px',
+          maxWidth: '140px',
+          className: (col.className || '') + ' text-center',
+          headerClassName: (col.headerClassName || '') + ' text-center',
+        };
+      }
+      if (col.key === 'totalValue') {
+        return {
+          ...col,
+          minWidth: '90px',
+          maxWidth: '110px',
+        };
+      }
+      return col;
+    }),
+    {
+      key: 'ingredients',
       title: 'عدد المكونات',
-      render: (value: any[] | undefined) => (value && Array.isArray(value)) ? value.length : 0,
-      sortable: true
+      render: (value: any[] | undefined) => (
+        <span className="block w-full text-center font-bold text-xs leading-tight">
+          {(value && Array.isArray(value)) ? value.length : 0}
+        </span>
+      ),
+      sortable: true,
+      className: 'px-1 text-xs text-center py-1.5 md:py-2 align-middle',
+      headerClassName: 'px-1 text-xs font-bold bg-gray-50 dark:bg-neutral-900 text-center py-1.5 md:py-2 align-middle',
+      minWidth: '70px',
+      maxWidth: '90px',
     }
   ];
 
@@ -202,6 +228,7 @@ const SemiFinishedList: React.FC<SemiFinishedListProps> = ({
         }
       }}
       sortConfig={sortConfig}
+      className="raw-materials-table"
     />
   );
 };

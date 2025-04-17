@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DataTableWithLoading from '@/components/ui/DataTableWithLoading';
@@ -225,6 +224,7 @@ const FinishedProductsList: React.FC<FinishedProductsListProps> = ({
         }
       }}
       sortConfig={sortConfig}
+      className="raw-materials-table"
     />
   );
 };

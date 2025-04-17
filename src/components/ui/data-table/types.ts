@@ -1,4 +1,3 @@
-
 import { ReactNode } from "react";
 
 export interface Column {
@@ -11,6 +10,9 @@ export interface Column {
   // Keep older properties for backward compatibility
   accessorKey?: string;
   cell?: ({ row }: any) => ReactNode;
+  // --- Added for table header UI improvements ---
+  headerClassName?: string;
+  maxWidth?: string;
 }
 
 export interface SortConfig {

@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { TableHeader, TableHead, TableRow } from "@/components/ui/table";
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowUpDown, ArrowDownUp, ArrowDown, ArrowUp } from 'lucide-react';
 import { Column, SortConfig } from './types';
 
 interface TableHeaderProps {
@@ -25,38 +24,43 @@ const TableHeaderComponent: React.FC<TableHeaderProps> = ({
         {columns.map((column) => (
           <TableHead 
             key={column.key} 
-            className="bg-muted font-semibold"
-            style={{
-              width: column.width || 'auto', 
-              minWidth: column.minWidth || '100px',
+            className={`font-semibold border-b border-muted-foreground/10 whitespace-nowrap align-middle h-8 px-1 py-1 text-xs bg-white dark:bg-neutral-900 ${column.headerClassName || ''}`}
+            style={{ 
+              minWidth: column.minWidth, 
+              maxWidth: column.maxWidth,
               position: 'relative',
               whiteSpace: 'nowrap'
             }}
           >
-            <div className="flex items-center">
-              {column.title}
-              {column.sortable && (
-                <div className="mr-1 flex flex-col">
-                  <ArrowUp
-                    onClick={() => onSort?.(column.key)}
-                    className={`h-4 w-4 cursor-pointer ${sortConfig?.key === column.key && sortConfig?.direction === 'asc' ? 'text-primary' : 'text-muted-foreground'}`}
-                  />
-                  <ArrowDown
-                    onClick={() => onSort?.(column.key)}
-                    className={`h-4 w-4 cursor-pointer ${sortConfig?.key === column.key && sortConfig?.direction === 'desc' ? 'text-primary' : 'text-muted-foreground'}`}
-                  />
-                </div>
+            <div className="flex items-center gap-1 justify-center select-none w-full">
+              <span className="w-full text-center block truncate text-gray-800 dark:text-gray-100 font-bold tracking-wide">
+                {column.title}
+              </span>
+              {column.sortable && onSort && (
+                <button
+                  className={`group p-0.5 rounded hover:bg-muted/70 focus:outline-none transition border border-transparent focus:border-primary/40`}
+                  style={{ lineHeight: 1 }}
+                  tabIndex={0}
+                  onClick={() => onSort(column.key)}
+                  aria-label={`إعادة ترتيب ${column.title}`}
+                >
+                  {sortConfig?.key === column.key ? (
+                    sortConfig.direction === 'asc' ? (
+                      <ArrowUp size={15} className="text-primary scale-110 transition-transform" />
+                    ) : (
+                      <ArrowDown size={15} className="text-primary scale-110 transition-transform" />
+                    )
+                  ) : (
+                    <ArrowUpDown size={15} className="text-gray-400 group-hover:text-primary/80 transition-transform" />
+                  )}
+                </button>
               )}
             </div>
           </TableHead>
         ))}
         {hasActions && (
           <TableHead 
-            className="bg-muted sticky right-0 z-20 shadow-md" 
-            style={{ 
-              minWidth: '120px',
-              backgroundColor: 'var(--muted)'
-            }}
+            className="font-semibold border-b border-muted-foreground/10 whitespace-nowrap text-right align-middle h-8 px-1 py-1 text-xs bg-white dark:bg-neutral-900"
           >
             الإجراءات
           </TableHead>

@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PageTransition from '@/components/ui/PageTransition';
-import DataTable from '@/components/ui/DataTable';
+import PackagingMaterialsList from '@/components/inventory/packaging/PackagingMaterialsList';
+import PackagingMaterialsStats from '@/components/inventory/packaging/PackagingMaterialsStats';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import InventoryService from '@/services/InventoryService';
 import CostUpdateService from '@/services/CostUpdateService';
 import { exportToExcel, prepareDataForExport } from '@/utils/exportData';
+import { getCommonTableColumns, renderInventoryActions } from '@/components/inventory/common/InventoryTableColumns';
 
 const units = ['قطعة', 'علبة', 'كرتونة', 'رول', 'متر'];
 
@@ -54,6 +56,9 @@ const PackagingMaterials = () => {
   // إضافة حالة للتحكم في عملية التصدير
   const [exporting, setExporting] = useState(false);
   const [updatingCosts, setUpdatingCosts] = useState(false);
+  
+  // إضافة حالة البحث عن المستلزم
+  const [searchQuery, setSearchQuery] = useState('');
   
   const queryClient = useQueryClient();
   
@@ -165,11 +170,21 @@ const PackagingMaterials = () => {
     }
   }, [packagingMaterials, filterType]);
 
+  // تطبيق البحث على البيانات المفلترة
+  const searchedMaterials = useMemo(() => {
+    if (!filteredMaterials) return [];
+    if (!searchQuery.trim()) return filteredMaterials;
+    return filteredMaterials.filter(item =>
+      item.name?.toString().includes(searchQuery) ||
+      item.code?.toString().includes(searchQuery)
+    );
+  }, [filteredMaterials, searchQuery]);
+
   // تطبيق الفرز على البيانات المفلترة
   const sortedMaterials = useMemo(() => {
-    if (!sortConfig) return filteredMaterials;
+    if (!sortConfig) return searchedMaterials;
     
-    return [...filteredMaterials].sort((a, b) => {
+    return [...searchedMaterials].sort((a, b) => {
       if (a[sortConfig.key] < b[sortConfig.key]) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
@@ -178,7 +193,7 @@ const PackagingMaterials = () => {
       }
       return 0;
     });
-  }, [filteredMaterials, sortConfig]);
+  }, [searchedMaterials, sortConfig]);
   
   // معالجة النقر على رأس العمود للفرز
   const handleSort = (key: string) => {
@@ -354,6 +369,25 @@ const PackagingMaterials = () => {
     }
   });
   
+  const [stats, setStats] = useState({ total: 0, lowStock: 0, totalValue: 0 });
+
+  // احصائيات مستلزمات التعبئة
+  React.useEffect(() => {
+    async function fetchStats() {
+      try {
+        const inventoryService = InventoryService.getInstance();
+        const materials = await inventoryService.getPackagingMaterials();
+        let total = materials.length;
+        let lowStock = materials.filter((m: any) => Number(m.quantity) <= Number(m.min_stock || m.minStock) * 1.2).length;
+        let totalValue = materials.reduce((acc: number, m: any) => acc + (Number(m.quantity) * Number(m.unit_cost || m.price)), 0);
+        setStats({ total, lowStock, totalValue });
+      } catch (e) {
+        setStats({ total: 0, lowStock: 0, totalValue: 0 });
+      }
+    }
+    fetchStats();
+  }, [isAddDialogOpen, isEditDialogOpen, isDeleteDialogOpen]);
+
   const handleAddMaterial = () => {
     if (!newMaterial.name || !newMaterial.unit) {
       toast.error('يجب ملء جميع الحقول المطلوبة');
@@ -389,249 +423,70 @@ const PackagingMaterials = () => {
     });
   };
   
-  const columns = [
-    { key: 'code', title: 'الكود' },
-    { key: 'name', title: 'اسم المنتج' },
-    { key: 'unit', title: 'وحدة القياس' },
-    { 
-      key: 'price', 
-      title: 'سعر الوحدة',
-      render: (value: number) => `${value} ج.م`
-    },
-    { 
-      key: 'quantity', 
-      title: 'الكمية',
-      render: (value: number, record: any) => (
-        <div className="flex items-center">
-          <div className="flex items-center gap-2 min-w-[120px]">
-            <div 
-              className={`w-3 h-3 rounded-full ${
-                value <= record.minStock ? 'bg-red-500' : 
-                value <= record.minStock * 1.5 ? 'bg-amber-500' : 
-                'bg-green-500'
-              }`} 
-            />
-            <div className="relative w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className={`absolute top-0 left-0 h-full rounded-full ${
-                  value <= record.minStock ? 'bg-red-500' : 
-                  value <= record.minStock * 1.5 ? 'bg-amber-500' : 
-                  'bg-green-500'
-                }`}
-                style={{ width: `${Math.min(100, Math.round((value / (record.minStock * 2)) * 100))}%` }}
-              ></div>
-            </div>
-            <span className={`font-medium ${
-              value <= record.minStock ? 'text-red-700' : 
-              value <= record.minStock * 1.5 ? 'text-amber-700' : 
-              'text-green-700'
-            }`}>{value} {record.unit}</span>
-          </div>
-        </div>
-      )
-    },
-    { 
-      key: 'minStock', 
-      title: 'الحد الأدنى',
-      render: (value: number, record: any) => `${value} ${record.unit}`
-    },
-    { key: 'importance', title: 'الأهمية' },
-    { 
-      key: 'totalValue', 
-      title: 'إجمالي القيمة',
-      render: (value: number) => `${value} ج.م`
-    }
-  ];
-  
-  const renderActions = (record: any) => (
-    <div className="flex space-x-2 rtl:space-x-reverse">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setCurrentMaterial(record);
-          setIsEditDialogOpen(true);
-        }}
-      >
-        <Edit size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => {
-          setCurrentMaterial(record);
-          setIsDeleteDialogOpen(true);
-        }}
-      >
-        <Trash size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        title="عرض التفاصيل"
-        onClick={() => {
-          setCurrentMaterial(record);
-          setIsDetailsDialogOpen(true);
-        }}
-      >
-        <Eye size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        title="زيادة الكمية"
-        onClick={() => quickUpdateQuantityMutation.mutate({ id: record.id, change: 1 })}
-      >
-        <PlusCircle size={16} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        title="نقص الكمية"
-        onClick={() => quickUpdateQuantityMutation.mutate({ id: record.id, change: -1 })}
-      >
-        <MinusCircle size={16} />
-      </Button>
-    </div>
-  );
-  
-  if (error) {
-    return (
-      <PageTransition>
-        <div className="p-6 text-center">
-          <p className="text-red-500">حدث خطأ أثناء تحميل البيانات: {(error as Error).message}</p>
-          <Button className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: ['packagingMaterials'] })}>
-            إعادة المحاولة
-          </Button>
-        </div>
-      </PageTransition>
-    );
-  }
-  
   return (
     <PageTransition>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
+      <div className="space-y-4 max-w-screen-xl mx-auto px-2 sm:px-4">
+        <PackagingMaterialsStats
+          total={stats.total}
+          lowStock={stats.lowStock}
+          totalValue={stats.totalValue}
+          onStatClick={(type) => {
+            if (type === 'lowStock') setFilterType('low-stock');
+            else if (type === 'total') setFilterType('all');
+            else if (type === 'totalValue') setFilterType('high-value');
+          }}
+        />
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-2">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">مستلزمات التعبئة</h1>
-            <p className="text-muted-foreground mt-1">إدارة مستلزمات التعبئة والتغليف</p>
-          </div>          <div className="flex gap-2">
-            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-              <SelectTrigger className="w-[180px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100">
-                <SelectValue placeholder="تصفية المستلزمات" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل المستلزمات</SelectItem>
-                <SelectItem value="low-stock">المخزون المنخفض</SelectItem>
-                <SelectItem value="high-value">الأعلى قيمة</SelectItem>
-                <SelectItem value="high-importance">الأكثر أهمية</SelectItem>              </SelectContent>
-            </Select>
+            <h1 className="text-2xl font-bold tracking-tight">مستلزمات التعبئة</h1>
+            <p className="text-muted-foreground mt-1 text-sm">إدارة مستلزمات التعبئة والتغليف المستخدمة في عمليات الإنتاج</p>
+          </div>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-end gap-2 mb-2">
+            <div className="flex flex-wrap gap-2 items-center order-2 md:order-1">
               <Button 
-              variant="outline" 
-              onClick={handleExportData}
-              disabled={exporting}
-              title="تصدير بيانات مستلزمات التعبئة إلى ملف Excel"
-              className="gap-2 bg-sky-100 hover:bg-sky-200 text-sky-700 border-sky-200"
-            >
-              <FileDown size={18} className={exporting ? 'animate-pulse' : ''} />
-              تصدير البيانات
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              onClick={handleUpdateFinishedProductCosts}
-              disabled={updatingCosts}
-              title="تحديث تكاليف المنتجات النهائية المرتبطة بمستلزمات التعبئة"
-              className="gap-2 bg-amber-100 hover:bg-amber-200 text-amber-700 border-amber-200"
-            >
-              <RefreshCw size={18} className={updatingCosts ? 'animate-spin' : ''} />
-              تحديث تكاليف المنتجات
-            </Button>
-            
-            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
-              <FileUp size={18} className="mr-2" />
-              استيراد
-            </Button>
-            
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus size={18} className="mr-2" />
-                  إضافة مستلزم
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>إضافة مستلزم تعبئة جديد</DialogTitle>
-                  <DialogDescription>
-                    أدخل بيانات مستلزم التعبئة الجديد. سيتم إنشاء كود فريد للمستلزم تلقائيًا.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">اسم المستلزم</Label>
-                    <Input
-                      id="name"
-                      value={newMaterial.name}
-                      onChange={e => setNewMaterial({...newMaterial, name: e.target.value})}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="unit">وحدة القياس</Label>
-                    <Select 
-                      value={newMaterial.unit} 
-                      onValueChange={value => setNewMaterial({...newMaterial, unit: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر وحدة القياس" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {units.map(unit => (
-                          <SelectItem key={unit} value={unit}>
-                            {unit}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="price">سعر الوحدة</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      value={newMaterial.price}
-                      onChange={e => setNewMaterial({...newMaterial, price: Number(e.target.value)})}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="quantity">الكمية</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      value={newMaterial.quantity}
-                      onChange={e => setNewMaterial({...newMaterial, quantity: Number(e.target.value)})}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="minStock">الحد الأدنى للمخزون</Label>
-                    <Input
-                      id="minStock"
-                      type="number"
-                      value={newMaterial.minStock}
-                      onChange={e => setNewMaterial({...newMaterial, minStock: Number(e.target.value)})}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    إلغاء
-                  </Button>
-                  <Button onClick={handleAddMaterial} disabled={addMutation.isPending}>
-                    {addMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                onClick={() => setIsAddDialogOpen(true)}
+                className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200 font-semibold px-3 py-1.5 text-sm gap-1"
+                size="sm"
+              >
+                <Plus className="h-4 w-4" /> إضافة مستلزم
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportData}
+                disabled={exporting}
+                title="تصدير بيانات مستلزمات التعبئة إلى ملف Excel"
+                className="gap-1 bg-sky-100 hover:bg-sky-200 text-sky-700 border-sky-200 font-semibold px-3 py-1.5 text-sm"
+                size="sm"
+              >
+                <FileDown className={exporting ? 'animate-pulse h-4 w-4' : 'h-4 w-4'} /> تصدير البيانات
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsImportDialogOpen(true)}
+                className="bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200 font-semibold px-3 py-1.5 text-sm gap-1"
+                size="sm"
+              >
+                <FileUp className="h-4 w-4" /> استيراد من ملف
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 items-center order-1 md:order-2">
+              <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                <SelectTrigger className="w-[130px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100 text-xs h-9">
+                  <SelectValue placeholder="تصفية المستلزمات" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل المستلزمات</SelectItem>
+                  <SelectItem value="low-stock">المخزون المنخفض</SelectItem>
+                  <SelectItem value="high-value">الأعلى قيمة</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                className="w-[140px] bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-100 dark:placeholder:text-gray-400 text-xs h-9"
+                placeholder="بحث..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
         </div>
         
@@ -644,16 +499,97 @@ const PackagingMaterials = () => {
             <Skeleton className="h-12 w-full" />
           </div>
         ) : (
-          <DataTable
-            columns={columns.map(col => ({ ...col, sortable: true }))}
-            data={sortedMaterials || []}
-            searchable
-            searchKeys={['code', 'name']}
-            actions={renderActions}
-            onSort={handleSort}
+          <PackagingMaterialsList
+            data={sortedMaterials}
+            isLoading={isLoading}
             sortConfig={sortConfig}
+            onSort={handleSort}
+            quickUpdateQuantity={(id, change) => quickUpdateQuantityMutation.mutate({ id, change })}
+            onEdit={(rec) => { setCurrentMaterial(rec); setIsEditDialogOpen(true); }}
+            onDelete={(rec) => { setCurrentMaterial(rec); setIsDeleteDialogOpen(true); }}
+            onView={(rec) => { setCurrentMaterial(rec); setIsDetailsDialogOpen(true); }}
           />
         )}
+        
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus size={18} className="mr-2" />
+              إضافة مستلزم
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>إضافة مستلزم تعبئة جديد</DialogTitle>
+              <DialogDescription>
+                أدخل بيانات مستلزم التعبئة الجديد. سيتم إنشاء كود فريد للمستلزم تلقائيًا.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">اسم المستلزم</Label>
+                <Input
+                  id="name"
+                  value={newMaterial.name}
+                  onChange={e => setNewMaterial({...newMaterial, name: e.target.value})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="unit">وحدة القياس</Label>
+                <Select 
+                  value={newMaterial.unit} 
+                  onValueChange={value => setNewMaterial({...newMaterial, unit: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر وحدة القياس" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {units.map(unit => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="price">سعر الوحدة</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  value={newMaterial.price}
+                  onChange={e => setNewMaterial({...newMaterial, price: Number(e.target.value)})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="quantity">الكمية</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  value={newMaterial.quantity}
+                  onChange={e => setNewMaterial({...newMaterial, quantity: Number(e.target.value)})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="minStock">الحد الأدنى للمخزون</Label>
+                <Input
+                  id="minStock"
+                  type="number"
+                  value={newMaterial.minStock}
+                  onChange={e => setNewMaterial({...newMaterial, minStock: Number(e.target.value)})}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button onClick={handleAddMaterial} disabled={addMutation.isPending}>
+                {addMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent>

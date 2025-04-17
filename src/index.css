@@ -59,51 +59,40 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
+    /* رفع التباين بين الخلفية والنصوص/البطاقات في الوضع المظلم */
+    --background: 222.2 84% 3%; /* أغمق قليلاً */
+    --foreground: 210 40% 98%; /* أبيض تقريباً */
+    --card: 222.2 84% 6%; /* أفتح من الخلفية */
     --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
+    --popover: 222.2 84% 8%;
     --popover-foreground: 210 40% 98%;
-
-    --primary: 217 91% 60%;
+    --primary: 217 91% 65%; /* أزرق أكثر إشراقًا */
     --primary-foreground: 222.2 47.4% 11.2%;
-
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
+    --muted: 217.2 32.6% 13%; /* أغمق قليلاً */
+    --muted-foreground: 215 20.2% 80%; /* أفتح */
     --accent: 241 83% 62%;
     --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 62.8% 45%;
     --destructive-foreground: 210 40% 98%;
-
     --success: 142 76% 36%;
     --success-foreground: 210 40% 98%;
-
-    --warning: 38 92% 50%;
+    --warning: 38 92% 60%;
     --warning-foreground: 210 40% 98%;
-
-    --info: 217 91% 60%;
+    --info: 217 91% 70%;
     --info-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    
+    --border: 217.2 32.6% 22%; /* أفتح قليلاً */
+    --input: 217.2 32.6% 22%;
+    --ring: 212.7 26.8% 90%;
     --sidebar-background: 222.2 84% 4.9%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 217 91% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent: 217.2 32.6% 13%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 212.7 26.8% 83.9%;
+    --sidebar-border: 217.2 32.6% 22%;
+    --sidebar-ring: 212.7 26.8% 90%;
   }
 }
 
@@ -322,6 +311,93 @@
   
   .product-desc {
     @apply text-sm text-muted-foreground line-clamp-2;
+  }
+  
+  /* تحسين تباين جداول التفاصيل في الوضع المظلم */
+  .dark table,
+  .dark .dark-table {
+    background-color: #181d23 !important;
+    color: #fff !important;
+  }
+  .dark table th,
+  .dark .dark-table th {
+    background-color: #232a32 !important;
+    color: #fff !important;
+    font-weight: bold;
+    border-bottom: 1px solid #333 !important;
+  }
+  .dark table td,
+  .dark .dark-table td {
+    background-color: #181d23 !important;
+    color: #fff !important;
+    border-bottom: 1px solid #232a32 !important;
+  }
+  .dark table tr.odd,
+  .dark .dark-table tr.odd {
+    background-color: #232a32 !important;
+  }
+  .dark table tr.even,
+  .dark .dark-table tr.even {
+    background-color: #181d23 !important;
+  }
+  .dark table,
+  .dark .dark-table {
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  /* تحسين تجربة جدول المواد الخام في الوضع المظلم والفاتح */
+  .raw-materials-table {
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 1.04rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  }
+  .raw-materials-table th {
+    background: hsl(var(--card));
+    color: hsl(var(--primary));
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid hsl(var(--border));
+  }
+  .raw-materials-table td {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border-bottom: 1px solid hsl(var(--border));
+    padding-top: 4px;
+    padding-bottom: 4px;
+    height: 32px;
+    transition: background 0.2s;
+  }
+  .raw-materials-table tr.odd td {
+    background: hsl(var(--muted)/0.90);
+  }
+  .raw-materials-table tr.even td {
+    background: hsl(var(--card));
+  }
+  .raw-materials-table tr:hover td {
+    background: hsl(var(--primary)/0.10);
+  }
+
+  /* الوضع المظلم */
+  .dark .raw-materials-table th {
+    background: hsl(var(--card));
+    color: #6dc1ff;
+    border-bottom: 2px solid #263040;
+  }
+  .dark .raw-materials-table td {
+    background: #181d23;
+    color: #fff;
+    border-bottom: 1px solid #232a32;
+  }
+  .dark .raw-materials-table tr.odd td {
+    background: #212934;
+  }
+  .dark .raw-materials-table tr.even td {
+    background: #181d23;
+  }
+  .dark .raw-materials-table tr:hover td {
+    background: hsl(var(--primary)/0.13);
   }
 }
 

@@ -327,10 +327,19 @@ const InventoryDashboardSummary: React.FC = () => {
   ];
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <style>{`
+        @media (min-width: 1024px) {
+          .inventory-summary-card {
+            max-width: 270px;
+            margin-left: auto;
+            margin-right: auto;
+          }
+        }
+      `}</style>
       {summaryItems.map((item, index) => (
         <Card 
           key={index} 
-          className="border-border/40 hover:border-primary/40 transition-colors cursor-pointer hover:shadow-md"
+          className="inventory-summary-card border-border/40 hover:border-primary/40 transition-colors cursor-pointer hover:shadow-md"
           onClick={() => handleCardClick(
             index === 0 ? 'inventory-value' : 
             index === 1 ? 'average-value' : 

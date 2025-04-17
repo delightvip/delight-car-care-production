@@ -62,7 +62,7 @@ const TableBodyComponent: React.FC<TableBodyProps> = ({
           ))}
           {actions && (
             <TableCell 
-              className="sticky right-0 z-20 bg-background shadow-md" 
+              className="sticky right-0 z-10 bg-background shadow-md" 
               style={{ 
                 minWidth: '120px',
                 backgroundColor: 'var(--background)'

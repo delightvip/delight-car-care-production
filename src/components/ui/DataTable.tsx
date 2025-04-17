@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { TableHeaderComponent } from "@/components/ui/data-table";
 import { Search, ArrowDown, ArrowUp } from 'lucide-react';
 import { useSidebar } from '../layout/SidebarContext';
 
@@ -102,49 +102,13 @@ const DataTable: React.FC<DataTableProps> = ({
           }}
         >
           <Table className="min-w-full">
-            <TableHeader className={stickyHeader ? "sticky top-0 z-10" : ""}>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableHead 
-                    key={column.key} 
-                    className="bg-muted font-semibold"
-                    style={{
-                      width: column.width || 'auto', 
-                      minWidth: column.minWidth || '100px',
-                      position: 'relative',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    <div className="flex items-center">
-                      {column.title}
-                      {column.sortable && (
-                        <div className="mr-1 flex flex-col">
-                          <ArrowUp
-                            onClick={() => onSort?.(column.key)}
-                            className={`h-4 w-4 cursor-pointer ${sortConfig?.key === column.key && sortConfig?.direction === 'asc' ? 'text-primary' : 'text-muted-foreground'}`}
-                          />
-                          <ArrowDown
-                            onClick={() => onSort?.(column.key)}
-                            className={`h-4 w-4 cursor-pointer ${sortConfig?.key === column.key && sortConfig?.direction === 'desc' ? 'text-primary' : 'text-muted-foreground'}`}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </TableHead>
-                ))}
-                {actions && (
-                  <TableHead 
-                    className="bg-muted sticky right-0 z-20 shadow-md" 
-                    style={{ 
-                      minWidth: '120px',
-                      backgroundColor: 'var(--muted)'
-                    }}
-                  >
-                    الإجراءات
-                  </TableHead>
-                )}
-              </TableRow>
-            </TableHeader>
+            <TableHeaderComponent
+              columns={columns}
+              onSort={onSort}
+              sortConfig={sortConfig}
+              stickyHeader={stickyHeader}
+              hasActions={!!actions}
+            />
             <TableBody>
               {paginatedData.length > 0 ? (
                 paginatedData.map((record, index) => (

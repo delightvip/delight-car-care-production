@@ -173,6 +173,7 @@ const RawMaterialsList: React.FC<RawMaterialsListProps> = ({
         }
       }}
       sortConfig={sortConfig}
+      className="raw-materials-table"
     />
   );
 };

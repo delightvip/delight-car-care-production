@@ -74,9 +74,8 @@ export const ensureNumericValue = (value: any, fieldName?: string): number => {
 export const formatCurrency = (value: number): string => {
   // Ensure we have a valid number
   const numValue = ensureNumericValue(value);
-  
-  // Format with 2 decimal places
-  return `${numValue.toFixed(2)} ج.م`;
+  // Format with 2 decimal places, no currency symbol
+  return numValue.toFixed(2);
 };
 
 /**
