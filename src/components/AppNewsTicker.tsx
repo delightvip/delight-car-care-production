@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { NewsTicker, NewsItem } from './ui/news-ticker';
 import NewsTickerService from '@/services/NewsTickerService';
@@ -23,23 +22,17 @@ export const AppNewsTicker = () => {
     { id: 'returns', name: 'المرتجعات', icon: null, enabled: true },
     { id: 'analytics', name: 'التحليلات', icon: null, enabled: true },
   ]);
-    // تحديث ومعالجة الأخبار وفقاً للفئات المحددة
-  useEffect(() => {
-    if (news.length > 0) {
-      const activeCategories = categories.filter(cat => cat.enabled).map(cat => cat.id);
-      
-      const filtered = news.filter(item => {
-        // تصفية العناصر حسب الفئة
-        const category = getCategoryFromContent(item);
-        return activeCategories.includes(category);
-      });
-      
-      setFilteredNews(filtered);
-    }
-  }, [news, categories]);
+  // حالة إظهار/إخفاء الشريط
+  const [showTicker, setShowTicker] = useState<boolean>(true);
 
-  // تحديد فئة الخبر بناءً على محتواه
-  const getCategoryFromContent = (item: NewsItem): string => {
+  // تحسين تصنيف الأخبار حسب الفئة باستخدام category id مباشرة
+  const getCategoryId = (item: NewsItem): string => {
+    // إذا كان هناك category id مخزن ضمن item (يفضل إضافته مستقبلاً)
+    if ((item as any).categoryId) return (item as any).categoryId;
+    // fallback: استخدم category مباشرة إذا كانت من الأنواع المعتمدة
+    const knownIds = categories.map(c => c.id);
+    if (item.category && knownIds.includes(item.category)) return item.category;
+    // fallback: مطابقة نصية
     const categoryMap: Record<string, string[]> = {
       'financial': ['مالي', 'الخزينة', 'البنك', 'الإيرادات', 'المصروفات', 'الربح'],
       'inventory': ['المخزون', 'الكمية', 'مخزون منخفض', 'حركة المخزون'],
@@ -48,26 +41,25 @@ export const AppNewsTicker = () => {
       'returns': ['المرتجعات', 'مرتجع'],
       'analytics': ['تحليلات', 'الأكثر مبيعًا', 'الأكثر ربحية', 'الأكثر استخدامًا']
     };
-    
-    // إذا كانت الفئة محددة بالفعل
-    if (item.category) {
-      for (const [key, values] of Object.entries(categoryMap)) {
-        if (values.some(value => item.category?.includes(value))) {
-          return key;
-        }
-      }
-    }
-    
-    // اعتماداً على المحتوى
     for (const [key, values] of Object.entries(categoryMap)) {
+      if (item.category && values.some(value => item.category?.includes(value))) {
+        return key;
+      }
       if (values.some(value => item.content.includes(value))) {
         return key;
       }
     }
-    
-    // إرجاع فئة افتراضية
     return 'analytics';
   };
+
+  // تحديث useEffect الخاص بالتصفية
+  useEffect(() => {
+    if (news.length > 0) {
+      const activeCategories = categories.filter(cat => cat.enabled).map(cat => cat.id);
+      const filtered = news.filter(item => activeCategories.includes(getCategoryId(item)));
+      setFilteredNews(filtered);
+    }
+  }, [news, categories]);
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -92,7 +84,8 @@ export const AppNewsTicker = () => {
     
     return () => clearInterval(intervalId);
   }, []);
-    // حالة التحميل
+
+  // حالة التحميل
   if (isLoading && news.length === 0) {
     return (
       <div className="h-8 bg-slate-800/90 border-y border-slate-700 flex items-center justify-center">
@@ -121,6 +114,7 @@ export const AppNewsTicker = () => {
       />
     );
   }
+
   // معالجة تغيير إعدادات التصفية
   const handleCategoriesChange = (updatedCategories: NewsTickerCategory[]) => {
     setCategories(updatedCategories);
@@ -136,9 +130,13 @@ export const AppNewsTicker = () => {
     setAutoplay(isAutoplay);
   };
   
+  // إضافة دالة تمرير تحكم الإظهار/الإخفاء لإعدادات الشريط
+  const handleToggleTicker = () => setShowTicker((prev) => !prev);
+
   return (
     <div className="relative">
-      <div className="absolute top-0 right-0 z-20 py-1 px-2">
+      {/* زر إعدادات الشريط دائم الظهور في أسفل يسار الشاشة */}
+      <div className="fixed bottom-2 left-6 z-50">
         <NewsTickerSettings 
           onCategoriesChange={handleCategoriesChange} 
           initialCategories={categories}
@@ -146,18 +144,23 @@ export const AppNewsTicker = () => {
           currentSpeed={speed}
           onAutoplayChange={handleAutoplayChange}
           autoplay={autoplay}
+          showTicker={showTicker}
+          onToggleTicker={handleToggleTicker}
         />
       </div>
-      <NewsTicker
-        items={filteredNews.length > 0 ? filteredNews : news}
-        direction="rtl"
-        pauseOnHover={true}
-        controls={true}
-        speed={speed}
-        autoplay={autoplay}
-        height={36}
-        theme={theme === 'dark' ? 'dark' : 'finance'}
-      />
+      {/* الشريط الإخباري */}
+      {showTicker && (
+        <NewsTicker
+          items={filteredNews.length > 0 ? filteredNews : news}
+          direction="rtl"
+          pauseOnHover={true}
+          controls={true}
+          speed={speed}
+          autoplay={autoplay}
+          height={36}
+          theme={theme === 'dark' ? 'dark' : 'finance'}
+        />
+      )}
     </div>
   );
 };

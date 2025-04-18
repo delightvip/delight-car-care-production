@@ -1,4 +1,3 @@
-
 import { NewsItem } from "@/components/ui/news-ticker";
 import { NewsTickerServiceInterface } from "./NewsTickerTypes";
 import InventoryService from "../InventoryService";
@@ -51,7 +50,7 @@ class InventoryNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `raw-${material.id}`,
           content: `المادة الخام "${material.name}" بكمية منخفضة`,
-          category: "المخزون",
+          category: "inventory",
           importance: material.quantity <= 5 ? "urgent" : "high",
           value: material.quantity,
           trend: "down",
@@ -65,7 +64,7 @@ class InventoryNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `pkg-${material.id}`,
           content: `مادة التعبئة "${material.name}" بكمية منخفضة`,
-          category: "المخزون",
+          category: "inventory",
           importance: material.quantity <= 5 ? "urgent" : "high",
           value: material.quantity,
           trend: "down",
@@ -79,7 +78,7 @@ class InventoryNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `fin-${product.id}`,
           content: `المنتج "${product.name}" بكمية منخفضة`,
-          category: "المخزون",
+          category: "inventory",
           importance: product.quantity <= 5 ? "urgent" : "high",
           value: product.quantity,
           trend: "down",
@@ -95,7 +94,7 @@ class InventoryNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `mov-${movement.id}`,
           content: `${directionText} ${movement.item_name}`,
-          category: "حركة المخزون",
+          category: "inventory",
           importance: "normal",
           value: movement.quantity,
           trend: trend as 'up' | 'down',

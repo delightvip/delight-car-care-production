@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { 
   AlertTriangle, Package, Beaker, Box, 
   ShoppingBag, Bell, InfoIcon, CheckCircle
@@ -17,6 +18,9 @@ interface NotificationType {
   link?: string;
   date: Date;
   read: boolean;
+  imageUrl?: string; // دعم صورة مصغرة اختيارية
+  actionLabel?: string; // زر إجراء سريع
+  onAction?: () => void; // دالة إجراء سريع
 }
 
 interface NotificationContextType {
@@ -77,7 +81,7 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   
   // إضافة إشعار جديد
   const addNotification = useCallback((notification: Omit<NotificationType, 'id' | 'date' | 'read'>) => {
-    const newNotification = {
+    const newNotification: NotificationType = {
       ...notification,
       id: generateUniqueId(),
       date: new Date(),
@@ -99,30 +103,17 @@ const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return [newNotification, ...prev];
     });
     
-    // عرض إشعار toast
-    showToast(newNotification);
-  }, []);
-
-  // عرض إشعار toast
-  const showToast = useCallback((notification: NotificationType) => {
-    const getIconByType = () => {
-      switch (notification.type) {
-        case 'info': return <InfoIcon size={18} />;
-        case 'success': return <CheckCircle size={18} />;
-        case 'warning': return <AlertTriangle size={18} />;
-        case 'error': return <AlertTriangle size={18} />;
-        default: return <Bell size={18} />;
-      }
-    };
-    
-    toast(notification.title, {
-      description: notification.message,
-      icon: getIconByType(),
-      duration: 5000,
-      action: notification.link ? {
-        label: 'فتح',
-        onClick: () => window.location.href = notification.link as string,
-      } : undefined,
+    // إظهار Toast عصري
+    toast({
+      title: newNotification.title,
+      description: newNotification.message,
+      action: newNotification.actionLabel && newNotification.onAction
+        ? (
+            <ToastAction onClick={newNotification.onAction} altText={newNotification.actionLabel}>
+              {newNotification.actionLabel}
+            </ToastAction>
+          )
+        : undefined,
     });
   }, []);
 

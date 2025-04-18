@@ -1,4 +1,3 @@
-
 import { NewsItem } from "@/components/ui/news-ticker";
 import { NewsTickerServiceInterface } from "./NewsTickerTypes";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +51,7 @@ class ReturnsNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `return-${returnItem.id}`,
           content: `مرتجع ${returnType} من ${partyName}`,
-          category: "المرتجعات",
+          category: "returns",
           importance: returnItem.amount > 5000 ? 'high' : 'normal',
           value: returnItem.amount,
           trend: 'down',
@@ -87,7 +86,7 @@ class ReturnsNewsService implements NewsTickerServiceInterface {
           newsItems.push({
             id: 'returns-stats-sales',
             content: 'إجمالي مرتجعات المبيعات (آخر 30 يوم)',
-            category: "المرتجعات",
+            category: "returns",
             importance: totalSalesReturns > 10000 ? 'high' : 'normal',
             value: totalSalesReturns,
             trend: 'down',
@@ -98,7 +97,7 @@ class ReturnsNewsService implements NewsTickerServiceInterface {
           newsItems.push({
             id: 'returns-stats-purchase',
             content: 'إجمالي مرتجعات المشتريات (آخر 30 يوم)',
-            category: "المرتجعات",
+            category: "returns",
             value: totalPurchaseReturns,
             trend: 'up',
           });

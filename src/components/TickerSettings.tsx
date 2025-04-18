@@ -43,6 +43,8 @@ interface NewsTickerSettingsProps {
   currentSpeed?: number;
   onAutoplayChange?: (autoplay: boolean) => void;
   autoplay?: boolean;
+  showTicker?: boolean;
+  onToggleTicker?: () => void;
 }
 
 // تعريف المكون باستخدام صيغة التصدير المسمى
@@ -52,7 +54,9 @@ export function NewsTickerSettings({
   onSpeedChange,
   currentSpeed = 40,
   onAutoplayChange,
-  autoplay = true
+  autoplay = true,
+  showTicker = true,
+  onToggleTicker
 }: NewsTickerSettingsProps) {
   const { toast } = useToast();
   const [categories, setCategories] = useState<NewsTickerCategory[]>(initialCategories || [
@@ -127,18 +131,25 @@ export function NewsTickerSettings({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="p-1 h-7 w-7 bg-blue-800/60 hover:bg-blue-700 text-white rounded-full">
-          <Settings className="h-4 w-4" />
+        <Button
+          variant="outline"
+          size="icon"
+          className={`shadow-lg border-2 rounded-full p-0.5 transition-all duration-200 focus:ring-2 focus:ring-blue-400
+            ${showTicker ? 'bg-primary text-white border-primary hover:bg-primary/90' : 'bg-gray-100 text-primary border-primary hover:bg-primary/10'}
+            dark:${showTicker ? 'bg-primary text-white border-primary hover:bg-primary/90' : 'bg-gray-900 text-primary border-primary hover:bg-primary/10'}`}
+          style={{ boxShadow: '0 2px 12px 0 rgba(0,0,0,0.18)', minWidth: 28, minHeight: 28, width: 28, height: 28 }}
+          aria-label="إعدادات الشريط الإخباري"
+        >
+          <Settings className="h-3.5 w-3.5" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-4" align="start">
-        <Tabs defaultValue="categories">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="categories">فئات المحتوى</TabsTrigger>
-            <TabsTrigger value="settings">إعدادات الشريط</TabsTrigger>
+      <PopoverContent align="end" className="w-[340px] rtl:text-right">
+        <Tabs defaultValue="categories" className="w-full">
+          <TabsList className="grid grid-cols-2 mb-2">
+            <TabsTrigger value="categories">الفئات</TabsTrigger>
+            <TabsTrigger value="settings">الإعدادات</TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="categories" className="space-y-3">
+          <TabsContent value="categories">
             <div className="flex items-center justify-between">
               <h4 className="font-medium text-sm">تخصيص المحتوى</h4>
               <Button
@@ -177,7 +188,6 @@ export function NewsTickerSettings({
               ))}
             </div>
           </TabsContent>
-          
           <TabsContent value="settings" className="space-y-4">
             <div>
               <h4 className="font-medium text-sm mb-2">سرعة الشريط الإخباري</h4>
@@ -237,6 +247,18 @@ export function NewsTickerSettings({
                 {isAutoplay ? 'سيستمر الشريط في التحرك تلقائياً' : 'سيتوقف الشريط حتى ينقر المستخدم على زر التشغيل'}
               </p>
             </div>
+            {onToggleTicker && (
+              <div className="flex justify-end mt-2">
+                <Button
+                  variant={showTicker ? "destructive" : "default"}
+                  size="sm"
+                  className={showTicker ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
+                  onClick={onToggleTicker}
+                >
+                  {showTicker ? 'إخفاء الشريط الإخباري' : 'إظهار الشريط الإخباري'}
+                </Button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </PopoverContent>

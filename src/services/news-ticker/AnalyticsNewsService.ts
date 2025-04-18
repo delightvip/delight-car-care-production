@@ -35,7 +35,7 @@ class AnalyticsNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `top-selling-${product.id}`,
           content: `المنتج الأكثر مبيعًا (${index + 1}): ${product.name}`,
-          category: "تحليلات المبيعات",
+          category: "analytics",
           importance: index === 0 ? "high" : "normal",
           value: product.total_sold,
           trend: "up",
@@ -48,7 +48,7 @@ class AnalyticsNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `most-profitable-${product.id}`,
           content: `المنتج الأكثر ربحية (${index + 1}): ${product.name}`,
-          category: "تحليلات الأرباح",
+          category: "analytics",
           importance: index === 0 ? "high" : "normal",
           value: product.profit,
           valueChangePercentage: product.profit_percentage,
@@ -62,7 +62,7 @@ class AnalyticsNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `most-used-${material.id}`,
           content: `المادة الخام الأكثر استخدامًا (${index + 1}): ${material.name}`,
-          category: "تحليلات الإنتاج",
+          category: "analytics",
           importance: "normal",
           value: material.usage_count,
           trend: "neutral",

@@ -1,0 +1,350 @@
+:root {
+  --primary-bg-light: #f8fafc;
+  --primary-bg-dark: #18181b;
+  --card-bg-light: #fff;
+  --card-bg-dark: #23232a;
+  --accent-light: #0ea5e9;
+  --accent-dark: #38bdf8;
+  --text-main-light: #18181b;
+  --text-main-dark: #f3f4f6;
+  --border-light: #e5e7eb;
+  --border-dark: #2a2a32;
+  --tab-active-light: #e0f2fe;
+  --tab-active-dark: #1e293b;
+  --night-bg: #181a20;
+  --night-card: #23272f;
+  --night-border: #2c313a;
+  --night-thead: #23272f;
+  --night-row-hover: #31343b;
+  --night-text-main: #f5f7fa;
+  --night-text-muted: #b0b6be;
+  --night-accent: #38bdf8;
+  --night-red: #ef4444;
+  --night-yellow: #facc15;
+  --night-green: #22c55e;
+}
+
+.planning-root {
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0fdfa 100%);
+  color: var(--text-main-light);
+  min-height: 100vh;
+  padding: 32px 0;
+  transition: background 0.4s;
+}
+
+.dark .planning-root {
+  background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+  color: var(--text-main-dark);
+}
+
+.planning-root.animate-fadein {
+  animation: fadeInUp 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(32px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card {
+  background: rgba(255,255,255,0.7);
+  border-radius: 1.25rem;
+  box-shadow: 0 6px 32px 0 rgba(14,165,233,0.08), 0 1.5px 8px 0 rgba(0,0,0,0.04);
+  backdrop-filter: blur(8px);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.dark .card {
+  background: var(--night-card) !important;
+  color: var(--night-text-main) !important;
+  border: 1px solid var(--night-border) !important;
+}
+
+.card.animate-fadein {
+  animation: fadeInUp 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tab-list {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  background: rgba(255,255,255,0.55);
+  border-radius: 1rem;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 8px 0 rgba(14,165,233,0.04);
+  position: relative;
+}
+
+.dark .tab-list {
+  background: var(--night-card) !important;
+  box-shadow: 0 2px 8px 0 rgba(30,41,59,0.20);
+}
+
+.tab-trigger {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.6rem 1.5rem;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: #0369a1;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.tab-trigger:hover {
+  background: #bae6fd;
+  color: #0ea5e9;
+  transform: translateY(-2px) scale(1.04);
+}
+
+.dark .tab-trigger {
+  color: var(--night-accent) !important;
+}
+
+.dark .tab-trigger:hover {
+  background: var(--night-row-hover) !important;
+  color: #fff !important;
+}
+
+.tab-active {
+  background: linear-gradient(90deg, #0ea5e9 0%, #22d3ee 100%);
+  color: #fff !important;
+  box-shadow: 0 2px 8px 0 rgba(14,165,233,0.13);
+  transform: scale(1.07);
+}
+
+.dark .tab-active {
+  background: linear-gradient(90deg, #0369a1 0%, #0ea5e9 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px 0 rgba(14,165,233,0.18);
+}
+
+.heading {
+  font-size: 2.1rem;
+  font-weight: bold;
+  letter-spacing: -1px;
+  margin-bottom: 1rem;
+  background: linear-gradient(90deg, #0ea5e9 0%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* جداول ولوحات */
+.dark table {
+  background: var(--night-bg) !important;
+  color: var(--night-text-main) !important;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  box-shadow: 0 2px 16px 0 rgba(0,0,0,0.10);
+}
+.dark thead tr {
+  background: var(--night-thead) !important;
+  color: var(--night-accent) !important;
+}
+.dark tbody tr {
+  background: var(--night-bg) !important;
+  border-bottom: 1px solid var(--night-border) !important;
+}
+.dark td, .dark th {
+  border-color: var(--night-border) !important;
+  background: transparent !important;
+}
+.dark tr:hover td, .dark tr:hover th {
+  background: var(--night-row-hover) !important;
+  color: var(--night-accent) !important;
+}
+.dark .text-red-600 {
+  color: var(--night-red) !important;
+}
+.dark .text-yellow-600, .dark .text-yellow-700 {
+  color: var(--night-yellow) !important;
+}
+.dark .text-green-600 {
+  color: var(--night-green) !important;
+}
+.dark .font-bold {
+  font-weight: bold !important;
+}
+.dark .text-muted-foreground {
+  color: var(--night-text-muted) !important;
+}
+
+/* صناديق التنبيه والفرص */
+.dark .bg-yellow-50 {
+  background: #3b2f13 !important;
+  color: var(--night-yellow) !important;
+  border-left: 4px solid var(--night-yellow) !important;
+}
+.dark .bg-blue-50 {
+  background: #172554 !important;
+  color: var(--night-accent) !important;
+  border-left: 4px solid var(--night-accent) !important;
+}
+
+/* أزرار رئيسية */
+.dark .bg-primary {
+  background: #0ea5e9 !important;
+  color: #fff !important;
+}
+.dark .bg-amber-500 {
+  background: #f59e42 !important;
+  color: #fff !important;
+}
+.dark .bg-sky-100 {
+  background: var(--night-row-hover) !important;
+  color: var(--night-accent) !important;
+  border-color: var(--night-accent) !important;
+}
+.dark .bg-sky-200 {
+  background: #334155 !important;
+  color: var(--night-accent) !important;
+}
+
+/* حدود عامة */
+.dark .border, .dark .border-b, .dark .border-l, .dark .border-r, .dark .border-t {
+  border-color: var(--night-border) !important;
+}
+
+/* تحسين تباين الروابط */
+.dark a {
+  color: var(--night-accent) !important;
+}
+
+/* تخصيص ألوان لوحة القيادة (SmartDashboard) للوضع الليلي */
+.dark .dashboard-kpi {
+  background: linear-gradient(120deg, #23272f 70%, #20232a 100%) !important;
+  color: var(--night-text-main) !important;
+  border: 1px solid var(--night-border) !important;
+  box-shadow: 0 2px 12px 0 rgba(30,41,59,0.12);
+}
+.dark .dashboard-kpi .font-bold {
+  color: var(--night-accent) !important;
+}
+.dark .dashboard-kpi .text-red-500 {
+  color: var(--night-red) !important;
+}
+.dark .dashboard-kpi .text-xs {
+  color: var(--night-text-muted) !important;
+}
+.dark .dashboard-alert {
+  background: #3b2f13 !important;
+  color: var(--night-yellow) !important;
+  border-left: 4px solid var(--night-yellow) !important;
+}
+.dark .dashboard-opportunity {
+  background: #172554 !important;
+  color: var(--night-accent) !important;
+  border-left: 4px solid var(--night-accent) !important;
+}
+
+/* خلفية مميزة لكل مكون (كارت/لوحة) مع ظل خفيف ومنع التداخل */
+.component-bg {
+  background: linear-gradient(120deg, #f0fdfa 85%, #e0f2fe 100%);
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 20px 0 rgba(14,165,233,0.10), 0 1.5px 8px 0 rgba(0,0,0,0.04);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  z-index: 1;
+  position: relative;
+}
+.dark .component-bg {
+  background: linear-gradient(120deg, #23272f 85%, #20232a 100%);
+  box-shadow: 0 4px 20px 0 rgba(30,41,59,0.18), 0 1.5px 8px 0 rgba(0,0,0,0.08);
+}
+
+/* منع التداخل بين المكونات */
+.component-bg + .component-bg {
+  margin-top: 0;
+}
+.dashboard-row-list {
+  z-index: 2;
+  position: relative;
+}
+
+/* صفوف كروت لوحة القيادة (رفيعة وبارزة) */
+.dashboard-row-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-radius: 0.875rem;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 2px 8px 0 rgba(30,41,59,0.06);
+  font-size: 1rem;
+  font-weight: 500;
+  transition: background 0.25s, color 0.25s;
+}
+
+/* وضع النهار */
+.dashboard-row-card {
+  background: linear-gradient(90deg, #f0fdfa 80%, #e0f2fe 100%);
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+.dashboard-row-card.critical {
+  background: linear-gradient(90deg, #fff1f2 80%, #ffe4e6 100%);
+  color: #dc2626;
+  border-color: #fecaca;
+}
+.dashboard-row-card.opportunity {
+  background: linear-gradient(90deg, #f0fdf4 80%, #bbf7d0 100%);
+  color: #059669;
+  border-color: #bbf7d0;
+}
+
+/* وضع الليل */
+.dark .dashboard-row-card {
+  background: linear-gradient(90deg, #23272f 80%, #20232a 100%);
+  color: var(--night-accent);
+  border: 1px solid var(--night-border);
+}
+.dark .dashboard-row-card.critical {
+  background: linear-gradient(90deg, #3b2f13 80%, #5a2e2e 100%);
+  color: var(--night-red);
+  border-color: #7f1d1d;
+}
+.dark .dashboard-row-card.opportunity {
+  background: linear-gradient(90deg, #17332a 80%, #1e3a2a 100%);
+  color: var(--night-green);
+  border-color: #166534;
+}
+
+@media (prefers-color-scheme: dark) {
+  .planning-root {
+    background: var(--primary-bg-dark);
+    color: var(--text-main-dark);
+  }
+  .card {
+    background: var(--card-bg-dark);
+    border-color: var(--border-dark);
+  }
+  .tab-active {
+    background: var(--tab-active-dark);
+    color: var(--accent-dark);
+  }
+}
+
+@media (max-width: 700px) {
+  .planning-root {
+    padding: 0.5rem;
+  }
+  .card {
+    padding: 1rem;
+  }
+  .tab-list {
+    padding: 0.5rem;
+    flex-wrap: wrap;
+  }
+}

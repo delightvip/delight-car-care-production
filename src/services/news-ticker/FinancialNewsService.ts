@@ -1,4 +1,3 @@
-
 import { NewsItem } from "@/components/ui/news-ticker";
 import { NewsTickerServiceInterface } from "./NewsTickerTypes";
 import { subDays, format } from "date-fns";
@@ -49,7 +48,7 @@ class FinancialNewsService implements NewsTickerServiceInterface {
       newsItems.push({
         id: 'fin-income',
         content: 'إجمالي الإيرادات (آخر 30 يوم)',
-        category: 'مالي',
+        category: 'financial',
         importance: summary.totalIncome > 10000 ? 'high' : 'normal',
         value: summary.totalIncome,
         trend: summary.totalIncome > summary.totalExpense ? 'up' : 'down',
@@ -58,7 +57,7 @@ class FinancialNewsService implements NewsTickerServiceInterface {
       newsItems.push({
         id: 'fin-expense',
         content: 'إجمالي المصروفات (آخر 30 يوم)',
-        category: 'مالي',
+        category: 'financial',
         importance: summary.totalExpense > summary.totalIncome ? 'high' : 'normal',
         value: summary.totalExpense,
         trend: summary.totalExpense > summary.totalIncome / 2 ? 'down' : 'neutral',
@@ -67,7 +66,7 @@ class FinancialNewsService implements NewsTickerServiceInterface {
       newsItems.push({
         id: 'fin-profit',
         content: 'صافي الربح (آخر 30 يوم)',
-        category: 'مالي',
+        category: 'financial',
         importance: summary.netProfit < 0 ? 'urgent' : summary.netProfit > 5000 ? 'high' : 'normal',
         value: summary.netProfit,
         trend: summary.netProfit > 0 ? 'up' : 'down',
@@ -79,7 +78,7 @@ class FinancialNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: 'profit-summary',
           content: 'إجمالي أرباح المبيعات (آخر 30 يوم)',
-          category: 'مبيعات',
+          category: 'financial',
           value: profitSummary.total_profit,
           valueChangePercentage: profitSummary.average_profit_percentage,
           trend: 'up',
@@ -92,7 +91,7 @@ class FinancialNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: 'cash-balance',
           content: 'رصيد الخزينة الحالي',
-          category: 'مالي',
+          category: 'financial',
           value: summary.cashBalance,
           trend: 'neutral',
         });
@@ -100,7 +99,7 @@ class FinancialNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: 'bank-balance',
           content: 'رصيد البنك الحالي',
-          category: 'مالي',
+          category: 'financial',
           value: summary.bankBalance,
           trend: 'neutral',
         });

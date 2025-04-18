@@ -28,6 +28,8 @@ import InventoryService from '@/services/InventoryService';
 import { PackagingOrder } from '@/services/ProductionService';
 import { FinishedProduct } from '@/services/InventoryService';
 import { useQuery } from '@tanstack/react-query';
+import PackagingSummaryCards from '@/components/inventory/packaging/PackagingSummaryCards';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 const statusTranslations = {
   pending: 'قيد الانتظار',
@@ -76,10 +78,11 @@ const PackagingOrders = () => {
     unit: string;
     type: string;
   }[]>([]);
-  
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({ from: undefined, to: undefined });
+
   const productionService = ProductionService.getInstance();
   const inventoryService = InventoryService.getInstance();
-  
+
   const { 
     data: orders = [], 
     isLoading: isOrdersLoading,
@@ -96,7 +99,7 @@ const PackagingOrders = () => {
       }
     }
   });
-  
+
   const { 
     data: finishedProducts = [], 
     isLoading: isProductsLoading,
@@ -115,15 +118,33 @@ const PackagingOrders = () => {
       }
     }
   });
-  
+
   const isLoading = isOrdersLoading || isProductsLoading;
-  
+
+  const filteredOrders = dateRange.from && dateRange.to
+    ? orders.filter(order => {
+        const orderDate = new Date(order.date);
+        return orderDate >= dateRange.from && orderDate <= dateRange.to;
+      })
+    : orders;
+
+  const summary = {
+    total: filteredOrders.length,
+    pending: filteredOrders.filter(o => o.status === 'pending').length,
+    inProgress: filteredOrders.filter(o => o.status === 'inProgress').length,
+    completed: filteredOrders.filter(o => o.status === 'completed').length,
+    cancelled: filteredOrders.filter(o => o.status === 'cancelled').length,
+    totalCost: filteredOrders.reduce((sum, o) => sum + (typeof o.totalCost === 'number' ? o.totalCost : 0), 0),
+    isLoading,
+    dateRange
+  };
+
   const refreshData = useCallback(() => {
     refetchOrders();
     refetchProducts();
     toast.info("جاري تحديث البيانات...");
   }, [refetchOrders, refetchProducts]);
-  
+
   // دالة لفحص توافر المكونات في الوقت الفعلي
   const checkRealTimeAvailability = useCallback(async (productCode: string, quantity: number) => {
     if (!productCode || quantity <= 0) {
@@ -182,47 +203,82 @@ const PackagingOrders = () => {
     
     setComponentsAvailability(availabilityResults);
   }, [finishedProducts, inventoryService]);
-  
+
   // مراقبة التغييرات في المنتج المحدد أو الكمية لتحديث توفر المكونات
   useEffect(() => {
     if (newOrder.productCode && newOrder.quantity > 0) {
       checkRealTimeAvailability(newOrder.productCode, newOrder.quantity);
     }
   }, [newOrder.productCode, newOrder.quantity, checkRealTimeAvailability]);
-  
+
   // نفس الشيء للنموذج التعديل
   useEffect(() => {
     if (editOrder.productCode && editOrder.quantity > 0) {
       checkRealTimeAvailability(editOrder.productCode, editOrder.quantity);
     }
   }, [editOrder.productCode, editOrder.quantity, checkRealTimeAvailability]);
-  
+
+  // تطوير جدول أوامر التعبئة ليطابق جدول أوامر الإنتاج
   const columns = [
-    { key: 'code', title: 'كود الأمر' },
-    { key: 'productName', title: 'المنتج' },
-    { 
-      key: 'quantity', 
-      title: 'الكمية',
-      render: (value: number, record: any) => `${value} ${record.unit}`
+    {
+      key: 'code',
+      title: 'كود الأمر',
+      render: (value: string, record: PackagingOrder) => (
+        <span className={`font-bold px-2 py-1 rounded whitespace-nowrap tracking-wide text-base ${statusColors[record.status as keyof typeof statusColors] || ''}`} title={value}>
+          {value}
+        </span>
+      )
     },
-    { 
-      key: 'status', 
+    {
+      key: 'productName',
+      title: 'المنتج',
+      render: (value: string, record: PackagingOrder) => (
+        <span className="font-semibold text-zinc-800 dark:text-zinc-100" title={value}>
+          {value.length > 28 ? value.slice(0, 28) + '…' : value}
+        </span>
+      )
+    },
+    {
+      key: 'quantity',
+      title: 'الكمية',
+      render: (value: number, record: PackagingOrder) => (
+        <span className="font-mono text-sm" title={`${value} ${record.unit}`}>
+          {value} <span className="text-muted-foreground">{record.unit}</span>
+        </span>
+      )
+    },
+    {
+      key: 'status',
       title: 'الحالة',
-      render: (value: string) => (
-        <Badge className={statusColors[value as keyof typeof statusColors]}>
+      render: (value: string, record: PackagingOrder) => (
+        <Badge className={statusColors[value as keyof typeof statusColors]} title={statusTranslations[value as keyof typeof statusTranslations]}>
           {statusIcons[value as keyof typeof statusIcons]}
           {statusTranslations[value as keyof typeof statusTranslations]}
         </Badge>
       )
     },
-    { key: 'date', title: 'التاريخ' },
-    { 
-      key: 'totalCost', 
+    {
+      key: 'date',
+      title: 'التاريخ',
+      render: (value: string, record: PackagingOrder) => (
+        <span className="font-mono text-xs text-zinc-600 dark:text-zinc-300" title={value}>
+          {value?.slice(0, 10) || '-'}
+        </span>
+      )
+    },
+    {
+      key: 'totalCost',
       title: 'التكلفة الإجمالية',
-      render: (value: number) => `${typeof value === 'number' ? value.toFixed(2) : 0} ج.م`
+      render: (value: number, record: PackagingOrder) => (
+        <span className="font-mono text-sm text-emerald-700 dark:text-emerald-300" title={typeof value === 'number' ? value.toFixed(2) + ' ج.م' : '0 ج.م'}>
+          {typeof value === 'number'
+            ? value.toFixed(2)
+            : 0} <span className="text-xs">ج.م</span>
+        </span>
+      )
     }
   ];
-  
+
   const handleAddOrder = async () => {
     if (!newOrder.productCode || newOrder.quantity <= 0) {
       toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
@@ -296,7 +352,7 @@ const PackagingOrders = () => {
       toast.error("حدث خطأ أثناء إنشاء أمر التعبئة");
     }
   };
-  
+
   const handleUpdateStatus = async () => {
     if (!currentOrder || !newStatus) return;
     
@@ -314,7 +370,7 @@ const PackagingOrders = () => {
       toast.error("حدث خطأ أثناء تحديث حالة أمر التعبئة");
     }
   };
-  
+
   const handleDeleteOrder = async () => {
     if (!currentOrder) return;
     
@@ -329,7 +385,7 @@ const PackagingOrders = () => {
       toast.error("حدث خطأ أثناء حذف أمر التعبئة");
     }
   };
-  
+
   const handleEditOrder = async () => {
     if (!editOrder.id || !editOrder.productCode || editOrder.quantity <= 0) {
       toast.error("يجب اختيار منتج وتحديد كمية صحيحة");
@@ -407,14 +463,14 @@ const PackagingOrders = () => {
       toast.error("حدث خطأ أثناء تحديث أمر التعبئة");
     }
   };
-  
+
   const calculateTotalCost = (productCode: string, quantity: number) => {
     const product = finishedProducts.find(p => p.code === productCode);
     if (!product) return 0;
     
     return product.unit_cost * quantity;
   };
-  
+
   const renderActions = (record: PackagingOrder) => (
     <div className="flex space-x-2 rtl:space-x-reverse">
       <Button
@@ -470,117 +526,43 @@ const PackagingOrders = () => {
       </Button>
     </div>
   );
-  
+
   return (
     <PageTransition>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">أوامر التعبئة</h1>
-            <p className="text-muted-foreground mt-1">إدارة عمليات تعبئة المنتجات النهائية</p>
+        {/* رأس الصفحة: العنوان والوصف في الأعلى أقصى اليمين */}
+        <div className="w-full flex items-end mb-2">
+          <div className="ml-auto text-end w-fit" style={{direction: 'rtl', textAlign: 'right'}}>
+            <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100 leading-tight mb-0" style={{marginBottom: 0, lineHeight: 1.2}}>أوامر التعبئة</h1>
+            <span className="text-sm text-zinc-500 dark:text-zinc-400 mt-0">إدارة عمليات تعبئة المنتجات النهائية</span>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={refreshData}>
-              <RefreshCw size={16} className="ml-2" />
-              تحديث
-            </Button>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus size={18} className="mr-2" />
-                  أمر تعبئة جديد
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl">
-                <DialogHeader>
-                  <DialogTitle>إضافة أمر تعبئة جديد</DialogTitle>
-                  <DialogDescription>
-                    اختر المنتج النهائي وحدد الكمية المطلوب تعبئتها.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="product">المنتج</Label>
-                      <Select 
-                        value={newOrder.productCode} 
-                        onValueChange={value => setNewOrder({...newOrder, productCode: value})}
-                      >
-                        <SelectTrigger id="product">
-                          <SelectValue placeholder="اختر المنتج" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {finishedProducts.map(product => (
-                            <SelectItem key={product.code} value={product.code}>
-                              {product.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="quantity">الكمية</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        value={newOrder.quantity}
-                        onChange={e => setNewOrder({...newOrder, quantity: Number(e.target.value)})}
-                      />
-                    </div>
-                  </div>
-                  
-                  {newOrder.productCode && newOrder.quantity > 0 && (
-                    <div className="border-t pt-4">
-                      <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
-                      <div className="space-y-2">
-                        {componentsAvailability.map((component, index) => (
-                          <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
-                            <div>
-                              <span className="font-medium">{component.name}</span>
-                              <span className="text-sm text-muted-foreground mr-2">
-                                ({component.requiredQuantity.toFixed(2)} {component.unit})
-                              </span>
-                              <Badge 
-                                variant="outline" 
-                                className="mr-2"
-                              >
-                                {component.type === 'semi' ? 'سائل' : 'تعبئة'}
-                              </Badge>
-                            </div>
-                            {component.available ? (
-                              <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                            ) : (
-                              <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <div className="mt-4 p-2 border rounded-md bg-muted/50">
-                        <div className="flex justify-between">
-                          <span className="font-medium">التكلفة الإجمالية:</span>
-                          <span>{calculateTotalCost(newOrder.productCode, newOrder.quantity).toFixed(2)} ج.م</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    إلغاء
-                  </Button>
-                  <Button onClick={handleAddOrder}>
-                    إضافة
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+        </div>
+        {/* بطاقات الملخص (مؤقتاً سنضعها هنا، ويمكنك تخصيصها لاحقاً) */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4 rtl:text-right">
+          <PackagingSummaryCards {...summary} />
+          <div className="flex flex-col items-end gap-2">
+            <span className="text-sm text-zinc-500 mb-1">تحديد الفترة الزمنية</span>
+            <DateRangePicker
+              initialDateFrom={dateRange.from}
+              initialDateTo={dateRange.to}
+              onUpdate={({ range }) => setDateRange(range)}
+              align="end"
+            />
           </div>
+        </div>
+        {/* أزرار الإجراءات أعلى الجدول */}
+        <div className="flex flex-row-reverse gap-2 items-center mb-2">
+          <Button className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-200 font-bold gap-1 flex items-center justify-center shadow-sm" onClick={() => setIsAddDialogOpen(true)}>
+            <Plus size={18} /> أمر تعبئة جديد
+          </Button>
+          <Button variant="outline" onClick={refreshData} className="gap-1 flex items-center justify-center">
+            <RefreshCw size={18} /> تحديث
+          </Button>
         </div>
         
         <DataTableWithLoading
           columns={columns}
-          data={orders}
+          data={filteredOrders}
           searchable
           searchKeys={['code', 'productName']}
           actions={renderActions}
@@ -588,80 +570,88 @@ const PackagingOrders = () => {
         />
         
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-xl rtl:text-right">
             <DialogHeader>
-              <DialogTitle>تفاصيل أمر التعبئة</DialogTitle>
+              <DialogTitle className="text-lg font-bold text-amber-700 mb-2">تفاصيل أمر التعبئة</DialogTitle>
             </DialogHeader>
             {currentOrder && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">كود الأمر</h4>
-                    <p className="font-medium">{currentOrder.code}</p>
+              <div className="space-y-8">
+                {/* ملخص سريع */}
+                <div className="bg-amber-50 dark:bg-zinc-800 rounded-lg p-4 border border-amber-100 dark:border-zinc-700 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">كود الأمر</span>
+                    <span className="font-semibold text-base">{currentOrder.code}</span>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">التاريخ</h4>
-                    <p className="font-medium">{currentOrder.date}</p>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">التاريخ</span>
+                    <span className="font-semibold text-base">{currentOrder.date ? new Date(currentOrder.date).toLocaleString('ar-EG') : '-'}</span>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">المنتج</h4>
-                    <p className="font-medium">{currentOrder.productName}</p>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">المنتج</span>
+                    <span className="font-semibold text-base">{currentOrder.productName}</span>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">الكمية</h4>
-                    <p className="font-medium">{currentOrder.quantity} {currentOrder.unit}</p>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">الكمية</span>
+                    <span className="font-semibold text-base">{currentOrder.quantity} {currentOrder.unit}</span>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">الحالة</h4>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">الحالة</span>
                     <Badge className={statusColors[currentOrder.status as keyof typeof statusColors]}>
                       {statusIcons[currentOrder.status as keyof typeof statusIcons]}
                       {statusTranslations[currentOrder.status as keyof typeof statusTranslations]}
                     </Badge>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">التكلفة الإجمالية</h4>
-                    <p className="font-medium">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">التكلفة الإجمالية</span>
+                    <span className="font-semibold text-base">
                       {typeof currentOrder.totalCost === 'number' 
                         ? `${currentOrder.totalCost.toFixed(2)} ج.م` 
                         : '0 ج.م'}
-                    </p>
+                    </span>
                   </div>
                 </div>
-                
+                {/* تفاصيل المنتج النصف مصنع */}
                 <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between p-2 border rounded-md">
-                      <div>
+                  <h4 className="text-sm font-bold mb-2 text-amber-700 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+                    المنتج النصف مصنع المستخدم
+                  </h4>
+                  {currentOrder.semiFinished ? (
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 border rounded-md bg-zinc-50 dark:bg-zinc-800 mb-2">
+                      <div className="flex flex-col">
                         <span className="font-medium">{currentOrder.semiFinished.name}</span>
-                        <span className="text-sm text-muted-foreground mr-2">
-                          ({currentOrder.semiFinished.quantity})
-                        </span>
-                        <Badge variant="outline" className="mr-2">سائل</Badge>
+                        <span className="text-xs text-muted-foreground">الكمية: {currentOrder.semiFinished.quantity} وحدة</span>
                       </div>
-                      {currentOrder.semiFinished.available ? (
-                        <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                      ) : (
-                        <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                      )}
+                      <Badge className={currentOrder.semiFinished.available ? 'bg-green-100 text-green-800 dark:bg-green-900/70 dark:text-green-100' : 'bg-red-100 text-red-800 dark:bg-red-900/70 dark:text-red-100'}>
+                        {currentOrder.semiFinished.available ? 'متوفر' : 'غير متوفر'}
+                      </Badge>
                     </div>
-                    
-                    {currentOrder.packagingMaterials.map((material, index) => (
-                      <div key={`${material.code}-${index}`} className="flex justify-between p-2 border rounded-md">
-                        <div>
-                          <span className="font-medium">{material.name}</span>
-                          <span className="text-sm text-muted-foreground mr-2">
-                            ({material.quantity})
-                          </span>
-                          <Badge variant="outline" className="mr-2">تعبئة</Badge>
+                  ) : (
+                    <div className="text-muted-foreground">لا يوجد منتج نصف مصنع</div>
+                  )}
+                </div>
+                {/* تفاصيل مواد التغليف */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-bold mb-2 text-amber-700 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+                    المواد التغليف المستخدمة
+                  </h4>
+                  <div className="space-y-2">
+                    {Array.isArray(currentOrder.packagingMaterials) && currentOrder.packagingMaterials.length > 0 ? (
+                      currentOrder.packagingMaterials.map((mat, idx) => (
+                        <div key={idx} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 border rounded-md bg-zinc-50 dark:bg-zinc-800">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{mat.name}</span>
+                            <span className="text-xs text-muted-foreground">الكمية: {mat.quantity} وحدة</span>
+                          </div>
+                          <Badge className={mat.available ? 'bg-green-100 text-green-800 dark:bg-green-900/70 dark:text-green-100' : 'bg-red-100 text-red-800 dark:bg-red-900/70 dark:text-red-100'}>
+                            {mat.available ? 'متوفر' : 'غير متوفر'}
+                          </Badge>
                         </div>
-                        {material.available ? (
-                          <Badge className="bg-green-100 text-green-800">متوفر</Badge>
-                        ) : (
-                          <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
-                        )}
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <div className="text-muted-foreground">لا توجد بيانات للمواد</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -673,88 +663,101 @@ const PackagingOrders = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
-        <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-          <DialogContent>
+
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogContent className="max-w-4xl rtl:text-right">
             <DialogHeader>
-              <DialogTitle>تحديث حالة أمر التعبئة</DialogTitle>
-              <DialogDescription>
-                تحديث حالة أمر التعبئة {currentOrder?.code}
-              </DialogDescription>
+              <DialogTitle className="text-lg font-bold text-emerald-700">إنشاء أمر تعبئة جديد</DialogTitle>
             </DialogHeader>
-            {currentOrder && (
-              <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="status">الحالة</Label>
+                  <Label htmlFor="product">المنتج</Label>
                   <Select 
-                    value={newStatus} 
-                    onValueChange={setNewStatus}
+                    value={newOrder.productCode} 
+                    onValueChange={value => setNewOrder({...newOrder, productCode: value})}
                   >
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="اختر الحالة" />
+                    <SelectTrigger id="product">
+                      <SelectValue placeholder="اختر المنتج" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">قيد الانتظار</SelectItem>
-                      <SelectItem value="inProgress">قيد التنفيذ</SelectItem>
-                      <SelectItem value="completed">مكتمل</SelectItem>
-                      <SelectItem value="cancelled">ملغي</SelectItem>
+                      {finishedProducts.map(product => (
+                        <SelectItem key={product.code} value={product.code} className="text-right">
+                          {product.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-                
-                {newStatus === 'completed' && (
-                  <div className="bg-yellow-50 p-4 rounded-md text-yellow-800">
-                    <h4 className="font-medium mb-1">تنبيه</h4>
-                    <p className="text-sm">
-                      عند تحديث الحالة إلى "مكتمل"، سيتم خصم المكونات من المخزون وإضافة المنتج النهائي.
-                    </p>
+                <div className="grid gap-2">
+                  <Label htmlFor="quantity">الكمية</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={newOrder.quantity}
+                    onChange={e => setNewOrder({...newOrder, quantity: Number(e.target.value)})}
+                  />
+                </div>
+              </div>
+              {newOrder.productCode && newOrder.quantity > 0 && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
+                  <div className="space-y-2">
+                    {componentsAvailability.map((component, index) => (
+                      <div key={`${component.code}-${index}`} className="flex justify-between p-2 border rounded-md">
+                        <div>
+                          <span className="font-medium">{component.name}</span>
+                          <span className="text-sm text-muted-foreground mr-2">
+                            ({component.requiredQuantity.toFixed(2)} {component.unit})
+                          </span>
+                          <Badge 
+                            variant="outline" 
+                            className="mr-2"
+                          >
+                            {component.type === 'semi' ? 'سائل' : 'تعبئة'}
+                          </Badge>
+                        </div>
+                        {component.available ? (
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/70 dark:text-green-100">
+                            متوفر
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-100 text-red-800 dark:bg-red-900/70 dark:text-red-100">
+                            غير متوفر
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="mt-4 p-2 border rounded-md bg-muted/50">
+                    <div className="flex justify-between">
+                      <span className="font-medium">التكلفة الإجمالية:</span>
+                      <span>{calculateTotalCost(newOrder.productCode, newOrder.quantity).toFixed(2)} ج.م</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button onClick={handleUpdateStatus}>
-                تحديث
+              <Button
+                onClick={handleAddOrder}
+                className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-200 font-bold gap-1 flex items-center justify-center shadow-sm"
+                disabled={isLoading}
+              >
+                {isLoading && <span className="loader mr-2"></span>}
+                إضافة أمر التعبئة
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>حذف أمر تعبئة</DialogTitle>
-              <DialogDescription>
-                هل أنت متأكد من حذف أمر التعبئة؟ لا يمكن التراجع عن هذا الإجراء.
-              </DialogDescription>
-            </DialogHeader>
-            {currentOrder && (
-              <div className="py-4">
-                <p className="font-medium">{currentOrder.code} - {currentOrder.productName}</p>
-                <p className="text-sm text-muted-foreground">الكمية: {currentOrder.quantity} {currentOrder.unit}</p>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                إلغاء
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteOrder}>
-                حذف
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
+
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-4xl">
+          <DialogContent className="max-w-4xl rtl:text-right">
             <DialogHeader>
-              <DialogTitle>تعديل أمر تعبئة</DialogTitle>
-              <DialogDescription>
-                تعديل بيانات أمر التعبئة
-              </DialogDescription>
+              <DialogTitle className="text-lg font-bold text-blue-700">تعديل أمر تعبئة</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -769,7 +772,7 @@ const PackagingOrders = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {finishedProducts.map(product => (
-                        <SelectItem key={product.code} value={product.code}>
+                        <SelectItem key={product.code} value={product.code} className="text-right">
                           {product.name}
                         </SelectItem>
                       ))}
@@ -794,7 +797,6 @@ const PackagingOrders = () => {
                   />
                 </div>
               </div>
-              
               {editOrder.productCode && editOrder.quantity > 0 && (
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-2">المكونات المطلوبة:</h4>
@@ -814,14 +816,17 @@ const PackagingOrders = () => {
                           </Badge>
                         </div>
                         {component.available ? (
-                          <Badge className="bg-green-100 text-green-800">متوفر</Badge>
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/70 dark:text-green-100">
+                            متوفر
+                          </Badge>
                         ) : (
-                          <Badge className="bg-red-100 text-red-800">غير متوفر</Badge>
+                          <Badge className="bg-red-100 text-red-800 dark:bg-red-900/70 dark:text-red-100">
+                            غير متوفر
+                          </Badge>
                         )}
                       </div>
                     ))}
                   </div>
-                  
                   <div className="mt-4 p-2 border rounded-md bg-muted/50">
                     <div className="flex justify-between">
                       <span className="font-medium">التكلفة الإجمالية:</span>
@@ -835,8 +840,87 @@ const PackagingOrders = () => {
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 إلغاء
               </Button>
-              <Button onClick={handleEditOrder}>
-                تحديث
+              <Button onClick={handleEditOrder} className="bg-blue-600 hover:bg-blue-700 text-white gap-1 flex items-center justify-center">
+                <CheckCircle2 size={16} /> تحديث
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+          <DialogContent className="max-w-md rtl:text-right">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-amber-700">تحديث حالة أمر التعبئة</DialogTitle>
+              <DialogDescription className="text-zinc-500 dark:text-zinc-300 text-base">
+                قم بتغيير حالة أمر التعبئة حسب تقدم العمل.
+              </DialogDescription>
+            </DialogHeader>
+            {currentOrder && (
+              <div className="grid gap-4 py-4">
+                {/* ملخص سريع للأمر */}
+                <div className="bg-gray-50 dark:bg-zinc-800 rounded-md p-3 flex flex-col md:flex-row md:items-center md:space-x-6 rtl:space-x-reverse border mb-2">
+                  <span className="font-semibold">{currentOrder.productName}</span>
+                  <span className="text-sm text-muted-foreground">رقم الأمر: {currentOrder.code}</span>
+                  <span className="text-sm text-muted-foreground">الكمية: {currentOrder.quantity} {currentOrder.unit}</span>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="status">الحالة الجديدة</Label>
+                  <div className="flex flex-row gap-3 mt-1">
+                    {[
+                      { value: 'pending', label: 'قيد الانتظار', color: 'bg-amber-400', icon: <span className='w-2 h-2 rounded-full bg-amber-400 mr-2 inline-block' /> },
+                      { value: 'inProgress', label: 'قيد التنفيذ', color: 'bg-blue-400', icon: <span className='w-2 h-2 rounded-full bg-blue-400 mr-2 inline-block' /> },
+                      { value: 'completed', label: 'مكتمل', color: 'bg-green-400', icon: <span className='w-2 h-2 rounded-full bg-green-400 mr-2 inline-block' /> },
+                      { value: 'cancelled', label: 'ملغي', color: 'bg-red-400', icon: <span className='w-2 h-2 rounded-full bg-red-400 mr-2 inline-block' /> },
+                    ].map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`flex items-center px-3 py-1 rounded border text-sm font-medium transition-colors focus:outline-none ${
+                          newStatus === option.value
+                            ? `${option.color} text-white border-transparent`
+                            : 'bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200'
+                        }`}
+                        onClick={() => setNewStatus(option.value)}
+                      >
+                        {option.icon}
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button onClick={handleUpdateStatus} className="bg-amber-600 hover:bg-amber-700 text-white gap-1 flex items-center justify-center">
+                تحديث الحالة
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-md rtl:text-right">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-red-700">حذف أمر تعبئة</DialogTitle>
+              <DialogDescription className="text-zinc-500 dark:text-zinc-300 text-base">
+                هل أنت متأكد من حذف أمر التعبئة؟ لا يمكن التراجع عن هذا الإجراء.
+              </DialogDescription>
+            </DialogHeader>
+            {currentOrder && (
+              <div className="py-4">
+                <p className="font-medium">{currentOrder.code} - {currentOrder.productName}</p>
+                <p className="text-sm text-muted-foreground">الكمية: {currentOrder.quantity} {currentOrder.unit}</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteOrder} className="bg-red-600 hover:bg-red-700 text-white gap-1 flex items-center justify-center">
+                <Trash size={16} /> حذف
               </Button>
             </DialogFooter>
           </DialogContent>

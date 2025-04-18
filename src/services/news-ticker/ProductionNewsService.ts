@@ -36,7 +36,7 @@ class ProductionNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `prod-${order.id}`,
           content: `أمر إنتاج ${order.productName} قيد التنفيذ`,
-          category: "الإنتاج",
+          category: "production",
           importance: "normal",
           value: order.quantity,
           trend: "up",
@@ -52,7 +52,7 @@ class ProductionNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `prod-comp-${order.id}`,
           content: `تم إكمال إنتاج ${order.productName}`,
-          category: "الإنتاج",
+          category: "production",
           importance: "normal",
           value: order.quantity,
           trend: "up",
@@ -65,7 +65,7 @@ class ProductionNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `pkg-${order.id}`,
           content: `أمر تعبئة ${order.productName} قيد التنفيذ`,
-          category: "التعبئة",
+          category: "production",
           importance: "normal",
           value: order.quantity,
           trend: "neutral",
@@ -81,7 +81,7 @@ class ProductionNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `pkg-comp-${order.id}`,
           content: `تم إكمال تعبئة ${order.productName}`,
-          category: "التعبئة",
+          category: "production",
           importance: "normal",
           value: order.quantity,
           trend: "up",

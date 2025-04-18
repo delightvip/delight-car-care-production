@@ -261,6 +261,18 @@ class InventoryService {
     }
   }
 
+  // ملخص مخزون مواد التعبئة
+  public async getPackagingStockSummary(): Promise<{ total: number; items: PackagingMaterial[] }> {
+    try {
+      const packagingMaterials = await this.getPackagingMaterials();
+      const total = packagingMaterials.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      return { total, items: packagingMaterials };
+    } catch (error) {
+      console.error('Error fetching packaging stock summary:', error);
+      return { total: 0, items: [] };
+    }
+  }
+
   // المنتجات نصف المصنعة
   public async getSemiFinishedProducts(): Promise<SemiFinishedProduct[]> {
     try {
@@ -934,6 +946,36 @@ class InventoryService {
     } catch (error) {
       console.error("Error checking raw materials availability:", error);
       return false;
+    }
+  }
+
+  // جلب المواد منخفضة المخزون
+  public async getLowStockMaterials(): Promise<any[]> {
+    try {
+      // جلب المواد الخام
+      const rawMaterials = await this.getRawMaterials();
+      // جلب مواد التعبئة
+      const packagingMaterials = await this.getPackagingMaterials();
+      // جلب المنتجات نصف المصنعة
+      const semiFinishedProducts = await this.getSemiFinishedProducts();
+      // جلب المنتجات تامة الصنع
+      const finishedProducts = await this.getFinishedProducts();
+
+      // تحديد المواد منخفضة المخزون (التي الكمية أقل من الحد الأدنى)
+      const lowRaw = rawMaterials.filter(mat => mat.quantity < mat.min_stock);
+      const lowPackaging = packagingMaterials.filter(mat => mat.quantity < mat.min_stock);
+      const lowSemi = semiFinishedProducts.filter(prod => prod.quantity < prod.min_stock);
+      const lowFinished = finishedProducts.filter(prod => prod.quantity < prod.min_stock);
+
+      return [
+        ...lowRaw.map(item => ({ ...item, type: 'raw_material' })),
+        ...lowPackaging.map(item => ({ ...item, type: 'packaging_material' })),
+        ...lowSemi.map(item => ({ ...item, type: 'semi_finished' })),
+        ...lowFinished.map(item => ({ ...item, type: 'finished_product' })),
+      ];
+    } catch (error) {
+      console.error('Error fetching low stock materials:', error);
+      return [];
     }
   }
 }

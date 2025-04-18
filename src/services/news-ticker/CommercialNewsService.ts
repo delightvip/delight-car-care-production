@@ -1,4 +1,3 @@
-
 import { NewsItem } from "@/components/ui/news-ticker";
 import { NewsTickerServiceInterface } from "./NewsTickerTypes";
 import { supabase } from "@/integrations/supabase/client";
@@ -119,7 +118,7 @@ class CommercialNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `inv-${invoice.id}`,
           content: `فاتورة ${invoiceType} للعميل ${partyName}`,
-          category: "المبيعات",
+          category: "commercial",
           importance: "normal",
           value: invoice.total_amount,
           trend: invoice.invoice_type === 'sale' ? 'up' : 'down',
@@ -135,7 +134,7 @@ class CommercialNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `pay-${payment.id}`,
           content: `${paymentType} من ${partyName}`,
-          category: "المدفوعات",
+          category: "commercial",
           importance: "normal",
           value: payment.amount,
           trend: payment.payment_type === 'collection' ? 'up' : 'down',
@@ -150,7 +149,7 @@ class CommercialNewsService implements NewsTickerServiceInterface {
         newsItems.push({
           id: `profit-${profit.id}`,
           content: `ربح من فاتورة ${profit.parties?.name}`,
-          category: "الأرباح",
+          category: "commercial",
           importance: profitPercentage >= 20 ? "high" : "normal",
           value: profit.profit_amount,
           valueChangePercentage: profitPercentage,

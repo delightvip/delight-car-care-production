@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Pause, Play, TrendingDown, TrendingUp, CircleDot, AlertCircle, Star } from "lucide-react";
 import "./news-ticker-fonts.css"; // استيراد ملف الخطوط الجديدة
@@ -38,129 +37,128 @@ export const NewsTicker = ({
   direction = "rtl",
   controls = true,
   autoplay = true,
-  height = 40,
+  height = 32,
   theme = "default"
 }: NewsTickerProps) => {
   const [isPaused, setIsPaused] = useState(!autoplay);
   const tickerRef = useRef<HTMLDivElement>(null);
-  const itemsRef = useRef<HTMLDivElement>(null);
+  const movingRef = useRef<HTMLDivElement>(null);
   const [itemWidth, setItemWidth] = useState(0);
-  
+  const [tickerSpeed, setTickerSpeed] = useState(speed);
+  const [repeatCount, setRepeatCount] = useState(3); // افتراضيًا
+  const [displayItems, setDisplayItems] = useState<NewsItem[]>([]);
+
   useEffect(() => {
-    if (tickerRef.current && itemsRef.current) {
-      const computedItemWidth = itemsRef.current.scrollWidth;
-      setItemWidth(computedItemWidth);
-      
-      // إعادة تعيين موضع العنصر للعرض من البداية
-      if (direction === "rtl") {
-        itemsRef.current.style.transform = `translateX(${tickerRef.current.offsetWidth}px)`;
-      } else {
-        itemsRef.current.style.transform = `translateX(-${computedItemWidth}px)`;
+    setDisplayItems(items.length === 0 ? [{ id: 'empty', content: 'لا توجد أخبار حالياً', category: 'عام', trend: 'neutral' }] : items);
+  }, [JSON.stringify(items)]);
+
+  useEffect(() => {
+    if (tickerRef.current && movingRef.current && displayItems.length > 0) {
+      const tempDiv = document.createElement('div');
+      tempDiv.style.display = 'inline-flex';
+      tempDiv.style.visibility = 'hidden';
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.pointerEvents = 'none';
+      tempDiv.style.height = `${height}px`;
+      tempDiv.style.whiteSpace = 'nowrap';
+      tempDiv.dir = direction;
+      displayItems.forEach(item => {
+        const el = document.createElement('span');
+        el.textContent = item.content;
+        el.style.padding = '0 24px';
+        el.style.fontWeight = 'bold';
+        tempDiv.appendChild(el);
+      });
+      document.body.appendChild(tempDiv);
+      const itemsWidth = tempDiv.scrollWidth;
+      setItemWidth(itemsWidth);
+      const containerWidth = tickerRef.current.offsetWidth;
+      const minRepeat = itemsWidth > 0 ? Math.ceil((containerWidth * 2) / itemsWidth) : 3;
+      setRepeatCount(Math.max(3, minRepeat));
+      document.body.removeChild(tempDiv);
+    }
+  }, [displayItems, tickerSpeed, height, direction]);
+
+  const positionRef = useRef(0); // الموضع الحالي الفعلي
+  const lastTimestampRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (tickerRef.current && movingRef.current) {
+      positionRef.current = direction === "rtl" ? 0 : -itemWidth * repeatCount / 2;
+      movingRef.current.style.transform = `translateX(${positionRef.current}px)`;
+      lastTimestampRef.current = null;
+    }
+  }, [itemWidth, direction, repeatCount]);
+
+  useEffect(() => {
+    let animationId: number;
+    function animate(timestamp: number) {
+      if (isPaused) {
+        lastTimestampRef.current = null;
+        return;
       }
-    }
-  }, [items, direction]);
-
-  useEffect(() => {
-    if (!isPaused && tickerRef.current && itemsRef.current) {
-      let animationId: number;
-      let startTime: number;
-      let lastPos = direction === "rtl" 
-        ? tickerRef.current.offsetWidth 
-        : -itemWidth;
-      
-      const animate = (timestamp: number) => {
-        if (!startTime) startTime = timestamp;
-        const progress = timestamp - startTime;
-        
-        // حساب الموضع الجديد بناءً على السرعة
-        const newPos = direction === "rtl" 
-          ? lastPos - (progress / 1000) * speed 
-          : lastPos + (progress / 1000) * speed;
-        
-        itemsRef.current!.style.transform = `translateX(${newPos}px)`;
-        
-        // إعادة تعيين الشريط عندما يخرج من الشاشة بالكامل
-        if ((direction === "rtl" && newPos < -itemWidth) || 
-            (direction === "ltr" && newPos > tickerRef.current!.offsetWidth)) {
-          startTime = timestamp;
-          lastPos = direction === "rtl" 
-            ? tickerRef.current!.offsetWidth 
-            : -itemWidth;
+      if (lastTimestampRef.current === null) {
+        lastTimestampRef.current = timestamp;
+      }
+      const totalWidth = itemWidth * repeatCount / 2;
+      const elapsed = (timestamp - lastTimestampRef.current);
+      const distance = (elapsed / 1000) * tickerSpeed;
+      lastTimestampRef.current = timestamp;
+      if (direction === "rtl") {
+        positionRef.current -= distance;
+        if (Math.abs(positionRef.current) >= totalWidth) {
+          positionRef.current = 0;
         }
-        
-        animationId = requestAnimationFrame(animate);
-      };
-      
+      } else {
+        positionRef.current += distance;
+        if (Math.abs(positionRef.current) >= totalWidth) {
+          positionRef.current = -totalWidth;
+        }
+      }
+      if (movingRef.current) {
+        movingRef.current.style.transform = `translateX(${positionRef.current}px)`;
+      }
       animationId = requestAnimationFrame(animate);
-      
-      return () => {
-        cancelAnimationFrame(animationId);
-      };
     }
-  }, [isPaused, itemWidth, speed, direction]);
-
-  // معالجات للتحكم
-  const handlePause = () => setIsPaused(true);
-  const handlePlay = () => setIsPaused(false);
-  const handleMouseEnter = () => pauseOnHover && setIsPaused(true);
-  const handleMouseLeave = () => pauseOnHover && autoplay && setIsPaused(false);
-
-  // تصنيف العناصر حسب الأهمية
-  const sortedItems = [...items].sort((a, b) => {
-    const importanceOrder = { urgent: 0, high: 1, normal: 2 };
-    const aVal = importanceOrder[a.importance || "normal"] || 2;
-    const bVal = importanceOrder[b.importance || "normal"] || 2;
-    return aVal - bVal;
-  });  // تحديد فئة الخلفية بناءً على السمة
-  const getTickerBackground = () => {
-    switch (theme) {
-      case "dark":
-        return "bg-gray-900/95 border-b-4 border-t border-blue-600 shadow-md";
-      case "finance":
-        return "bg-blue-950/95 border-b-4 border-t border-blue-600 backdrop-blur-sm shadow-md";
-      default:
-        return "bg-blue-950/95 border-b-4 border-t border-blue-500";
+    if (!isPaused) {
+      animationId = requestAnimationFrame(animate);
     }
-  };
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [isPaused, tickerSpeed, repeatCount, direction, itemWidth]);
+
+  const handlePause = useCallback(() => setIsPaused(true), []);
+  const handlePlay = useCallback(() => setIsPaused(false), []);
+  const handleMouseEnter = useCallback(() => pauseOnHover && setIsPaused(true), [pauseOnHover]);
+  const handleMouseLeave = useCallback(() => pauseOnHover && autoplay && setIsPaused(false), [pauseOnHover, autoplay]);
 
   return (
-    <div 
-      className={cn("relative overflow-hidden border-y", getTickerBackground(), className)}
-      style={{ height: `${height}px` }}
+    <div
+      ref={tickerRef}
+      className={cn("relative overflow-hidden w-full flex items-center select-none", className)}
+      style={{ height }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
-      <div 
-        ref={tickerRef}
-        className="h-full overflow-hidden"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+      <div
+        ref={movingRef}
+        className="flex items-center whitespace-nowrap"
+        style={{ height, willChange: 'transform', transition: 'none' }}
       >
-        <div 
-          ref={itemsRef}
-          className="inline-flex items-center h-full whitespace-nowrap will-change-transform"
-          dir={direction}
-        >
-          {sortedItems.map((item, idx) => (
-            <div 
-              key={item.id || idx}
-              className={cn(                "inline-flex items-center px-4 h-full",
-                item.importance === "urgent" && "font-bold",
-                item.importance === "high" && "font-semibold",
-                item.highlight && "bg-amber-500/20 dark:bg-amber-500/30",
-                item.category && "after:content-['●'] after:mx-3 after:text-primary-foreground/60"
-              )}
-            >              {/* أيقونة الأهمية أو الاتجاه */}
+        {Array.from({ length: repeatCount }).map((_, idx) => (
+          displayItems.map((item, i) => (
+            <div key={`${item.id}-${idx}-${i}`} className="flex items-center px-6 py-0.5">
               {item.importance === "urgent" && (
                 <AlertCircle size={18} className="text-red-500 dark:text-red-400 mr-1.5" />
               )}
               {item.importance === "high" && (
                 <Star size={18} className="text-amber-500 dark:text-amber-400 mr-1.5" />
               )}
-                {/* عرض الفئة إذا كانت موجودة */}
               {item.category && (
                 <span className="ml-1 px-2 py-0.5 bg-blue-600 dark:bg-blue-700 text-white text-xs font-bold rounded-sm mr-2 inline-flex items-center">
                   {item.category}
                 </span>
-              )}              {/* المحتوى الرئيسي */}
+              )}
               <span className={cn(
                 "text-sm font-bold text-white tracking-wide mx-1 financial-font",
                 item.category?.includes("مالي") && "news-financial",
@@ -174,7 +172,7 @@ export const NewsTicker = ({
                 ) : (
                   item.content
                 )}
-              </span>                {/* عرض معلومات التغيير إذا كانت موجودة */}
+              </span>
               {item.value !== undefined && (
                 <span 
                   className={cn(
@@ -186,7 +184,7 @@ export const NewsTicker = ({
                 >
                   {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
                 </span>
-              )}                {/* مؤشر الاتجاه */}
+              )}
               {item.trend === "up" && (
                 <TrendingUp size={16} className="text-emerald-300 bg-emerald-900/60 p-0.5 rounded mx-0.5" />
               )}
@@ -195,7 +193,7 @@ export const NewsTicker = ({
               )}
               {item.trend === "neutral" && (
                 <CircleDot size={16} className="text-amber-300 bg-amber-900/60 p-0.5 rounded mx-0.5" />
-              )}                {/* نسبة التغيير */}
+              )}
               {item.valueChangePercentage !== undefined && (
                 <span 
                   className={cn(
@@ -209,10 +207,9 @@ export const NewsTicker = ({
                 </span>
               )}
             </div>
-          ))}
-        </div>
+          ))
+        ))}
       </div>
-      
       {controls && (
         <div className="absolute top-0 left-0 h-full flex items-center gap-1 px-2 bg-background/80 backdrop-blur-sm z-10">
           {isPaused ? (
@@ -226,6 +223,20 @@ export const NewsTicker = ({
           )}
         </div>
       )}
+      <div className="w-full flex justify-end items-center px-2 py-0.5 bg-transparent">
+        <label htmlFor="ticker-speed" className="text-xs mr-2 text-muted-foreground">السرعة</label>
+        <input
+          id="ticker-speed"
+          type="range"
+          min={10}
+          max={200}
+          step={1}
+          value={tickerSpeed}
+          onChange={e => setTickerSpeed(Number(e.target.value))}
+          className="w-32 accent-primary"
+        />
+        <span className="text-xs w-7 text-center">{tickerSpeed}</span>
+      </div>
     </div>
   );
 };

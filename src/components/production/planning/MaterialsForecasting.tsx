@@ -34,6 +34,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import MaterialsConsumptionService, { MaterialConsumptionRecord } from '@/services/database/MaterialsConsumptionService';
+import SmartForecastingService, { ForecastAlgorithm, SmartForecastResult } from '@/services/ai/SmartForecastingService';
+import RawMaterialsPlanning from './RawMaterialsPlanning';
 
 interface Material {
   id: string;
@@ -77,7 +80,15 @@ const MaterialsForecasting = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'materialName', direction: 'asc' });
   const [autoApprovedMaterials, setAutoApprovedMaterials] = useState<string[]>([]);
-  
+  const [historicalConsumption, setHistoricalConsumption] = useState<MaterialConsumptionRecord[]>([]);
+  const [isLoadingConsumption, setIsLoadingConsumption] = useState<boolean>(true);
+
+  // خيارات التوقع الذكي
+  const [forecastMonths, setForecastMonths] = useState<number>(6);
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState<ForecastAlgorithm>('moving_average');
+  const [smartForecasts, setSmartForecasts] = useState<SmartForecastResult[]>([]);
+  const [forecastAccuracy, setForecastAccuracy] = useState<Record<ForecastAlgorithm, { mae: number; rmse: number }>>({} as any);
+
   const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
     queryKey: ['raw-materials-for-forecast'],
     queryFn: async () => {
@@ -138,41 +149,72 @@ const MaterialsForecasting = () => {
     }
   });
   
-  const generateHistoricalConsumption = (): HistoricalConsumption[] => {
-    const allMaterials = [...(rawMaterials || []), ...(packagingMaterials || [])];
-    if (allMaterials.length === 0) return [];
-    
-    const monthsRange = eachMonthOfInterval({
-      start: addMonths(new Date(), -6),
-      end: new Date()
+  useEffect(() => {
+    setIsLoadingConsumption(true);
+    MaterialsConsumptionService.getHistoricalConsumption(6)
+      .then(data => setHistoricalConsumption(data))
+      .catch(err => {
+        setHistoricalConsumption([]);
+        toast.error('تعذر جلب بيانات الاستهلاك الفعلي للمواد');
+      })
+      .finally(() => setIsLoadingConsumption(false));
+  }, [rawMaterials, packagingMaterials]);
+
+  useEffect(() => {
+    if (!historicalConsumption.length) return;
+    // نستخدم آخر 6 أشهر كفترة اختبار
+    const monthsToTest = 6;
+    const historyByMaterial: Record<string, MaterialConsumptionRecord[]> = {};
+    historicalConsumption.forEach(h => {
+      if (!historyByMaterial[h.materialId]) historyByMaterial[h.materialId] = [];
+      historyByMaterial[h.materialId].push(h);
     });
-    
-    let historicalData: HistoricalConsumption[] = [];
-    
-    allMaterials.forEach(material => {
-      monthsRange.forEach(month => {
-        const baseConsumption = material.category === 'raw-material' 
-          ? material.reorderLevel * (0.7 + Math.random() * 0.6) 
-          : material.reorderLevel * (0.5 + Math.random() * 0.5);
-        
-        const recencyFactor = 1 + (monthsRange.indexOf(month) / monthsRange.length) * 0.2;
-        
-        const trendFactor = 1 + (monthsRange.indexOf(month) / monthsRange.length) * 0.3;
-        
-        const randomNoise = 0.9 + Math.random() * 0.2;
-        
-        const consumptionQty = Math.round(baseConsumption * recencyFactor * trendFactor * randomNoise);
-        
-        historicalData.push({
-          materialId: material.id,
-          month: format(month, 'yyyy-MM'),
-          consumptionQty,
-          consumptionRate: consumptionQty / 30
-        });
+    const algos: ForecastAlgorithm[] = [
+      'moving_average',
+      'linear_regression',
+      'seasonal_trend',
+      'exponential_smoothing',
+      'arima_like',
+      'ensemble',
+    ];
+    const accuracy: Record<ForecastAlgorithm, { mae: number; rmse: number }> = {} as any;
+    algos.forEach(algo => {
+      let allActual: number[] = [];
+      let allPred: number[] = [];
+      Object.values(historyByMaterial).forEach(history => {
+        if (history.length <= monthsToTest) return;
+        const sorted = [...history].sort((a, b) => a.month.localeCompare(b.month));
+        const testStart = sorted.length - monthsToTest;
+        const train = sorted.slice(0, testStart);
+        const test = sorted.slice(testStart);
+        const monthsList = test.map(x => x.month);
+        let preds: number[] = [];
+        if (algo === 'moving_average') preds = SmartForecastingService.movingAverage(train, monthsToTest);
+        if (algo === 'linear_regression') preds = SmartForecastingService.linearRegression(train, monthsToTest);
+        if (algo === 'seasonal_trend') preds = SmartForecastingService.seasonalTrend(train, monthsToTest, monthsList);
+        if (algo === 'exponential_smoothing') preds = SmartForecastingService.exponentialSmoothing(train, monthsToTest);
+        if (algo === 'arima_like') preds = SmartForecastingService.arimaLike(train, monthsToTest);
+        if (algo === 'ensemble') preds = SmartForecastingService.ensembleForecast(train, monthsToTest, monthsList);
+        allActual.push(...test.map(x => x.consumptionQty));
+        allPred.push(...preds);
       });
+      accuracy[algo] = {
+        mae: SmartForecastingService.meanAbsoluteError(allActual, allPred),
+        rmse: SmartForecastingService.rootMeanSquaredError(allActual, allPred),
+      };
     });
-    
-    return historicalData;
+    setForecastAccuracy(accuracy);
+  }, [historicalConsumption]);
+
+  const generateHistoricalConsumption = (): HistoricalConsumption[] => {
+    if (!historicalConsumption.length) return [];
+    // تحويل البيانات من service إلى الشكل المطلوب
+    return historicalConsumption.map(rec => ({
+      materialId: rec.materialId,
+      month: rec.month,
+      consumptionQty: rec.consumptionQty,
+      consumptionRate: rec.consumptionQty / 30 // تقريبياً
+    }));
   };
   
   const generateForecast = () => {
@@ -188,35 +230,31 @@ const MaterialsForecasting = () => {
     const forecastResults: ForecastItem[] = [];
     
     allMaterials.forEach(material => {
+      // بيانات الاستهلاك الخاصة بهذه المادة
       const materialHistoryData = historicalData.filter(h => h.materialId === material.id);
-      
+      // فقط الأشهر الستة الأخيرة
+      const lastMonths = materialHistoryData
+        .filter(item => item.month !== forecastMonth)
+        .sort((a, b) => a.month.localeCompare(b.month))
+        .slice(-6);
       let forecastedConsumption = 0;
-      
-      if (materialHistoryData.length > 0) {
-        const totalWeightedConsumption = materialHistoryData.reduce((sum, item, index) => {
-          const weight = (index + 1) / materialHistoryData.length;
-          return sum + (item.consumptionQty * weight);
-        }, 0);
-        
-        forecastedConsumption = Math.round(totalWeightedConsumption / materialHistoryData.length * 1.1);
+      if (lastMonths.length > 0) {
+        // متوسط الاستهلاك الشهري الفعلي
+        const avg = lastMonths.reduce((sum, item) => sum + item.consumptionQty, 0) / lastMonths.length;
+        forecastedConsumption = Math.round(avg);
       } else {
         forecastedConsumption = Math.ceil(material.reorderLevel * 1.2);
       }
-      
       const expectedEndQuantity = Math.max(0, material.quantity - forecastedConsumption);
-      
       let status: 'ok' | 'warning' | 'critical' = 'ok';
-      
       if (expectedEndQuantity <= 0) {
         status = 'critical';
       } else if (expectedEndQuantity <= material.reorderLevel) {
         status = 'warning';
       }
-      
       const suggestedOrder = status !== 'ok' 
         ? Math.max(material.optimalOrderQuantity, forecastedConsumption - expectedEndQuantity)
         : 0;
-      
       forecastResults.push({
         materialId: material.id,
         materialName: material.name,
@@ -241,6 +279,28 @@ const MaterialsForecasting = () => {
       generateForecast();
     }
   }, [isLoadingRawMaterials, isLoadingPackaging, forecastDate]);
+
+  // حساب الأشهر المستقبلية
+  const getFutureMonths = (count: number): string[] => {
+    const now = new Date();
+    return Array.from({ length: count }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
+      return format(d, 'yyyy-MM');
+    });
+  };
+
+  // توليد التوقعات الذكية
+  useEffect(() => {
+    if (!historicalConsumption.length) return;
+    const monthsList = getFutureMonths(forecastMonths);
+    const results = SmartForecastingService.smartForecast(
+      historicalConsumption,
+      forecastMonths,
+      monthsList,
+      [selectedAlgorithm]
+    );
+    setSmartForecasts(results);
+  }, [historicalConsumption, forecastMonths, selectedAlgorithm]);
   
   const getFilteredItems = () => {
     return forecastItems.filter(item => {
@@ -400,10 +460,21 @@ const MaterialsForecasting = () => {
   };
   
   const filteredItems = getSortedItems();
-  const isLoading = isLoadingRawMaterials || isLoadingPackaging;
+  const isLoading = isLoadingRawMaterials || isLoadingPackaging || isLoadingConsumption;
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* التخطيط الذكي للمواد الخام (جدول عملي) */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-xl">جدول المواد الخام والتوقع الذكي</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RawMaterialsPlanning />
+        </CardContent>
+      </Card>
+
+      {/* التبويب التحليلي القديم */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -746,6 +817,103 @@ const MaterialsForecasting = () => {
           </CardContent>
         </Card>
       </div>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">توقع ذكي للاستهلاك المستقبلي</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4 mb-4">
+            <div>
+              <Label>عدد الأشهر المستقبلية</Label>
+              <Input type="number" min={1} max={24} value={forecastMonths} onChange={e => setForecastMonths(Number(e.target.value))} style={{ width: 80 }} />
+            </div>
+            <div>
+              <Label>الخوارزمية</Label>
+              <Select value={selectedAlgorithm} onValueChange={(val) => setSelectedAlgorithm(val as ForecastAlgorithm)}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="moving_average">المتوسط المتحرك{forecastAccuracy.moving_average ? ` (MAE: ${forecastAccuracy.moving_average.mae?.toFixed(1)})` : ''}</SelectItem>
+                  <SelectItem value="linear_regression">الانحدار الخطي{forecastAccuracy.linear_regression ? ` (MAE: ${forecastAccuracy.linear_regression.mae?.toFixed(1)})` : ''}</SelectItem>
+                  <SelectItem value="seasonal_trend">تحليل موسمي{forecastAccuracy.seasonal_trend ? ` (MAE: ${forecastAccuracy.seasonal_trend.mae?.toFixed(1)})` : ''}</SelectItem>
+                  <SelectItem value="exponential_smoothing">تسوية أسية{forecastAccuracy.exponential_smoothing ? ` (MAE: ${forecastAccuracy.exponential_smoothing.mae?.toFixed(1)})` : ''}</SelectItem>
+                  <SelectItem value="arima_like">ARIMA-like{forecastAccuracy.arima_like ? ` (MAE: ${forecastAccuracy.arima_like.mae?.toFixed(1)})` : ''}</SelectItem>
+                  <SelectItem value="ensemble">توقع مدمج{forecastAccuracy.ensemble ? ` (MAE: ${forecastAccuracy.ensemble.mae?.toFixed(1)})` : ''}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            {selectedAlgorithm && forecastAccuracy[selectedAlgorithm] && (
+              <>
+                <span>دقة الخوارزمية المختارة خلال آخر 6 أشهر: </span>
+                <span>MAE = {forecastAccuracy[selectedAlgorithm].mae?.toFixed(2)}, </span>
+                <span>RMSE = {forecastAccuracy[selectedAlgorithm].rmse?.toFixed(2)}</span>
+              </>
+            )}
+          </div>
+          <div className="h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={(() => {
+                  // بناء بيانات الرسم البياني: لكل شهر، مجموع التوقعات لكل الفئات
+                  const months = getFutureMonths(forecastMonths);
+                  return months.map(month => {
+                    const row: any = { month };
+                    smartForecasts.forEach(f => {
+                      const pred = f.forecasts.find(x => x.month === month && x.algorithm === selectedAlgorithm)?.predicted || 0;
+                      row[f.materialName] = pred;
+                    });
+                    return row;
+                  });
+                })()}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                {smartForecasts.map((f, idx) => (
+                  <Line
+                    key={f.materialId}
+                    type="monotone"
+                    dataKey={f.materialName}
+                    stroke={["#6366F1", "#F59E0B", "#10b981", "#EF4444", "#8B5CF6"][idx % 5]}
+                    dot={false}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-6">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>المادة</TableHead>
+                  {getFutureMonths(forecastMonths).map(month => (
+                    <TableHead key={month}>{month}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {smartForecasts.map(f => (
+                  <TableRow key={f.materialId}>
+                    <TableCell>{f.materialName}</TableCell>
+                    {getFutureMonths(forecastMonths).map(month => (
+                      <TableCell key={month} className="text-center">
+                        {f.forecasts.find(x => x.month === month && x.algorithm === selectedAlgorithm)?.predicted || 0}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

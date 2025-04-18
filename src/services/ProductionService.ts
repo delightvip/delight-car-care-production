@@ -22,6 +22,7 @@ export interface ProductionOrder {
     available: boolean;
   }[];
   totalCost: number;
+  notes?: string;
 }
 
 // أنواع البيانات لأوامر التعبئة
@@ -874,6 +875,7 @@ class ProductionService {
         requiredQuantity: number;
       }[];
       totalCost?: number;
+      notes?: string;
     }
   ): Promise<boolean> {
     try {
@@ -944,6 +946,7 @@ class ProductionService {
         quantity: number;
       }[];
       totalCost?: number; // إضافة معامل التكلفة الإجمالية الاختياري
+      notes?: string;
     }
   ): Promise<boolean> {
     try {
