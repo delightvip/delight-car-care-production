@@ -252,6 +252,54 @@ const NotificationPanel = () => {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {/* === MODERN FLOATING LOW STOCK TOAST === */}
+        {false && totalLowStock > 0 && lowStockItems && (
+          <div
+            className="fixed z-[99] bottom-6 right-6 animate-in fade-in slide-in-from-bottom-4 w-[92vw] max-w-xs md:max-w-sm lg:max-w-md rounded-2xl bg-gradient-to-br from-white/90 via-blue-50/80 to-blue-100/90 dark:from-neutral-900/90 dark:via-neutral-800/80 dark:to-neutral-900/90 border border-blue-200 dark:border-blue-900 shadow-2xl backdrop-blur-lg flex flex-col gap-1 px-4 py-3 transition-all group hover:scale-105 hover:shadow-3xl"
+            style={{ boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.18)' }}
+          >
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex items-center justify-center rounded-full bg-gradient-to-tr from-blue-200 to-blue-400 text-white p-2 shadow-sm">
+                <AlertTriangle className="h-5 w-5 text-blue-700 dark:text-yellow-300 animate-pulse" />
+              </div>
+              <div className="flex-1">
+                <span className="font-bold text-base text-blue-900 dark:text-blue-100">تنبيه مخزون منخفض</span>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/40" onClick={handleRefresh} title="تحديث">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-between items-center text-xs font-medium text-blue-800 dark:text-blue-200">
+              {lowStockItems.counts.rawMaterials ? (
+                <div className="flex items-center gap-1 bg-blue-100/80 dark:bg-blue-900/40 rounded px-2 py-0.5">
+                  <span>مواد أولية</span>
+                  <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200">{lowStockItems.counts.rawMaterials}</Badge>
+                </div>
+              ) : null}
+              {lowStockItems.counts.semiFinished ? (
+                <div className="flex items-center gap-1 bg-blue-100/80 dark:bg-blue-900/40 rounded px-2 py-0.5">
+                  <span>نصف مصنعة</span>
+                  <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200">{lowStockItems.counts.semiFinished}</Badge>
+                </div>
+              ) : null}
+              {lowStockItems.counts.packaging ? (
+                <div className="flex items-center gap-1 bg-blue-100/80 dark:bg-blue-900/40 rounded px-2 py-0.5">
+                  <span>تعبئة</span>
+                  <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200">{lowStockItems.counts.packaging}</Badge>
+                </div>
+              ) : null}
+              {lowStockItems.counts.finished ? (
+                <div className="flex items-center gap-1 bg-blue-100/80 dark:bg-blue-900/40 rounded px-2 py-0.5">
+                  <span>نهائية</span>
+                  <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200">{lowStockItems.counts.finished}</Badge>
+                </div>
+              ) : null}
+            </div>
+            <Button asChild variant="link" size="sm" className="mt-2 w-full text-blue-700 dark:text-blue-200 font-semibold underline underline-offset-4 hover:text-blue-900 dark:hover:text-blue-100 transition-colors">
+              <Link to="/inventory/low-stock">عرض التفاصيل</Link>
+            </Button>
+          </div>
+        )}
       </>
     );
   } catch (error) {

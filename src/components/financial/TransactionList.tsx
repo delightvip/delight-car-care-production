@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -110,8 +109,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
     const searchTermLower = searchTerm.toLowerCase();
     return (
       transaction.category_name?.toLowerCase().includes(searchTermLower) ||
-      transaction.notes?.toLowerCase().includes(searchTermLower) ||
-      formatAmount(transaction.amount).includes(searchTerm)
+      transaction.notes?.toLowerCase().includes(searchTermLower)
+      // تم حذف البحث بالمبلغ بناءً على طلب التبسيط
     );
   });
   

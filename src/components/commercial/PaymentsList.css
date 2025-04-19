@@ -1,0 +1,32 @@
+.zebra-row:nth-child(even) {
+  background-color: #f7fafc;
+}
+.zebra-row:nth-child(odd) {
+  background-color: #fff;
+}
+.payment-row:hover {
+  background-color: #e3f6fc !important;
+  transition: background 0.2s;
+}
+.payment-amount {
+  font-weight: bold;
+  color: #1d3557;
+}
+.payment-status-confirmed {
+  background: #e6fff6;
+  color: #217a54;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.payment-status-cancelled {
+  background: #ffeaea;
+  color: #a12626;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.payment-status-draft {
+  background: #fffbe6;
+  color: #b8860b;
+  border-radius: 6px;
+  box-shadow: none;
+}

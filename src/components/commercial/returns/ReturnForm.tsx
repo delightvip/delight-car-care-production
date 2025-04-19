@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -124,13 +123,14 @@ export function ReturnForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
-            <ReturnInvoiceForm 
-              form={form}
-              isLoadingInvoices={isLoadingInvoices}
-              filteredInvoices={filteredInvoices}
-            />
-            
-            <CardFooter className="px-0 pt-6 flex justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ReturnInvoiceForm 
+                form={form}
+                isLoadingInvoices={isLoadingInvoices}
+                filteredInvoices={filteredInvoices}
+              />
+            </div>
+            <CardFooter className="px-0 pt-6 flex flex-col md:flex-row md:justify-between gap-2">
               <Button 
                 variant="outline" 
                 type="button"

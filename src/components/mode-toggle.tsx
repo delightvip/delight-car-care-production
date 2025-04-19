@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/components/theme-provider";
+import ColorThemePicker from '@/components/ColorThemePicker';
 
 export function ModeToggle() {
   const { theme, setTheme } = useTheme();
@@ -21,7 +21,7 @@ export function ModeToggle() {
   // This ensures the document's class reflects the current theme
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
+    root.classList.remove('light', 'dark', 'blue', 'green');
     
     if (theme === 'system') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -49,9 +49,20 @@ export function ModeToggle() {
           <Moon className="mr-2 h-4 w-4" />
           <span>داكن</span>
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("blue")}>
+          <span className="mr-2 h-4 w-4 inline-block rounded-full bg-blue-500 border border-blue-700"></span>
+          <span>أزرق</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("green")}>
+          <span className="mr-2 h-4 w-4 inline-block rounded-full bg-green-500 border border-green-700"></span>
+          <span>أخضر</span>
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme("system")}>
           <span>تلقائي</span>
         </DropdownMenuItem>
+        <div style={{ padding: '8px 4px', borderTop: '1px solid #eee', marginTop: 6 }}>
+          <ColorThemePicker />
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

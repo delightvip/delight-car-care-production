@@ -1,4 +1,3 @@
-
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -30,11 +29,11 @@ interface SidebarMenuItem {
   icon: LucideIcon;
   title: string;
   path: string;
-  badge?: number;
+  badge?: string;
   submenu?: {
     title: string;
     path: string;
-    badge?: number;
+    badge?: string;
   }[];
 }
 
@@ -47,7 +46,7 @@ const SidebarMenu = () => {
     ],
     commercial: [
       { icon: ShoppingCart, title: 'لوحة المبيعات', path: '/commercial' },
-      { icon: Receipt, title: 'الفواتير', path: '/commercial/invoices' },
+      { icon: Receipt, title: 'الفواتير', path: '/commercial/invoices', badge: '3' },
       { icon: Users, title: 'العملاء والموردين', path: '/commercial/parties' },
       { icon: Wallet, title: 'المدفوعات', path: '/commercial/payments' },
       { icon: TrendingUp, title: 'الأرباح', path: '/commercial/profits' },
@@ -55,7 +54,10 @@ const SidebarMenu = () => {
     ],
     inventory: [
       { icon: Archive, title: 'المخزون', path: '/inventory' },
-      { icon: Package, title: 'المواد الخام', path: '/inventory/raw-materials' },
+      { icon: Package, title: 'المواد الخام', path: '/inventory/raw-materials', submenu: [
+        { title: 'الموردون', path: '/inventory/raw-materials/suppliers', badge: '2' },
+        { title: 'المشتريات', path: '/inventory/raw-materials/purchases' },
+      ] },
       { icon: Package, title: 'مواد التعبئة', path: '/inventory/packaging' },
       { icon: Package, title: 'منتجات نصف مصنعة', path: '/inventory/semi-finished' },
       { icon: Package, title: 'المنتجات النهائية', path: '/inventory/finished-products' },
@@ -123,6 +125,25 @@ const SidebarMenu = () => {
       <SidebarMenuGroup title="الإدارة المالية" items={menuItems.financial} isActive={isActive} />
       
       <SidebarMenuGroup title="التحليلات" items={menuItems.analytics} isActive={isActive} />
+      
+      {menuItems.commercial.map((item) => (
+        <Button
+          key={item.path}
+          variant={isActive(item.path) ? "secondary" : "ghost"}
+          className="w-full justify-start text-base font-normal"
+          asChild
+        >
+          <Link to={item.path} className="gap-3">
+            <item.icon className="h-5 w-5" />
+            <span>{item.title}</span>
+            {item.badge && (
+              <span className="bg-red-500 text-white text-xs font-bold py-1 px-2 rounded-full">
+                {item.badge}
+              </span>
+            )}
+          </Link>
+        </Button>
+      ))}
       
       <div className="mt-auto">
         {menuItems.settings.map((item) => (

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { LedgerEntry } from '@/services/CommercialTypes';
 import { toast } from "sonner";
@@ -51,16 +50,22 @@ export class LedgerReportGenerator {
             entries: entries,
             total_debit: totalDebit,
             total_credit: totalCredit,
-            closing_balance: closingBalance
+            closing_balance: closingBalance,
+            phone: party.phone || '',
+            email: party.email || '',
+            address: party.address || '',
+            notes: party.notes || '',
+            code: party.code || '',
+            created_at: party.created_at
           };
         })
       );
       
-      return statements;
+      return { statements };
     } catch (error) {
       console.error('Error generating account statement:', error);
       toast.error('حدث خطأ أثناء إنشاء كشف الحساب');
-      return [];
+      return { statements: [] };
     }
   }
   

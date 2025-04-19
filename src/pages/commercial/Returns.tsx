@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -7,7 +6,8 @@ import {
   PlusCircle, 
   Search, 
   FileDown, 
-  RefreshCw
+  RefreshCw,
+  CheckCircle
 } from 'lucide-react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -165,19 +165,48 @@ const Returns = () => {
   return (
     <PageTransition>
       <div className="container mx-auto p-4">
+        {/* --- ملخص سريع أعلى الصفحة --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="rounded-xl bg-gradient-to-tr from-green-50 via-green-100 to-green-50 dark:from-green-900/50 dark:to-green-950/60 p-4 flex items-center gap-3 shadow-sm">
+            <CheckCircle className="h-7 w-7 text-green-600 dark:text-green-300" />
+            <div>
+              <div className="font-bold text-lg">{returns?.filter(r => r.return_type === 'sales_return').length || 0}</div>
+              <div className="text-sm text-muted-foreground">مرتجع مبيعات</div>
+            </div>
+          </div>
+          <div className="rounded-xl bg-gradient-to-tr from-blue-50 via-blue-100 to-blue-50 dark:from-blue-900/50 dark:to-blue-950/60 p-4 flex items-center gap-3 shadow-sm">
+            <CheckCircle className="h-7 w-7 text-blue-600 dark:text-blue-300" />
+            <div>
+              <div className="font-bold text-lg">{returns?.filter(r => r.return_type === 'purchase_return').length || 0}</div>
+              <div className="text-sm text-muted-foreground">مرتجع مشتريات</div>
+            </div>
+          </div>
+          <div className="rounded-xl bg-gradient-to-tr from-yellow-50 via-yellow-100 to-yellow-50 dark:from-yellow-900/50 dark:to-yellow-950/60 p-4 flex items-center gap-3 shadow-sm">
+            <CheckCircle className="h-7 w-7 text-yellow-600 dark:text-yellow-300" />
+            <div>
+              <div className="font-bold text-lg">{returns?.length || 0}</div>
+              <div className="text-sm text-muted-foreground">إجمالي المرتجعات</div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h1 className="text-2xl font-bold">المرتجعات</h1>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleRefresh}>
-              <RefreshCw className="w-4 h-4 ml-2" />
+            <Button variant="outline" onClick={handleRefresh} className="transition-transform hover:scale-105">
+              <RefreshCw className="w-4 h-4 ml-2 animate-spin-slow group-hover:animate-spin" />
               تحديث
             </Button>
-            <Button variant="outline" onClick={exportToCsv}>
+            <Button variant="outline" onClick={exportToCsv} className="transition-transform hover:scale-105">
               <FileDown className="w-4 h-4 ml-2" />
               تصدير
             </Button>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <PlusCircle className="w-4 h-4 ml-2" />
+            <Button
+              onClick={() => setIsAddDialogOpen(true)}
+              className="rounded-lg bg-green-200 hover:bg-green-300 text-green-900 font-bold px-2.5 py-1 flex items-center gap-1 shadow border border-green-300 focus:ring-1 focus:ring-green-100 focus:border-green-400 text-sm"
+              title="إضافة مرتجع"
+            >
+              <PlusCircle className="h-4 w-4" />
               إضافة مرتجع
             </Button>
           </div>
@@ -198,14 +227,16 @@ const Returns = () => {
                   <TabsTrigger value="purchase_return">مرتجع مشتريات</TabsTrigger>
                 </TabsList>
               </Tabs>
-              <div className="relative w-full max-w-xs">
-                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <div className="relative w-full max-w-xs transition-all">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground animate-pulse" />
                 <Input 
-                  placeholder="بحث..." 
-                  className="w-full pr-10" 
+                  placeholder="بحث سريع بالاسم أو الرقم..." 
+                  className="w-full pr-10 rounded-full focus:ring-2 focus:ring-blue-400 transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+                {/* تصفية متقدمة */}
+                {/* <Button size="sm" variant="ghost" className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-600" title="تصفية متقدمة"><Filter className="w-4 h-4" /></Button> */}
               </div>
             </div>
           </CardHeader>

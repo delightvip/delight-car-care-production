@@ -1,4 +1,3 @@
-
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
@@ -8,6 +7,7 @@ import Layout from '@/components/layout/Layout';
 import Index from '@/pages/Index';
 import NotFound from '@/pages/NotFound';
 import Settings from '@/pages/settings/Settings';
+import PaymentDetails from '@/pages/commercial/PaymentDetails';
 
 // Financial pages - Import directly instead of lazy loading
 import FinancialDashboard from '@/pages/financial/FinancialDashboard';
@@ -40,6 +40,7 @@ const Returns = lazy(() => import('@/pages/commercial/Returns'));
 const AccountStatements = lazy(() => import('@/pages/commercial/AccountStatements'));
 const CommercialLedger = lazy(() => import('@/pages/commercial/CommercialLedger'));
 const CommercialDashboard = lazy(() => import('@/pages/commercial/CommercialDashboard'));
+const InvoiceEdit = lazy(() => import('@/pages/commercial/InvoiceEdit'));
 
 // Financial pages - Continue with directly imported components
 const TransactionPage = lazy(() => import('@/pages/financial/TransactionPage'));
@@ -93,12 +94,16 @@ function App() {
               <Route path="parties/:id" element={<PartyDetails />} />
               <Route path="invoices" element={<Invoices />} />
               <Route path="invoices/:id" element={<InvoiceDetails />} />
+              <Route path="invoices/edit/:id" element={<InvoiceEdit />} />
               <Route path="payments" element={<Payments />} />              <Route path="returns" element={<Returns />} />
               <Route path="profits" element={<Profits />} />
               <Route path="account-statements" element={<AccountStatements />} />
               <Route path="statements" element={<Navigate to="/commercial/account-statements" replace />} />
               <Route path="ledger" element={<CommercialLedger />} />
             </Route>
+            
+            {/* Payments Details Route */}
+            <Route path="commercial/payments/:id" element={<React.Suspense fallback={<div>جاري التحميل...</div>}><PaymentDetails /></React.Suspense>} />
             
             {/* Financial Routes - Using direct imports instead of lazy loading */}
             <Route path="financial">

@@ -1,4 +1,3 @@
-
 import BaseCommercialService from './BaseCommercialService';
 import { format } from 'date-fns';
 import { toast } from "sonner";
@@ -158,10 +157,10 @@ class LedgerReportService extends BaseCommercialService {
         return '';
       }
       
-      // Create CSV headers
+      // Create CSV headers in Arabic
       let csvContent = 'التاريخ,نوع المعاملة,البيان,المرجع,مدين,دائن,الرصيد\n';
       
-      // Add CSV rows
+      // Add CSV rows with Arabic numerals and RTL support
       ledgerEntries.forEach(entry => {
         const date = format(new Date(entry.date), 'yyyy-MM-dd');
         const transactionType = this.getTransactionDescription(entry.transaction_type);
@@ -169,11 +168,17 @@ class LedgerReportService extends BaseCommercialService {
         const debit = entry.debit || 0;
         const credit = entry.credit || 0;
         const balance = entry.balance_after;
-        
-        csvContent += `${date},"${transactionType}","${entry.notes}","${reference}",${debit},${credit},${balance}\n`;
+        const notes = entry.notes ? entry.notes.replace(/\n/g, ' ') : '';
+        // Convert numbers to Arabic numerals and round to 2 decimals
+        const toArabicNumber = (num: number|string) => {
+          const rounded = Number(num).toFixed(2);
+          return String(rounded).replace(/[0-9]/g, d => String.fromCharCode(d.charCodeAt(0) + 0x0660 - 48));
+        };
+        csvContent += `${date},"${transactionType}","${notes}","${reference}",${toArabicNumber(debit)},${toArabicNumber(credit)},${toArabicNumber(balance)}\n`;
       });
       
-      return csvContent;
+      // Add BOM for Excel to recognize UTF-8 and RTL
+      return '\uFEFF' + csvContent;
     } catch (error) {
       console.error('Error exporting ledger to CSV:', error);
       toast.error('حدث خطأ أثناء تصدير سجل الحساب');

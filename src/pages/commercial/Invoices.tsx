@@ -49,18 +49,18 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import InvoiceStatusBadge from '@/components/commercial/InvoiceStatusBadge';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem
+} from '@/components/ui/select';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 const Invoices = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -71,6 +71,9 @@ const Invoices = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -165,26 +168,41 @@ const Invoices = () => {
     return items;
   }, [rawMaterials, packaging, semiFinished, finished]);
   
-  const filteredInvoices = React.useMemo(() => {
-    if (!invoices) return [];
-    
-    let filtered = invoices;
-    
-    if (activeTab !== 'all') {
-      filtered = invoices.filter(invoice => invoice.invoice_type === activeTab);
+  const statusOptions = [
+    { value: 'all', label: 'كل الحالات' },
+    { value: 'draft', label: 'مسودة' },
+    { value: 'confirmed', label: 'مؤكدة' },
+    { value: 'cancelled', label: 'ملغية' },
+  ];
+  const paymentOptions = [
+    { value: 'all', label: 'كل حالات الدفع' },
+    { value: 'paid', label: 'مدفوعة' },
+    { value: 'partial', label: 'مدفوعة جزئياً' },
+    { value: 'unpaid', label: 'غير مدفوعة' },
+  ];
+  
+  const initialDateFrom = dateRange.from;
+  const initialDateTo = dateRange.to;
+
+  const filteredInvoices = (invoices || []).filter((invoice) => {
+    if (statusFilter !== 'all' && invoice.payment_status !== statusFilter) return false;
+    if (paymentStatusFilter !== 'all' && invoice.status !== paymentStatusFilter) return false;
+    if (activeTab !== 'all' && invoice.invoice_type !== activeTab) return false;
+    let match = true;
+    if (dateRange.from && dateRange.to) {
+      const invoiceDate = new Date(invoice.date);
+      match =
+        invoiceDate >= new Date(dateRange.from.setHours(0,0,0,0)) &&
+        invoiceDate <= new Date(dateRange.to.setHours(23,59,59,999));
     }
-    
-    if (searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(invoice => 
-        invoice.party_name?.toLowerCase().includes(query) ||
-        invoice.id.toLowerCase().includes(query) ||
-        invoice.total_amount.toString().includes(query)
-      );
-    }
-    
-    return filtered;
-  }, [invoices, activeTab, searchQuery]);
+    if (!searchQuery) return match;
+    return (
+      match && (
+        String(invoice.id).includes(searchQuery) ||
+        (invoice.party_name && invoice.party_name.includes(searchQuery))
+      )
+    );
+  });
   
   const handleCreateInvoice = async (invoiceData: Omit<Invoice, 'id' | 'created_at'>) => {
     try {
@@ -272,25 +290,28 @@ const Invoices = () => {
     }
   };
   
+  const toArabicNumber = (num: number|string) => {
+    const rounded = Number(num).toFixed(2);
+    return String(rounded).replace(/[0-9]/g, d => String.fromCharCode(d.charCodeAt(0) + 0x0660 - 48));
+  };
+
   const handleExportInvoices = () => {
     try {
       if (!filteredInvoices.length) {
         toast.warning('لا توجد فواتير للتصدير');
         return;
       }
-      
-      let csvContent = 'رقم الفاتورة,النوع,الطرف,التاريخ,المبلغ,الحالة,حالة المعاملة\n';
-      
+      // إضافة BOM لدعم Excel
+      let csvContent = '\uFEFFرقم الفاتورة,النوع,الطرف,التاريخ,المبلغ,الحالة,حالة الفاتورة\n';
       filteredInvoices.forEach(invoice => {
         csvContent += `${invoice.id},`;
         csvContent += `${invoice.invoice_type === 'sale' ? 'بيع' : 'شراء'},`;
         csvContent += `"${invoice.party_name || ''}",`;
         csvContent += `${format(new Date(invoice.date), 'yyyy-MM-dd')},`;
-        csvContent += `${invoice.total_amount.toFixed(2)},`;
+        csvContent += `${toArabicNumber(invoice.total_amount)},`;
         csvContent += `${invoice.status},`;
-        csvContent += `${invoice.payment_status}\n`;
+        csvContent += `${invoice.payment_status || ''}\n`;
       });
-      
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -300,7 +321,6 @@ const Invoices = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       toast.success('تم تصدير الفواتير بنجاح');
     } catch (error) {
       console.error('Error exporting invoices:', error);
@@ -328,6 +348,10 @@ const Invoices = () => {
     isLoadingPackaging || 
     isLoadingSemiFinished || 
     isLoadingFinished;
+  
+  const handleEditClick = (invoice: Invoice) => {
+    navigate(`/commercial/invoices/edit/${invoice.id}`);
+  };
   
   if (isLoading) {
     return (
@@ -362,6 +386,18 @@ const Invoices = () => {
     );
   }
   
+  const statusColor = {
+    paid: 'bg-green-50 text-green-700 border-green-200',
+    partial: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    unpaid: 'bg-red-50 text-red-700 border-red-200',
+  };
+
+  const statusLabel = {
+    paid: 'مدفوعة',
+    partial: 'مدفوعة جزئياً',
+    unpaid: 'غير مدفوعة',
+  };
+
   return (
     <PageTransition>
       <div className="space-y-6">
@@ -370,8 +406,12 @@ const Invoices = () => {
             <h1 className="text-3xl font-bold tracking-tight">الفواتير</h1>
             <p className="text-muted-foreground">إدارة فواتير المبيعات والمشتريات</p>
           </div>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> إنشاء فاتورة جديدة
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            className="rounded-lg bg-green-200 hover:bg-green-300 text-green-900 font-bold px-5 py-2.5 flex items-center gap-2 shadow border-2 border-green-300 focus:ring-2 focus:ring-green-100 focus:border-green-400 text-base"
+          >
+            <PlusCircle className="h-5 w-5" />
+            فاتورة جديدة
           </Button>
         </div>
         
@@ -383,126 +423,134 @@ const Invoices = () => {
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xl font-bold">
-                  {activeTab === 'all' ? 'جميع الفواتير' :
-                   activeTab === 'sale' ? 'فواتير المبيعات' : 'فواتير المشتريات'}
+            <Card className="w-full shadow border border-gray-100 rounded-2xl overflow-hidden mb-8">
+              <CardHeader className="bg-gray-50 dark:bg-zinc-900 py-4 px-6 border-b border-gray-50 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <CardTitle className="text-2xl font-bold text-primary-800 dark:text-primary-200 tracking-tight flex items-center gap-2">
+                  <FileText className="h-6 w-6 text-primary-400 dark:text-primary-300" />
+                  قائمة الفواتير
                 </CardTitle>
-                <div className="flex items-center space-x-2 space-x-reverse">
-                  <div className="relative w-64">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="البحث في الفواتير..."
-                      className="pl-8"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+                  <div className="flex gap-2">
+                    <div className="w-36">
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="حالة المعاملة" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-36">
+                      <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="حالة الدفع" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {paymentOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center mb-4">
+                    <DateRangePicker
+                      className="min-w-[260px]"
+                      initialDateFrom={initialDateFrom}
+                      initialDateTo={initialDateTo}
+                      onUpdate={({ range }) => setDateRange(range)}
+                      align="end"
                     />
                   </div>
-                  <Button variant="outline" size="icon" onClick={handleExportInvoices} title="تصدير إلى CSV">
-                    <Download className="h-4 w-4" />
+                  <Button variant="outline" className="border-primary text-primary" onClick={handleExportInvoices}>
+                    <FileDown className="mr-2 h-4 w-4" /> تصدير
+                  </Button>
+                  <Button onClick={() => setIsAddDialogOpen(true)} className="bg-green-200 hover:bg-green-300 text-green-900">
+                    <PlusCircle className="mr-2 h-4 w-4" /> فاتورة جديدة
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">رقم الفاتورة</TableHead>
-                      <TableHead>النوع</TableHead>
-                      <TableHead>الطرف</TableHead>
-                      <TableHead>التاريخ</TableHead>
-                      <TableHead className="text-right">المبلغ</TableHead>
-                      <TableHead>الحالة</TableHead>
-                      <TableHead>حالة المعاملة</TableHead>
-                      <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredInvoices.length > 0 ? (
-                      filteredInvoices.map((invoice) => (
-                        <TableRow key={invoice.id}>
-                          <TableCell className="font-medium">
-                            {invoice.id.substring(0, 8)}...
-                          </TableCell>
-                          <TableCell>
-                            {invoice.invoice_type === 'sale' ? 'بيع' : 'شراء'}
-                          </TableCell>
-                          <TableCell>{invoice.party_name}</TableCell>
-                          <TableCell>
-                            {format(new Date(invoice.date), 'yyyy-MM-dd')}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {invoice.total_amount.toFixed(2)}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                          <TableCell>
-                            <InvoiceStatusBadge status={invoice.payment_status} />
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                  <span className="sr-only">فتح القائمة</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => navigate(`/commercial/invoices/${invoice.id}`)}>
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  <span>عرض التفاصيل</span>
-                                </DropdownMenuItem>
-                                
-                                {invoice.payment_status === 'draft' && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => navigate(`/commercial/invoices/edit/${invoice.id}`)}>
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      <span>تعديل</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => {
-                                      setSelectedInvoiceId(invoice.id);
-                                      setIsConfirmDialogOpen(true);
-                                    }}>
-                                      <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                                      <span>تأكيد الفاتورة</span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDeleteClick(invoice)}>
-                                      <Trash2 className="mr-2 h-4 w-4 text-red-500" />
-                                      <span>حذف</span>
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                                
-                                {invoice.payment_status === 'confirmed' && (
-                                  <DropdownMenuItem onClick={() => {
-                                    setSelectedInvoiceId(invoice.id);
-                                    setIsCancelDialogOpen(true);
-                                  }}>
-                                    <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                                    <span>إلغاء الفاتورة</span>
-                                  </DropdownMenuItem>
-                                )}
-                                
-                                <DropdownMenuItem onClick={() => window.print()}>
-                                  <Printer className="mr-2 h-4 w-4" />
-                                  <span>طباعة</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-full divide-y divide-gray-100">
+                    <TableHeader className="bg-gray-50">
+                      <TableRow>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">#</TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">النوع</TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">الطرف</TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">التاريخ</TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">المبلغ</TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">الحالة</TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">حالة الفاتورة</TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-bold text-gray-500 tracking-wide">إجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredInvoices.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-lg">
+                            لا توجد فواتير مطابقة
                           </TableCell>
                         </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
-                          لا توجد فواتير للعرض
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        filteredInvoices.map((invoice, idx) => (
+                          <TableRow
+                            key={invoice.id}
+                            className="hover:bg-primary/10 transition-colors border-b border-gray-50 group"
+                            onClick={() => navigate(`/commercial/invoices/${invoice.id}`)}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <TableCell className="px-4 py-3 font-semibold text-primary-700 text-base">{invoice.id}</TableCell>
+                            <TableCell className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 border text-xs font-semibold ${invoice.invoice_type === 'sale' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+                                {invoice.invoice_type === 'sale' ? 'بيع' : 'شراء'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="px-4 py-3 font-medium text-gray-700">{invoice.party_name}</TableCell>
+                            <TableCell className="px-4 py-3 text-gray-500">{format(new Date(invoice.date), 'yyyy/MM/dd')}</TableCell>
+                            <TableCell className="px-4 py-3 font-bold text-primary-700">{Number(invoice.total_amount).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</TableCell>
+                            <TableCell className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 border text-xs font-semibold ${statusColor[invoice.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                <span className="w-2 h-2 rounded-full inline-block" style={{ background: invoice.status === 'paid' ? '#22c55e' : invoice.status === 'partial' ? '#eab308' : '#ef4444' }}></span>
+                                {statusLabel[invoice.status] || invoice.status}
+                              </span>
+                            </TableCell>
+                            <TableCell className="px-4 py-3">
+                              <InvoiceStatusBadge status={invoice.payment_status} />
+                            </TableCell>
+                            <TableCell className="px-4 py-3">
+                              <div className="flex gap-1 items-center child:opacity-80 child-hover:opacity-100" onClick={e => e.stopPropagation()}>
+                                <Button size="icon" variant="ghost" onClick={() => navigate(`/commercial/invoices/${invoice.id}`)} title="عرض التفاصيل">
+                                  <FileText className="h-4 w-4 text-primary-500" />
+                                </Button>
+                                <Button size="icon" variant="ghost" onClick={() => handleEditClick(invoice)} title="تعديل">
+                                  <Edit className="h-4 w-4 text-blue-500" />
+                                </Button>
+                                {invoice.payment_status === 'draft' ? (
+                                  <Button size="icon" variant="ghost" onClick={() => handleDeleteClick(invoice)} title="حذف">
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                ) : invoice.payment_status === 'confirmed' ? (
+                                  <Button size="icon" variant="ghost" onClick={e => { e.stopPropagation(); setSelectedInvoiceId(invoice.id); setIsCancelDialogOpen(true); }} title="إلغاء">
+                                    <XCircle className="h-4 w-4 text-orange-500" />
+                                  </Button>
+                                ) : null}
+                                {invoice.payment_status === 'draft' && (
+                                  <Button size="icon" variant="ghost" onClick={e => { e.stopPropagation(); setSelectedInvoiceId(invoice.id); setIsConfirmDialogOpen(true); }} title="تأكيد الفاتورة">
+                                    <CheckCircle className="h-4 w-4 text-green-500" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

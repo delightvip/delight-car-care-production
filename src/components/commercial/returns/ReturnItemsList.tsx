@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { UseFormReturn } from "react-hook-form";
 import { ReturnFormValues } from "@/types/returns";
@@ -9,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 interface ReturnItemsListProps {
   form: UseFormReturn<ReturnFormValues>;
@@ -37,10 +37,26 @@ export default function ReturnItemsList({
   const items = form.watch('items') || [];
   const total = items.reduce((sum, item) => sum + (item.selected ? (item.quantity * item.unit_price) : 0), 0);
 
+  // تحديد/إلغاء كل العناصر دفعة واحدة
+  const allSelected = items.length > 0 && items.every(item => item.selected);
+  const toggleAll = (checked: boolean) => {
+    items.forEach((item, idx) => toggleItemSelection(idx, checked));
+  };
+
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <CardTitle className="text-lg">أصناف المرتجع</CardTitle>
+        {items.length > 0 && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => toggleAll(true)} disabled={allSelected} className="text-xs px-2 py-1">
+              تحديد الكل
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => toggleAll(false)} disabled={!allSelected} className="text-xs px-2 py-1">
+              إلغاء الكل
+            </Button>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[250px] pr-4">
@@ -57,13 +73,13 @@ export default function ReturnItemsList({
           ) : (
             <div className="space-y-4">
               {items.map((item, index) => (
-                <div key={index} className="flex items-center space-x-4 rtl:space-x-reverse border-b pb-3">
+                <div key={index} className="flex flex-col md:flex-row md:items-center md:space-x-4 rtl:space-x-reverse border-b pb-3 gap-2 md:gap-0">
                   <Checkbox 
                     id={`select-item-${index}`}
                     checked={item.selected} 
                     onCheckedChange={(checked) => toggleItemSelection(index, !!checked)}
                   />
-                  <div className="grid gap-1 flex-1">
+                  <div className="grid gap-1 flex-1 grid-cols-1 md:grid-cols-2">
                     <div className="flex justify-between items-center">
                       <Label htmlFor={`item-${index}`} className="font-medium">
                         {item.item_name}
@@ -115,10 +131,10 @@ export default function ReturnItemsList({
             </div>
           )}
         </ScrollArea>
-        
-        <div className="flex justify-between items-center pt-4 mt-4 border-t">
-          <span className="font-semibold">الإجمالي</span>
-          <span className="font-bold text-lg">{total.toFixed(2)}</span>
+        {/* ملخص الإجمالي بشكل أوضح */}
+        <div className="flex justify-between items-center pt-4 mt-4 border-t bg-gray-50 dark:bg-zinc-900">
+          <span className="font-semibold text-base dark:text-gray-100">الإجمالي الكلي</span>
+          <span className="font-bold text-lg text-green-700 dark:text-green-300">{total.toFixed(2)}</span>
         </div>
       </CardContent>
     </Card>

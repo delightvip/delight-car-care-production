@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -23,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Party } from '@/services/PartyService';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Plus } from 'lucide-react';
 
 const partyFormSchema = z.object({
   name: z.string().min(2, {
@@ -63,41 +63,47 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
   });
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="text-xl font-bold">{isEditing ? 'تعديل بيانات الطرف' : 'إضافة طرف جديد'}</CardTitle>
+    <Card className="w-full max-w-2xl mx-auto shadow-xl rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+      <CardHeader className="flex flex-row items-center gap-2 border-b border-gray-100 dark:border-zinc-800 pb-4">
+        <span className="bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-full p-2">
+          <Plus className="h-6 w-6" />
+        </span>
+        <CardTitle className="text-2xl font-bold text-primary-700 dark:text-primary-300 tracking-tight">
+          {isEditing ? 'تعديل بيانات الطرف' : 'إضافة طرف جديد'}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>الاسم</FormLabel>
+                    <FormLabel>الاسم <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input placeholder="اسم الطرف" {...field} />
+                      <Input placeholder="اسم الطرف" {...field} className="rounded-lg border-gray-300 dark:border-zinc-700 focus:ring-2 focus:ring-primary-200" />
                     </FormControl>
+                    <span className="text-xs text-muted-foreground">أدخل الاسم الكامل للطرف.</span>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>النوع</FormLabel>
+                    <FormLabel>النوع <span className="text-red-500">*</span></FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       defaultValue={field.value}
                       disabled={isEditing}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="rounded-lg border-gray-300 dark:border-zinc-700 focus:ring-2 focus:ring-primary-200">
                           <SelectValue placeholder="اختر نوع الطرف" />
                         </SelectTrigger>
                       </FormControl>
@@ -107,11 +113,12 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                         <SelectItem value="other">أخرى</SelectItem>
                       </SelectContent>
                     </Select>
+                    <span className="text-xs text-muted-foreground">حدد نوع الطرف التجاري.</span>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="phone"
@@ -119,13 +126,14 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                   <FormItem>
                     <FormLabel>رقم الهاتف</FormLabel>
                     <FormControl>
-                      <Input placeholder="رقم الهاتف" {...field} />
+                      <Input placeholder="رقم الهاتف" {...field} className="rounded-lg border-gray-300 dark:border-zinc-700 focus:ring-2 focus:ring-primary-200" />
                     </FormControl>
+                    <span className="text-xs text-muted-foreground">اختياري: رقم للتواصل مع الطرف.</span>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="email"
@@ -133,8 +141,9 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                   <FormItem>
                     <FormLabel>البريد الإلكتروني</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="البريد الإلكتروني" {...field} />
+                      <Input type="email" placeholder="البريد الإلكتروني" {...field} className="rounded-lg border-gray-300 dark:border-zinc-700 focus:ring-2 focus:ring-primary-200" />
                     </FormControl>
+                    <span className="text-xs text-muted-foreground">اختياري: البريد الإلكتروني للطرف.</span>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -153,13 +162,15 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                         {...field} 
                         onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                         disabled={isEditing}
+                        className="rounded-lg border-gray-300 dark:border-zinc-700 focus:ring-2 focus:ring-primary-200"
                       />
                     </FormControl>
+                    <span className="text-xs text-muted-foreground">اختياري: الرصيد عند إضافة الطرف لأول مرة.</span>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="balance_type"
@@ -172,7 +183,7 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                       disabled={isEditing}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="rounded-lg border-gray-300 dark:border-zinc-700 focus:ring-2 focus:ring-primary-200">
                           <SelectValue placeholder="نوع الرصيد" />
                         </SelectTrigger>
                       </FormControl>
@@ -181,12 +192,12 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                         <SelectItem value="credit">دائن (عليه)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <span className="text-xs text-muted-foreground">حدد إذا كان الرصيد مدين أم دائن.</span>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-            
             <FormField
               control={form.control}
               name="address"
@@ -194,18 +205,24 @@ export function PartyForm({ onSubmit, initialData, isEditing = false }: PartyFor
                 <FormItem>
                   <FormLabel>العنوان</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="العنوان" {...field} />
+                    <Textarea placeholder="العنوان" {...field} className="rounded-lg border-gray-300 dark:border-zinc-700 focus:ring-2 focus:ring-primary-200" />
                   </FormControl>
+                  <span className="text-xs text-muted-foreground">اختياري: العنوان التفصيلي للطرف.</span>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
-            <CardFooter className="px-0 pt-6 flex justify-between">
-              <Button variant="outline" type="button" onClick={() => form.reset()}>
-                إعادة تعيين
+            <CardFooter className="px-0 pt-8 flex justify-between">
+              <Button variant="outline" type="button" onClick={() => form.reset()} className="rounded-lg">
+                <span className="mr-1">↺</span> إعادة تعيين
               </Button>
-              <Button type="submit">{isEditing ? 'تحديث' : 'إضافة'}</Button>
+              <Button
+                type="submit"
+                className="rounded-lg bg-green-200 hover:bg-green-300 text-green-900 font-bold shadow border-2 border-green-300 focus:ring-2 focus:ring-green-100 focus:border-green-400"
+                style={{ backgroundColor: '#bbf7d0', color: '#166534', borderColor: '#86efac' }}
+              >
+                <span className="mr-1">{isEditing ? '💾' : '➕'}</span> {isEditing ? 'تحديث' : 'إضافة'}
+              </Button>
             </CardFooter>
           </form>
         </Form>

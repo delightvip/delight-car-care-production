@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -97,6 +97,23 @@ export function PaymentForm({
       notes: initialData?.notes || '',
     },
   });
+
+  useEffect(() => {
+    // تعبئة نوع المعاملة والعميل تلقائياً إذا توفرت initialData
+    if (initialData) {
+      if (initialData.payment_type) {
+        setSelectedPaymentType(initialData.payment_type);
+        form.setValue('payment_type', initialData.payment_type);
+      }
+      if (initialData.party_id) {
+        form.setValue('party_id', initialData.party_id);
+      }
+      // تعبئة الفاتورة المرتبطة تلقائياً إذا توفرت
+      if (initialData.related_invoice_id) {
+        form.setValue('related_invoice_id', initialData.related_invoice_id);
+      }
+    }
+  }, [initialData, form]);
 
   const handlePaymentTypeChange = useCallback((value: string) => {
     setSelectedPaymentType(value);
@@ -299,24 +316,29 @@ export function PaymentForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>المبلغ</FormLabel>
-                    <div className="relative">
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          min="0" 
-                          placeholder="أدخل المبلغ" 
-                          {...field}
-                          className={`pr-16 font-medium text-lg ${
-                            field.value > 1000 ? 'text-green-600 dark:text-green-400' :
-                            field.value > 0 ? 'text-primary' : ''
-                          }`}
-                        />
-                      </FormControl>
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                        ج.م
-                      </div>
-                    </div>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        autoComplete="off"
+                        value={field.value}
+                        onChange={e => {
+                          // اقبل القيمة كما هي (نصية) للسماح بالكتابة الطبيعية
+                          field.onChange(e.target.value);
+                        }}
+                        onBlur={e => {
+                          // عند الخروج من الحقل، قم بتحويل القيمة إلى رقم وتنسيقها
+                          const val = e.target.value;
+                          const num = parseFloat(val);
+                          if (!isNaN(num)) {
+                            field.onChange(Number(num.toFixed(2)));
+                          } else {
+                            field.onChange('');
+                          }
+                        }}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -497,8 +519,8 @@ export function PaymentForm({
                   </div>                  <div className="flex flex-col space-y-1">
                     <span className="text-sm text-muted-foreground">المبلغ:</span>
                     <span className="font-medium text-lg">
-                      {typeof form.getValues('amount') === 'number' 
-                        ? form.getValues('amount').toFixed(2) 
+                      {typeof form.getValues('amount') === 'number'
+                        ? Number(form.getValues('amount')).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                         : '0.00'} ج.م
                     </span>
                   </div>

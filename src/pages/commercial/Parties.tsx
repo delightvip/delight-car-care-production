@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -88,7 +87,11 @@ const Parties = () => {
             <h1 className="text-3xl font-bold tracking-tight">الأطراف التجارية</h1>
             <p className="text-muted-foreground">إدارة العملاء والموردين والأطراف الأخرى</p>
           </div>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            className="bg-green-200 hover:bg-green-300 text-green-900 font-bold rounded-lg shadow border-2 border-green-300 focus:ring-2 focus:ring-green-100 focus:border-green-400 px-4 py-2 flex items-center gap-2"
+            style={{ backgroundColor: '#bbf7d0', color: '#166534', borderColor: '#86efac' }}
+          >
             <PlusCircle className="mr-2 h-4 w-4" /> إضافة طرف جديد
           </Button>
         </div>
@@ -100,9 +103,9 @@ const Parties = () => {
             <TabsTrigger value="supplier">الموردين</TabsTrigger>
             <TabsTrigger value="other">أخرى</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value={activeTab} className="mt-0">
-            <PartyList 
+            <PartyList
               parties={filteredParties}
               onAddParty={handleAddParty}
               onUpdateParty={handleUpdateParty}
@@ -113,6 +116,7 @@ const Parties = () => {
                 activeTab === 'supplier' ? 'الموردين' : 'أطراف أخرى'
               }
               type={activeTab as any}
+              onTypeChange={(type) => setActiveTab(type as typeof activeTab)}
             />
           </TabsContent>
         </Tabs>

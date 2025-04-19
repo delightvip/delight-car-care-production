@@ -13,6 +13,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import PriceTrendChart from '@/components/inventory/reports/PriceTrendChart';
 
 // Import the report components
 import ReportFilterCard from '@/components/inventory/reports/ReportFilterCard';
@@ -122,10 +123,12 @@ const InventoryReports = () => {
       
       if (!selectedTableInfo) return null;
       
+      // Ensure correct type: most likely the ID in DB is number, so always use Number(selectedItem)
+      const idValue = Number(selectedItem);
       const { data, error } = await supabase
         .from(selectedTableInfo.table)
         .select('id, code, name, quantity, unit')
-        .eq('id', parseInt(selectedItem))
+        .eq('id', idValue)
         .single();
         
       if (error) {
@@ -313,6 +316,34 @@ const InventoryReports = () => {
       };
     },
     enabled: activeTab === 'dependency' || activeTab === 'unused-materials'
+  });
+
+  const { data: priceHistory, isLoading: isLoadingPriceHistory } = useQuery({
+    queryKey: ['price-history', selectedCategory, selectedItem],
+    enabled: !!selectedItem,
+    queryFn: async () => {
+      if (!selectedItem) return [];
+      // Determine table name
+      const tableInfo = inventoryTables.find(t => t.id === selectedCategory);
+      if (!tableInfo) return [];
+      // Fetch price history for the item
+      // Ensure correct type: most likely the ID in DB is number, so always use Number(selectedItem)
+      const idValue = Number(selectedItem);
+      const { data, error } = await supabase
+        .from(tableInfo.table)
+        .select('id, code, name, unit_cost, updated_at, created_at')
+        .eq('id', idValue)
+        .order('updated_at', { ascending: true });
+      if (error) {
+        console.error('Error fetching price history:', error);
+        return [];
+      }
+      // Build history
+      return (data || []).map((row: any) => ({
+        date: row.updated_at || row.created_at,
+        price: row.unit_cost,
+      }));
+    }
   });
 
   useEffect(() => {
@@ -595,6 +626,145 @@ const InventoryReports = () => {
                 setTimeRange={setTimeRange}
               />
             </div>
+            
+            <Tabs defaultValue="item-movement" value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full max-w-4xl mx-auto grid-cols-2 md:grid-cols-5">
+                <TabsTrigger value="item-movement" className="flex items-center gap-2">
+                  <BarChart3 size={16} />
+                  <span className="hidden md:inline">حركة الصنف</span>
+                </TabsTrigger>
+                <TabsTrigger value="price-trends" className="flex items-center gap-2">
+                  <TrendingUp size={16} />
+                  <span className="hidden md:inline">اتجاهات الأسعار</span>
+                </TabsTrigger>
+                <TabsTrigger value="dependency" className="flex items-center gap-2">
+                  <Layers size={16} />
+                  <span className="hidden md:inline">اعتمادية المواد</span>
+                </TabsTrigger>
+                <TabsTrigger value="consumption" className="flex items-center gap-2">
+                  <FileBarChart size={16} />
+                  <span className="hidden md:inline">الأكثر استهلاكاً</span>
+                </TabsTrigger>
+                <TabsTrigger value="least-used" className="flex items-center gap-2">
+                  <Clock size={16} />
+                  <span className="hidden md:inline">الأقل استهلاكاً</span>
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="item-movement" className="mt-0">
+                <div className="bg-muted/30 rounded-lg p-6 border border-border/40 shadow-sm">
+                  <ReportContent
+                    selectedItem={selectedItem}
+                    selectedCategory={selectedCategory}
+                    isLoadingItemDetails={isLoadingItemDetails}
+                    selectedItemDetails={selectedItemDetails}
+                    reportType={reportType}
+                    setReportType={setReportType}
+                    timeRange={timeRange}
+                    setTimeRange={setTimeRange}
+                  />
+                </div>
+              </TabsContent>
+              <TabsContent value="price-trends" className="mt-0">                  <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="اختر نوع الأصناف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inventoryTables.map(category => (
+                        <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedItem || ''} onValueChange={setSelectedItem}>
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue placeholder="اختر الصنف (اختياري)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {items?.map(item => (
+                        <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>تغير أسعار المواد بمرور الوقت</CardTitle>
+                    <CardDescription>يوضح التغير في أسعار المواد الخام ومواد التعبئة</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderPriceTrends()}
+                  </CardContent>
+                </Card>
+                {selectedItem && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>مؤشر تغيرات سعر الصنف المحدد</CardTitle>
+                      <CardDescription>
+                        يعرض تطور سعر الوحدة عبر الزمن لهذا الصنف
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <PriceTrendChart
+                        data={priceHistory || []}
+                        isLoading={isLoadingPriceHistory}
+                        materialName={items?.find(i => i.id === selectedItem)?.name}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+                {!selectedItem && (
+                  <div className="text-center py-8 text-muted-foreground">يمكنك اختيار صنف من القائمة أعلاه لعرض اتجاهات سعره بالتفصيل</div>
+                )}
+              </div>
+            </TabsContent>
+              <TabsContent value="dependency" className="mt-0">
+                {renderDependencyChart(materialsDependency?.rawMaterials || [], "اعتمادية المواد الخام")}
+                {renderDependencyChart(materialsDependency?.packaging || [], "اعتمادية مواد التعبئة")}
+              </TabsContent>
+              <TabsContent value="consumption" className="mt-0">
+                {renderConsumptionChart(topConsumedMaterials?.rawMaterials || [], "أكثر 10 مواد خام استهلاكاً")}
+                {renderConsumptionChart(topConsumedMaterials?.packaging || [], "أكثر 10 مواد تعبئة استهلاكاً")}
+              </TabsContent>
+              <TabsContent value="least-used" className="mt-0">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-semibold">المواد الأقل استهلاكاً</h2>
+                  <div className="flex items-center gap-2">
+                    <Select defaultValue={timeRange} onValueChange={setTimeRange}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="الفترة الزمنية" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="month">شهري</SelectItem>
+                        <SelectItem value="quarter">ربع سنوي</SelectItem>
+                        <SelectItem value="year">سنوي</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid md:grid-cols-2 gap-6 mb-6">
+                  {isLoadingTopConsumed ? (
+                    <>
+                      <Skeleton className="h-96 w-full" />
+                      <Skeleton className="h-96 w-full" />
+                    </>
+                  ) : (
+                    <>
+                      {renderConsumptionChart(
+                        getLeastUsedMaterials().rawMaterials, 
+                        "أقل 10 مواد خام استهلاكاً"
+                      )}
+                      {renderConsumptionChart(
+                        getLeastUsedMaterials().packaging, 
+                        "أقل 10 مواد تعبئة استهلاكاً"
+                      )}
+                    </>
+                  )}
+                </div>
+                <h2 className="text-xl font-semibold mb-4">المواد غير المستخدمة في المنتجات</h2>
+                {renderUnusedMaterials()}
+              </TabsContent>
+            </Tabs>
           </>
         ) : (
           <Tabs defaultValue="item-movement" value={activeTab} onValueChange={setActiveTab}>
@@ -620,404 +790,358 @@ const InventoryReports = () => {
                 <span className="hidden md:inline">الأقل استهلاكاً</span>
               </TabsTrigger>
             </TabsList>
+            <TabsContent value="item-movement" className="mt-0">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">حركة وتحليل الأصناف</h2>
+                <div className="flex items-center gap-2">
+                  <Select defaultValue={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="اختر نوع الأصناف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inventoryTables.map(category => (
+                        <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select defaultValue={selectedItem || ''} onValueChange={setSelectedItem}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="اختر الصنف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {items?.map(item => (
+                        <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              {selectedItem && (
+                <Button
+                  variant="default"
+                  className="mb-6"
+                  onClick={() => navigate(`/inventory/reports/${selectedCategory}/${selectedItem}`)}
+                >
+                  عرض تقرير مفصل للصنف
+                </Button>
+              )}
+              
+              <div className="bg-muted/30 rounded-lg p-6 border border-border/40 shadow-sm">
+                <ReportContent
+                  selectedItem={selectedItem}
+                  selectedCategory={selectedCategory}
+                  isLoadingItemDetails={isLoadingItemDetails}
+                  selectedItemDetails={selectedItemDetails}
+                  reportType={reportType}
+                  setReportType={setReportType}
+                  timeRange={timeRange}
+                  setTimeRange={setTimeRange}
+                />
+              </div>
+            </TabsContent>
             
-            <div className="h-2"></div>
-            
-            <Card>
-              <CardContent className="p-6">
-                <TabsContent value="item-movement" className="mt-0">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-semibold">حركة وتحليل الأصناف</h2>
-                    <div className="flex items-center gap-2">
-                      <Select defaultValue={selectedCategory} onValueChange={setSelectedCategory}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="اختر نوع الأصناف" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {inventoryTables.map(category => (
-                            <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      
-                      <Select defaultValue={selectedItem || ''} onValueChange={setSelectedItem}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="اختر الصنف" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {items?.map(item => (
-                            <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  {selectedItem && (
-                    <Button
-                      variant="default"
-                      className="mb-6"
-                      onClick={() => navigate(`/inventory/reports/${selectedCategory}/${selectedItem}`)}
-                    >
-                      عرض تقرير مفصل للصنف
-                    </Button>
-                  )}
-                  
-                  <div className="bg-muted/30 rounded-lg p-6 border border-border/40 shadow-sm">
-                    <ReportContent
-                      selectedItem={selectedItem}
-                      selectedCategory={selectedCategory}
-                      isLoadingItemDetails={isLoadingItemDetails}
-                      selectedItemDetails={selectedItemDetails}
-                      reportType={reportType}
-                      setReportType={setReportType}
-                      timeRange={timeRange}
-                      setTimeRange={setTimeRange}
-                    />
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="price-trends" className="mt-0">                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-semibold">اتجاهات أسعار المواد</h2>
-                    <div className="flex items-center gap-2">
-                      <AdvancedTimeFilter 
-                        onChange={(range) => {
-                          const preset = range.preset || 'month';
-                          setTimeRange(preset);
-                        }}
-                        defaultValue={{
-                          from: new Date(new Date().setMonth(new Date().getMonth() - 1)),
-                          to: new Date(),
-                          preset: timeRange
-                        }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <Card className="mb-6">
-                    <CardHeader>
-                      <CardTitle>تغير أسعار المواد بمرور الوقت</CardTitle>
-                      <CardDescription>يوضح التغير في أسعار المواد الخام ومواد التعبئة</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {renderPriceTrends()}
-                    </CardContent>
-                  </Card>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>المواد الخام - التكلفة الحالية</CardTitle>
-                        <CardDescription>أعلى 5 مواد خام من حيث التكلفة</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {isLoadingPriceTrends ? (
-                          <Skeleton className="h-40 w-full" />
-                        ) : (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>الاسم</TableHead>
-                                <TableHead>التكلفة</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {priceTrendsData?.rawMaterials
-                                .sort((a, b) => b.unit_cost - a.unit_cost)
-                                .slice(0, 5)
-                                .map(material => (
-                                  <TableRow key={material.id}>
-                                    <TableCell>{material.name}</TableCell>
-                                    <TableCell>{material.unit_cost.toLocaleString('ar-EG')} ج.م</TableCell>
-                                  </TableRow>
-                                ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </CardContent>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>مواد التعبئة - التكلفة الحالية</CardTitle>
-                        <CardDescription>أعلى 5 مواد تعبئة من حيث التكلفة</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {isLoadingPriceTrends ? (
-                          <Skeleton className="h-40 w-full" />
-                        ) : (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>الاسم</TableHead>
-                                <TableHead>التكلفة</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {priceTrendsData?.packaging
-                                .sort((a, b) => b.unit_cost - a.unit_cost)
-                                .slice(0, 5)
-                                .map(material => (
-                                  <TableRow key={material.id}>
-                                    <TableCell>{material.name}</TableCell>
-                                    <TableCell>{material.unit_cost.toLocaleString('ar-EG')} ج.م</TableCell>
-                                  </TableRow>
-                                ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="dependency" className="mt-0">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-semibold">اعتمادية المواد في المنتجات</h2>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-6 mb-6">
-                    {isLoadingDependency ? (
-                      <>
-                        <Skeleton className="h-96 w-full" />
-                        <Skeleton className="h-96 w-full" />
-                      </>
-                    ) : (
-                      <>
-                        {renderDependencyChart(
-                          materialsDependency?.rawMaterials.filter(m => m.dependencyCount > 0).slice(0, 10) || [], 
-                          "أكثر 10 مواد خام استخداماً في المنتجات"
-                        )}
-                        {renderDependencyChart(
-                          materialsDependency?.packaging.filter(m => m.dependencyCount > 0).slice(0, 10) || [], 
-                          "أكثر 10 مواد تعبئة استخداماً في المنتجات"
-                        )}
-                      </>
-                    )}
-                  </div>
-                  
+            <TabsContent value="price-trends" className="mt-0">                  <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="اختر نوع الأصناف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inventoryTables.map(category => (
+                        <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedItem || ''} onValueChange={setSelectedItem}>
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue placeholder="اختر الصنف (اختياري)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {items?.map(item => (
+                        <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>تغير أسعار المواد بمرور الوقت</CardTitle>
+                    <CardDescription>يوضح التغير في أسعار المواد الخام ومواد التعبئة</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderPriceTrends()}
+                  </CardContent>
+                </Card>
+                {selectedItem && (
                   <Card>
                     <CardHeader>
-                      <CardTitle>توزيع اعتمادية المواد</CardTitle>
-                      <CardDescription>يوضح نسبة المواد المستخدمة وغير المستخدمة</CardDescription>
+                      <CardTitle>مؤشر تغيرات سعر الصنف المحدد</CardTitle>
+                      <CardDescription>
+                        يعرض تطور سعر الوحدة عبر الزمن لهذا الصنف
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {isLoadingDependency ? (
-                        <Skeleton className="h-60 w-full" />
-                      ) : (
-                        <div className="grid md:grid-cols-2 gap-6">
-                          <div>
-                            <h3 className="text-lg font-medium mb-4 text-center">المواد الخام</h3>
-                            <ResponsiveContainer width="100%" height={300}>
-                              <RechartsPieChart>
-                                <Pie
-                                  data={[
-                                    { 
-                                      name: 'مستخدمة', 
-                                      value: materialsDependency?.rawMaterials.filter(m => m.dependencyCount > 0).length || 0 
-                                    },
-                                    { 
-                                      name: 'غير مستخدمة', 
-                                      value: materialsDependency?.rawMaterials.filter(m => m.dependencyCount === 0).length || 0 
-                                    }
-                                  ]}
-                                  cx="50%"
-                                  cy="50%"
-                                  labelLine={true}
-                                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                  outerRadius={80}
-                                  fill="#8884d8"
-                                  dataKey="value"
-                                >
-                                  {[0, 1].map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip />
-                              </RechartsPieChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-medium mb-4 text-center">مواد التعبئة</h3>
-                            <ResponsiveContainer width="100%" height={300}>
-                              <RechartsPieChart>
-                                <Pie
-                                  data={[
-                                    { 
-                                      name: 'مستخدمة', 
-                                      value: materialsDependency?.packaging.filter(m => m.dependencyCount > 0).length || 0 
-                                    },
-                                    { 
-                                      name: 'غير مستخدمة', 
-                                      value: materialsDependency?.packaging.filter(m => m.dependencyCount === 0).length || 0 
-                                    }
-                                  ]}
-                                  cx="50%"
-                                  cy="50%"
-                                  labelLine={true}
-                                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                  outerRadius={80}
-                                  fill="#8884d8"
-                                  dataKey="value"
-                                >
-                                  {[0, 1].map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip />
-                              </RechartsPieChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      )}
+                      <PriceTrendChart
+                        data={priceHistory || []}
+                        isLoading={isLoadingPriceHistory}
+                        materialName={items?.find(i => i.id === selectedItem)?.name}
+                      />
                     </CardContent>
                   </Card>
-                </TabsContent>
-                
-                <TabsContent value="consumption" className="mt-0">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-semibold">المواد الأكثر استهلاكاً</h2>
-                    <div className="flex items-center gap-2">
-                      <Select defaultValue={timeRange} onValueChange={setTimeRange}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="الفترة الزمنية" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="month">شهري</SelectItem>
-                          <SelectItem value="quarter">ربع سنوي</SelectItem>
-                          <SelectItem value="year">سنوي</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-6 mb-6">
-                    {isLoadingTopConsumed ? (
-                      <>
-                        <Skeleton className="h-96 w-full" />
-                        <Skeleton className="h-96 w-full" />
-                      </>
-                    ) : (
-                      <>
-                        {renderConsumptionChart(
-                          topConsumedMaterials?.rawMaterials.slice(0, 10) || [], 
-                          "أعلى 10 مواد خام استهلاكاً"
-                        )}
-                        {renderConsumptionChart(
-                          topConsumedMaterials?.packaging.slice(0, 10) || [], 
-                          "أعلى 10 مواد تعبئة استهلاكاً"
-                        )}
-                      </>
+                )}
+                {!selectedItem && (
+                  <div className="text-center py-8 text-muted-foreground">يمكنك اختيار صنف من القائمة أعلاه لعرض اتجاهات سعره بالتفصيل</div>
+                )}
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="dependency" className="mt-0">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">اعتمادية المواد في المنتجات</h2>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                {isLoadingDependency ? (
+                  <>
+                    <Skeleton className="h-96 w-full" />
+                    <Skeleton className="h-96 w-full" />
+                  </>
+                ) : (
+                  <>
+                    {renderDependencyChart(
+                      materialsDependency?.rawMaterials.filter(m => m.dependencyCount > 0).slice(0, 10) || [], 
+                      "أكثر 10 مواد خام استخداماً في المنتجات"
                     )}
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>أكثر المواد الخام استهلاكاً</CardTitle>
-                        <CardDescription>استناداً إلى بيانات حركة المخزون</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {isLoadingTopConsumed ? (
-                          <Skeleton className="h-40 w-full" />
-                        ) : (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>الكود</TableHead>
-                                <TableHead>الاسم</TableHead>
-                                <TableHead>الكمية المستهلكة</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {topConsumedMaterials?.rawMaterials.slice(0, 5).map(material => (
-                                <TableRow key={material.id}>
-                                  <TableCell>{material.code}</TableCell>
-                                  <TableCell>{material.name}</TableCell>
-                                  <TableCell>{material.consumption.toLocaleString('ar-EG')} {material.unit}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </CardContent>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>أكثر مواد التعبئة استهلاكاً</CardTitle>
-                        <CardDescription>استناداً إلى بيانات حركة المخزون</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {isLoadingTopConsumed ? (
-                          <Skeleton className="h-40 w-full" />
-                        ) : (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>الكود</TableHead>
-                                <TableHead>الاسم</TableHead>
-                                <TableHead>الكمية المستهلكة</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {topConsumedMaterials?.packaging.slice(0, 5).map(material => (
-                                <TableRow key={material.id}>
-                                  <TableCell>{material.code}</TableCell>
-                                  <TableCell>{material.name}</TableCell>
-                                  <TableCell>{material.consumption.toLocaleString('ar-EG')} {material.unit}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="least-used" className="mt-0">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-semibold">المواد الأقل استهلاكاً</h2>
-                    <div className="flex items-center gap-2">
-                      <Select defaultValue={timeRange} onValueChange={setTimeRange}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="الفترة الزمنية" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="month">شهري</SelectItem>
-                          <SelectItem value="quarter">ربع سنوي</SelectItem>
-                          <SelectItem value="year">سنوي</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-6 mb-6">
-                    {isLoadingTopConsumed ? (
-                      <>
-                        <Skeleton className="h-96 w-full" />
-                        <Skeleton className="h-96 w-full" />
-                      </>
-                    ) : (
-                      <>
-                        {renderConsumptionChart(
-                          getLeastUsedMaterials().rawMaterials, 
-                          "أقل 10 مواد خام استهلاكاً"
-                        )}
-                        {renderConsumptionChart(
-                          getLeastUsedMaterials().packaging, 
-                          "أقل 10 مواد تعبئة استهلاكاً"
-                        )}
-                      </>
+                    {renderDependencyChart(
+                      materialsDependency?.packaging.filter(m => m.dependencyCount > 0).slice(0, 10) || [], 
+                      "أكثر 10 مواد تعبئة استخداماً في المنتجات"
                     )}
-                  </div>
-                  
-                  <h2 className="text-xl font-semibold mb-4">المواد غير المستخدمة في المنتجات</h2>
-                  {renderUnusedMaterials()}
-                </TabsContent>
-              </CardContent>
-            </Card>
+                  </>
+                )}
+              </div>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>توزيع اعتمادية المواد</CardTitle>
+                  <CardDescription>يوضح نسبة المواد المستخدمة وغير المستخدمة</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingDependency ? (
+                    <Skeleton className="h-60 w-full" />
+                  ) : (
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="text-lg font-medium mb-4 text-center">المواد الخام</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <RechartsPieChart>
+                            <Pie
+                              data={[
+                                { 
+                                  name: 'مستخدمة', 
+                                  value: materialsDependency?.rawMaterials.filter(m => m.dependencyCount > 0).length || 0 
+                                },
+                                { 
+                                  name: 'غير مستخدمة', 
+                                  value: materialsDependency?.rawMaterials.filter(m => m.dependencyCount === 0).length || 0 
+                                }
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={true}
+                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {[0, 1].map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium mb-4 text-center">مواد التعبئة</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <RechartsPieChart>
+                            <Pie
+                              data={[
+                                { 
+                                  name: 'مستخدمة', 
+                                  value: materialsDependency?.packaging.filter(m => m.dependencyCount > 0).length || 0 
+                                },
+                                { 
+                                  name: 'غير مستخدمة', 
+                                  value: materialsDependency?.packaging.filter(m => m.dependencyCount === 0).length || 0 
+                                }
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={true}
+                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {[0, 1].map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="consumption" className="mt-0">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">المواد الأكثر استهلاكاً</h2>
+                <div className="flex items-center gap-2">
+                  <Select defaultValue={timeRange} onValueChange={setTimeRange}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="الفترة الزمنية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="month">شهري</SelectItem>
+                      <SelectItem value="quarter">ربع سنوي</SelectItem>
+                      <SelectItem value="year">سنوي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                {isLoadingTopConsumed ? (
+                  <>
+                    <Skeleton className="h-96 w-full" />
+                    <Skeleton className="h-96 w-full" />
+                  </>
+                ) : (
+                  <>
+                    {renderConsumptionChart(
+                      topConsumedMaterials?.rawMaterials.slice(0, 10) || [], 
+                      "أعلى 10 مواد خام استهلاكاً"
+                    )}
+                    {renderConsumptionChart(
+                      topConsumedMaterials?.packaging.slice(0, 10) || [], 
+                      "أعلى 10 مواد تعبئة استهلاكاً"
+                    )}
+                  </>
+                )}
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>أكثر المواد الخام استهلاكاً</CardTitle>
+                    <CardDescription>استناداً إلى بيانات حركة المخزون</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingTopConsumed ? (
+                      <Skeleton className="h-40 w-full" />
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>الكود</TableHead>
+                            <TableHead>الاسم</TableHead>
+                            <TableHead>الكمية المستهلكة</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {topConsumedMaterials?.rawMaterials.slice(0, 5).map(material => (
+                            <TableRow key={material.id}>
+                              <TableCell>{material.code}</TableCell>
+                              <TableCell>{material.name}</TableCell>
+                              <TableCell>{material.consumption.toLocaleString('ar-EG')} {material.unit}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>أكثر مواد التعبئة استهلاكاً</CardTitle>
+                    <CardDescription>استناداً إلى بيانات حركة المخزون</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingTopConsumed ? (
+                      <Skeleton className="h-40 w-full" />
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>الكود</TableHead>
+                            <TableHead>الاسم</TableHead>
+                            <TableHead>الكمية المستهلكة</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {topConsumedMaterials?.packaging.slice(0, 5).map(material => (
+                            <TableRow key={material.id}>
+                              <TableCell>{material.code}</TableCell>
+                              <TableCell>{material.name}</TableCell>
+                              <TableCell>{material.consumption.toLocaleString('ar-EG')} {material.unit}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="least-used" className="mt-0">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">المواد الأقل استهلاكاً</h2>
+                <div className="flex items-center gap-2">
+                  <Select defaultValue={timeRange} onValueChange={setTimeRange}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="الفترة الزمنية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="month">شهري</SelectItem>
+                      <SelectItem value="quarter">ربع سنوي</SelectItem>
+                      <SelectItem value="year">سنوي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                {isLoadingTopConsumed ? (
+                  <>
+                    <Skeleton className="h-96 w-full" />
+                    <Skeleton className="h-96 w-full" />
+                  </>
+                ) : (
+                  <>
+                    {renderConsumptionChart(
+                      getLeastUsedMaterials().rawMaterials, 
+                      "أقل 10 مواد خام استهلاكاً"
+                    )}
+                    {renderConsumptionChart(
+                      getLeastUsedMaterials().packaging, 
+                      "أقل 10 مواد تعبئة استهلاكاً"
+                    )}
+                  </>
+                )}
+              </div>
+              
+              <h2 className="text-xl font-semibold mb-4">المواد غير المستخدمة في المنتجات</h2>
+              {renderUnusedMaterials()}
+            </TabsContent>
           </Tabs>
         )}
       </div>

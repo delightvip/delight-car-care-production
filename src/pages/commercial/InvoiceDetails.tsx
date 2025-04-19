@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -41,11 +40,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import PartyService from '@/services/PartyService';
+import './invoice-print.css';
 
 const InvoiceDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [parties, setParties] = useState([]);
   
   const commercialService = CommercialService.getInstance();
   
@@ -54,6 +56,11 @@ const InvoiceDetails = () => {
     queryFn: () => commercialService.getInvoiceById(id || ''),
     enabled: !!id,
   });
+  
+  // جلب قائمة الأطراف
+  useEffect(() => {
+    PartyService.getInstance().getParties().then(setParties);
+  }, []);
   
   if (isLoading) {
     return (
@@ -181,7 +188,7 @@ const InvoiceDetails = () => {
   
   return (
     <PageTransition>
-      <div className="space-y-6">
+      <div className="space-y-6" id="invoice-print-area">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
@@ -192,19 +199,19 @@ const InvoiceDetails = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => window.print()}>
+            <Button variant="outline" onClick={() => window.print()} className="no-print">
               <Printer className="ml-2 h-4 w-4" />
               طباعة
             </Button>
             {invoice.payment_status === 'draft' && (
               <>
-                <Button variant="outline" onClick={() => navigate(`/commercial/invoices/edit/${id}`)}>
+                <Button variant="outline" onClick={() => navigate(`/commercial/invoices/edit/${id}`)} className="no-print">
                   <Edit className="ml-2 h-4 w-4" />
                   تعديل
                 </Button>
                 <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive">
+                    <Button variant="destructive" className="no-print">
                       <Trash2 className="ml-2 h-4 w-4" />
                       حذف
                     </Button>
@@ -226,7 +233,7 @@ const InvoiceDetails = () => {
                 </AlertDialog>
               </>
             )}
-            <Button variant="outline" onClick={() => navigate(-1)}>
+            <Button variant="outline" onClick={() => navigate(-1)} className="no-print">
               <ArrowLeft className="ml-2 h-4 w-4" />
               العودة
             </Button>
@@ -278,7 +285,7 @@ const InvoiceDetails = () => {
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="no-print">
             <CardHeader>
               <CardTitle className="text-xl">ملخص الفاتورة</CardTitle>
             </CardHeader>

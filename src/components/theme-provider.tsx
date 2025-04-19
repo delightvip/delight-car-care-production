@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -7,7 +6,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes"
 import { type ThemeProviderProps } from "next-themes/dist/types"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 
-type Theme = "dark" | "light" | "system"
+type Theme = "dark" | "light" | "system" | "blue" | "green"
 
 interface ThemeProviderContextProps {
   theme: Theme
@@ -23,7 +22,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   // Apply theme to document when component mounts or theme changes
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
+    root.classList.remove('light', 'dark', 'blue', 'green');
     
     if (theme === 'system') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

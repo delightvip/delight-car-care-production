@@ -498,13 +498,15 @@ const ModernSidebar: React.FC = () => {
           stiffness: 300, 
           damping: 30,
           duration: 0.3
-        }}        className={cn(
+        }}
+        className={cn(
           'bg-background h-screen flex flex-col fixed top-0 z-30',
           rtl ? 'right-0 border-l border-border' : 'left-0 border-r border-border', 
           'will-change-transform',
           'shadow-sm',
           'overflow-hidden'
         )}
+        style={{ direction: rtl ? 'rtl' : 'ltr' }}
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <AnimatePresence initial={false} mode="wait">
@@ -656,24 +658,26 @@ const ModernSidebar: React.FC = () => {
         
         {!isExpanded && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.3 }}
-            className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-10"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.15, duration: 0.3 }}
+            className="hidden md:flex fixed left-[60px] top-1/2 -translate-y-1/2 z-40"
+            style={{ width: '40px', height: '80px', borderTopRightRadius: '32px', borderBottomRightRadius: '32px', background: 'linear-gradient(90deg, #fff 80%, #f0f4ff 100%)', boxShadow: '2px 0 12px 0 rgba(31,38,135,0.08)' }}
           >
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="secondary"
+                    variant="ghost"
                     size="icon"
-                    className="rounded-full h-8 w-8 shadow-md"
+                    className="rounded-full h-12 w-12 m-auto flex items-center justify-center shadow-none border-none hover:bg-primary/10 transition-all"
+                    style={{ background: 'transparent' }}
                     onClick={toggleSidebar}
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronRight className="h-7 w-7 text-primary" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="left">
+                <TooltipContent side="right">
                   توسيع القائمة
                 </TooltipContent>
               </Tooltip>

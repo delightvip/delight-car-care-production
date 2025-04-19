@@ -29,9 +29,14 @@ import { PaymentForm } from '@/components/commercial/PaymentForm';
 import PaymentsList from '@/components/commercial/PaymentsList';
 import FinancialBalanceSummary from '@/components/financial/FinancialBalanceSummary';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, isAfter, isBefore } from 'date-fns';
 import { Payment } from '@/services/commercial/CommercialTypes';
 import InvoiceService from '@/services/commercial/InvoiceService';
+import { DateRangePicker } from '@/components/ui/DateRangePicker';
+import { Autocomplete } from '@/components/ui/Autocomplete';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { useNavigate } from 'react-router-dom';
+import PaymentDetailsDialog from '@/components/commercial/PaymentDetailsDialog';
 
 const Payments = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -42,6 +47,8 @@ const Payments = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [detailsPayment, setDetailsPayment] = useState<Payment | null>(null);
   
   const queryClient = useQueryClient();
   
@@ -109,26 +116,47 @@ const Payments = () => {
     queryClient.invalidateQueries({ queryKey: ['payments'] });
   }, [queryClient]);
   
+  // تصفية متقدمة
+  const [filter, setFilter] = useState({
+    dateRange: { startDate: null, endDate: null },
+    party: '',
+    method: '',
+  });
+  const [autoSearch, setAutoSearch] = useState('');
+  // ترقيم الصفحات
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  // اقتراحات البحث الذكي
+  const suggestions = React.useMemo(() => {
+    if (!payments) return [];
+    const partyNames = payments.map(p => p.party_name || '').filter(Boolean);
+    const paymentIds = payments.map(p => p.id.toString());
+    return Array.from(new Set([...partyNames, ...paymentIds]));
+  }, [payments]);
+  // تصفية المدفوعات حسب الفلاتر
   const filteredPayments = React.useMemo(() => {
     if (!payments) return [];
-    
-    let filtered = payments;
-    
-    if (activeTab !== 'all') {
-      filtered = payments.filter(payment => payment.payment_type === activeTab);
-    }
-    
-    if (searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(payment => 
-        payment.party_name?.toLowerCase().includes(query) ||
-        payment.id.toLowerCase().includes(query) ||
-        payment.amount.toString().includes(query)
-      );
-    }
-    
-    return filtered;
-  }, [payments, activeTab, searchQuery]);
+    return payments.filter(payment => {
+      // تصفية التاريخ
+      if (filter.dateRange.startDate && isBefore(startOfDay(new Date(payment.date)), startOfDay(filter.dateRange.startDate))) return false;
+      if (filter.dateRange.endDate && isAfter(endOfDay(new Date(payment.date)), endOfDay(filter.dateRange.endDate))) return false;
+      // تصفية الطرف
+      if (filter.party && payment.party_id !== filter.party) return false;
+      // تصفية الطريقة
+      if (filter.method && payment.method !== filter.method) return false;
+      // البحث الذكي
+      if (autoSearch && !(
+        (payment.party_name && payment.party_name.includes(autoSearch)) ||
+        (payment.id && payment.id.toString().includes(autoSearch))
+      )) return false;
+      return true;
+    });
+  }, [payments, filter, autoSearch]);
+  // ترقيم الصفحات
+  const totalPages = Math.ceil(filteredPayments.length / pageSize);
+  const paginatedPayments = filteredPayments.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  
+  const navigate = useNavigate();
   
   const handleCreatePayment = async (paymentData: Omit<Payment, 'id' | 'created_at'>) => {
     try {
@@ -162,8 +190,13 @@ const Payments = () => {
   };
   
   const handleEditClick = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setIsEditDialogOpen(true);
+    // فقط إذا لم يتم تأكيد المعاملة
+    if (payment.payment_status !== 'confirmed') {
+      setSelectedPayment(payment);
+      setIsEditDialogOpen(true);
+    } else {
+      toast.warning('لا يمكن تعديل معاملة تم تأكيدها بالفعل.');
+    }
   };
   
   const handleDeleteClick = (payment: Payment) => {
@@ -271,6 +304,14 @@ const Payments = () => {
   
   const isLoading = isLoadingPayments || isLoadingParties || isLoadingInvoices;
   
+  // عند الضغط على صف المدفوعات، افتح نافذة التفاصيل فقط إذا لم يكن الزر هو زر إجراء (مثل تأكيد أو إلغاء)
+  const handleRowClick = (payment: Payment, event?: React.MouseEvent) => {
+    // إذا كان الضغط على زر إجراء، لا تفتح نافذة التفاصيل
+    if (event && (event.target as HTMLElement).closest('.action-btn')) return;
+    setDetailsPayment(payment);
+    setIsDetailsDialogOpen(true);
+  };
+  
   if (isLoading) {
     return (
       <PageTransition>
@@ -307,25 +348,73 @@ const Payments = () => {
   return (
     <PageTransition>
       <div className="space-y-6">
-        <div className="flex flex-row items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">المعاملات المالية</h1>
-            <p className="text-muted-foreground">إدارة معاملات الدفع والتحصيل</p>
-          </div>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
+        {/* عنوان الصفحة */}
+        <div className="mb-2">
+          <h1 className="text-3xl font-bold tracking-tight">المعاملات المالية</h1>
+          <p className="text-muted-foreground">إدارة معاملات الدفع والتحصيل</p>
+        </div>
+        {/* ملخصات الأرصدة */}
+        <div className="mb-2">
+          <FinancialBalanceSummary className="max-w-2xl mx-auto" />
+        </div>
+
+        {/* مستطيل البحث والتصفية بحجم أصغر ومسافات أقل */}
+        <div
+          className="w-full flex flex-row flex-wrap gap-2 mb-2 items-end justify-between rounded-lg p-2 border border-border shadow-sm bg-background dark:bg-zinc-900/90 dark:border-zinc-700"
+          style={{ minHeight: 'unset' }}
+        >
+          <DateRangePicker
+            value={filter.dateRange}
+            onChange={range => setFilter(f => ({ ...f, dateRange: range }))}
+          />
+          <Autocomplete
+            suggestions={suggestions}
+            value={autoSearch}
+            onChange={setAutoSearch}
+            placeholder="بحث باسم الطرف أو رقم المعاملة"
+          />
+          <select
+            value={filter.party}
+            onChange={e => setFilter(f => ({ ...f, party: e.target.value }))}
+            className="min-w-[110px] bg-white dark:bg-zinc-800 border border-input dark:border-zinc-700 text-xs text-foreground dark:text-zinc-100 focus:ring-2 focus:ring-primary/50 rounded-md shadow px-1 py-1"
+            style={{ height: '30px' }}
+          >
+            <option value="">كل الأطراف</option>
+            {parties && parties.map(party => (
+              <option key={party.id} value={party.id}>{party.name}</option>
+            ))}
+          </select>
+          <select
+            value={filter.method}
+            onChange={e => setFilter(f => ({ ...f, method: e.target.value }))}
+            className="min-w-[110px] bg-white dark:bg-zinc-800 border border-input dark:border-zinc-700 text-xs text-foreground dark:text-zinc-100 focus:ring-2 focus:ring-primary/50 rounded-md shadow px-1 py-1"
+            style={{ height: '30px' }}
+          >
+            <option value="">كل الطرق</option>
+            <option value="cash">نقدي</option>
+            <option value="check">شيك</option>
+            <option value="bank_transfer">تحويل بنكي</option>
+            <option value="other">أخرى</option>
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-7 text-xs px-2"
+            style={{ minHeight: '28px' }}
+            onClick={() => {
+              setFilter({ dateRange: { startDate: null, endDate: null }, party: '', method: '' });
+              setAutoSearch('');
+            }}
+          >
+            إعادة تعيين
+          </Button>
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            className="h-7 px-2 text-xs rounded-md bg-green-100 hover:bg-green-200 text-green-800 border border-green-200 shadow-none ml-auto"
+            style={{ minHeight: '28px', minWidth: 'auto' }}
+          >
             <PlusCircle className="mr-2 h-4 w-4" /> تسجيل معاملة جديدة
           </Button>
-        </div>
-        
-        <FinancialBalanceSummary className="mb-6" />
-        
-        <div className="flex mb-4">
-          <Input
-            placeholder="البحث عن معاملة..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
         </div>
         
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
@@ -336,16 +425,39 @@ const Payments = () => {
           </TabsList>
           
           <TabsContent value={activeTab} className="mt-0">
+            {/* جدول المدفوعات */}
             <PaymentsList 
-              payments={filteredPayments}
+              payments={paginatedPayments}
               onEditClick={handleEditClick}
               onDeleteClick={handleDeleteClick}
               onConfirmClick={handleConfirmClick}
               onCancelClick={handleCancelClick}
               activeTab={activeTab}
+              onRowClick={handleRowClick}
             />
           </TabsContent>
         </Tabs>
+        
+        {/* ترقيم الصفحات */}
+        <div className="mt-4">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious onClick={() => setCurrentPage(p => Math.max(1, p - 1))} />
+              </PaginationItem>
+              {Array.from({ length: totalPages }, (_, i) => (
+                <PaginationItem key={i}>
+                  <PaginationLink isActive={currentPage === i + 1} onClick={() => setCurrentPage(i + 1)}>
+                    {i + 1}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       </div>
       
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -438,6 +550,14 @@ const Payments = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          {detailsPayment && (
+            <PaymentDetailsDialog payment={detailsPayment} onClose={() => setIsDetailsDialogOpen(false)} />
+          )}
+        </DialogContent>
+      </Dialog>
     </PageTransition>
   );
 };

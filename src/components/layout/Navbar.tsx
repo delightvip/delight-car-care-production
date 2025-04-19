@@ -52,7 +52,7 @@ const Navbar = () => {
         damping: 30
       }}
     >
-      <div className="flex items-center gap-2 md:gap-3">
+      <div className="flex items-center gap-2 md:gap-3 w-[160px] md:w-[200px] justify-center md:justify-start relative z-10">
         <SidebarTrigger className="md:hidden" />
         <NavbarBranding />
       </div>
@@ -77,6 +77,7 @@ const Navbar = () => {
         <Separator orientation="vertical" className="h-8" />
         
         <ModeToggle />
+        {/* <ColorThemePicker /> تم نقل اختيار اللون إلى القائمة المنسدلة للثيمات فقط */}
       </div>
     </motion.header>
   );

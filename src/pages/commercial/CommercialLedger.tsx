@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -156,118 +155,119 @@ const CommercialLedger = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="party">الطرف التجاري</Label>
-                <select
-                  id="party"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={partyId}
-                  onChange={handlePartyChange}
-                >
-                  <option value="">اختر طرف تجاري</option>
-                  {parties?.map((party: Party) => (
-                    <option key={party.id} value={party.id}>
-                      {party.name}
-                    </option>
-                  ))}
-                </select>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="party">الطرف التجاري</Label>
+                  <select
+                    id="party"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={partyId}
+                    onChange={handlePartyChange}
+                  >
+                    <option value="">اختر طرف تجاري</option>
+                    {parties?.map((party: Party) => (
+                      <option key={party.id} value={party.id}>
+                        {party.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>تاريخ البداية</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "w-[240px] pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP", {locale: ar})
+                              ) : (
+                                <span>اختر تاريخ البداية</span>
+                              )}
+                              <CalendarIcon className="mr-4 h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            locale={ar}
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date > new Date()
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormDescription>
+                        اختر تاريخ بداية الفترة.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>تاريخ النهاية</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "w-[240px] pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP", {locale: ar})
+                              ) : (
+                                <span>اختر تاريخ النهاية</span>
+                              )}
+                              <CalendarIcon className="mr-4 h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            locale={ar}
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date > new Date()
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormDescription>
+                        اختر تاريخ نهاية الفترة.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>تاريخ البداية</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-[240px] pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", {locale: ar})
-                            ) : (
-                              <span>اختر تاريخ البداية</span>
-                            )}
-                            <CalendarIcon className="mr-4 h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          locale={ar}
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date()
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormDescription>
-                      اختر تاريخ بداية الفترة.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>تاريخ النهاية</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-[240px] pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", {locale: ar})
-                            ) : (
-                              <span>اختر تاريخ النهاية</span>
-                            )}
-                            <CalendarIcon className="mr-4 h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          locale={ar}
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date()
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormDescription>
-                      اختر تاريخ نهاية الفترة.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <Button type="submit">تحديث السجل</Button>
-          </form>
-          
+              <Button type="submit">تحديث السجل</Button>
+            </form>
+          </Form>
           {ledgerData.length > 0 && (
             <div className="overflow-x-auto">
               <table className="min-w-full leading-normal">
@@ -300,13 +300,13 @@ const CommercialLedger = () => {
                         {entry.transaction_type}
                       </td>
                       <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">
-                        {entry.debit}
+                        {Number(entry.debit).toFixed(2)}
                       </td>
                       <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">
-                        {entry.credit}
+                        {Number(entry.credit).toFixed(2)}
                       </td>
                       <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">
-                        {entry.balance_after}
+                        {Number(entry.balance_after).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -315,7 +315,30 @@ const CommercialLedger = () => {
             </div>
           )}
         </CardContent>
-        <div className="p-4">
+        <div className="p-4 flex flex-col md:flex-row gap-2 md:gap-4 justify-end">
+          <Button 
+            onClick={() => {
+              const closed = window.close();
+              // إذا لم تُغلق النافذة، أعد التوجيه
+              setTimeout(() => {
+                if (!window.closed) {
+                  alert('لا يمكن إغلاق النافذة تلقائياً. سيتم إعادتك إلى صفحة العملاء.');
+                  window.location.href = '/commercial/parties';
+                }
+              }, 200);
+            }} 
+            variant="secondary"
+          >
+            إغلاق النافذة
+          </Button>
+          {partyId && (
+            <Button 
+              onClick={() => window.location.href = `/commercial/parties/${partyId}`}
+              variant="outline"
+            >
+              العودة إلى صفحة العميل
+            </Button>
+          )}
           <Button 
             onClick={exportToCSV} 
             disabled={isExporting}

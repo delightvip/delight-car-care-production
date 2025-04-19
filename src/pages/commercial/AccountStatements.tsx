@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import PageTransition from '@/components/ui/PageTransition';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +28,7 @@ import { ar } from 'date-fns/locale';
 import { Download, FileText, Printer, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import CommercialService from '@/services/CommercialService';
+import { exportStatementToCSV, printStatement } from './utils/exportUtils';
 
 const formSchema = z.object({
   startDate: z.date({
@@ -198,11 +198,11 @@ const AccountStatements: React.FC<AccountStatementsProps> = () => {
                           </div>
                           <div className="text-left">
                             <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" className="gap-1">
+                              <Button size="sm" variant="outline" className="gap-1" onClick={() => printStatement(statement)}>
                                 <Printer className="h-4 w-4" />
                                 <span>طباعة</span>
                               </Button>
-                              <Button size="sm" variant="outline" className="gap-1">
+                              <Button size="sm" variant="outline" className="gap-1" onClick={() => exportStatementToCSV(statement)}>
                                 <Download className="h-4 w-4" />
                                 <span>تصدير</span>
                               </Button>
@@ -210,7 +210,15 @@ const AccountStatements: React.FC<AccountStatementsProps> = () => {
                           </div>
                         </div>
                       </div>
-                      
+                      {/* تفاصيل إضافية للطرف */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mb-2 text-sm text-muted-foreground">
+                        <div><span className="font-semibold">الهاتف:</span> {statement.phone || '—'}</div>
+                        <div><span className="font-semibold">البريد الإلكتروني:</span> {statement.email || '—'}</div>
+                        <div><span className="font-semibold">العنوان:</span> {statement.address || '—'}</div>
+                        <div><span className="font-semibold">الكود:</span> {statement.code || '—'}</div>
+                        <div><span className="font-semibold">تاريخ الإنشاء:</span> {statement.created_at ? (new Date(statement.created_at)).toLocaleDateString('ar-EG') : '—'}</div>
+                        <div className="col-span-2"><span className="font-semibold">ملاحظات:</span> {statement.notes || '—'}</div>
+                      </div>
                       <div className="p-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div className="p-3 bg-muted/30 rounded-md">
